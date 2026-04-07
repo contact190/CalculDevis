@@ -34,10 +34,6 @@ export class FormulaEngine {
 
     const profiles = [];
     const accessories = [];
-    let totalGasketLength = 0;
-    if (composition.hasGasket) {
-      totalGasketLength = (L + H) * 2;
-    }
 
     composition.elements.forEach(el => {
       const isCouvreJoint = el.label?.toLowerCase().includes('couvre-joint') || el.label?.toLowerCase().includes('couvre joint');
@@ -80,23 +76,26 @@ export class FormulaEngine {
 
     const glass = this.db.glass.find(g => g.id === glassId);
     let gasket = null;
-    let compatibility = null;
     
-    if (glass) {
-      compatibility = this.db.gasketCompatibility.find(
+    if (glass && composition.hasGasket) {
+      const compatibility = this.db.gasketCompatibility.find(
         c => c.rangeId === composition.rangeId && c.glassThickness === glass.thickness
       );
-    }
-    
-    if (compatibility && totalGasketLength > 0) {
-      const gRef = this.db.accessories.find(a => a.id === compatibility.gasketId);
-      if (gRef) {
-        const qty = totalGasketLength / 1000;
-        gasket = {
-          ...gRef,
-          qty,
-          cost: qty * gRef.price
-        };
+      
+      if (compatibility) {
+        const gRef = this.db.accessories.find(a => a.id === compatibility.gasketId);
+        if (gRef) {
+          const formula = compatibility.formula || '(L+H)*2';
+          const lenMm = this.evaluate(formula, { L, H });
+          const qtyMl = lenMm / 1000;
+          
+          gasket = {
+            ...gRef,
+            qty: qtyMl,
+            formula: formula,
+            cost: qtyMl * gRef.price
+          };
+        }
       }
     }
 
@@ -121,7 +120,9 @@ export class FormulaEngine {
       });
     }
 
-    const glassArea = (L * H) / 1000000;
+    const glassL = this.evaluate(composition.glassFormulaL || 'L', { L, H });
+    const glassH = this.evaluate(composition.glassFormulaH || 'H', { L, H });
+    const glassArea = (glassL * glassH) / 1000000;
     const glassWeight = glass ? (glassArea * glass.weightPerM2) : 0;
     const glassCost = glass ? (glassArea * glass.pricePerM2) : 0;
 
@@ -130,10 +131,12 @@ export class FormulaEngine {
       accessories,
       glass: glass ? {
         ...glass,
+        width: glassL,
+        height: glassH,
         area: glassArea,
         weight: glassWeight,
         cost: glassCost
-      } : { name: 'Vitrage Manquant', area: 0, weight: 0, cost: 0 },
+      } : { name: 'Vitrage Manquant', width: 0, height: 0, area: 0, weight: 0, cost: 0 },
       gasket
     };
   }

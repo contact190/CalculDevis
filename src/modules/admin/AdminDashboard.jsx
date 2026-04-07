@@ -15,6 +15,8 @@ const AdminDashboard = ({ data, setData }) => {
       categoryId: data.categories?.[0]?.id || 'CAT-F',
       openingType: 'Ouvrant',
       hasGasket: true,
+      glassFormulaL: 'L-80',
+      glassFormulaH: 'H-80',
       elements: []
     };
     setData(prev => ({ ...prev, compositions: [...prev.compositions, newComp] }));
@@ -34,7 +36,7 @@ const AdminDashboard = ({ data, setData }) => {
       colors: { id: `C-${Date.now().toString().slice(-4)}`, name: 'Nouvelle Couleur', hex: '#FFFFFF', factor: 1.0 },
       accessories: { id: `A-${Date.now().toString().slice(-4)}`, name: 'Nouvel Accessoire', unit: 'Unité', price: 5.0 },
       categories: { id: `CAT-${Date.now().toString().slice(-4)}`, name: 'Nouvelle Catégorie' },
-      gasketCompatibility: { rangeId: data.ranges?.[0]?.id || '', glassThickness: 4, gasketId: data.accessories.find(a => a.unit === 'Joint')?.id || '' },
+      gasketCompatibility: { rangeId: data.ranges?.[0]?.id || '', glassThickness: 4, gasketId: data.accessories.find(a => a.unit === 'Joint')?.id || '', formula: '(L+H)*2' },
       glassProfileCompatibility: { rangeId: data.ranges?.[0]?.id || '', glassThickness: 4, profileId: data.profiles?.[0]?.id || '', formula: '(L+H)*2' },
       options: { id: `OPT-${Date.now().toString().slice(-4)}`, name: 'Nouvelle Option', rangeId: data.ranges?.[0]?.id || '', addAccessoryId: data.accessories?.[0]?.id || '', removeAccessoryId: '', formula: '1' },
       traverses: { id: `TRV-${Date.now().toString().slice(-4)}`, name: 'Nouvelle Traverse', type: 'horizontale', usage: 'fenetre', profileId: '', formula: 'L', priceUnit: 'ML' }
@@ -69,6 +71,12 @@ const AdminDashboard = ({ data, setData }) => {
       ...prev,
       gasketCompatibility: prev.gasketCompatibility.filter((_, i) => i !== index)
     }));
+  };
+
+  const handleUpdateGasketCompatibility = (index, field, value) => {
+    const updated = [...data.gasketCompatibility];
+    updated[index][field] = field === 'glassThickness' ? parseFloat(value) || 0 : value;
+    setData(prev => ({ ...prev, gasketCompatibility: updated }));
   };
 
   const handleUpdateComposition = (updated) => {
@@ -459,6 +467,7 @@ const AdminDashboard = ({ data, setData }) => {
                   <th>Gamme</th>
                   <th>Épaisseur Vitrage (mm)</th>
                   <th>Joint Compatible</th>
+                  <th>Formule Qté</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -466,17 +475,43 @@ const AdminDashboard = ({ data, setData }) => {
                 {data.gasketCompatibility.map((gc, i) => (
                   <tr key={i}>
                     <td>
-                      <select className="input" defaultValue={gc.rangeId} style={{ width: '120px' }}>
+                      <select 
+                        className="input" 
+                        value={gc.rangeId} 
+                        onChange={e => handleUpdateGasketCompatibility(i, 'rangeId', e.target.value)}
+                        style={{ width: '120px' }}
+                      >
                         {data.ranges.map(r => <option key={r.id} value={r.id}>{r.id}</option>)}
                       </select>
                     </td>
-                    <td><input className="input" type="number" defaultValue={gc.glassThickness} style={{ width: '100px' }} /></td>
                     <td>
-                      <select className="input" defaultValue={gc.gasketId} style={{ width: '200px' }}>
+                      <input 
+                        className="input" 
+                        type="number" 
+                        value={gc.glassThickness} 
+                        onChange={e => handleUpdateGasketCompatibility(i, 'glassThickness', e.target.value)}
+                        style={{ width: '100px' }} 
+                      />
+                    </td>
+                    <td>
+                      <select 
+                        className="input" 
+                        value={gc.gasketId} 
+                        onChange={e => handleUpdateGasketCompatibility(i, 'gasketId', e.target.value)}
+                        style={{ width: '200px' }}
+                      >
                         {data.accessories.filter(a => a.unit === 'Joint').map(a => (
                           <option key={a.id} value={a.id}>{a.name} ({a.id})</option>
                         ))}
                       </select>
+                    </td>
+                    <td>
+                      <input 
+                        className="input" 
+                        value={gc.formula || '(L+H)*2'} 
+                        onChange={e => handleUpdateGasketCompatibility(i, 'formula', e.target.value)}
+                        style={{ width: '150px' }} 
+                      />
                     </td>
                     <td>
                       <button className="btn" onClick={() => handleDeleteGasketCompatibility(i)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
@@ -484,7 +519,7 @@ const AdminDashboard = ({ data, setData }) => {
                   </tr>
                 ))}
                 <tr>
-                  <td colSpan="4">
+                  <td colSpan="5">
                     <button className="btn btn-secondary" onClick={() => handleAddItem('gasketCompatibility')} style={{ width: '100%', marginTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
                       <Plus size={16} /> Ajouter une Compatibilité
                     </button>
@@ -679,7 +714,34 @@ const AdminDashboard = ({ data, setData }) => {
                           handleUpdateComposition(updated);
                         }}
                       />
-                      <label htmlFor="hasGasket" className="label" style={{ marginBottom: 0 }}>Comporte Joint</label>
+                      <label htmlFor="hasGasket" className="label" style={{ marginBottom: 0 }}>Joint</label>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem', padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '0.5rem' }}>
+                    <div className="form-group">
+                      <label className="label">Formule Largeur Vitrage (L-..)</label>
+                      <input 
+                        className="input" 
+                        value={editingComposition.glassFormulaL || 'L-80'} 
+                        onChange={(e) => {
+                          const updated = { ...editingComposition, glassFormulaL: e.target.value };
+                          setEditingComposition(updated);
+                          handleUpdateComposition(updated);
+                        }} 
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="label">Formule Hauteur Vitrage (H-..)</label>
+                      <input 
+                        className="input" 
+                        value={editingComposition.glassFormulaH || 'H-80'} 
+                        onChange={(e) => {
+                          const updated = { ...editingComposition, glassFormulaH: e.target.value };
+                          setEditingComposition(updated);
+                          handleUpdateComposition(updated);
+                        }} 
+                      />
                     </div>
                   </div>
 

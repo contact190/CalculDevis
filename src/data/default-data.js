@@ -91,10 +91,10 @@ export const DEFAULT_DATA = {
     { id: 'JNT03', name: 'Joint vitrage 5mm', unit: 'Joint', price: 1.10 },
   ],
   gasketCompatibility: [
-    { rangeId: 'H36', glassThickness: 4, gasketId: 'JNT03' },
-    { rangeId: 'H36', glassThickness: 24, gasketId: 'JNT02' },
-    { rangeId: 'H48', glassThickness: 4, gasketId: 'JNT03' },
-    { rangeId: 'H48', glassThickness: 24, gasketId: 'JNT01' },
+    { rangeId: 'H36', glassThickness: 4, gasketId: 'JNT03', formula: '(L+H)*2' },
+    { rangeId: 'H36', glassThickness: 24, gasketId: 'JNT02', formula: '(L+H)*2' },
+    { rangeId: 'H48', glassThickness: 4, gasketId: 'JNT03', formula: '(L+H)*2' },
+    { rangeId: 'H48', glassThickness: 24, gasketId: 'JNT01', formula: '(L+H)*2' },
   ],
   glassProfileCompatibility: [],
   options: [
@@ -158,6 +158,8 @@ export const DEFAULT_DATA = {
       categoryId: 'CAT-F',
       openingType: 'Coulissant',
       hasGasket: true,
+      glassFormulaL: 'L-80',
+      glassFormulaH: 'H-80',
       elements: [
         { type: 'profile', id: 'P101', label: 'Dormant Haut', formula: 'L', qty: 1 },
         { type: 'profile', id: 'P101', label: 'Dormant Bas', formula: 'L', qty: 1 },
