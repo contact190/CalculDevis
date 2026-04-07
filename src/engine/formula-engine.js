@@ -18,8 +18,9 @@ export class FormulaEngine {
   evaluate(formula, scope) {
     if (!formula || typeof formula !== 'string') return 0;
     try {
-      // Basic sanitization and evaluation
-      return math.evaluate(formula, scope);
+      // Support French style commas by replacing them with dots
+      const cleanFormula = formula.replace(/,/g, '.');
+      return math.evaluate(cleanFormula, scope);
     } catch (error) {
       console.error(`Error evaluating formula: ${formula}`, error);
       return 0;
