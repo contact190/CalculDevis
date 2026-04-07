@@ -84,11 +84,11 @@ export const DEFAULT_DATA = {
     },
   ],
   accessories: [
-    { id: 'ACC01', name: 'Kit Galet H36', unit: 'Kit', price: 12.50 },
-    { id: 'ACC02', name: 'Poignée standard', unit: 'Unité', price: 8.90 },
-    { id: 'JNT01', name: 'Joint vitrage 3mm', unit: 'Joint', price: 0.85 },
-    { id: 'JNT02', name: 'Joint vitrage 4mm', unit: 'Joint', price: 0.95 },
-    { id: 'JNT03', name: 'Joint vitrage 5mm', unit: 'Joint', price: 1.10 },
+    { id: 'ACC01', name: 'Kit Galet H36', unit: 'Kit', price: 12.50, rangeId: 'H36' },
+    { id: 'ACC02', name: 'Poignée standard', unit: 'Unité', price: 8.90, rangeId: 'H36' },
+    { id: 'JNT01', name: 'Joint vitrage 3mm', unit: 'Joint', price: 0.85, rangeId: 'H36' },
+    { id: 'JNT02', name: 'Joint vitrage 4mm', unit: 'Joint', price: 0.95, rangeId: 'H36' },
+    { id: 'JNT03', name: 'Joint vitrage 5mm', unit: 'Joint', price: 1.10, rangeId: 'H36' },
   ],
   gasketCompatibility: [
     { rangeId: 'H36', glassThickness: 4, gasketId: 'JNT03', formula: '(L+H)*2' },

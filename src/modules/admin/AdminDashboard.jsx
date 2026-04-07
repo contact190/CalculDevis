@@ -35,7 +35,7 @@ const AdminDashboard = ({ data, setData }) => {
       profiles: { id: `P-${Date.now().toString().slice(-4)}`, name: 'Nouveau Profilé', rangeId: data.ranges?.[0]?.id || '', weightPerM: 1.0, pricePerKg: 5.0, barLength: 6000, colors: ['RAL9016'], type: 'ALU' },
       glass: { id: `V-${Date.now().toString().slice(-4)}`, name: 'Nouveau Vitrage', type: 'SIMPLE', composition: '4', specification: 'Standard', thickness: 4, weightPerM2: 10, pricePerM2: 20 },
       colors: { id: `C-${Date.now().toString().slice(-4)}`, name: 'Nouvelle Couleur', hex: '#FFFFFF', factor: 1.0 },
-      accessories: { id: `A-${Date.now().toString().slice(-4)}`, name: 'Nouvel Accessoire', unit: 'Unité', price: 5.0 },
+      accessories: { id: `A-${Date.now().toString().slice(-4)}`, name: 'Nouvel Accessoire', rangeId: data.ranges?.[0]?.id || '', unit: 'Unité', price: 5.0 },
       categories: { id: `CAT-${Date.now().toString().slice(-4)}`, name: 'Nouvelle Catégorie' },
       gasketCompatibility: { rangeId: data.ranges?.[0]?.id || '', glassThickness: 4, gasketId: data.accessories.find(a => a.unit === 'Joint')?.id || '', formula: '(L+H)*2' },
       glassProfileCompatibility: { rangeId: data.ranges?.[0]?.id || '', glassThickness: 4, profileId: data.profiles?.[0]?.id || '', formula: '(L+H)*2' },
@@ -425,6 +425,7 @@ const AdminDashboard = ({ data, setData }) => {
               <thead>
                 <tr>
                   <th>Code Article</th>
+                  <th>Gamme</th>
                   <th>Désignation</th>
                   <th>Unité de Vente</th>
                   <th>Prix Achat (DZD/Unité ou ML)</th>
@@ -437,7 +438,12 @@ const AdminDashboard = ({ data, setData }) => {
                     <td style={{ fontWeight: 600 }}>
                       <input className="input" defaultValue={acc.id} onBlur={e => handleUpdateItem('accessories', acc.id, 'id', e.target.value)} style={{ width: '100px', fontWeight: 600 }} />
                     </td>
-                    <td><input className="input" value={acc.name} onChange={e => handleUpdateItem('accessories', acc.id, 'name', e.target.value)} style={{ width: '250px' }} /></td>
+                    <td>
+                      <select className="input" value={acc.rangeId} onChange={e => handleUpdateItem('accessories', acc.id, 'rangeId', e.target.value)} style={{ width: '100px' }}>
+                        {data.ranges.map(r => <option key={r.id} value={r.id}>{r.id}</option>)}
+                      </select>
+                    </td>
+                    <td><input className="input" value={acc.name} onChange={e => handleUpdateItem('accessories', acc.id, 'name', e.target.value)} style={{ width: '200px' }} /></td>
                     <td>
                       <select className="input" value={acc.unit} onChange={e => handleUpdateItem('accessories', acc.id, 'unit', e.target.value)} style={{ width: '100px' }}>
                         <option value="Kit">Kit</option>
@@ -453,7 +459,7 @@ const AdminDashboard = ({ data, setData }) => {
                   </tr>
                 ))}
                 <tr>
-                  <td colSpan="5">
+                  <td colSpan="6">
                     <button className="btn btn-secondary" onClick={() => handleAddItem('accessories')} style={{ width: '100%', marginTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
                       <Plus size={16} /> Ajouter un Accessoire
                     </button>

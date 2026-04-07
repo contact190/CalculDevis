@@ -38,6 +38,12 @@ function App() {
         openingType: c.openingType || 'Fixe'
       }));
     }
+    if (repaired.accessories) {
+      repaired.accessories = repaired.accessories.map(a => ({
+        ...a,
+        rangeId: a.rangeId || (repaired.ranges?.[0]?.id || 'H36')
+      }));
+    }
     return repaired;
   };
 
