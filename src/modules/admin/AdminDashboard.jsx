@@ -538,7 +538,7 @@ const AdminDashboard = ({ data, setData }) => {
                 <tr>
                   <th>Gamme Associée</th>
                   <th>Épaisseur Vitrage (mm)</th>
-                  <th>Profilé (Parclose/Complément)</th>
+                  <th>Profilé Parclose (Génère H et V)</th>
                   <th>Formule Qté</th>
                   <th>Actions</th>
                 </tr>

@@ -51,7 +51,7 @@ export class FormulaEngine {
 
     composition.elements.forEach(el => {
       const label = el.label || '';
-      const isCouvreJoint = /couvre[- ]?joint|cj[vh]?/i.test(label);
+      const isCouvreJoint = /couvre[- ]?joint|cj[vh]?|parclose[vh]?/i.test(label);
       let elQty = el.qty;
 
       if (isCouvreJoint) {
@@ -184,7 +184,7 @@ export class FormulaEngine {
           const hQty = 2 * glassQty;
           profiles.push({
             ...pRef,
-            label: 'Parclose H',
+            label: 'ParcloseH',
             qty: hQty,
             length: hValue,
             formula: composition.glassFormulaL || 'L',
@@ -199,7 +199,7 @@ export class FormulaEngine {
           const vQty = 2 * glassQty;
           profiles.push({
             ...pRef,
-            label: 'Parclose V',
+            label: 'ParcloseV',
             qty: vQty,
             length: vValue,
             formula: composition.glassFormulaH || 'H',
