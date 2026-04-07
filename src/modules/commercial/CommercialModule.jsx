@@ -431,6 +431,31 @@ const CommercialModule = ({ config, setConfig, database }) => {
                     </tr>
                   ))}
                 </>)}
+                
+                {/* --- SOUS-TOTAUX --- */}
+                <tr style={{ borderTop: '2px solid #e2e8f0', color: '#64748b', fontSize: '0.65rem' }}>
+                   <td colSpan="6" style={{ textAlign: 'right' }}>Total Profilés (Alu + Couleur) :</td>
+                   <td style={{ textAlign: 'right' }}>{priceData?.subtotals?.profiles.toFixed(2)} DZD</td>
+                </tr>
+                <tr style={{ color: '#64748b', fontSize: '0.65rem' }}>
+                   <td colSpan="6" style={{ textAlign: 'right' }}>Total Accessoires :</td>
+                   <td style={{ textAlign: 'right' }}>{priceData?.subtotals?.accessories.toFixed(2)} DZD</td>
+                </tr>
+                <tr style={{ color: '#64748b', fontSize: '0.65rem' }}>
+                   <td colSpan="6" style={{ textAlign: 'right' }}>Total Joints :</td>
+                   <td style={{ textAlign: 'right' }}>{priceData?.subtotals?.gasket.toFixed(2)} DZD</td>
+                </tr>
+                <tr style={{ color: '#64748b', fontSize: '0.65rem' }}>
+                   <td colSpan="6" style={{ textAlign: 'right' }}>Total Vitrage :</td>
+                   <td style={{ textAlign: 'right' }}>{priceData?.subtotals?.glass.toFixed(2)} DZD</td>
+                </tr>
+                {priceData?.subtotals?.shutter > 0 && (
+                  <tr style={{ color: '#64748b', fontSize: '0.65rem' }}>
+                    <td colSpan="6" style={{ textAlign: 'right' }}>Total Volet Roulant :</td>
+                    <td style={{ textAlign: 'right' }}>{priceData.subtotals.shutter.toFixed(2)} DZD</td>
+                  </tr>
+                )}
+
                 <tr style={{ background: '#f1f5f9', fontWeight: 700, fontSize: '0.85rem' }}>
                   <td colSpan="6" style={{ textAlign: 'right' }}>COÛT TOTAL DE REVIENT (MATÉRIAUX)</td>
                   <td style={{ textAlign: 'right', color: '#1e293b' }}>{priceData ? priceData.cost.toFixed(2) : '0.00'} DZD</td>

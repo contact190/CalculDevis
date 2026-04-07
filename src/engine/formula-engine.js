@@ -417,21 +417,31 @@ export class FormulaEngine {
     const bom = this.calculateBOM(config);
     const color = this.db.colors.find(c => c.id === config.colorId);
     
-    const shutterCost = (bom.shutters || []).reduce((sum, s) => sum + (s.cost || 0), 0);
+    // Subtotals (Raw material costs)
+    const profilesRaw = bom.profiles.reduce((sum, p) => sum + p.cost, 0);
+    const accessoriesTotal = bom.accessories.reduce((sum, a) => sum + (a.cost || 0), 0);
+    const glassTotal = bom.glass ? bom.glass.cost : 0;
+    const gasketTotal = bom.gasket ? bom.gasket.cost : 0;
+    const shutterTotal = (bom.shutters || []).reduce((sum, s) => sum + (s.cost || 0), 0);
 
-    const materialCost = bom.profiles.reduce((sum, p) => sum + p.cost, 0) + 
-                       (bom.glass ? bom.glass.cost : 0) + 
-                       (bom.gasket ? bom.gasket.cost : 0) + 
-                       bom.accessories.reduce((sum, a) => sum + (a.cost || 0), 0);
+    // Apply color factor ONLY to profiles
+    const profilesTotal = profilesRaw * (color ? color.factor : 1.0);
     
-    const costWithColor = materialCost * (color ? color.factor : 1.0);
+    // Total cost of goods (Revient)
+    const totalRevient = profilesTotal + accessoriesTotal + glassTotal + gasketTotal + shutterTotal;
     
     const margin = config.margin || (this.db.margins?.default || 2.2);
-    const priceHT = (costWithColor + shutterCost) * margin;
+    const priceHT = totalRevient * margin;
     
     return {
-      cost: costWithColor + shutterCost,
-      shutterCost,
+      cost: totalRevient,
+      subtotals: {
+        profiles: profilesTotal,
+        accessories: accessoriesTotal,
+        glass: glassTotal,
+        gasket: gasketTotal,
+        shutter: shutterTotal
+      },
       priceHT,
       priceTTC: priceHT * 1.20,
       bom
