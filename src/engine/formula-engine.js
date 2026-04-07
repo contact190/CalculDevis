@@ -56,13 +56,13 @@ export class FormulaEngine {
 
       if (isCouvreJoint) {
         const lowerLabel = label.toLowerCase();
-        const isHorizontal = lowerLabel.includes('haut') || lowerLabel.includes('bas') || lowerLabel.includes('h');
-        const isVertical = lowerLabel.includes('gauche') || lowerLabel.includes('droite') || lowerLabel.includes('v');
+        const isHorizontal = /haut|bas|h$|\bh\b/i.test(lowerLabel);
+        const isVertical = /gauche|droite|v$|\bv\b/i.test(lowerLabel);
 
         if (isHorizontal) {
           const hasHaut = lowerLabel.includes('haut');
           const hasBas = lowerLabel.includes('bas');
-          const isGenericH = !hasHaut && !hasBas; // e.g. "CjH" or "couvre-jointH"
+          const isGenericH = !hasHaut && !hasBas;
           
           if (isGenericH) {
             let activeH = 0;
@@ -77,7 +77,7 @@ export class FormulaEngine {
         } else if (isVertical) {
           const hasGauche = lowerLabel.includes('gauche');
           const hasDroite = lowerLabel.includes('droite');
-          const isGenericV = !hasGauche && !hasDroite; // e.g. "CjV" or "couvre-jointV"
+          const isGenericV = !hasGauche && !hasDroite;
 
           if (isGenericV) {
             let activeV = 0;
@@ -107,7 +107,7 @@ export class FormulaEngine {
             formula: el.formula,
             resolvedFormula: this.resolveFormula(el.formula, scope),
             unitPrice: unitPrice,
-            totalMeasure: value * el.qty,
+            totalMeasure: value * elQty,
             cost: (qty / (pRef.barLength || 6000)) * unitPrice
           });
         }
