@@ -16,6 +16,7 @@ export class FormulaEngine {
    * @param {object} scope - { L: 1000, H: 2000 }
    */
   evaluate(formula, scope) {
+    if (!formula || typeof formula !== 'string') return 0;
     try {
       // Basic sanitization and evaluation
       return math.evaluate(formula, scope);
@@ -63,12 +64,17 @@ export class FormulaEngine {
       } else if (el.type === 'accessory') {
         const aRef = this.db.accessories.find(a => a.id === el.id);
         if (aRef) {
+          // Automatic unit conversion: if formula result is in mm and unit is M/ML/Joint, divide by 1000
+          const unitUpper = (aRef.unit || '').toUpperCase();
+          const isLinear = ['M', 'ML', 'JOINT'].includes(unitUpper);
+          const finalQty = isLinear ? (qty / 1000) : qty;
+
           accessories.push({
             ...aRef,
             label: el.label,
-            qty: qty,
-            formula: el.formula,
-            cost: qty * aRef.price
+            qty: finalQty,
+            formula: el.formula || '1',
+            cost: (finalQty || 0) * (aRef.price || 0)
           });
         }
       }

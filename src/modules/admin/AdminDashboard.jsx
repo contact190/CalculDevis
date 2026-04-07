@@ -767,9 +767,11 @@ const AdminDashboard = ({ data, setData }) => {
                               className="input" 
                               value={el.type} 
                               onChange={(e) => {
+                                const newType = e.target.value;
                                 const newEls = [...editingComposition.elements];
-                                newEls[i].type = e.target.value;
-                                newEls[i].id = e.target.value === 'profile' ? data.profiles[0].id : data.accessories[0].id;
+                                newEls[i].type = newType;
+                                newEls[i].id = newType === 'profile' ? data.profiles[0].id : data.accessories[0].id;
+                                newEls[i].formula = newType === 'profile' ? 'L' : '1';
                                 const updated = { ...editingComposition, elements: newEls };
                                 setEditingComposition(updated);
                                 handleUpdateComposition(updated);
