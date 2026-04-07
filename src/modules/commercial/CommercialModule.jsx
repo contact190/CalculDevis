@@ -413,11 +413,16 @@ const CommercialModule = ({ config, setConfig, database }) => {
                     <tr key={`shutter-${i}`} style={{ background: '#f8faff' }}>
                       <td style={{ fontWeight: 500 }}>{s.name}</td>
                       <td style={{ color: '#64748b' }}>{s.formula} = {typeof s.qty === 'number' ? s.qty.toFixed(2) : s.qty} {s.priceUnit}</td>
+                      <td>1u</td>
                       <td>{typeof s.qty === 'number' ? s.qty.toFixed(2) : s.qty} {s.priceUnit}</td>
                       <td style={{ textAlign: 'right' }}>{(s.cost || 0).toFixed(2)} DZD</td>
                     </tr>
                   ))}
                 </>)}
+                <tr style={{ background: '#f1f5f9', fontWeight: 700 }}>
+                  <td colSpan="4" style={{ textAlign: 'right' }}>COÛT TOTAL DE REVIENT (MATÉRIAUX)</td>
+                  <td style={{ textAlign: 'right', color: '#1e293b' }}>{priceData ? priceData.cost.toFixed(2) : '0.00'} DZD</td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -428,6 +433,21 @@ const CommercialModule = ({ config, setConfig, database }) => {
           <JoineryCanvas config={config} width={350} height={350} database={database} />
 
           <div className="price-card shadow-lg">
+            <div style={{ marginBottom: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '1rem' }}>
+              <label style={{ fontSize: '0.75rem', opacity: 0.8, display: 'block', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Coefficient de Marge</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <input 
+                  type="number" 
+                  step="0.1" 
+                  min="1" 
+                  value={config.margin} 
+                  onChange={e => setConfig(prev => ({ ...prev, margin: parseFloat(e.target.value) || 1 }))}
+                  style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: 'white', borderRadius: '0.4rem', padding: '0.4rem 0.6rem', width: '80px', fontSize: '1.1rem', fontWeight: 700 }}
+                />
+                <span style={{ fontSize: '0.9rem', opacity: 0.8 }}>x Coût Matériaux</span>
+              </div>
+            </div>
+
             <span style={{ fontSize: '0.875rem', opacity: 0.8 }}>TOTAL DEVIS (HT)</span>
             <div style={{ fontSize: '2.5rem', fontWeight: 800 }}>
               {priceData ? `${priceData.priceHT.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD` : '---'}

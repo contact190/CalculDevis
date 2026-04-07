@@ -399,7 +399,7 @@ export class FormulaEngine {
     
     const costWithColor = materialCost * (color ? color.factor : 1.0);
     
-    const margin = this.db.margins.default;
+    const margin = config.margin || (this.db.margins?.default || 2.2);
     const priceHT = (costWithColor + shutterCost) * margin;
     
     return {

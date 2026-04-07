@@ -22,7 +22,8 @@ function App() {
     optionalSides: { top: false, bottom: false, left: false, right: false },
     selectedOptions: [],
     hasShutter: false,
-    shutterConfig: { caissonId: 'CAI-140', lameId: 'LAM-39E', glissiereId: 'GLI-INVDC', axeId: 'AXE-40', kitId: 'KIT-SANG' }
+    shutterConfig: { caissonId: 'CAI-140', lameId: 'LAM-39E', glissiereId: 'GLI-INVDC', axeId: 'AXE-40', kitId: 'KIT-SANG' },
+    margin: 2.2
   });
 
   const [database, setDatabase] = useState(DEFAULT_DATA);
