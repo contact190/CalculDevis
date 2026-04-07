@@ -81,6 +81,16 @@ function App() {
     return () => clearTimeout(timeout);
   }, [database]);
 
+  // 3. Ensure config is valid for current DB
+  React.useEffect(() => {
+    if (!database.compositions || database.compositions.length === 0) return;
+    
+    const exists = database.compositions.some(c => c.id === currentConfig.compositionId);
+    if (!exists) {
+      setCurrentConfig(prev => ({ ...prev, compositionId: database.compositions[0].id }));
+    }
+  }, [database]);
+
   const menuItems = [
     { id: 'commercial', label: 'Commercial', icon: LayoutDashboard },
     { id: 'production', label: 'Atelier / Production', icon: Package },
