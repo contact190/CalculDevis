@@ -332,6 +332,7 @@ const AdminDashboard = ({ data, setData }) => {
               <thead>
                 <tr>
                   <th>Référence</th>
+                  <th>Désignation</th>
                   <th>Type</th>
                   <th>Composition</th>
                   <th>Spécification</th>
@@ -344,8 +345,9 @@ const AdminDashboard = ({ data, setData }) => {
                 {data.glass.map(g => (
                   <tr key={g.id}>
                     <td style={{ fontWeight: 600 }}>
-                      <input className="input" defaultValue={g.id} onBlur={e => handleUpdateItem('glass', g.id, 'id', e.target.value)} style={{ width: '120px', fontWeight: 600 }} />
+                      <input className="input" defaultValue={g.id} onBlur={e => handleUpdateItem('glass', g.id, 'id', e.target.value)} style={{ width: '100px', fontWeight: 600 }} />
                     </td>
+                    <td><input className="input" value={g.name} onChange={e => handleUpdateItem('glass', g.id, 'name', e.target.value)} style={{ width: '180px' }} /></td>
                     <td>
                       <select className="input" value={g.type} onChange={e => handleUpdateItem('glass', g.id, 'type', e.target.value)} style={{ width: '100px' }}>
                         <option value="SIMPLE">Simple</option>

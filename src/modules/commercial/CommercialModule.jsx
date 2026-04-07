@@ -232,7 +232,7 @@ const CommercialModule = ({ config, setConfig, database }) => {
               <div className="form-group">
                 <label className="label">Vitrage</label>
                 <select name="glassId" value={config.glassId} onChange={handleChange} className="input">
-                  {database.glass.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                  {database.glass.map(g => <option key={g.id} value={g.id}>{g.name} {g.composition ? `(${g.composition})` : ''}</option>)}
                 </select>
               </div>
             </div>
