@@ -161,6 +161,14 @@ export class FormulaEngine {
       }
     }
 
+    const glassL = this.evaluate(composition.glassFormulaL || 'L', scope);
+    const glassH = this.evaluate(composition.glassFormulaH || 'H', scope);
+    const glassQty = this.evaluate(composition.glassFormulaQty || '1', scope);
+    const glassArea = ((glassL * glassH) / 1000000) * glassQty;
+    const glassWeight = glass ? (glassArea * glass.weightPerM2) : 0;
+    const glassCost = glass ? (glassArea * glass.pricePerM2) : 0;
+
+    // Add Parcloses based on glass compatibility
     if (glass) {
       const glassProfiles = this.db.glassProfileCompatibility?.filter(
         c => c.rangeId === composition.rangeId && c.glassThickness === glass.thickness
@@ -169,25 +177,40 @@ export class FormulaEngine {
       glassProfiles.forEach(gp => {
         const pRef = this.db.profiles.find(p => p.id === gp.profileId);
         if (pRef) {
-          const value = this.evaluate(gp.formula || '(L+H)*2', { L, H });
+          const unitPrice = (pRef.pricePerBar || pRef.pricePerKg || 0);
+          
+          // Parclose Horizontal (2 per glass)
+          const hValue = glassL;
+          const hQty = 2 * glassQty;
           profiles.push({
             ...pRef,
-            label: 'Parclose / Profilé Comp.',
-            qty: 1,
-            length: value,
-            formula: gp.formula || '(L+H)*2',
-            cost: (value / (pRef.barLength || 6000)) * (pRef.pricePerBar || pRef.pricePerKg || 0)
+            label: 'Parclose H',
+            qty: hQty,
+            length: hValue,
+            formula: composition.glassFormulaL || 'L',
+            resolvedFormula: this.resolveFormula(composition.glassFormulaL || 'L', scope),
+            unitPrice: unitPrice,
+            totalMeasure: hValue * hQty,
+            cost: ((hValue * hQty) / (pRef.barLength || 6000)) * unitPrice
+          });
+
+          // Parclose Vertical (2 per glass)
+          const vValue = glassH;
+          const vQty = 2 * glassQty;
+          profiles.push({
+            ...pRef,
+            label: 'Parclose V',
+            qty: vQty,
+            length: vValue,
+            formula: composition.glassFormulaH || 'H',
+            resolvedFormula: this.resolveFormula(composition.glassFormulaH || 'H', scope),
+            unitPrice: unitPrice,
+            totalMeasure: vValue * vQty,
+            cost: ((vValue * vQty) / (pRef.barLength || 6000)) * unitPrice
           });
         }
       });
     }
-
-    const glassL = this.evaluate(composition.glassFormulaL || 'L', scope);
-    const glassH = this.evaluate(composition.glassFormulaH || 'H', scope);
-    const glassQty = this.evaluate(composition.glassFormulaQty || '1', scope);
-    const glassArea = ((glassL * glassH) / 1000000) * glassQty;
-    const glassWeight = glass ? (glassArea * glass.weightPerM2) : 0;
-    const glassCost = glass ? (glassArea * glass.pricePerM2) : 0;
 
     return {
       profiles,
