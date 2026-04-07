@@ -407,7 +407,7 @@ const CommercialModule = ({ config, setConfig, database }) => {
                     <td style={{ fontWeight: 600 }}>Vitrage</td>
                     <td>-</td>
                     <td>-</td>
-                    <td>1u</td>
+                    <td>{priceData.bom.glass.qty}u</td>
                     <td>{priceData.bom.glass.area.toFixed(2)} m²</td>
                     <td>{priceData.bom.glass.pricePerM2?.toFixed(2)}</td>
                     <td style={{ textAlign: 'right', fontWeight: 600 }}>{priceData.bom.glass.cost.toFixed(2)} DZD</td>

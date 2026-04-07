@@ -17,6 +17,7 @@ const AdminDashboard = ({ data, setData }) => {
       hasGasket: true,
       glassFormulaL: 'L-80',
       glassFormulaH: 'H-80',
+      glassFormulaQty: '1',
       elements: []
     };
     setData(prev => ({ ...prev, compositions: [...prev.compositions, newComp] }));
@@ -720,7 +721,7 @@ const AdminDashboard = ({ data, setData }) => {
                     </div>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem', padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '0.5rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginBottom: '1.5rem', padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '0.5rem' }}>
                     <div className="form-group">
                       <label className="label">Formule Largeur Vitrage (L-..)</label>
                       <input 
@@ -740,6 +741,18 @@ const AdminDashboard = ({ data, setData }) => {
                         value={editingComposition.glassFormulaH || 'H-80'} 
                         onChange={(e) => {
                           const updated = { ...editingComposition, glassFormulaH: e.target.value };
+                          setEditingComposition(updated);
+                          handleUpdateComposition(updated);
+                        }} 
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="label">Nombre de Vitrages</label>
+                      <input 
+                        className="input" 
+                        value={editingComposition.glassFormulaQty || '1'} 
+                        onChange={(e) => {
+                          const updated = { ...editingComposition, glassFormulaQty: e.target.value };
                           setEditingComposition(updated);
                           handleUpdateComposition(updated);
                         }} 

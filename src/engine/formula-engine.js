@@ -150,9 +150,10 @@ export class FormulaEngine {
       });
     }
 
-    const glassL = this.evaluate(composition.glassFormulaL || 'L', { L, H });
-    const glassH = this.evaluate(composition.glassFormulaH || 'H', { L, H });
-    const glassArea = (glassL * glassH) / 1000000;
+    const glassL = this.evaluate(composition.glassFormulaL || 'L', scope);
+    const glassH = this.evaluate(composition.glassFormulaH || 'H', scope);
+    const glassQty = this.evaluate(composition.glassFormulaQty || '1', scope);
+    const glassArea = ((glassL * glassH) / 1000000) * glassQty;
     const glassWeight = glass ? (glassArea * glass.weightPerM2) : 0;
     const glassCost = glass ? (glassArea * glass.pricePerM2) : 0;
 
@@ -163,10 +164,11 @@ export class FormulaEngine {
         ...glass,
         width: glassL,
         height: glassH,
+        qty: glassQty,
         area: glassArea,
         weight: glassWeight,
         cost: glassCost
-      } : { name: 'Vitrage Manquant', width: 0, height: 0, area: 0, weight: 0, cost: 0 },
+      } : { name: 'Vitrage Manquant', width: 0, height: 0, qty: 0, area: 0, weight: 0, cost: 0 },
       gasket
     };
   }
@@ -390,6 +392,7 @@ export class FormulaEngine {
       finalGlass = {
         ...glasses[0],
         name: glasses.length > 1 ? `Mixte (${glasses.length} panneaux)` : glasses[0].name,
+        qty: glasses.reduce((sum, g) => sum + (g.qty || 0), 0),
         area: glasses.reduce((sum, g) => sum + (g.area || 0), 0),
         weight: glasses.reduce((sum, g) => sum + (g.weight || 0), 0),
         cost: glasses.reduce((sum, g) => sum + (g.cost || 0), 0)
