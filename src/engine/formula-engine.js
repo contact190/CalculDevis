@@ -50,18 +50,50 @@ export class FormulaEngine {
     const scope = { L, H };
 
     composition.elements.forEach(el => {
-      // ... (Couvre-joint logic)
-      const isCouvreJoint = el.label?.toLowerCase().includes('couvre-joint') || el.label?.toLowerCase().includes('couvre joint');
+      const label = el.label || '';
+      const isCouvreJoint = /couvre[- ]?joint|cj[vh]?/i.test(label);
+      let elQty = el.qty;
+
       if (isCouvreJoint) {
-        const lowerLabel = el.label.toLowerCase();
-        if (lowerLabel.includes('haut') && !optionalSides.top) return;
-        if (lowerLabel.includes('bas') && !optionalSides.bottom) return;
-        if (lowerLabel.includes('gauche') && !optionalSides.left) return;
-        if (lowerLabel.includes('droite') && !optionalSides.right) return;
+        const lowerLabel = label.toLowerCase();
+        const isHorizontal = lowerLabel.includes('haut') || lowerLabel.includes('bas') || lowerLabel.includes('h');
+        const isVertical = lowerLabel.includes('gauche') || lowerLabel.includes('droite') || lowerLabel.includes('v');
+
+        if (isHorizontal) {
+          const hasHaut = lowerLabel.includes('haut');
+          const hasBas = lowerLabel.includes('bas');
+          const isGenericH = !hasHaut && !hasBas; // e.g. "CjH" or "couvre-jointH"
+          
+          if (isGenericH) {
+            let activeH = 0;
+            if (optionalSides.top) activeH++;
+            if (optionalSides.bottom) activeH++;
+            if (activeH === 0) return;
+            elQty = (el.qty / 2) * activeH;
+          } else {
+            if (hasHaut && !optionalSides.top) return;
+            if (hasBas && !optionalSides.bottom) return;
+          }
+        } else if (isVertical) {
+          const hasGauche = lowerLabel.includes('gauche');
+          const hasDroite = lowerLabel.includes('droite');
+          const isGenericV = !hasGauche && !hasDroite; // e.g. "CjV" or "couvre-jointV"
+
+          if (isGenericV) {
+            let activeV = 0;
+            if (optionalSides.left) activeV++;
+            if (optionalSides.right) activeV++;
+            if (activeV === 0) return;
+            elQty = (el.qty / 2) * activeV;
+          } else {
+            if (hasGauche && !optionalSides.left) return;
+            if (hasDroite && !optionalSides.right) return;
+          }
+        }
       }
 
       const value = this.evaluate(el.formula, scope);
-      const qty = value * el.qty;
+      const qty = value * elQty;
 
       if (el.type === 'profile') {
         const pRef = this.db.profiles.find(p => p.id === el.id);
@@ -70,7 +102,7 @@ export class FormulaEngine {
           profiles.push({
             ...pRef,
             label: el.label,
-            qty: el.qty,
+            qty: elQty,
             length: value,
             formula: el.formula,
             resolvedFormula: this.resolveFormula(el.formula, scope),

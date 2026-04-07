@@ -240,7 +240,7 @@ const CommercialModule = ({ config, setConfig, database }) => {
 
           {(() => {
             const currentComp = database.compositions.find(c => c.id === config.compositionId);
-            const hasCouvreJoint = currentComp?.elements?.some(e => e.label?.toLowerCase().includes('couvre-joint') || e.label?.toLowerCase().includes('couvre joint'));
+            const hasCouvreJoint = currentComp?.elements?.some(e => /couvre[- ]?joint|cj[vh]?/i.test(e.label || ''));
             if (!hasCouvreJoint) return null;
 
             return (
