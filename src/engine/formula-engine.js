@@ -421,6 +421,7 @@ export class FormulaEngine {
 
     const materialCost = bom.profiles.reduce((sum, p) => sum + p.cost, 0) + 
                        (bom.glass ? bom.glass.cost : 0) + 
+                       (bom.gasket ? bom.gasket.cost : 0) + 
                        bom.accessories.reduce((sum, a) => sum + (a.cost || 0), 0);
     
     const costWithColor = materialCost * (color ? color.factor : 1.0);
