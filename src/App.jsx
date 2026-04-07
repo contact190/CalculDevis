@@ -27,19 +27,36 @@ function App() {
 
   const [database, setDatabase] = useState(DEFAULT_DATA);
 
+  const repairDatabase = (db) => {
+    const repaired = { ...DEFAULT_DATA, ...db };
+    // Ensure all compositions have a categoryId if missing
+    if (repaired.compositions) {
+      repaired.compositions = repaired.compositions.map(c => ({
+        ...c,
+        categoryId: c.categoryId || (repaired.categories?.[0]?.id || 'CAT-F'),
+        openingType: c.openingType || 'Fixe'
+      }));
+    }
+    return repaired;
+  };
+
   // 1. Initial Cloud Sync (on Mount)
   React.useEffect(() => {
     const initDB = async () => {
       setIsSyncing(true);
       const cloudData = await syncDatabase.load();
       if (cloudData) {
-        setDatabase(cloudData);
+        setDatabase(repairDatabase(cloudData));
         setLastSyncTime(new Date());
       } else {
         // Fallback to local if cloud is empty/fails
         const saved = localStorage.getItem('calculDevisDB');
         if (saved) {
-           try { setDatabase(JSON.parse(saved)); } catch(e) { setDatabase(DEFAULT_DATA); }
+           try { 
+             setDatabase(repairDatabase(JSON.parse(saved))); 
+           } catch(e) { 
+             setDatabase(DEFAULT_DATA); 
+           }
         }
       }
       setIsSyncing(false);

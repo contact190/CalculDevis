@@ -154,10 +154,16 @@ const CommercialModule = ({ config, setConfig, database }) => {
             {/* Technical Options (Simple Mode only) */}
             <div style={{ display: config.useCustomLayout ? 'none' : 'block' }}>
               {(() => {
+                if (!database.compositions || database.compositions.length === 0) {
+                  return <div style={{ padding: '1rem', color: '#ef4444' }}>Aucun modèle disponible dans la base.</div>;
+                }
+
                 const currentComp = database.compositions.find(c => c.id === config.compositionId) || database.compositions[0];
-                const activeCat = currentComp?.categoryId || '';
-                const activeOpen = currentComp?.openingType || '';
-                const availableOpenings = [...new Set(database.compositions.filter(c => c.categoryId === activeCat).map(c => c.openingType))];
+                const activeCat = currentComp?.categoryId || (database.categories?.[0]?.id || '');
+                const activeOpen = currentComp?.openingType || 'Fixe';
+                
+                const compsInCat = database.compositions.filter(c => c.categoryId === activeCat);
+                const availableOpenings = [...new Set(compsInCat.map(c => c.openingType))];
 
                 return (
                   <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0', marginBottom: '1rem' }}>
