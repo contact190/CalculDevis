@@ -168,8 +168,11 @@ export class FormulaEngine {
     const glassWeight = glass ? (glassArea * glass.weightPerM2) : 0;
     const glassCost = glass ? (glassArea * glass.pricePerM2) : 0;
 
-    // Add Parcloses based on glass compatibility
+    // Add Parcloses based on glass compatibility ONLY if not already present in profiles
     if (glass) {
+      const hasManualParcloseH = profiles.some(p => p.label?.toLowerCase() === 'parcloseh');
+      const hasManualParcloseV = profiles.some(p => p.label?.toLowerCase() === 'parclosev');
+      
       const glassProfiles = this.db.glassProfileCompatibility?.filter(
         c => c.rangeId === composition.rangeId && c.glassThickness === glass.thickness
       ) || [];
@@ -179,35 +182,39 @@ export class FormulaEngine {
         if (pRef) {
           const unitPrice = (pRef.pricePerBar || pRef.pricePerKg || 0);
           
-          // Parclose Horizontal (2 per glass)
-          const hValue = glassL;
-          const hQty = 2 * glassQty;
-          profiles.push({
-            ...pRef,
-            label: 'ParcloseH',
-            qty: hQty,
-            length: hValue,
-            formula: composition.glassFormulaL || 'L',
-            resolvedFormula: this.resolveFormula(composition.glassFormulaL || 'L', scope),
-            unitPrice: unitPrice,
-            totalMeasure: hValue * hQty,
-            cost: ((hValue * hQty) / (pRef.barLength || 6000)) * unitPrice
-          });
+          // Parclose Horizontal (2 per glass) - Only if not already added manually
+          if (!hasManualParcloseH) {
+            const hValue = glassL;
+            const hQty = 2 * glassQty;
+            profiles.push({
+              ...pRef,
+              label: 'ParcloseH',
+              qty: hQty,
+              length: hValue,
+              formula: composition.glassFormulaL || 'L',
+              resolvedFormula: this.resolveFormula(composition.glassFormulaL || 'L', scope),
+              unitPrice: unitPrice,
+              totalMeasure: hValue * hQty,
+              cost: ((hValue * hQty) / (pRef.barLength || 6000)) * unitPrice
+            });
+          }
 
-          // Parclose Vertical (2 per glass)
-          const vValue = glassH;
-          const vQty = 2 * glassQty;
-          profiles.push({
-            ...pRef,
-            label: 'ParcloseV',
-            qty: vQty,
-            length: vValue,
-            formula: composition.glassFormulaH || 'H',
-            resolvedFormula: this.resolveFormula(composition.glassFormulaH || 'H', scope),
-            unitPrice: unitPrice,
-            totalMeasure: vValue * vQty,
-            cost: ((vValue * vQty) / (pRef.barLength || 6000)) * unitPrice
-          });
+          // Parclose Vertical (2 per glass) - Only if not already added manually
+          if (!hasManualParcloseV) {
+            const vValue = glassH;
+            const vQty = 2 * glassQty;
+            profiles.push({
+              ...pRef,
+              label: 'ParcloseV',
+              qty: vQty,
+              length: vValue,
+              formula: composition.glassFormulaH || 'H',
+              resolvedFormula: this.resolveFormula(composition.glassFormulaH || 'H', scope),
+              unitPrice: unitPrice,
+              totalMeasure: vValue * vQty,
+              cost: ((vValue * vQty) / (pRef.barLength || 6000)) * unitPrice
+            });
+          }
         }
       });
     }
