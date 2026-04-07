@@ -81,13 +81,20 @@ function App() {
     return () => clearTimeout(timeout);
   }, [database]);
 
-  // 3. Ensure config is valid for current DB
   React.useEffect(() => {
     if (!database.compositions || database.compositions.length === 0) return;
     
-    const exists = database.compositions.some(c => c.id === currentConfig.compositionId);
-    if (!exists) {
-      setCurrentConfig(prev => ({ ...prev, compositionId: database.compositions[0].id }));
+    const compExists = database.compositions.some(c => c.id === currentConfig.compositionId);
+    const glassExists = database.glass.some(g => g.id === currentConfig.glassId);
+    const colorExists = database.colors.some(c => c.id === currentConfig.colorId);
+    
+    if (!compExists || !glassExists || !colorExists) {
+      setCurrentConfig(prev => ({ 
+        ...prev, 
+        compositionId: compExists ? prev.compositionId : database.compositions[0].id,
+        glassId: glassExists ? prev.glassId : database.glass[0].id,
+        colorId: colorExists ? prev.colorId : database.colors[0].id
+      }));
     }
   }, [database]);
 
