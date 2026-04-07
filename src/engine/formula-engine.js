@@ -27,6 +27,17 @@ export class FormulaEngine {
   }
 
   /**
+   * Resolve a formula by replacing L and H with their values
+   */
+  resolveFormula(formula, scope) {
+    if (!formula || typeof formula !== 'string') return '';
+    let resolved = formula;
+    if (scope.L !== undefined) resolved = resolved.replace(/L/g, Math.round(scope.L));
+    if (scope.H !== undefined) resolved = resolved.replace(/H/g, Math.round(scope.H));
+    return resolved;
+  }
+
+  /**
    * Calculate BOM for a single component (used by global BOM or individual cells)
    */
   calculateComponentBOM(config, L, H, compositionId, glassId, optionalSides = {}) {
@@ -35,8 +46,10 @@ export class FormulaEngine {
 
     const profiles = [];
     const accessories = [];
+    const scope = { L, H };
 
     composition.elements.forEach(el => {
+      // ... (Couvre-joint logic)
       const isCouvreJoint = el.label?.toLowerCase().includes('couvre-joint') || el.label?.toLowerCase().includes('couvre joint');
       if (isCouvreJoint) {
         const lowerLabel = el.label.toLowerCase();
@@ -46,25 +59,28 @@ export class FormulaEngine {
         if (lowerLabel.includes('droite') && !optionalSides.right) return;
       }
 
-      const value = this.evaluate(el.formula, { L, H });
+      const value = this.evaluate(el.formula, scope);
       const qty = value * el.qty;
 
       if (el.type === 'profile') {
         const pRef = this.db.profiles.find(p => p.id === el.id);
         if (pRef) {
+          const unitPrice = (pRef.pricePerBar || pRef.pricePerKg || 0);
           profiles.push({
             ...pRef,
             label: el.label,
             qty: el.qty,
             length: value,
             formula: el.formula,
-            cost: (qty / (pRef.barLength || 6000)) * (pRef.pricePerBar || pRef.pricePerKg || 0)
+            resolvedFormula: this.resolveFormula(el.formula, scope),
+            unitPrice: unitPrice,
+            totalMeasure: value * el.qty,
+            cost: (qty / (pRef.barLength || 6000)) * unitPrice
           });
         }
       } else if (el.type === 'accessory') {
         const aRef = this.db.accessories.find(a => a.id === el.id);
         if (aRef) {
-          // Automatic unit conversion: if formula result is in mm and unit is M/ML/Joint, divide by 1000
           const unitUpper = (aRef.unit || '').toUpperCase();
           const isLinear = ['M', 'ML', 'JOINT'].includes(unitUpper);
           const finalQty = isLinear ? (qty / 1000) : qty;
@@ -75,6 +91,9 @@ export class FormulaEngine {
             qty: finalQty,
             multiplier: el.qty || 1,
             formula: el.formula || '1',
+            resolvedFormula: this.resolveFormula(el.formula || '1', scope),
+            unitPrice: aRef.price || 0,
+            totalMeasure: qty, // Total in mm or units
             cost: (finalQty || 0) * (aRef.price || 0)
           });
         }
@@ -93,14 +112,17 @@ export class FormulaEngine {
         const gRef = this.db.accessories.find(a => a.id === compatibility.gasketId);
         if (gRef) {
           const formula = compatibility.formula || '(L+H)*2';
-          const lenMm = this.evaluate(formula, { L, H });
+          const lenMm = this.evaluate(formula, scope);
           const qtyMl = lenMm / 1000;
           
           gasket = {
             ...gRef,
             qty: qtyMl,
             formula: formula,
-            cost: qtyMl * gRef.price
+            resolvedFormula: this.resolveFormula(formula, scope),
+            unitPrice: gRef.price || 0,
+            totalMeasure: lenMm,
+            cost: qtyMl * (gRef.price || 0)
           };
         }
       }

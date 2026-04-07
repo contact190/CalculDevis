@@ -355,72 +355,84 @@ const CommercialModule = ({ config, setConfig, database }) => {
           )}
 
           <div style={{ marginTop: '2rem', borderTop: '1px solid #f1f5f9', paddingTop: '1.5rem' }}>
-            <h3 style={{ fontSize: '0.875rem', fontWeight: 600, color: '#64748b', marginBottom: '1rem' }}>RÉSUMÉ DU CALCUL</h3>
-            <table className="data-table" style={{ fontSize: '0.875rem' }}>
+            <h3 style={{ fontSize: '0.875rem', fontWeight: 600, color: '#64748b', marginBottom: '1rem' }}>RÉSUMÉ DÉTAILLÉ DU CALCUL</h3>
+            <table className="data-table" style={{ fontSize: '0.7rem' }}>
               <thead>
                 <tr>
                   <th>Composant</th>
-                  <th>Détail</th>
+                  <th>Formule</th>
+                  <th>Calcul</th>
                   <th>Nbre</th>
-                  <th>Total</th>
-                  <th style={{ textAlign: 'right' }}>Prix</th>
+                  <th>Mesure Totale</th>
+                  <th>Prix Unit.</th>
+                  <th style={{ textAlign: 'right' }}>Prix Total</th>
                 </tr>
               </thead>
               <tbody>
                 {priceData && priceData.bom.profiles.map((p, i) => (
                   <tr key={i}>
-                    <td style={{ fontWeight: 500 }}>{p.label}</td>
-                    <td style={{ color: '#64748b' }}>{p.name} ({p.length} mm)</td>
+                    <td style={{ fontWeight: 600 }}>{p.label}</td>
+                    <td style={{ color: '#64748b', fontSize: '0.65rem' }}>{p.formula}</td>
+                    <td style={{ color: '#3b82f6', fontSize: '0.65rem' }}>{p.resolvedFormula}</td>
                     <td>{p.qty}u</td>
-                    <td>{p.length} mm</td>
-                    <td style={{ textAlign: 'right' }}>{p.cost.toFixed(2)} DZD</td>
+                    <td>{Math.round(p.totalMeasure)} mm</td>
+                    <td>{p.unitPrice?.toFixed(2)}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 600 }}>{p.cost.toFixed(2)} DZD</td>
                   </tr>
                 ))}
                 {priceData && priceData.bom.accessories.map((acc, i) => (
                   <tr key={`acc-${i}`}>
-                    <td style={{ fontWeight: 500 }}>{acc.label}</td>
-                    <td style={{ color: '#64748b' }}>{acc.name} ({acc.formula})</td>
+                    <td style={{ fontWeight: 600 }}>{acc.label}</td>
+                    <td style={{ color: '#64748b', fontSize: '0.65rem' }}>{acc.formula}</td>
+                    <td style={{ color: '#3b82f6', fontSize: '0.65rem' }}>{acc.resolvedFormula}</td>
                     <td>{acc.multiplier}u</td>
-                    <td>{acc.qty.toFixed(2)} {acc.unit}</td>
-                    <td style={{ textAlign: 'right' }}>{acc.cost.toFixed(2)} DZD</td>
+                    <td>{acc.totalMeasure.toFixed(2)} {acc.unit === 'Ml' || acc.unit === 'Joint' ? 'mm' : 'u'}</td>
+                    <td>{acc.unitPrice?.toFixed(2)}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 600 }}>{acc.cost.toFixed(2)} DZD</td>
                   </tr>
                 ))}
                 {priceData && priceData.bom.gasket && (
                   <tr>
-                    <td style={{ fontWeight: 500 }}>Joint de vitrage</td>
-                    <td style={{ color: '#64748b' }}>{priceData.bom.gasket.name}</td>
+                    <td style={{ fontWeight: 600 }}>Joint de vitrage</td>
+                    <td style={{ color: '#64748b', fontSize: '0.65rem' }}>{priceData.bom.gasket.formula}</td>
+                    <td style={{ color: '#3b82f6', fontSize: '0.65rem' }}>{priceData.bom.gasket.resolvedFormula}</td>
                     <td>1u</td>
-                    <td>{priceData.bom.gasket.qty.toFixed(2)} m</td>
-                    <td style={{ textAlign: 'right' }}>{priceData.bom.gasket.cost.toFixed(2)} DZD</td>
+                    <td>{priceData.bom.gasket.totalMeasure.toFixed(2)} mm</td>
+                    <td>{priceData.bom.gasket.unitPrice?.toFixed(2)}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 600 }}>{priceData.bom.gasket.cost.toFixed(2)} DZD</td>
                   </tr>
                 )}
                 {priceData && (
                   <tr>
-                    <td style={{ fontWeight: 500 }}>Vitrage</td>
-                    <td style={{ color: '#64748b' }}>{priceData.bom.glass.name}</td>
+                    <td style={{ fontWeight: 600 }}>Vitrage</td>
+                    <td>-</td>
+                    <td>-</td>
                     <td>1u</td>
                     <td>{priceData.bom.glass.area.toFixed(2)} m²</td>
-                    <td style={{ textAlign: 'right' }}>{priceData.bom.glass.cost.toFixed(2)} DZD</td>
+                    <td>{priceData.bom.glass.pricePerM2?.toFixed(2)}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 600 }}>{priceData.bom.glass.cost.toFixed(2)} DZD</td>
                   </tr>
                 )}
                 {priceData && priceData.bom.shutters && priceData.bom.shutters.length > 0 && (<>
                   <tr>
-                    <td colSpan="4" style={{ background: '#eff6ff', color: '#1d4ed8', fontWeight: 700, fontSize: '0.75rem', letterSpacing: '0.05em', paddingTop: '0.5rem' }}>
+                    <td colSpan="7" style={{ background: '#eff6ff', color: '#1d4ed8', fontWeight: 700, fontSize: '0.75rem', letterSpacing: '0.05em', paddingTop: '0.5rem' }}>
                       📦 PACK VOLET ROULANT
                     </td>
                   </tr>
                   {priceData.bom.shutters.map((s, i) => (
                     <tr key={`shutter-${i}`} style={{ background: '#f8faff' }}>
                       <td style={{ fontWeight: 500 }}>{s.name}</td>
-                      <td style={{ color: '#64748b' }}>{s.formula} = {typeof s.qty === 'number' ? s.qty.toFixed(2) : s.qty} {s.priceUnit}</td>
+                      <td>{s.formula}</td>
+                      <td>-</td>
                       <td>1u</td>
                       <td>{typeof s.qty === 'number' ? s.qty.toFixed(2) : s.qty} {s.priceUnit}</td>
-                      <td style={{ textAlign: 'right' }}>{(s.cost || 0).toFixed(2)} DZD</td>
+                      <td>{s.price?.toFixed(2)}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 600 }}>{(s.cost || 0).toFixed(2)} DZD</td>
                     </tr>
                   ))}
                 </>)}
-                <tr style={{ background: '#f1f5f9', fontWeight: 700 }}>
-                  <td colSpan="4" style={{ textAlign: 'right' }}>COÛT TOTAL DE REVIENT (MATÉRIAUX)</td>
+                <tr style={{ background: '#f1f5f9', fontWeight: 700, fontSize: '0.85rem' }}>
+                  <td colSpan="6" style={{ textAlign: 'right' }}>COÛT TOTAL DE REVIENT (MATÉRIAUX)</td>
                   <td style={{ textAlign: 'right', color: '#1e293b' }}>{priceData ? priceData.cost.toFixed(2) : '0.00'} DZD</td>
                 </tr>
               </tbody>
