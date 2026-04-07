@@ -361,7 +361,8 @@ const CommercialModule = ({ config, setConfig, database }) => {
                 <tr>
                   <th>Composant</th>
                   <th>Détail</th>
-                  <th>Quantité</th>
+                  <th>Nbre</th>
+                  <th>Total</th>
                   <th style={{ textAlign: 'right' }}>Prix</th>
                 </tr>
               </thead>
@@ -371,6 +372,7 @@ const CommercialModule = ({ config, setConfig, database }) => {
                     <td style={{ fontWeight: 500 }}>{p.label}</td>
                     <td style={{ color: '#64748b' }}>{p.name} ({p.length} mm)</td>
                     <td>{p.qty}u</td>
+                    <td>{p.length} mm</td>
                     <td style={{ textAlign: 'right' }}>{p.cost.toFixed(2)} DZD</td>
                   </tr>
                 ))}
@@ -378,6 +380,7 @@ const CommercialModule = ({ config, setConfig, database }) => {
                   <tr key={`acc-${i}`}>
                     <td style={{ fontWeight: 500 }}>{acc.label}</td>
                     <td style={{ color: '#64748b' }}>{acc.name} ({acc.formula})</td>
+                    <td>{acc.multiplier}u</td>
                     <td>{acc.qty.toFixed(2)} {acc.unit}</td>
                     <td style={{ textAlign: 'right' }}>{acc.cost.toFixed(2)} DZD</td>
                   </tr>
@@ -385,16 +388,18 @@ const CommercialModule = ({ config, setConfig, database }) => {
                 {priceData && priceData.bom.gasket && (
                   <tr>
                     <td style={{ fontWeight: 500 }}>Joint de vitrage</td>
-                    <td style={{ color: '#64748b' }}>{priceData.bom.gasket.name} ({priceData.bom.gasket.qty.toFixed(2)} m)</td>
+                    <td style={{ color: '#64748b' }}>{priceData.bom.gasket.name}</td>
                     <td>1u</td>
+                    <td>{priceData.bom.gasket.qty.toFixed(2)} m</td>
                     <td style={{ textAlign: 'right' }}>{priceData.bom.gasket.cost.toFixed(2)} DZD</td>
                   </tr>
                 )}
                 {priceData && (
                   <tr>
                     <td style={{ fontWeight: 500 }}>Vitrage</td>
-                    <td style={{ color: '#64748b' }}>{priceData.bom.glass.name} ({priceData.bom.glass.area.toFixed(2)} m²)</td>
+                    <td style={{ color: '#64748b' }}>{priceData.bom.glass.name}</td>
                     <td>1u</td>
+                    <td>{priceData.bom.glass.area.toFixed(2)} m²</td>
                     <td style={{ textAlign: 'right' }}>{priceData.bom.glass.cost.toFixed(2)} DZD</td>
                   </tr>
                 )}

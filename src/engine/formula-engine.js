@@ -73,6 +73,7 @@ export class FormulaEngine {
             ...aRef,
             label: el.label,
             qty: finalQty,
+            multiplier: el.qty || 1,
             formula: el.formula || '1',
             cost: (finalQty || 0) * (aRef.price || 0)
           });
