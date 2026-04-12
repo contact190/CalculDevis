@@ -37,31 +37,7 @@ export const DEFAULT_DATA = {
       barLength: 6000, 
       colors: ['RAL9016', 'RAL7016'],
       type: 'ALU' 
-    },
-    { 
-      id: 'P201', name: 'Dormant H48', 
-      rangeId: 'H48', 
-      weightPerM: 1.45, pricePerKg: 4.8, 
-      barLength: 6500, 
-      colors: ['RAL9016', 'RAL7016', 'BOIS'], 
-      type: 'ALU' 
-    },
-    { 
-      id: 'CJ-H', name: 'Couvre-joint Horizontal 40mm', 
-      rangeId: 'H36', 
-      weightPerM: 0.35, pricePerKg: 5.5, 
-      barLength: 6000, 
-      colors: ['RAL9016', 'RAL7016', 'BOIS'], 
-      type: 'ALU' 
-    },
-    { 
-      id: 'CJ-V', name: 'Couvre-joint Vertical 40mm', 
-      rangeId: 'H36', 
-      weightPerM: 0.40, pricePerKg: 5.5, 
-      barLength: 6000, 
-      colors: ['RAL9016', 'RAL7016', 'BOIS'], 
-      type: 'ALU' 
-    },
+    }
   ],
   glass: [
     { 
@@ -169,10 +145,6 @@ export const DEFAULT_DATA = {
         { type: 'profile', id: 'P102', label: 'Ouvrant Droite', formula: '(H-40)', qty: 1 },
         { type: 'profile', id: 'P102', label: 'Ouvrant Haut', formula: '(L-40)/2', qty: 2 },
         { type: 'profile', id: 'P102', label: 'Ouvrant Bas', formula: '(L-40)/2', qty: 2 },
-        { type: 'profile', id: 'CJ-H', label: 'Couvre-joint Haut', formula: 'L', qty: 1 },
-        { type: 'profile', id: 'CJ-H', label: 'Couvre-joint Bas', formula: 'L', qty: 1 },
-        { type: 'profile', id: 'CJ-V', label: 'Couvre-joint Gauche', formula: 'H', qty: 1 },
-        { type: 'profile', id: 'CJ-V', label: 'Couvre-joint Droite', formula: 'H', qty: 1 },
         { type: 'accessory', id: 'ACC01', label: 'Kit Roulettes', formula: '1', qty: 2 },
         { type: 'accessory', id: 'ACC02', label: 'Poignée', formula: '1', qty: 1 },
       ]

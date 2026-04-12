@@ -7,11 +7,47 @@ import ClientsModule from './modules/clients/ClientsModule';
 import { DEFAULT_DATA } from './data/default-data';
 import { syncDatabase } from './utils/supabaseClient';
 
+const DEFAULT_QUOTE_SETTINGS = {
+  companyName: '',
+  companyAddress: '',
+  companyPhone: '',
+  companyEmail: '',
+  companyRC: '',
+  companyIMP: '',
+  companyMF: '',
+  companyBank: '',
+  logoBase64: null,
+  footerText: 'Devis valable sous réserve d\'acceptation dans le délai indiqué.',
+  validityDays: 30,
+  tvaRate: 19,
+  quotePrefix: 'DEV-',
+  quoteCounter: 1,
+};
+
+const makeNewQuote = (settings) => ({
+  id: `QUOTE-${Date.now()}`,
+  number: `${settings.quotePrefix}${String(settings.quoteCounter).padStart(3, '0')}`,
+  clientId: null,
+  createdAt: new Date().toISOString(),
+  items: [],
+});
+
 function App() {
   const [activeTab, setActiveTab] = useState('commercial');
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState(null);
   
+  const [database, setDatabase] = useState(DEFAULT_DATA);
+
+  const [quoteSettings, setQuoteSettings] = useState(() => {
+    try {
+      const saved = localStorage.getItem('quoteSettings');
+      return saved ? { ...DEFAULT_QUOTE_SETTINGS, ...JSON.parse(saved) } : DEFAULT_QUOTE_SETTINGS;
+    } catch { return DEFAULT_QUOTE_SETTINGS; }
+  });
+
+  const [currentQuote, setCurrentQuote] = useState(() => makeNewQuote(DEFAULT_QUOTE_SETTINGS));
+
   // Shared state for the current configuration (session specific)
   const [currentConfig, setCurrentConfig] = useState({
     L: 1200,
@@ -26,11 +62,37 @@ function App() {
     margin: 2.2
   });
 
-  const [database, setDatabase] = useState(DEFAULT_DATA);
+  const generateUniqueId = (prefix = 'ID') => {
+    return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
+  };
 
   const repairDatabase = (db) => {
-    const repaired = { ...DEFAULT_DATA, ...db };
-    // Ensure all compositions have a categoryId if missing
+    if (!db) return DEFAULT_DATA;
+    
+    // Non-destructive merge: only fill missing TOP-LEVEL categories
+    const repaired = { ...db };
+    Object.keys(DEFAULT_DATA).forEach(key => {
+      // Deduplicate arrays if they exist
+      if (Array.isArray(repaired[key])) {
+        const unique = [];
+        const seen = new Set();
+        repaired[key].forEach(item => {
+          if (!item) return;
+          const id = item.id || JSON.stringify(item);
+          if (!seen.has(id)) {
+            unique.push(item);
+            seen.add(id);
+          }
+        });
+        repaired[key] = unique;
+      }
+
+      if (repaired[key] === undefined || (Array.isArray(repaired[key]) && repaired[key].length === 0 && DEFAULT_DATA[key].length > 0 && key !== 'profiles' && key !== 'glassProfileCompatibility')) {
+        repaired[key] = DEFAULT_DATA[key];
+      }
+    });
+
+    // Specific field repairs for existing items
     if (repaired.compositions) {
       repaired.compositions = repaired.compositions.map(c => ({
         ...c,
@@ -39,10 +101,44 @@ function App() {
       }));
     }
     if (repaired.accessories) {
-      repaired.accessories = repaired.accessories.map(a => ({
-        ...a,
-        rangeId: a.rangeId || (repaired.ranges?.[0]?.id || 'H36')
-      }));
+      repaired.accessories = repaired.accessories.map(a => {
+        const item = { ...a };
+        if (item.rangeId && !item.rangeIds) {
+          item.rangeIds = [item.rangeId];
+        }
+        if (!item.rangeIds) item.rangeIds = [repaired.ranges?.[0]?.id || 'H36'];
+        return item;
+      });
+    }
+    if (repaired.options) {
+      repaired.options = repaired.options.map(o => {
+        const item = { ...o };
+        if (item.rangeId && !item.rangeIds) {
+          item.rangeIds = [item.rangeId];
+        }
+        if (!item.rangeIds) item.rangeIds = [repaired.ranges?.[0]?.id || 'H36'];
+        return item;
+      });
+    }
+
+    if (repaired.glassProfileCompatibility) {
+      repaired.glassProfileCompatibility = repaired.glassProfileCompatibility.map(gc => {
+        const item = { ...gc };
+        if (item.profileId && !item.profileHId) {
+          item.profileHId = item.profileId;
+          item.profileVId = item.profileId;
+        }
+        if (item.formula && !item.formulaH) {
+          item.formulaH = item.formula;
+          item.formulaV = item.formula;
+        }
+        // Ensure defaults if missing
+        if (!item.formulaH) item.formulaH = 'L-80';
+        if (!item.formulaV) item.formulaV = 'H-80';
+        if (item.qtyH === undefined) item.qtyH = 2;
+        if (item.qtyV === undefined) item.qtyV = 2;
+        return item;
+      });
     }
     return repaired;
   };
@@ -197,11 +293,21 @@ function App() {
             config={currentConfig} 
             setConfig={setCurrentConfig} 
             database={database}
+            setDatabase={setDatabase}
+            currentQuote={currentQuote}
+            setCurrentQuote={setCurrentQuote}
+            quoteSettings={quoteSettings}
+            setQuoteSettings={(settings) => {
+              setQuoteSettings(settings);
+              localStorage.setItem('quoteSettings', JSON.stringify(settings));
+            }}
+            onNewQuote={() => setCurrentQuote(makeNewQuote(quoteSettings))}
           />
         )}
         {activeTab === 'production' && (
           <ProductionModule 
             currentConfig={currentConfig} 
+            currentQuote={currentQuote}
             database={database}
           />
         )}
@@ -209,6 +315,10 @@ function App() {
           <ClientsModule 
             data={database}
             setData={setDatabase}
+            onOpenQuote={(quote) => {
+              setCurrentQuote(quote);
+              setActiveTab('commercial');
+            }}
           />
         )}
         {activeTab === 'admin' && (

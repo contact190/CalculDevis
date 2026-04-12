@@ -49,50 +49,71 @@ export class FormulaEngine {
     const accessories = [];
     const scope = { L, H };
 
+    const expandedElements = [];
+
     composition.elements.forEach(el => {
-      const label = el.label || '';
-      const isCouvreJoint = /couvre[- ]?joint|cj[vh]?|parclose[vh]?/i.test(label);
-      let elQty = el.qty;
-
-      if (isCouvreJoint) {
-        const lowerLabel = label.toLowerCase();
-        const isHorizontal = /haut|bas|h$|\bh\b/i.test(lowerLabel);
-        const isVertical = /gauche|droite|v$|\bv\b/i.test(lowerLabel);
-
-        if (isHorizontal) {
-          const hasHaut = lowerLabel.includes('haut');
-          const hasBas = lowerLabel.includes('bas');
-          const isGenericH = !hasHaut && !hasBas;
-          
-          if (isGenericH) {
-            let activeH = 0;
-            if (optionalSides.top) activeH++;
-            if (optionalSides.bottom) activeH++;
-            if (activeH === 0) return;
-            elQty = (el.qty / 2) * activeH;
-          } else {
-            if (hasHaut && !optionalSides.top) return;
-            if (hasBas && !optionalSides.bottom) return;
-          }
-        } else if (isVertical) {
-          const hasGauche = lowerLabel.includes('gauche');
-          const hasDroite = lowerLabel.includes('droite');
-          const isGenericV = !hasGauche && !hasDroite;
-
-          if (isGenericV) {
-            let activeV = 0;
-            if (optionalSides.left) activeV++;
-            if (optionalSides.right) activeV++;
-            if (activeV === 0) return;
-            elQty = (el.qty / 2) * activeV;
-          } else {
-            if (hasGauche && !optionalSides.left) return;
-            if (hasDroite && !optionalSides.right) return;
-          }
-        }
+      let label = el.label || '';
+      let itemName = '';
+      
+      if (el.type === 'profile') {
+        const p = this.db.profiles.find(x => x.id === el.id);
+        if (p) itemName = p.name || '';
+      } else if (el.type === 'accessory') {
+        const a = this.db.accessories.find(x => x.id === el.id);
+        if (a) itemName = a.name || '';
       }
 
-      const value = this.evaluate(el.formula, scope);
+      const searchStr = (label + ' ' + itemName).toLowerCase();
+      const isCouvreJoint = /couvres?[- ]?joints?|cj[vh]?/i.test(searchStr);
+
+      if (!isCouvreJoint) {
+        expandedElements.push(el);
+        return;
+      }
+
+      const isHorizontal = /haut|bas|h$|\bh\b|cjh|couvres?[- ]?joints?h/i.test(searchStr);
+      const isVertical = /gauche|droite|v$|\bv\b|cjv|couvres?[- ]?joints?v/i.test(searchStr);
+      const baseLabel = label || itemName;
+
+      if (isHorizontal) {
+        const hasHaut = searchStr.includes('haut');
+        const hasBas = searchStr.includes('bas');
+        const isGenericH = !hasHaut && !hasBas;
+        
+        if (isGenericH) {
+          if (optionalSides.top) expandedElements.push({ ...el, label: baseLabel + ' (Haut)', qty: el.qty / 2 });
+          if (optionalSides.bottom) expandedElements.push({ ...el, label: baseLabel + ' (Bas)', qty: el.qty / 2 });
+        } else {
+          if (hasHaut && optionalSides.top) expandedElements.push(el);
+          if (hasBas && optionalSides.bottom) expandedElements.push(el);
+        }
+      } else if (isVertical) {
+        const hasGauche = searchStr.includes('gauche');
+        const hasDroite = searchStr.includes('droite');
+        const isGenericV = !hasGauche && !hasDroite;
+
+        if (isGenericV) {
+          if (optionalSides.left) expandedElements.push({ ...el, label: baseLabel + ' (Gauche)', qty: el.qty / 2 });
+          if (optionalSides.right) expandedElements.push({ ...el, label: baseLabel + ' (Droite)', qty: el.qty / 2 });
+        } else {
+          if (hasGauche && optionalSides.left) expandedElements.push(el);
+          if (hasDroite && optionalSides.right) expandedElements.push(el);
+        }
+      } else {
+        // Generic 4-sided
+        const vFormula = (el.formula === 'L' || !el.formula) ? 'H' : el.formula;
+        if (optionalSides.top) expandedElements.push({ ...el, label: baseLabel + ' (Haut)', qty: el.qty / 4 });
+        if (optionalSides.bottom) expandedElements.push({ ...el, label: baseLabel + ' (Bas)', qty: el.qty / 4 });
+        if (optionalSides.left) expandedElements.push({ ...el, formula: vFormula, label: baseLabel + ' (Gauche)', qty: el.qty / 4 });
+        if (optionalSides.right) expandedElements.push({ ...el, formula: vFormula, label: baseLabel + ' (Droite)', qty: el.qty / 4 });
+      }
+    });
+
+    expandedElements.forEach(el => {
+      let elQty = el.qty;
+      const isAccessory = el.type === 'accessory';
+      const formulaStr = (el.formula && el.formula.trim() !== '') ? el.formula : (isAccessory ? '1' : '');
+      const value = this.evaluate(formulaStr, scope);
       const qty = value * elQty;
 
       if (el.type === 'profile') {
@@ -150,6 +171,8 @@ export class FormulaEngine {
           
           gasket = {
             ...gRef,
+            isGlassGasket: true,
+            label: 'Joint de Vitrage',
             qty: qtyMl,
             formula: formula,
             resolvedFormula: this.resolveFormula(formula, scope),
@@ -178,43 +201,46 @@ export class FormulaEngine {
       ) || [];
 
       glassProfiles.forEach(gp => {
-        const pRef = this.db.profiles.find(p => p.id === gp.profileId);
-        if (pRef) {
-          const unitPrice = (pRef.pricePerBar || pRef.pricePerKg || 0);
+        // Handle Parclose Horizontal
+        const pHRef = this.db.profiles.find(p => p.id === gp.profileHId);
+        if (pHRef && !hasManualParcloseH) {
+          const unitPrice = (pHRef.pricePerBar || pHRef.pricePerKg || 0);
+          const formulaH = gp.formulaH || composition.glassFormulaL || 'L';
+          const hValue = this.evaluate(formulaH, scope);
+          const hQty = (gp.qtyH || 2) * glassQty;
           
-          // Parclose Horizontal (2 per glass) - Only if not already added manually
-          if (!hasManualParcloseH) {
-            const hValue = glassL;
-            const hQty = 2 * glassQty;
-            profiles.push({
-              ...pRef,
-              label: 'ParcloseH',
-              qty: hQty,
-              length: hValue,
-              formula: composition.glassFormulaL || 'L',
-              resolvedFormula: this.resolveFormula(composition.glassFormulaL || 'L', scope),
-              unitPrice: unitPrice,
-              totalMeasure: hValue * hQty,
-              cost: ((hValue * hQty) / (pRef.barLength || 6000)) * unitPrice
-            });
-          }
+          profiles.push({
+            ...pHRef,
+            label: 'ParcloseH',
+            qty: hQty,
+            length: hValue,
+            formula: formulaH,
+            resolvedFormula: this.resolveFormula(formulaH, scope),
+            unitPrice: unitPrice,
+            totalMeasure: hValue * hQty,
+            cost: ((hValue * hQty) / (pHRef.barLength || 6000)) * unitPrice
+          });
+        }
 
-          // Parclose Vertical (2 per glass) - Only if not already added manually
-          if (!hasManualParcloseV) {
-            const vValue = glassH;
-            const vQty = 2 * glassQty;
-            profiles.push({
-              ...pRef,
-              label: 'ParcloseV',
-              qty: vQty,
-              length: vValue,
-              formula: composition.glassFormulaH || 'H',
-              resolvedFormula: this.resolveFormula(composition.glassFormulaH || 'H', scope),
-              unitPrice: unitPrice,
-              totalMeasure: vValue * vQty,
-              cost: ((vValue * vQty) / (pRef.barLength || 6000)) * unitPrice
-            });
-          }
+        // Handle Parclose Vertical
+        const pVRef = this.db.profiles.find(p => p.id === gp.profileVId);
+        if (pVRef && !hasManualParcloseV) {
+          const unitPrice = (pVRef.pricePerBar || pVRef.pricePerKg || 0);
+          const formulaV = gp.formulaV || composition.glassFormulaH || 'H';
+          const vValue = this.evaluate(formulaV, scope);
+          const vQty = (gp.qtyV || 2) * glassQty;
+          
+          profiles.push({
+            ...pVRef,
+            label: 'ParcloseV',
+            qty: vQty,
+            length: vValue,
+            formula: formulaV,
+            resolvedFormula: this.resolveFormula(formulaV, scope),
+            unitPrice: unitPrice,
+            totalMeasure: vValue * vQty,
+            cost: ((vValue * vQty) / (pVRef.barLength || 6000)) * unitPrice
+          });
         }
       });
     }
@@ -429,11 +455,12 @@ export class FormulaEngine {
     let finalGasket = null;
     
     activeAccessories.forEach(a => {
-      if (a.unit === 'Joint' || a.label?.toLowerCase().includes('joint')) {
+      if (a.isGlassGasket) {
         if (!finalGasket) {
           finalGasket = { ...a };
         } else {
           finalGasket.qty += a.qty;
+          finalGasket.totalMeasure += (a.totalMeasure || 0);
           finalGasket.cost += a.cost;
         }
         return;
@@ -464,6 +491,7 @@ export class FormulaEngine {
     const bom = {
       profiles: Object.values(groupedProfilesMap),
       glass: finalGlass,
+      glassDetails: glasses,
       gasket: finalGasket,
       accessories: Object.values(groupedAccessoriesMap),
       shutters: shutterPack

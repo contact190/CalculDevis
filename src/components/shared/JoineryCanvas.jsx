@@ -3,7 +3,7 @@ import React, { useEffect, useRef } from 'react';
 /**
  * Joinery Drawing Component (Canvas 2D)
  */
-const JoineryCanvas = ({ config, width = 400, height = 400, database }) => {
+const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComplete }) => {
   const canvasRef = useRef(null);
 
   useEffect(() => {
@@ -94,7 +94,18 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database }) => {
     ctx.fillText(`${H} mm`, 0, 0);
     ctx.restore();
 
-  }, [config, width, height]);
+    // Notifications (Optionnel)
+    if (onDrawComplete) {
+      setTimeout(() => {
+        try {
+          onDrawComplete(canvas.toDataURL('image/png'));
+        } catch (e) {
+          console.error('Failed to export canvas', e);
+        }
+      }, 50);
+    }
+
+  }, [config, width, height, database, onDrawComplete]);
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col items-center justify-center">

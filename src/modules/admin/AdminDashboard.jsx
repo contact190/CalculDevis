@@ -1,7 +1,69 @@
 import React, { useState } from 'react';
-import { Package, Search, Plus, Trash2, Save, Download, Upload, AlertCircle, RefreshCw, Layers, Edit2, ChevronDown, Check, FileSpreadsheet } from 'lucide-react';
+import { Package, Search, Plus, Trash2, Save, Download, Upload, AlertCircle, RefreshCw, Layers, Edit2, ChevronDown, Check, FileSpreadsheet, Info } from 'lucide-react';
 import { DEFAULT_DATA } from '../../data/default-data';
 import * as XLSX from 'xlsx';
+
+const MultiSelectRange = ({ selectedIds = [], allRanges, onChange }) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  const toggleRange = (id) => {
+    if (selectedIds.includes(id)) {
+      onChange(selectedIds.filter(x => x !== id));
+    } else {
+      onChange([...selectedIds, id]);
+    }
+  };
+
+  return (
+    <div style={{ position: 'relative', width: '120px' }}>
+      <button 
+        className="input" 
+        onClick={() => setIsOpen(!isOpen)}
+        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', textAlign: 'left', fontSize: '0.8rem', background: 'white' }}
+      >
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {selectedIds.length === 0 ? 'Aucune' : selectedIds.length === allRanges.length ? 'Toutes' : `${selectedIds.length} gammes`}
+        </span>
+        <ChevronDown size={14} />
+      </button>
+      
+      {isOpen && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 40 }} onClick={() => setIsOpen(false)} />
+          <div style={{ 
+            position: 'absolute', top: '100%', left: 0, 
+            width: '180px',
+            background: 'white', border: '1px solid #e2e8f0', borderRadius: '0.4rem',
+            boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', zIndex: 50,
+            maxHeight: '200px', overflowY: 'auto', padding: '0.5rem'
+          }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.3rem', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', marginBottom: '0.3rem', fontWeight: 600, fontSize: '0.75rem' }}>
+              <input 
+                type="checkbox" 
+                checked={Array.isArray(selectedIds) && Array.isArray(allRanges) && selectedIds.length === allRanges.length && allRanges.length > 0}
+                onChange={() => {
+                  if (selectedIds.length === allRanges.length) onChange([]);
+                  else onChange((allRanges || []).map(r => r.id));
+                }}
+              />
+              Plusieurs / Toutes
+            </label>
+            {(allRanges || []).map(r => (
+              <label key={r.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.3rem', cursor: 'pointer', fontSize: '0.75rem' }}>
+                <input 
+                  type="checkbox" 
+                  checked={(selectedIds || []).includes(r.id)}
+                  onChange={() => toggleRange(r.id)}
+                />
+                {r.id}
+              </label>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
 
 const AdminDashboard = ({ data, setData }) => {
   const [activeTab, setActiveTab] = useState('ranges');
@@ -30,17 +92,19 @@ const AdminDashboard = ({ data, setData }) => {
   };
 
   const handleAddItem = (category) => {
+    const generateId = (prefix) => `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
+    
     const defaultData = {
-      ranges: { id: `G-${Date.now().toString().slice(-4)}`, name: 'Nouvelle Gamme', minL: 500, maxL: 2000, minH: 500, maxH: 2000 },
-      profiles: { id: `P-${Date.now().toString().slice(-4)}`, name: 'Nouveau Profilé', rangeId: data.ranges?.[0]?.id || '', weightPerM: 1.0, pricePerKg: 5.0, barLength: 6000, colors: ['RAL9016'], type: 'ALU' },
-      glass: { id: `V-${Date.now().toString().slice(-4)}`, name: 'Nouveau Vitrage', type: 'SIMPLE', composition: '4', specification: 'Standard', thickness: 4, weightPerM2: 10, pricePerM2: 20 },
-      colors: { id: `C-${Date.now().toString().slice(-4)}`, name: 'Nouvelle Couleur', hex: '#FFFFFF', factor: 1.0 },
-      accessories: { id: `A-${Date.now().toString().slice(-4)}`, name: 'Nouvel Accessoire', rangeId: data.ranges?.[0]?.id || '', unit: 'Unité', price: 5.0 },
-      categories: { id: `CAT-${Date.now().toString().slice(-4)}`, name: 'Nouvelle Catégorie' },
+      ranges: { id: generateId('G'), name: 'Nouvelle Gamme', minL: 500, maxL: 2000, minH: 500, maxH: 2000 },
+      profiles: { id: generateId('P'), name: 'Nouveau Profilé', rangeId: data.ranges?.[0]?.id || '', weightPerM: 1.0, pricePerKg: 5.0, barLength: 6000, colors: ['RAL9016'], type: 'ALU' },
+      glass: { id: generateId('V'), name: 'Nouveau Vitrage', type: 'SIMPLE', composition: '4', specification: 'Standard', thickness: 4, weightPerM2: 10, pricePerM2: 20 },
+      colors: { id: generateId('C'), name: 'Nouvelle Couleur', hex: '#FFFFFF', factor: 1.0 },
+      accessories: { id: generateId('A'), name: 'Nouvel Accessoire', rangeIds: [data.ranges?.[0]?.id || ''], unit: 'Unité', price: 5.0 },
+      categories: { id: generateId('CAT'), name: 'Nouvelle Catégorie' },
       gasketCompatibility: { rangeId: data.ranges?.[0]?.id || '', glassThickness: 4, gasketId: data.accessories.find(a => a.unit === 'Joint')?.id || '', formula: '(L+H)*2' },
-      glassProfileCompatibility: { rangeId: data.ranges?.[0]?.id || '', glassThickness: 4, profileId: data.profiles?.[0]?.id || '', formula: '(L+H)*2' },
-      options: { id: `OPT-${Date.now().toString().slice(-4)}`, name: 'Nouvelle Option', rangeId: data.ranges?.[0]?.id || '', addAccessoryId: data.accessories?.[0]?.id || '', removeAccessoryId: '', formula: '1' },
-      traverses: { id: `TRV-${Date.now().toString().slice(-4)}`, name: 'Nouvelle Traverse', type: 'horizontale', usage: 'fenetre', profileId: '', formula: 'L', priceUnit: 'ML' }
+      glassProfileCompatibility: { rangeId: data.ranges?.[0]?.id || '', glassThickness: 4, profileHId: data.profiles?.[0]?.id || '', qtyH: 2, formulaH: 'L-80', profileVId: data.profiles?.[0]?.id || '', qtyV: 2, formulaV: 'H-80' },
+      options: { id: generateId('OPT'), name: 'Nouvelle Option', rangeIds: [data.ranges?.[0]?.id || ''], addAccessoryId: data.accessories?.[0]?.id || '', removeAccessoryId: '', formula: '1' },
+      traverses: { id: generateId('TRV'), name: 'Nouvelle Traverse', type: 'horizontale', usage: 'fenetre', profileId: '', formula: 'L', priceUnit: 'ML' }
     };
 
     setData(prev => ({
@@ -49,18 +113,56 @@ const AdminDashboard = ({ data, setData }) => {
     }));
   };
 
-  const handleDeleteItem = (category, id) => {
-    setData(prev => ({
-      ...prev,
-      [category]: prev[category].filter(item => item.id !== id)
-    }));
+  const handleUpdateItem = (category, id, field, value, index = -1) => {
+    // Safety check for ID uniqueness
+    if (field === 'id') {
+      const exists = data[category].some((item, idx) => item.id === value && idx !== index && item.id !== id);
+      if (exists) {
+        alert("Cet identifiant existe déjà dans cette catégorie. Veuillez en choisir un autre.");
+        return;
+      }
+    }
+
+    setData(prev => {
+      const updated = [...prev[category]];
+      const parseValue = (val, prevVal) => {
+        if (Array.isArray(prevVal)) return val; // Keep arrays as is
+        if (typeof prevVal === 'number' || ['price', 'pricePerKg', 'pricePerBar', 'weightPerM', 'pricePerM2', 'factor', 'minL', 'maxL', 'minH', 'maxH'].includes(field)) {
+          return parseFloat(val) || 0;
+        }
+        return val;
+      };
+
+      if (index !== -1 && index < updated.length) {
+        updated[index] = { 
+          ...updated[index], 
+          [field]: parseValue(value, updated[index][field])
+        };
+      } else {
+        return {
+          ...prev,
+          [category]: prev[category].map(item => item.id === id ? { 
+            ...item, 
+            [field]: parseValue(value, item[field])
+          } : item)
+        };
+      }
+      return { ...prev, [category]: updated };
+    });
   };
 
-  const handleUpdateItem = (category, id, field, value) => {
-    setData(prev => ({
-      ...prev,
-      [category]: prev[category].map(item => item.id === id ? { ...item, [field]: field === 'price' || field === 'pricePerKg' || field === 'pricePerBar' || field === 'weightPerM' || field === 'pricePerM2' || field === 'factor' || field === 'minL' || field === 'maxL' || field === 'minH' || field === 'maxH' || typeof item[field] === 'number' ? parseFloat(value) || 0 : value } : item)
-    }));
+  const handleDeleteItem = (category, id, index = -1) => {
+    setData(prev => {
+      if (index !== -1) {
+        const updated = [...prev[category]];
+        updated.splice(index, 1);
+        return { ...prev, [category]: updated };
+      }
+      return {
+        ...prev,
+        [category]: prev[category].filter(item => item.id !== id)
+      };
+    });
   };
 
   const handleDeleteGlassProfileCompatibility = (index) => {
@@ -220,14 +322,14 @@ const AdminDashboard = ({ data, setData }) => {
                 </tr>
               </thead>
               <tbody>
-                {data.categories.map(cat => (
-                  <tr key={cat.id}>
+                {data.categories.map((cat, idx) => (
+                  <tr key={`${cat.id}-${idx}`}>
                     <td style={{ fontWeight: 600 }}>
-                      <input className="input" defaultValue={cat.id} onBlur={e => handleUpdateItem('categories', cat.id, 'id', e.target.value)} style={{ width: '150px', fontWeight: 600 }} />
+                      <input className="input" value={cat.id} onChange={e => handleUpdateItem('categories', cat.id, 'id', e.target.value, idx)} style={{ width: '150px', fontWeight: 600 }} />
                     </td>
-                    <td><input className="input" value={cat.name} onChange={e => handleUpdateItem('categories', cat.id, 'name', e.target.value)} style={{ width: '300px' }} /></td>
+                    <td><input className="input" value={cat.name} onChange={e => handleUpdateItem('categories', cat.id, 'name', e.target.value, idx)} style={{ width: '300px' }} /></td>
                     <td>
-                      <button className="btn" onClick={() => handleDeleteItem('categories', cat.id)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
+                      <button className="btn" onClick={() => handleDeleteItem('categories', cat.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
                     </td>
                   </tr>
                 ))}
@@ -256,18 +358,18 @@ const AdminDashboard = ({ data, setData }) => {
                 </tr>
               </thead>
               <tbody>
-                {data.ranges.map(range => (
-                  <tr key={range.id}>
+                {data.ranges.map((range, idx) => (
+                  <tr key={`${range.id}-${idx}`}>
                     <td style={{ fontWeight: 600 }}>
-                      <input className="input" defaultValue={range.id} onBlur={e => handleUpdateItem('ranges', range.id, 'id', e.target.value)} style={{ width: '80px', fontWeight: 600 }} />
+                      <input className="input" value={range.id} onChange={e => handleUpdateItem('ranges', range.id, 'id', e.target.value, idx)} style={{ width: '80px', fontWeight: 600 }} />
                     </td>
-                    <td><input className="input" value={range.name} onChange={e => handleUpdateItem('ranges', range.id, 'name', e.target.value)} style={{ width: '150px' }} /></td>
-                    <td><input className="input" type="number" value={range.minL} onChange={e => handleUpdateItem('ranges', range.id, 'minL', e.target.value)} style={{ width: '80px' }} /></td>
-                    <td><input className="input" type="number" value={range.maxL} onChange={e => handleUpdateItem('ranges', range.id, 'maxL', e.target.value)} style={{ width: '80px' }} /></td>
-                    <td><input className="input" type="number" value={range.minH} onChange={e => handleUpdateItem('ranges', range.id, 'minH', e.target.value)} style={{ width: '80px' }} /></td>
-                    <td><input className="input" type="number" value={range.maxH} onChange={e => handleUpdateItem('ranges', range.id, 'maxH', e.target.value)} style={{ width: '80px' }} /></td>
+                    <td><input className="input" value={range.name} onChange={e => handleUpdateItem('ranges', range.id, 'name', e.target.value, idx)} style={{ width: '150px' }} /></td>
+                    <td><input className="input" type="number" value={range.minL} onChange={e => handleUpdateItem('ranges', range.id, 'minL', e.target.value, idx)} style={{ width: '80px' }} /></td>
+                    <td><input className="input" type="number" value={range.maxL} onChange={e => handleUpdateItem('ranges', range.id, 'maxL', e.target.value, idx)} style={{ width: '80px' }} /></td>
+                    <td><input className="input" type="number" value={range.minH} onChange={e => handleUpdateItem('ranges', range.id, 'minH', e.target.value, idx)} style={{ width: '80px' }} /></td>
+                    <td><input className="input" type="number" value={range.maxH} onChange={e => handleUpdateItem('ranges', range.id, 'maxH', e.target.value, idx)} style={{ width: '80px' }} /></td>
                     <td>
-                      <button className="btn" onClick={() => handleDeleteItem('ranges', range.id)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
+                      <button className="btn" onClick={() => handleDeleteItem('ranges', range.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
                     </td>
                   </tr>
                 ))}
@@ -292,28 +394,51 @@ const AdminDashboard = ({ data, setData }) => {
                   <th>Long. Barre (mm)</th>
                   <th>Couleurs dispo.</th>
                   <th>Prix Achat (DZD/Barre)</th>
-                  <th>Actions</th>
+                  <th style={{ textAlign: 'right' }}>
+                    <button 
+                      className="btn btn-secondary" 
+                      style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem' }} 
+                      onClick={() => {
+                        const unique = [];
+                        const seen = new Set();
+                        data.profiles.forEach(p => {
+                          if (!seen.has(p.id)) {
+                            unique.push(p);
+                            seen.add(p.id);
+                          }
+                        });
+                        if (unique.length < data.profiles.length) {
+                          setData(prev => ({ ...prev, profiles: unique }));
+                          alert(`${data.profiles.length - unique.length} doublons supprimés.`);
+                        } else {
+                          alert("Aucun doublon détecté.");
+                        }
+                      }}
+                    >
+                      Dédoublonner
+                    </button>
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {data.profiles.map(p => (
-                  <tr key={p.id}>
+                {data.profiles.map((p, idx) => (
+                  <tr key={`${p.id}-${idx}`}>
                     <td style={{ fontWeight: 600 }}>
-                      <input className="input" defaultValue={p.id} onBlur={e => handleUpdateItem('profiles', p.id, 'id', e.target.value)} style={{ width: '100px', fontWeight: 600 }} />
+                      <input className="input" value={p.id} onChange={e => handleUpdateItem('profiles', p.id, 'id', e.target.value, idx)} style={{ width: '100px', fontWeight: 600 }} />
                     </td>
                     <td>
-                      <select className="input" value={p.rangeId} onChange={e => handleUpdateItem('profiles', p.id, 'rangeId', e.target.value)} style={{ width: '100px' }}>
+                      <select className="input" value={p.rangeId} onChange={e => handleUpdateItem('profiles', p.id, 'rangeId', e.target.value, idx)} style={{ width: '100px' }}>
                         {data.ranges.map(r => <option key={r.id} value={r.id}>{r.id}</option>)}
                       </select>
                     </td>
-                    <td><input className="input" value={p.name} onChange={e => handleUpdateItem('profiles', p.id, 'name', e.target.value)} style={{ width: '180px' }} /></td>
-                    <td><input className="input" type="number" value={p.barLength} onChange={e => handleUpdateItem('profiles', p.id, 'barLength', e.target.value)} style={{ width: '90px' }} /></td>
+                    <td><input className="input" value={p.name} onChange={e => handleUpdateItem('profiles', p.id, 'name', e.target.value, idx)} style={{ width: '180px' }} /></td>
+                    <td><input className="input" type="number" value={p.barLength} onChange={e => handleUpdateItem('profiles', p.id, 'barLength', e.target.value, idx)} style={{ width: '90px' }} /></td>
                     <td>
-                      <input className="input" value={p.colors?.join(', ') || ''} onChange={e => handleUpdateItem('profiles', p.id, 'colors', e.target.value.split(',').map(s=>s.trim()))} style={{ width: '150px' }} title="RAL9016, RAL7016..." />
+                      <input className="input" value={p.colors?.join(', ') || ''} onChange={e => handleUpdateItem('profiles', p.id, 'colors', e.target.value.split(',').map(s=>s.trim()), idx)} style={{ width: '150px' }} title="RAL9016, RAL7016..." />
                     </td>
-                    <td><input className="input" type="number" value={p.pricePerBar || p.pricePerKg} onChange={e => handleUpdateItem('profiles', p.id, 'pricePerBar', e.target.value)} style={{ width: '100px' }} /></td>
+                    <td><input className="input" type="number" value={p.pricePerBar || p.pricePerKg} onChange={e => handleUpdateItem('profiles', p.id, 'pricePerBar', e.target.value, idx)} style={{ width: '100px' }} /></td>
                     <td>
-                      <button className="btn" onClick={() => handleDeleteItem('profiles', p.id)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
+                      <button className="btn" onClick={() => handleDeleteItem('profiles', p.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
                     </td>
                   </tr>
                 ))}
@@ -343,26 +468,26 @@ const AdminDashboard = ({ data, setData }) => {
                 </tr>
               </thead>
               <tbody>
-                {data.glass.map(g => (
-                  <tr key={g.id}>
+                {data.glass.map((g, idx) => (
+                  <tr key={`${g.id}-${idx}`}>
                     <td style={{ fontWeight: 600 }}>
-                      <input className="input" defaultValue={g.id} onBlur={e => handleUpdateItem('glass', g.id, 'id', e.target.value)} style={{ width: '100px', fontWeight: 600 }} />
+                      <input className="input" value={g.id} onChange={e => handleUpdateItem('glass', g.id, 'id', e.target.value, idx)} style={{ width: '100px', fontWeight: 600 }} />
                     </td>
-                    <td><input className="input" value={g.name} onChange={e => handleUpdateItem('glass', g.id, 'name', e.target.value)} style={{ width: '180px' }} /></td>
+                    <td><input className="input" value={g.name} onChange={e => handleUpdateItem('glass', g.id, 'name', e.target.value, idx)} style={{ width: '180px' }} /></td>
                     <td>
-                      <select className="input" value={g.type} onChange={e => handleUpdateItem('glass', g.id, 'type', e.target.value)} style={{ width: '100px' }}>
+                      <select className="input" value={g.type} onChange={e => handleUpdateItem('glass', g.id, 'type', e.target.value, idx)} style={{ width: '100px' }}>
                         <option value="SIMPLE">Simple</option>
                         <option value="DOUBLE">Double</option>
                         <option value="TRIPLE">Triple</option>
                         <option value="SPECIAL">Spécial</option>
                       </select>
                     </td>
-                    <td><input className="input" value={g.composition} onChange={e => handleUpdateItem('glass', g.id, 'composition', e.target.value)} style={{ width: '100px' }} /></td>
-                    <td><input className="input" value={g.specification || 'Standard'} onChange={e => handleUpdateItem('glass', g.id, 'specification', e.target.value)} style={{ width: '120px' }} /></td>
-                    <td><input className="input" type="number" value={g.thickness} onChange={e => handleUpdateItem('glass', g.id, 'thickness', e.target.value)} style={{ width: '80px' }} /></td>
-                    <td><input className="input" type="number" value={g.pricePerM2} onChange={e => handleUpdateItem('glass', g.id, 'pricePerM2', e.target.value)} style={{ width: '100px' }} /></td>
+                    <td><input className="input" value={g.composition} onChange={e => handleUpdateItem('glass', g.id, 'composition', e.target.value, idx)} style={{ width: '100px' }} /></td>
+                    <td><input className="input" value={g.specification || 'Standard'} onChange={e => handleUpdateItem('glass', g.id, 'specification', e.target.value, idx)} style={{ width: '120px' }} /></td>
+                    <td><input className="input" type="number" value={g.thickness} onChange={e => handleUpdateItem('glass', g.id, 'thickness', e.target.value, idx)} style={{ width: '80px' }} /></td>
+                    <td><input className="input" type="number" value={g.pricePerM2} onChange={e => handleUpdateItem('glass', g.id, 'pricePerM2', e.target.value, idx)} style={{ width: '100px' }} /></td>
                     <td>
-                      <button className="btn" onClick={() => handleDeleteItem('glass', g.id)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
+                      <button className="btn" onClick={() => handleDeleteItem('glass', g.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
                     </td>
                   </tr>
                 ))}
@@ -389,23 +514,23 @@ const AdminDashboard = ({ data, setData }) => {
                 </tr>
               </thead>
               <tbody>
-                {data.colors.map(c => (
-                  <tr key={c.id}>
+                {data.colors.map((c, idx) => (
+                  <tr key={`${c.id}-${idx}`}>
                     <td style={{ fontWeight: 600 }}>
-                      <input className="input" defaultValue={c.id} onBlur={e => handleUpdateItem('colors', c.id, 'id', e.target.value)} style={{ width: '100px', fontWeight: 600 }} />
+                      <input className="input" value={c.id} onChange={e => handleUpdateItem('colors', c.id, 'id', e.target.value, idx)} style={{ width: '100px', fontWeight: 600 }} />
                     </td>
-                    <td><input className="input" value={c.name} onChange={e => handleUpdateItem('colors', c.id, 'name', e.target.value)} style={{ width: '200px' }} /></td>
+                    <td><input className="input" value={c.name} onChange={e => handleUpdateItem('colors', c.id, 'name', e.target.value, idx)} style={{ width: '200px' }} /></td>
                     <td>
                       <input 
                         type="color" 
                         value={c.hex || '#ffffff'} 
-                        onChange={e => handleUpdateItem('colors', c.id, 'hex', e.target.value)}
+                        onChange={e => handleUpdateItem('colors', c.id, 'hex', e.target.value, idx)}
                         style={{ width: '40px', height: '40px', padding: '0', cursor: 'pointer', border: '1px solid #cbd5e1', borderRadius: '4px' }}
                       />
                     </td>
-                    <td><input className="input" type="number" step="0.05" value={c.factor} onChange={e => handleUpdateItem('colors', c.id, 'factor', e.target.value)} style={{ width: '100px' }} /></td>
+                    <td><input className="input" type="number" step="0.05" value={c.factor} onChange={e => handleUpdateItem('colors', c.id, 'factor', e.target.value, idx)} style={{ width: '100px' }} /></td>
                     <td>
-                      <button className="btn" onClick={() => handleDeleteItem('colors', c.id)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
+                      <button className="btn" onClick={() => handleDeleteItem('colors', c.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
                     </td>
                   </tr>
                 ))}
@@ -433,28 +558,30 @@ const AdminDashboard = ({ data, setData }) => {
                 </tr>
               </thead>
               <tbody>
-                {data.accessories.map(acc => (
-                  <tr key={acc.id}>
+                {data.accessories.map((acc, idx) => (
+                  <tr key={`${acc.id}-${idx}`}>
                     <td style={{ fontWeight: 600 }}>
-                      <input className="input" defaultValue={acc.id} onBlur={e => handleUpdateItem('accessories', acc.id, 'id', e.target.value)} style={{ width: '100px', fontWeight: 600 }} />
+                      <input className="input" value={acc.id} onChange={e => handleUpdateItem('accessories', acc.id, 'id', e.target.value, idx)} style={{ width: '100px', fontWeight: 600 }} />
                     </td>
                     <td>
-                      <select className="input" value={acc.rangeId} onChange={e => handleUpdateItem('accessories', acc.id, 'rangeId', e.target.value)} style={{ width: '100px' }}>
-                        {data.ranges.map(r => <option key={r.id} value={r.id}>{r.id}</option>)}
-                      </select>
+                      <MultiSelectRange 
+                        selectedIds={acc.rangeIds || []} 
+                        allRanges={data.ranges} 
+                        onChange={newIds => handleUpdateItem('accessories', acc.id, 'rangeIds', newIds, idx)} 
+                      />
                     </td>
-                    <td><input className="input" value={acc.name} onChange={e => handleUpdateItem('accessories', acc.id, 'name', e.target.value)} style={{ width: '200px' }} /></td>
+                    <td><input className="input" value={acc.name} onChange={e => handleUpdateItem('accessories', acc.id, 'name', e.target.value, idx)} style={{ width: '200px' }} /></td>
                     <td>
-                      <select className="input" value={acc.unit} onChange={e => handleUpdateItem('accessories', acc.id, 'unit', e.target.value)} style={{ width: '100px' }}>
+                      <select className="input" value={acc.unit} onChange={e => handleUpdateItem('accessories', acc.id, 'unit', e.target.value, idx)} style={{ width: '100px' }}>
                         <option value="Kit">Kit</option>
                         <option value="Ml">Ml</option>
                         <option value="Unité">Unité</option>
                         <option value="Joint">Joint</option>
                       </select>
                     </td>
-                    <td><input className="input" type="number" step="0.01" value={acc.price} onChange={e => handleUpdateItem('accessories', acc.id, 'price', e.target.value)} style={{ width: '100px' }} /></td>
+                    <td><input className="input" type="number" step="0.01" value={acc.price} onChange={e => handleUpdateItem('accessories', acc.id, 'price', e.target.value, idx)} style={{ width: '100px' }} /></td>
                     <td>
-                      <button className="btn" onClick={() => handleDeleteItem('accessories', acc.id)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
+                      <button className="btn" onClick={() => handleDeleteItem('accessories', acc.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
                     </td>
                   </tr>
                 ))}
@@ -481,23 +608,23 @@ const AdminDashboard = ({ data, setData }) => {
                 </tr>
               </thead>
               <tbody>
-                {data.gasketCompatibility.map((gc, i) => (
+                {(data.gasketCompatibility || []).map((gc, i) => (
                   <tr key={i}>
                     <td>
                       <select 
                         className="input" 
-                        value={gc.rangeId} 
+                        value={gc.rangeId || ''} 
                         onChange={e => handleUpdateGasketCompatibility(i, 'rangeId', e.target.value)}
                         style={{ width: '120px' }}
                       >
-                        {data.ranges.map(r => <option key={r.id} value={r.id}>{r.id}</option>)}
+                        {(data.ranges || []).map(r => <option key={r.id} value={r.id}>{r.id}</option>)}
                       </select>
                     </td>
                     <td>
                       <input 
                         className="input" 
                         type="number" 
-                        value={gc.glassThickness} 
+                        value={gc.glassThickness || 0} 
                         onChange={e => handleUpdateGasketCompatibility(i, 'glassThickness', e.target.value)}
                         style={{ width: '100px' }} 
                       />
@@ -505,21 +632,26 @@ const AdminDashboard = ({ data, setData }) => {
                     <td>
                       <select 
                         className="input" 
-                        value={gc.gasketId} 
+                        value={gc.gasketId || ''} 
                         onChange={e => handleUpdateGasketCompatibility(i, 'gasketId', e.target.value)}
                         style={{ width: '200px' }}
                       >
-                        {data.accessories.filter(a => a.unit === 'Joint').map(a => (
-                          <option key={a.id} value={a.id}>{a.name} ({a.id})</option>
-                        ))}
+                        <option value="">Sélectionner...</option>
+                        {(data.accessories || [])
+                          .filter(a => a.unit === 'Joint' && (a.rangeIds || []).includes(gc.rangeId))
+                          .map(a => (
+                            <option key={a.id} value={a.id}>{a.name} ({a.id})</option>
+                          ))
+                        }
                       </select>
                     </td>
                     <td>
                       <input 
                         className="input" 
-                        value={gc.formula || '(L+H)*2'} 
+                        value={gc.formula || ''} 
                         onChange={e => handleUpdateGasketCompatibility(i, 'formula', e.target.value)}
                         style={{ width: '150px' }} 
+                        placeholder="(L+H)*2"
                       />
                     </td>
                     <td>
@@ -539,86 +671,167 @@ const AdminDashboard = ({ data, setData }) => {
           )}
 
           {activeTab === 'glassProfiles' && (
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Gamme Associée</th>
-                  <th>Épaisseur Vitrage (mm)</th>
-                  <th>Profilé Parclose (Génère H et V)</th>
-                  <th>Formule Qté</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
+            <div>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Gamme</th>
+                    <th>Vitrage (mm)</th>
+                    <th>Parclose H</th>
+                    <th>Qté H</th>
+                    <th>Formule H</th>
+                    <th>Parclose V</th>
+                    <th>Qté V</th>
+                    <th>Formule V</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
               <tbody>
-                {data.glassProfileCompatibility?.map((gc, i) => (
-                  <tr key={i}>
-                    <td>
-                      <select 
-                        className="input" 
-                        value={gc.rangeId} 
-                        onChange={e => {
-                          const updated = [...data.glassProfileCompatibility];
-                          updated[i].rangeId = e.target.value;
-                          setData(prev => ({ ...prev, glassProfileCompatibility: updated }));
-                        }}
-                        style={{ width: '120px' }}>
-                        {data.ranges.map(r => <option key={r.id} value={r.id}>{r.id}</option>)}
-                      </select>
-                    </td>
-                    <td>
-                      <input 
-                        className="input" 
-                        type="number" 
-                        value={gc.glassThickness} 
-                        onChange={e => {
-                          const updated = [...data.glassProfileCompatibility];
-                          updated[i].glassThickness = parseFloat(e.target.value) || 0;
-                          setData(prev => ({ ...prev, glassProfileCompatibility: updated }));
-                        }} 
-                        style={{ width: '100px' }} 
-                      />
-                    </td>
-                    <td>
-                      <select 
-                        className="input" 
-                        value={gc.profileId} 
-                        onChange={e => {
-                          const updated = [...data.glassProfileCompatibility];
-                          updated[i].profileId = e.target.value;
-                          setData(prev => ({ ...prev, glassProfileCompatibility: updated }));
-                        }}
-                        style={{ width: '200px' }}>
-                        {data.profiles.map(p => (
-                          <option key={p.id} value={p.id}>{p.name} ({p.id})</option>
-                        ))}
-                      </select>
-                    </td>
-                    <td>
-                      <input 
-                        className="input" 
-                        value={gc.formula} 
-                        onChange={e => {
-                          const updated = [...data.glassProfileCompatibility];
-                          updated[i].formula = e.target.value;
-                          setData(prev => ({ ...prev, glassProfileCompatibility: updated }));
-                        }} 
-                        style={{ width: '150px' }} 
-                      />
-                    </td>
-                    <td>
-                      <button className="btn" onClick={() => handleDeleteGlassProfileCompatibility(i)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
+                {(data?.glassProfileCompatibility || []).map((gc, i) => {
+                   if (!gc) return null;
+                   return (
+                   <tr key={`gp-${i}`}>
+                     <td>
+                       <select 
+                         className="input" 
+                         value={gc.rangeId || ''} 
+                         onChange={e => {
+                           const updated = [...(data.glassProfileCompatibility || [])];
+                           updated[i].rangeId = e.target.value;
+                           setData(prev => ({ ...prev, glassProfileCompatibility: updated }));
+                         }}
+                         style={{ width: '100px' }}>
+                         {(data?.ranges || []).map(r => <option key={r.id} value={r.id}>{r.id}</option>)}
+                       </select>
+                     </td>
+                     <td>
+                       <input 
+                         className="input" 
+                         type="number" 
+                         value={gc.glassThickness || 0} 
+                         onChange={e => {
+                           const updated = [...(data.glassProfileCompatibility || [])];
+                           updated[i].glassThickness = parseFloat(e.target.value) || 0;
+                           setData(prev => ({ ...prev, glassProfileCompatibility: updated }));
+                         }} 
+                         style={{ width: '60px' }} 
+                       />
+                     </td>
+                     <td>
+                       <select 
+                         className="input" 
+                         value={gc.profileHId || ''} 
+                         onChange={e => {
+                           const updated = [...(data.glassProfileCompatibility || [])];
+                           updated[i].profileHId = e.target.value;
+                           setData(prev => ({ ...prev, glassProfileCompatibility: updated }));
+                         }}
+                         style={{ width: '140px' }}>
+                         <option value="">Sélectionner...</option>
+                         {(data?.profiles || [])
+                           .filter(p => p && (!gc.rangeId || p.rangeId === gc.rangeId))
+                           .map(p => (
+                             <option key={p.id} value={p.id}>{p.name || p.id}</option>
+                           ))
+                         }
+                       </select>
+                     </td>
+                     <td>
+                       <input 
+                         className="input" 
+                         type="number" 
+                         value={gc.qtyH || 0} 
+                         onChange={e => {
+                           const updated = [...(data.glassProfileCompatibility || [])];
+                           updated[i].qtyH = parseFloat(e.target.value) || 0;
+                           setData(prev => ({ ...prev, glassProfileCompatibility: updated }));
+                         }} 
+                         style={{ width: '50px' }} 
+                       />
+                     </td>
+                     <td>
+                       <input 
+                         className="input" 
+                         value={gc.formulaH || ''} 
+                         onChange={e => {
+                           const updated = [...(data.glassProfileCompatibility || [])];
+                           updated[i].formulaH = e.target.value;
+                           setData(prev => ({ ...prev, glassProfileCompatibility: updated }));
+                         }} 
+                         style={{ width: '80px' }} 
+                         placeholder="L-80"
+                       />
+                     </td>
+                     <td>
+                       <select 
+                         className="input" 
+                         value={gc.profileVId || ''} 
+                         onChange={e => {
+                           const updated = [...(data.glassProfileCompatibility || [])];
+                           updated[i].profileVId = e.target.value;
+                           setData(prev => ({ ...prev, glassProfileCompatibility: updated }));
+                         }}
+                         style={{ width: '140px' }}>
+                         <option value="">Sélectionner...</option>
+                         {(data?.profiles || [])
+                           .filter(p => p && (!gc.rangeId || p.rangeId === gc.rangeId))
+                           .map(p => (
+                             <option key={p.id} value={p.id}>{p.name || p.id}</option>
+                           ))
+                         }
+                       </select>
+                     </td>
+                      <td>
+                        <input 
+                          className="input" 
+                          type="number" 
+                          value={gc.qtyV || 0} 
+                          onChange={e => {
+                            const updated = [...(data.glassProfileCompatibility || [])];
+                            updated[i].qtyV = parseFloat(e.target.value) || 0;
+                            setData(prev => ({ ...prev, glassProfileCompatibility: updated }));
+                          }} 
+                          style={{ width: '50px' }} 
+                        />
+                      </td>
+                      <td>
+                        <input 
+                          className="input" 
+                          value={gc.formulaV || ''} 
+                         onChange={e => {
+                           const updated = [...(data.glassProfileCompatibility || [])];
+                           updated[i].formulaV = e.target.value;
+                           setData(prev => ({ ...prev, glassProfileCompatibility: updated }));
+                         }} 
+                         style={{ width: '100px' }} 
+                         placeholder="H-80"
+                       />
+                     </td>
+                     <td>
+                       <button className="btn" onClick={() => handleDeleteGlassProfileCompatibility(i)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
+                     </td>
+                   </tr>
+                 )})}
+                <tr>
+                    <td colSpan="9">
+                      <button className="btn btn-secondary" onClick={() => handleAddItem('glassProfileCompatibility')} style={{ width: '100%', marginTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                        <Plus size={16} /> Ajouter une Compatibilité
+                      </button>
                     </td>
                   </tr>
-                ))}
-                <tr>
-                  <td colSpan="5">
-                    <button className="btn btn-secondary" onClick={() => handleAddItem('glassProfileCompatibility')} style={{ width: '100%', marginTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-                      <Plus size={16} /> Ajouter une Compatibilité
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                </tbody>
+              </table>
+
+              <div style={{ marginTop: '1.5rem', padding: '1rem', background: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
+                <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b', lineHeight: '1.5' }}>
+                  <Info size={14} style={{ verticalAlign: 'middle', marginRight: '0.4rem', color: '#3b82f6' }} />
+                  <strong>Note sur les Parcloses :</strong> Le moteur de calcul génère 
+                  automatiquement les débits <em>ParcloseH</em> (Horizontal) et <em>ParcloseV</em> (Vertical) 
+                  pour chaque vitrage en utilisant le profilé compatible défini ici. 
+                  <br />Ces lignes calculées apparaissent dans le devis mais ne sont pas ajoutées à votre bibliothèque de profilés.
+                </p>
+              </div>
+            </div>
           )}
 
           {activeTab === 'compositions' && (
@@ -801,22 +1014,70 @@ const AdminDashboard = ({ data, setData }) => {
                             </select>
                           </td>
                           <td>
-                            <select 
-                              className="input" 
-                              value={el.id}
-                              onChange={(e) => {
-                                const newEls = [...editingComposition.elements];
-                                newEls[i].id = e.target.value;
-                                const updated = { ...editingComposition, elements: newEls };
-                                setEditingComposition(updated);
-                                handleUpdateComposition(updated);
-                              }}
-                            >
-                              {el.type === 'profile' 
-                                ? data.profiles.map(p => <option key={p.id} value={p.id}>{p.name} ({p.id})</option>)
-                                : data.accessories.map(a => <option key={a.id} value={a.id}>{a.name} ({a.id})</option>)
-                              }
-                            </select>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                              {(() => {
+                                // Check if linked item is from a different range
+                                if (el.type === 'profile') {
+                                  const linked = data.profiles.find(p => p.id === el.id);
+                                  const wrongRange = linked && editingComposition.rangeId && linked.rangeId !== editingComposition.rangeId;
+                                  return (
+                                    <>
+                                      {wrongRange && (
+                                        <span title={`⚠️ Ce profilé (${linked.rangeId}) n'appartient pas à la gamme ${editingComposition.rangeId} !`}
+                                          style={{ fontSize: '1rem', cursor: 'help', color: '#f59e0b' }}>⚠️</span>
+                                      )}
+                                      <select 
+                                        className="input" 
+                                        value={el.id}
+                                        onChange={(e) => {
+                                          const newEls = [...editingComposition.elements];
+                                          newEls[i].id = e.target.value;
+                                          const updated = { ...editingComposition, elements: newEls };
+                                          setEditingComposition(updated);
+                                          handleUpdateComposition(updated);
+                                        }}
+                                        style={{ borderColor: wrongRange ? '#f59e0b' : undefined }}
+                                      >
+                                        {data.profiles.map(p => (
+                                          <option key={p.id} value={p.id}>
+                                            {p.rangeId !== editingComposition.rangeId ? `[${p.rangeId}] ` : ''}{p.name} ({p.id})
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </>
+                                  );
+                                } else {
+                                  const linked = data.accessories.find(a => a.id === el.id);
+                                  const wrongRange = linked && editingComposition.rangeId && !(linked.rangeIds || []).includes(editingComposition.rangeId);
+                                  return (
+                                    <>
+                                      {wrongRange && (
+                                        <span title={`⚠️ Cet accessoire n'est pas compatiblee avec la gamme ${editingComposition.rangeId} !`}
+                                          style={{ fontSize: '1rem', cursor: 'help', color: '#f59e0b' }}>⚠️</span>
+                                      )}
+                                      <select 
+                                        className="input" 
+                                        value={el.id}
+                                        onChange={(e) => {
+                                          const newEls = [...editingComposition.elements];
+                                          newEls[i].id = e.target.value;
+                                          const updated = { ...editingComposition, elements: newEls };
+                                          setEditingComposition(updated);
+                                          handleUpdateComposition(updated);
+                                        }}
+                                        style={{ borderColor: wrongRange ? '#f59e0b' : undefined }}
+                                      >
+                                        {data.accessories.map(a => (
+                                          <option key={a.id} value={a.id}>
+                                            {!(a.rangeIds || []).includes(editingComposition.rangeId) ? `[Autre gamme] ` : ''}{a.name} ({a.id})
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </>
+                                  );
+                                }
+                              })()}
+                            </div>
                           </td>
                           <td>
                             <input 
@@ -958,30 +1219,28 @@ const AdminDashboard = ({ data, setData }) => {
                 </tr>
               </thead>
               <tbody>
-                {data.options?.map((opt, i) => (
-                  <tr key={opt.id}>
+                {data.options?.map((opt, idx) => (
+                  <tr key={`${opt.id}-${idx}`}>
                     <td>
                       <input 
                         className="input" 
                         value={opt.name} 
-                        onChange={e => handleUpdateItem('options', opt.id, 'name', e.target.value)} 
+                        onChange={e => handleUpdateItem('options', opt.id, 'name', e.target.value, idx)} 
                         style={{ width: '180px' }} 
+                      />
+                    </td>
+                    <td>
+                      <MultiSelectRange 
+                        selectedIds={opt.rangeIds || []} 
+                        allRanges={data.ranges} 
+                        onChange={newIds => handleUpdateItem('options', opt.id, 'rangeIds', newIds, idx)} 
                       />
                     </td>
                     <td>
                       <select 
                         className="input" 
-                        value={opt.rangeId} 
-                        onChange={e => handleUpdateItem('options', opt.id, 'rangeId', e.target.value)}
-                        style={{ width: '120px' }}>
-                        {data.ranges.map(r => <option key={r.id} value={r.id}>{r.id}</option>)}
-                      </select>
-                    </td>
-                    <td>
-                      <select 
-                        className="input" 
                         value={opt.addAccessoryId} 
-                        onChange={e => handleUpdateItem('options', opt.id, 'addAccessoryId', e.target.value)}
+                        onChange={e => handleUpdateItem('options', opt.id, 'addAccessoryId', e.target.value, idx)}
                         style={{ width: '200px' }}>
                         <option value="">(Aucun)</option>
                         {data.accessories.map(p => (
@@ -993,7 +1252,7 @@ const AdminDashboard = ({ data, setData }) => {
                       <input 
                         className="input" 
                         value={opt.formula} 
-                        onChange={e => handleUpdateItem('options', opt.id, 'formula', e.target.value)} 
+                        onChange={e => handleUpdateItem('options', opt.id, 'formula', e.target.value, idx)} 
                         style={{ width: '100px' }} 
                       />
                     </td>
@@ -1001,7 +1260,7 @@ const AdminDashboard = ({ data, setData }) => {
                       <select 
                         className="input" 
                         value={opt.removeAccessoryId || ''} 
-                        onChange={e => handleUpdateItem('options', opt.id, 'removeAccessoryId', e.target.value)}
+                        onChange={e => handleUpdateItem('options', opt.id, 'removeAccessoryId', e.target.value, idx)}
                         style={{ width: '200px' }}>
                         <option value="">(Ne rien supprimer)</option>
                         {data.accessories.map(p => (
@@ -1010,7 +1269,7 @@ const AdminDashboard = ({ data, setData }) => {
                       </select>
                     </td>
                     <td>
-                      <button className="btn" onClick={() => handleDeleteItem('options', opt.id)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
+                      <button className="btn" onClick={() => handleDeleteItem('options', opt.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
                     </td>
                   </tr>
                 ))}
@@ -1050,7 +1309,7 @@ const AdminDashboard = ({ data, setData }) => {
             };
 
             const addShutterItem = (family) => {
-              const id = `${family.slice(0,3).toUpperCase()}-${Date.now().toString().slice(-4)}`;
+              const id = `${family.slice(0,3).toUpperCase()}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
               const newItem = { id, name: 'Nouvel élément', price: 0, priceUnit: 'ML', formula: '1' };
               setData(prev => ({
                 ...prev,
@@ -1117,17 +1376,17 @@ const AdminDashboard = ({ data, setData }) => {
                 </tr>
               </thead>
               <tbody>
-                {(data.traverses || []).map((trv) => (
-                  <tr key={trv.id}>
-                    <td><input className="input" value={trv.name} onChange={e => handleUpdateItem('traverses', trv.id, 'name', e.target.value)} style={{ width: '190px' }} /></td>
+                {(data.traverses || []).map((trv, idx) => (
+                  <tr key={`${trv.id}-${idx}`}>
+                    <td><input className="input" value={trv.name} onChange={e => handleUpdateItem('traverses', trv.id, 'name', e.target.value, idx)} style={{ width: '190px' }} /></td>
                     <td>
-                      <select className="input" value={trv.type} onChange={e => handleUpdateItem('traverses', trv.id, 'type', e.target.value)} style={{ width: '120px' }}>
+                      <select className="input" value={trv.type} onChange={e => handleUpdateItem('traverses', trv.id, 'type', e.target.value, idx)} style={{ width: '120px' }}>
                         <option value="horizontale">Horizontale</option>
                         <option value="verticale">Verticale</option>
                       </select>
                     </td>
                     <td>
-                      <select className="input" value={trv.usage} onChange={e => handleUpdateItem('traverses', trv.id, 'usage', e.target.value)} style={{ width: '140px' }}>
+                      <select className="input" value={trv.usage} onChange={e => handleUpdateItem('traverses', trv.id, 'usage', e.target.value, idx)} style={{ width: '140px' }}>
                         <option value="fenetre">Fenêtre</option>
                         <option value="porte">Porte</option>
                         <option value="pf">Porte-Fenêtre</option>
@@ -1136,13 +1395,13 @@ const AdminDashboard = ({ data, setData }) => {
                       </select>
                     </td>
                     <td>
-                      <select className="input" value={trv.profileId || ''} onChange={e => handleUpdateItem('traverses', trv.id, 'profileId', e.target.value)} style={{ width: '200px' }}>
+                      <select className="input" value={trv.profileId || ''} onChange={e => handleUpdateItem('traverses', trv.id, 'profileId', e.target.value, idx)} style={{ width: '200px' }}>
                         <option value="">(Aucun profil)</option>
                         {data.profiles.map(p => <option key={p.id} value={p.id}>{p.name} ({p.id})</option>)}
                       </select>
                     </td>
-                    <td><input className="input" value={trv.formula || 'L'} onChange={e => handleUpdateItem('traverses', trv.id, 'formula', e.target.value)} style={{ width: '100px' }} /></td>
-                    <td><button className="btn" onClick={() => handleDeleteItem('traverses', trv.id)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button></td>
+                    <td><input className="input" value={trv.formula || 'L'} onChange={e => handleUpdateItem('traverses', trv.id, 'formula', e.target.value, idx)} style={{ width: '100px' }} /></td>
+                    <td><button className="btn" onClick={() => handleDeleteItem('traverses', trv.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button></td>
                   </tr>
                 ))}
                 <tr>
