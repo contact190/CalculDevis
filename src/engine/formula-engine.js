@@ -443,12 +443,17 @@ export class FormulaEngine {
           const qty = this.evaluate(item.formula || '1', { L, H, HC: shutterHeight });
           
           let displayName = item.name;
-          if (key === 'glissiereId' && item.options && config.shutterConfig.glissiereParams) {
+          if (key === 'glissiereId' && config.shutterConfig.glissiereParams) {
             const params = config.shutterConfig.glissiereParams;
-            const paramStrings = item.options.map(o => {
-              const val = params[o.key] || (o.values && o.values[0]);
-              return val ? `${o.label}: ${val}mm` : null;
-            }).filter(Boolean);
+            const paramStrings = [];
+            if (item.opt1Label) {
+              const val = params.opt1 || item.opt1Values?.split(',')[0]?.trim();
+              if (val) paramStrings.push(`${item.opt1Label}: ${val}mm`);
+            }
+            if (item.opt2Label) {
+              const val = params.opt2 || item.opt2Values?.split(',')[0]?.trim();
+              if (val) paramStrings.push(`${item.opt2Label}: ${val}mm`);
+            }
             if (paramStrings.length > 0) {
               displayName += ` (${paramStrings.join(', ')})`;
             }

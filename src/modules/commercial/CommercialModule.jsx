@@ -262,14 +262,16 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
 
                   const selectedItemId = config.shutterConfig?.[key];
                   
-                  // For glissière, we might need to resolve AUTO to show its sub-options
                   let effectiveItem = null;
                   if (key === 'glissiereId') {
                     let id = selectedItemId;
-                    if (id === 'AUTO' && currentComp) {
+                    if (id === 'AUTO') {
                       const kitId = config.shutterConfig?.kitId;
                       const type = kitId === 'KIT-SANG' ? 'MONO' : (kitId === 'KIT-MOTE' ? 'PALA' : 'OTHER');
-                      const autoG = database.shutterComponents.glissieres.find(g => (!g.rangeId || g.rangeId === currentComp.rangeId) && g.shutterType === type);
+                      const autoG = database.shutterComponents.glissieres.find(g => 
+                        (!g.rangeId || !currentComp || g.rangeId === currentComp.rangeId) && 
+                        g.shutterType === type
+                      );
                       id = autoG?.id;
                     }
                     effectiveItem = database.shutterComponents.glissieres.find(g => g.id === id);
@@ -297,20 +299,40 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                         </select>
                       </div>
 
-                      {/* Render parametric options for glissière */}
-                      {key === 'glissiereId' && effectiveItem?.options?.map(opt => (
-                        <div key={opt.key} className="form-group">
-                          <label className="label" style={{ fontSize: '0.8rem' }}>{opt.label}</label>
-                          <select 
-                            className="input" 
-                            style={{ border: '1px solid #3b82f6', background: '#eff6ff' }}
-                            value={config.shutterConfig?.glissiereParams?.[opt.key] || opt.values[0]} 
-                            onChange={e => handleParamChange(opt.key, e.target.value)}
-                          >
-                            {opt.values.map(v => <option key={v} value={v}>{v} mm</option>)}
-                          </select>
-                        </div>
-                      ))}
+                      {key === 'glissiereId' && (
+                        <>
+                          {effectiveItem?.opt1Label && (
+                            <div className="form-group">
+                              <label className="label" style={{ fontSize: '0.8rem' }}>{effectiveItem.opt1Label}</label>
+                              <select 
+                                className="input" 
+                                style={{ border: '2px solid #3b82f6', background: '#eff6ff' }}
+                                value={config.shutterConfig?.glissiereParams?.opt1 || effectiveItem.opt1Values?.split(',')[0]?.trim() || ''} 
+                                onChange={e => handleParamChange('opt1', e.target.value)}
+                              >
+                                {(effectiveItem.opt1Values || '').split(',').map(v => v.trim()).filter(Boolean).map(v => (
+                                  <option key={v} value={v}>{v} mm</option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+                          {effectiveItem?.opt2Label && (
+                            <div className="form-group">
+                              <label className="label" style={{ fontSize: '0.8rem' }}>{effectiveItem.opt2Label}</label>
+                              <select 
+                                className="input" 
+                                style={{ border: '2px solid #3b82f6', background: '#eff6ff' }}
+                                value={config.shutterConfig?.glissiereParams?.opt2 || effectiveItem.opt2Values?.split(',')[0]?.trim() || ''} 
+                                onChange={e => handleParamChange('opt2', e.target.value)}
+                              >
+                                {(effectiveItem.opt2Values || '').split(',').map(v => v.trim()).filter(Boolean).map(v => (
+                                  <option key={v} value={v}>{v} mm</option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+                        </>
+                      )}
                     </React.Fragment>
                   );
                 })}

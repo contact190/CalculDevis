@@ -103,17 +103,13 @@ export const DEFAULT_DATA = {
       { id: 'LAM-45T', name: 'Lame 45 Thermique', price: 0, priceUnit: 'ML', formula: 'L/1000 * ceil(H/45)' }
     ],
     glissieres: [
-      { id: 'GLI-INVDC', name: 'L Invisible Double Côté', shutterType: 'PALA', price: 0, priceUnit: 'ML', formula: 'H/1000*2', options: [
-        { key: 'width', label: 'Largeur Monobloque', values: ['85', '120', '145'] }
-      ]},
-      { id: 'GLI-VISSC', name: 'L Visible Seul Côté', shutterType: 'MONO', price: 0, priceUnit: 'ML', formula: 'H/1000', options: [
-        { key: 'thickness', label: 'Épaisseur L Visible', values: ['120', '150', '180'] },
-        { key: 'width', label: 'Largeur Monobloque', values: ['85', '120', '145'] }
-      ]},
-      { id: 'GLI-VIDC', name: 'L Visible Double Côté', shutterType: 'MONO', price: 0, priceUnit: 'ML', formula: 'H/1000*2', options: [
-        { key: 'thickness', label: 'Épaisseur L Visible', values: ['120', '150', '180'] }
-      ]},
-      { id: 'GLI-SIMDC', name: 'Simple Double Côté', shutterType: 'PALA', price: 0, priceUnit: 'ML', formula: 'H/1000*2', options: [] },
+      { id: 'GLI-INVDC', name: 'L Invisible Double Côté', shutterType: 'PALA', price: 0, priceUnit: 'ML', formula: 'H/1000*2', 
+        opt1Label: 'Largeur Monobloque', opt1Values: '85, 120, 145' },
+      { id: 'GLI-VISSC', name: 'L Visible Seul Côté', shutterType: 'MONO', price: 0, priceUnit: 'ML', formula: 'H/1000', 
+        opt1Label: 'Épaisseur L Visible', opt1Values: '120, 150, 180', opt2Label: 'Largeur Monobloque', opt2Values: '85, 120, 145' },
+      { id: 'GLI-VIDC', name: 'L Visible Double Côté', shutterType: 'MONO', price: 0, priceUnit: 'ML', formula: 'H/1000*2', 
+        opt1Label: 'Épaisseur L Visible', opt1Values: '120, 150, 180' },
+      { id: 'GLI-SIMDC', name: 'Simple Double Côté', shutterType: 'PALA', price: 0, priceUnit: 'ML', formula: 'H/1000*2' },
     ],
     axes: [
       { id: 'AXE-40', name: 'Axe 40', price: 0, priceUnit: 'ML', formula: 'L/1000' },

@@ -1328,7 +1328,14 @@ const AdminDashboard = ({ data, setData }) => {
                           <th>Désignation</th>
                           {key === 'glissiereId' && <th>Gamme</th>}
                           {key === 'glissiereId' && <th>Type (Auto)</th>}
-                          <th>Options (JSON)</th>
+                          {key === 'glissiereId' ? (
+                            <>
+                              <th>Option 1 (Nom)</th>
+                              <th>Option 1 (Valeurs)</th>
+                              <th>Option 2 (Nom)</th>
+                              <th>Option 2 (Valeurs)</th>
+                            </>
+                          ) : null}
                           <th>Formule Qté</th>
                           <th>Unité</th>
                           <th>Prix (DZD)</th>
@@ -1347,7 +1354,7 @@ const AdminDashboard = ({ data, setData }) => {
                                 </select>
                               </td>
                             )}
-                            {key === 'glissieres' && (
+                            {key === 'glissiereId' && (
                               <td>
                                 <select className="input" value={item.shutterType || 'OTHER'} onChange={e => updateShutterItem(key, i, 'shutterType', e.target.value)} style={{ width: '90px' }}>
                                   <option value="MONO">Mono (Sangle)</option>
@@ -1356,21 +1363,14 @@ const AdminDashboard = ({ data, setData }) => {
                                 </select>
                               </td>
                             )}
-                            <td>
-                              <input 
-                                className="input" 
-                                value={JSON.stringify(item.options || [])} 
-                                onChange={e => {
-                                  try {
-                                    const parsed = JSON.parse(e.target.value);
-                                    updateShutterItem(key, i, 'options', parsed);
-                                  } catch(err) {}
-                                }} 
-                                style={{ width: '150px', fontSize: '0.65rem' }} 
-                                placeholder="[]"
-                                title="Ex: [{'key':'width','label':'Largeur','values':['85','120']}]"
-                              />
-                            </td>
+                            {key === 'glissiereId' ? (
+                              <>
+                                <td><input className="input" value={item.opt1Label || ''} onChange={e => updateShutterItem(key, i, 'opt1Label', e.target.value)} style={{ width: '120px', fontSize: '0.7rem' }} placeholder="Ex: Largeur" /></td>
+                                <td><input className="input" value={item.opt1Values || ''} onChange={e => updateShutterItem(key, i, 'opt1Values', e.target.value)} style={{ width: '150px', fontSize: '0.7rem' }} placeholder="Ex: 85, 120" /></td>
+                                <td><input className="input" value={item.opt2Label || ''} onChange={e => updateShutterItem(key, i, 'opt2Label', e.target.value)} style={{ width: '120px', fontSize: '0.7rem' }} placeholder="Ex: Épaisseur" /></td>
+                                <td><input className="input" value={item.opt2Values || ''} onChange={e => updateShutterItem(key, i, 'opt2Values', e.target.value)} style={{ width: '150px', fontSize: '0.7rem' }} placeholder="Ex: 120, 150" /></td>
+                              </>
+                            ) : null}
                             <td><input className="input" value={item.formula || ''} onChange={e => updateShutterItem(key, i, 'formula', e.target.value)} style={{ width: '140px' }} /></td>
                             <td>
                               <select className="input" value={item.priceUnit} onChange={e => updateShutterItem(key, i, 'priceUnit', e.target.value)} style={{ width: '90px' }}>

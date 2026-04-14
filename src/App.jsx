@@ -144,19 +144,43 @@ function App() {
     // Repair Shutter Components (glissieres Mono/Pala)
     if (repaired.shutterComponents) {
       const defaultG = DEFAULT_DATA.shutterComponents.glissieres || [];
-      const currentG = repaired.shutterComponents.glissieres || [];
+      let currentG = repaired.shutterComponents.glissieres || [];
+      
+      // Migration: Remove old range-specific glissieres
+      currentG = currentG.filter(cg => !cg.rangeId);
+
       defaultG.forEach(dg => {
         const existingIdx = currentG.findIndex(cg => cg.id === dg.id);
         if (existingIdx === -1) {
           currentG.push(dg);
         } else {
-          // Update metadata/options
-          currentG[existingIdx] = { ...dg, ...currentG[existingIdx], options: dg.options };
+          currentG[existingIdx] = { 
+            ...currentG[existingIdx], 
+            ...dg,
+            opt1Label: dg.opt1Label, 
+            opt1Values: dg.opt1Values,
+            opt2Label: dg.opt2Label,
+            opt2Values: dg.opt2Values
+          };
         }
       });
-      // Remove deprecated range-specific glissieres if needed? 
-      // For now we keep them but the new ones are universal.
       repaired.shutterComponents.glissieres = currentG;
+
+      // MISSION CRITICAL: Migrate existing product glissiereIds in all quotes
+      if (repaired.quotes) {
+        repaired.quotes.forEach(q => {
+          (q.products || []).forEach(p => {
+            if (p.config?.shutterConfig?.glissiereId) {
+              const oldId = p.config.shutterConfig.glissiereId;
+              if (oldId.includes('-H36') || oldId.includes('-H48')) {
+                // Map "GLI-INVDC-H36" -> "GLI-INVDC"
+                const newId = oldId.replace('-H36', '').replace('-H48', '');
+                p.config.shutterConfig.glissiereId = newId;
+              }
+            }
+          });
+        });
+      }
     }
 
     return repaired;
