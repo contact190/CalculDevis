@@ -1310,7 +1310,7 @@ const AdminDashboard = ({ data, setData }) => {
 
             const addShutterItem = (family) => {
               const id = `${family.slice(0,3).toUpperCase()}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-              const newItem = { id, name: 'Nouvel élément', price: 0, priceUnit: 'ML', formula: '1' };
+              const newItem = { id, name: 'Nouvel élément', price: 0, priceUnit: 'ML', formula: '1', barLength: 1 };
               setData(prev => ({
                 ...prev,
                 shutterComponents: { ...prev.shutterComponents, [family]: [...prev.shutterComponents[family], newItem] }
