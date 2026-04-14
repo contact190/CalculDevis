@@ -34,6 +34,7 @@ export class FormulaEngine {
     if (!formula || typeof formula !== 'string') return '';
     let resolved = formula;
     if (scope.L !== undefined) resolved = resolved.replace(/L/g, Math.round(scope.L));
+    if (scope.HC !== undefined) resolved = resolved.replace(/HC/g, Math.round(scope.HC));
     if (scope.H !== undefined) resolved = resolved.replace(/H/g, Math.round(scope.H));
     return resolved;
   }
@@ -426,10 +427,11 @@ export class FormulaEngine {
         const selectedId = config.shutterConfig[key];
         const item = (source || []).find(x => x.id === selectedId);
         if (item) {
-          const qty = this.evaluate(item.formula || '1', { L, H });
+          const qty = this.evaluate(item.formula || '1', { L, H, HC: shutterHeight });
           shutterPack.push({
             ...item,
             qty,
+            resolvedFormula: this.resolveFormula(item.formula || '1', { L, H, HC: shutterHeight }),
             cost: qty * (item.price || 0)
           });
         }

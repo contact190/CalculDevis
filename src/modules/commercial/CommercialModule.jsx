@@ -294,6 +294,14 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                     <td style={{ textAlign: 'right', fontWeight: 600 }}>{priceData.bom.gasket.cost.toFixed(2)} DZD</td>
                   </tr>
                 )}
+                {priceData?.bom.shutters && priceData.bom.shutters.map((s, i) => (
+                  <tr key={`shutter-${i}`}>
+                    <td style={{ fontWeight: 600 }}>[Volet] {s.name}</td><td style={{ color: '#64748b', fontSize: '0.65rem' }}>{s.formula}</td>
+                    <td style={{ color: '#3b82f6', fontSize: '0.65rem' }}>{s.resolvedFormula || '-'}</td><td>{s.qty?.toFixed(2)} {s.priceUnit}</td>
+                    <td>-</td><td>{s.price?.toFixed(2)}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 600 }}>{(s.cost || 0).toFixed(2)} DZD</td>
+                  </tr>
+                ))}
                 {priceData && (
                   <tr>
                     <td style={{ fontWeight: 600 }}>Vitrage</td><td>-</td><td>-</td><td>{priceData.bom.glass.qty}u</td>

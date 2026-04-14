@@ -1418,10 +1418,16 @@ const AdminDashboard = ({ data, setData }) => {
           <div style={{ marginTop: '2rem', padding: '1rem', background: '#eff6ff', borderRadius: '0.75rem', display: 'flex', gap: '0.8rem', alignItems: 'flex-start' }}>
             <AlertCircle size={20} color="#3b82f6" style={{ marginTop: '0.2rem' }} />
             <div>
-              <p style={{ margin: 0, fontWeight: 600, color: '#1d4ed8', fontSize: '0.875rem' }}>Note de sécurité</p>
-              <p style={{ margin: '0.2rem 0 0 0', color: '#3b82f6', fontSize: '0.875rem' }}>
-                Toutes les modifications effectuées ici impacteront directement le module Commercial pour les nouveaux devis.
-                Assurez-vous de sauvegarder avant de quitter cette page.
+              <p style={{ margin: 0, fontWeight: 600, color: '#1d4ed8', fontSize: '0.875rem' }}>Aide: Formules de calcul</p>
+              <p style={{ margin: '0.2rem 0 0 0', color: '#3b82f6', fontSize: '0.875rem', lineHeight: '1.5' }}>
+                Variables utilisables :<br />
+                • <strong>L</strong> : Largeur totale (mm)<br />
+                • <strong>H</strong> : Hauteur totale (mm)<br />
+                • <strong>HC</strong> : Hauteur du Caisson (mm) - <i>Uniquement pour les composants du volet</i><br />
+                <br />
+                Fonctions mathématiques autorisées : <i>ceil, floor, abs, sqrt, + , - , * , /</i><br />
+                <br />
+                * Les modifications impactent directement le module Commercial pour les nouveaux devis.
               </p>
             </div>
           </div>
