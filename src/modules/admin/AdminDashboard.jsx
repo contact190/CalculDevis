@@ -1322,13 +1322,14 @@ const AdminDashboard = ({ data, setData }) => {
                 {shutterFamilies.map(({ key, label }) => (
                   <div key={key}>
                     <h4 style={{ margin: '0 0 0.75rem', color: '#1e293b', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.4rem' }}>{label}</h4>
-                    <table className="data-table">
+                    <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+                      <table className="data-table" style={{ minWidth: key === 'glissieres' ? '1200px' : '100%', marginBottom: 0 }}>
                       <thead>
                         <tr>
                           <th>Désignation</th>
-                          {key === 'glissiereId' && <th>Gamme</th>}
-                          {key === 'glissiereId' && <th>Type (Auto)</th>}
-                          {key === 'glissiereId' ? (
+                          {key === 'glissieres' && <th>Gamme</th>}
+                          {key === 'glissieres' && <th>Type (Auto)</th>}
+                          {key === 'glissieres' ? (
                             <>
                               <th>Option 1 (Nom)</th>
                               <th>Option 1 (Valeurs)</th>
@@ -1346,7 +1347,7 @@ const AdminDashboard = ({ data, setData }) => {
                         {(data.shutterComponents?.[key] || []).map((item, i) => (
                           <tr key={item.id}>
                             <td><input className="input" value={item.name} onChange={e => updateShutterItem(key, i, 'name', e.target.value)} style={{ width: '180px' }} /></td>
-                            {key === 'glissiereId' && (
+                            {key === 'glissieres' && (
                               <td>
                                 <select className="input" value={item.rangeId || ''} onChange={e => updateShutterItem(key, i, 'rangeId', e.target.value)} style={{ width: '90px' }}>
                                   <option value="">Toutes</option>
@@ -1354,7 +1355,7 @@ const AdminDashboard = ({ data, setData }) => {
                                 </select>
                               </td>
                             )}
-                            {key === 'glissiereId' && (
+                            {key === 'glissieres' && (
                               <td>
                                 <select className="input" value={item.shutterType || 'OTHER'} onChange={e => updateShutterItem(key, i, 'shutterType', e.target.value)} style={{ width: '90px' }}>
                                   <option value="MONO">Mono (Sangle)</option>
@@ -1363,7 +1364,7 @@ const AdminDashboard = ({ data, setData }) => {
                                 </select>
                               </td>
                             )}
-                            {key === 'glissiereId' ? (
+                            {key === 'glissieres' ? (
                               <>
                                 <td><input className="input" value={item.opt1Label || ''} onChange={e => updateShutterItem(key, i, 'opt1Label', e.target.value)} style={{ width: '120px', fontSize: '0.7rem' }} placeholder="Ex: Largeur" /></td>
                                 <td><input className="input" value={item.opt1Values || ''} onChange={e => updateShutterItem(key, i, 'opt1Values', e.target.value)} style={{ width: '150px', fontSize: '0.7rem' }} placeholder="Ex: 85, 120" /></td>
@@ -1384,7 +1385,7 @@ const AdminDashboard = ({ data, setData }) => {
                           </tr>
                         ))}
                         <tr>
-                          <td colSpan={key === 'glissiereId' ? 7 : 5}>
+                          <td colSpan={key === 'glissieres' ? 7 : 5}>
                             <button className="btn btn-secondary" onClick={() => addShutterItem(key)} style={{ width: '100%', marginTop: '0.4rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
                               <Plus size={16} /> Ajouter
                             </button>
@@ -1393,6 +1394,7 @@ const AdminDashboard = ({ data, setData }) => {
                       </tbody>
                     </table>
                   </div>
+                </div>
                 ))}
               </div>
             );
