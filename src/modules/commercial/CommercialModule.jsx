@@ -240,6 +240,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
             </label>
             {config.hasShutter && database.shutterComponents && (
               <div style={{ marginTop: '1rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                {[
                   { key: 'caissonId', label: 'Caisson', items: database.shutterComponents.caissons },
                   { key: 'lameId', label: 'Lame', items: database.shutterComponents.lames },
                   { key: 'glissiereId', label: 'Glissière', items: database.shutterComponents.glissieres },
