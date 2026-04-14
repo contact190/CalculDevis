@@ -97,25 +97,25 @@ export const DEFAULT_DATA = {
     lames: [
       { id: 'LAM-39E', name: 'Lame 39 Extrudée', price: 0, priceUnit: 'ML', formula: 'L/1000 * ceil(H/39)' },
       { id: 'LAM-45E', name: 'Lame 45 Extrudée', price: 0, priceUnit: 'ML', formula: 'L/1000 * ceil(H/45)' },
-      { id: 'LAM-40P', name: 'Lame 40 Plate',    price: 0, priceUnit: 'ML', formula: 'L/1000 * ceil(H/40)' },
-      { id: 'LAM-39T', name: 'Lame 39 Thermique', price: 0, priceUnit: 'ML', formula: 'L/1000 * ceil(H/39)' },
-      { id: 'LAM-43T', name: 'Lame 43 Thermique', price: 0, priceUnit: 'ML', formula: 'L/1000 * ceil(H/43)' },
-      { id: 'LAM-45T', name: 'Lame 45 Thermique', price: 0, priceUnit: 'ML', formula: 'L/1000 * ceil(H/45)' }
+      { id: 'LAM-40P', name: 'Lame 40 Plate',    price: 0, priceUnit: 'ML', formula: 'L/1000 * ceil(H/40)', barLength: 6400 },
+      { id: 'LAM-39T', name: 'Lame 39 Thermique', price: 0, priceUnit: 'ML', formula: 'L/1000 * ceil(H/39)', barLength: 6400 },
+      { id: 'LAM-43T', name: 'Lame 43 Thermique', price: 0, priceUnit: 'ML', formula: 'L/1000 * ceil(H/43)', barLength: 6400 },
+      { id: 'LAM-45T', name: 'Lame 45 Thermique', price: 0, priceUnit: 'ML', formula: 'L/1000 * ceil(H/45)', barLength: 6400 }
     ],
     glissieres: [
       { id: 'GLI-INVDC', name: 'L Invisible Double Côté', shutterType: 'PALA', price: 0, priceUnit: 'ML', formula: 'H/1000*2', 
-        opt1Label: 'Largeur Monobloque', opt1Values: '85, 120, 145' },
+        opt1Label: 'Largeur Monobloque', opt1Values: '85, 120, 145', barLength: 6400 },
       { id: 'GLI-VISSC', name: 'L Visible Seul Côté', shutterType: 'MONO', price: 0, priceUnit: 'ML', formula: 'H/1000', 
-        opt1Label: 'Épaisseur L Visible', opt1Values: '120, 150, 180', opt2Label: 'Largeur Monobloque', opt2Values: '85, 120, 145' },
+        opt1Label: 'Épaisseur L Visible', opt1Values: '120, 150, 180', opt2Label: 'Largeur Monobloque', opt2Values: '85, 120, 145', barLength: 6400 },
       { id: 'GLI-VIDC', name: 'L Visible Double Côté', shutterType: 'MONO', price: 0, priceUnit: 'ML', formula: 'H/1000*2', 
-        opt1Label: 'Épaisseur L Visible', opt1Values: '120, 150, 180' },
-      { id: 'GLI-SIMDC', name: 'Simple Double Côté', shutterType: 'PALA', price: 0, priceUnit: 'ML', formula: 'H/1000*2' },
+        opt1Label: 'Épaisseur L Visible', opt1Values: '120, 150, 180', barLength: 6400 },
+      { id: 'GLI-SIMDC', name: 'Simple Double Côté', shutterType: 'PALA', price: 0, priceUnit: 'ML', formula: 'H/1000*2', barLength: 6400 },
     ],
     axes: [
-      { id: 'AXE-40', name: 'Axe 40', price: 0, priceUnit: 'ML', formula: 'L/1000' },
-      { id: 'AXE-60', name: 'Axe 60', price: 0, priceUnit: 'ML', formula: 'L/1000' },
-      { id: 'AXE-70', name: 'Axe 70', price: 0, priceUnit: 'ML', formula: 'L/1000' },
-      { id: 'AXE-80', name: 'Axe 80', price: 0, priceUnit: 'ML', formula: 'L/1000' }
+      { id: 'AXE-40', name: 'Axe 40', price: 0, priceUnit: 'ML', formula: 'L/1000', barLength: 6400 },
+      { id: 'AXE-60', name: 'Axe 60', price: 0, priceUnit: 'ML', formula: 'L/1000', barLength: 6400 },
+      { id: 'AXE-70', name: 'Axe 70', price: 0, priceUnit: 'ML', formula: 'L/1000', barLength: 6400 },
+      { id: 'AXE-80', name: 'Axe 80', price: 0, priceUnit: 'ML', formula: 'L/1000', barLength: 6400 }
     ],
     kits: [
       { id: 'KIT-SANG',   name: 'Kit Sangle',    price: 0, priceUnit: 'Unité', formula: '1' },

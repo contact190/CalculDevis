@@ -160,7 +160,8 @@ function App() {
             opt1Label: dg.opt1Label, 
             opt1Values: dg.opt1Values,
             opt2Label: dg.opt2Label,
-            opt2Values: dg.opt2Values
+            opt2Values: dg.opt2Values,
+            barLength: dg.barLength
           };
         }
       });

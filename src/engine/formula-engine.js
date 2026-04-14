@@ -459,12 +459,22 @@ export class FormulaEngine {
             }
           }
 
+          let finalQty = qty;
+          let finalUnit = item.priceUnit;
+          if (item.priceUnit === 'Barre') {
+            const barLengthMm = parseFloat(item.barLength) || 6400;
+            finalQty = Math.ceil(qty / (barLengthMm / 1000));
+            // Ensure we show 'Barres' in the UI/BOM
+            finalUnit = finalQty > 1 ? 'Barres' : 'Barre';
+          }
+
           shutterPack.push({
             ...item,
             name: displayName,
-            qty,
+            qty: finalQty,
+            priceUnit: finalUnit,
             resolvedFormula: this.resolveFormula(item.formula || '1', { L, H, HC: shutterHeight }),
-            cost: qty * (item.price || 0)
+            cost: finalQty * (item.price || 0)
           });
         }
       });

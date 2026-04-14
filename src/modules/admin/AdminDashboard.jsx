@@ -1337,6 +1337,7 @@ const AdminDashboard = ({ data, setData }) => {
                               <th>Option 2 (Valeurs)</th>
                             </>
                           ) : null}
+                          <th>Lg Barre (mm)</th>
                           <th>Formule Qté</th>
                           <th>Unité</th>
                           <th>Prix (DZD)</th>
@@ -1372,12 +1373,14 @@ const AdminDashboard = ({ data, setData }) => {
                                 <td><input className="input" value={item.opt2Values || ''} onChange={e => updateShutterItem(key, i, 'opt2Values', e.target.value)} style={{ width: '150px', fontSize: '0.7rem' }} placeholder="Ex: 120, 150" /></td>
                               </>
                             ) : null}
+                            <td><input className="input" type="number" value={item.barLength || 6400} onChange={e => updateShutterItem(key, i, 'barLength', e.target.value)} style={{ width: '90px', fontSize: '0.8rem' }} /></td>
                             <td><input className="input" value={item.formula || ''} onChange={e => updateShutterItem(key, i, 'formula', e.target.value)} style={{ width: '140px' }} /></td>
                             <td>
                               <select className="input" value={item.priceUnit} onChange={e => updateShutterItem(key, i, 'priceUnit', e.target.value)} style={{ width: '90px' }}>
                                 <option>ML</option>
                                 <option>M2</option>
                                 <option>Unité</option>
+                                <option>Barre</option>
                               </select>
                             </td>
                             <td><input className="input" type="number" step="0.01" value={item.price} onChange={e => updateShutterItem(key, i, 'price', e.target.value)} style={{ width: '100px' }} /></td>
@@ -1385,7 +1388,7 @@ const AdminDashboard = ({ data, setData }) => {
                           </tr>
                         ))}
                         <tr>
-                          <td colSpan={key === 'glissieres' ? 7 : 5}>
+                          <td colSpan={key === 'glissieres' ? 8 : 6}>
                             <button className="btn btn-secondary" onClick={() => addShutterItem(key)} style={{ width: '100%', marginTop: '0.4rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
                               <Plus size={16} /> Ajouter
                             </button>
