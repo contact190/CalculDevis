@@ -432,7 +432,8 @@ export class FormulaEngine {
           const type = kitId === 'KIT-SANG' ? 'MONO' : (kitId === 'KIT-MOTE' ? 'PALA' : 'OTHER');
           const composition = this.db.compositions.find(c => c.id === config.compositionId);
           if (composition) {
-            const autoG = (source || []).find(g => g.rangeId === composition.rangeId && g.shutterType === type);
+            // Find universal or range-specific
+            const autoG = (source || []).find(g => (!g.rangeId || g.rangeId === composition.rangeId) && g.shutterType === type);
             if (autoG) selectedId = autoG.id;
           }
         }
@@ -440,8 +441,22 @@ export class FormulaEngine {
         const item = (source || []).find(x => x.id === selectedId);
         if (item) {
           const qty = this.evaluate(item.formula || '1', { L, H, HC: shutterHeight });
+          
+          let displayName = item.name;
+          if (key === 'glissiereId' && item.options && config.shutterConfig.glissiereParams) {
+            const params = config.shutterConfig.glissiereParams;
+            const paramStrings = item.options.map(o => {
+              const val = params[o.key] || (o.values && o.values[0]);
+              return val ? `${o.label}: ${val}mm` : null;
+            }).filter(Boolean);
+            if (paramStrings.length > 0) {
+              displayName += ` (${paramStrings.join(', ')})`;
+            }
+          }
+
           shutterPack.push({
             ...item,
+            name: displayName,
             qty,
             resolvedFormula: this.resolveFormula(item.formula || '1', { L, H, HC: shutterHeight }),
             cost: qty * (item.price || 0)

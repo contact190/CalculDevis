@@ -146,10 +146,16 @@ function App() {
       const defaultG = DEFAULT_DATA.shutterComponents.glissieres || [];
       const currentG = repaired.shutterComponents.glissieres || [];
       defaultG.forEach(dg => {
-        if (!currentG.some(cg => cg.id === dg.id)) {
+        const existingIdx = currentG.findIndex(cg => cg.id === dg.id);
+        if (existingIdx === -1) {
           currentG.push(dg);
+        } else {
+          // Update metadata/options
+          currentG[existingIdx] = { ...dg, ...currentG[existingIdx], options: dg.options };
         }
       });
+      // Remove deprecated range-specific glissieres if needed? 
+      // For now we keep them but the new ones are universal.
       repaired.shutterComponents.glissieres = currentG;
     }
 

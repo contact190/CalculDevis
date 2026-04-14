@@ -1328,6 +1328,7 @@ const AdminDashboard = ({ data, setData }) => {
                           <th>Désignation</th>
                           {key === 'glissiereId' && <th>Gamme</th>}
                           {key === 'glissiereId' && <th>Type (Auto)</th>}
+                          <th>Options (JSON)</th>
                           <th>Formule Qté</th>
                           <th>Unité</th>
                           <th>Prix (DZD)</th>
@@ -1346,7 +1347,7 @@ const AdminDashboard = ({ data, setData }) => {
                                 </select>
                               </td>
                             )}
-                            {key === 'glissiereId' && (
+                            {key === 'glissieres' && (
                               <td>
                                 <select className="input" value={item.shutterType || 'OTHER'} onChange={e => updateShutterItem(key, i, 'shutterType', e.target.value)} style={{ width: '90px' }}>
                                   <option value="MONO">Mono (Sangle)</option>
@@ -1355,7 +1356,22 @@ const AdminDashboard = ({ data, setData }) => {
                                 </select>
                               </td>
                             )}
-                            <td><input className="input" value={item.formula} onChange={e => updateShutterItem(key, i, 'formula', e.target.value)} style={{ width: '140px' }} /></td>
+                            <td>
+                              <input 
+                                className="input" 
+                                value={JSON.stringify(item.options || [])} 
+                                onChange={e => {
+                                  try {
+                                    const parsed = JSON.parse(e.target.value);
+                                    updateShutterItem(key, i, 'options', parsed);
+                                  } catch(err) {}
+                                }} 
+                                style={{ width: '150px', fontSize: '0.65rem' }} 
+                                placeholder="[]"
+                                title="Ex: [{'key':'width','label':'Largeur','values':['85','120']}]"
+                              />
+                            </td>
+                            <td><input className="input" value={item.formula || ''} onChange={e => updateShutterItem(key, i, 'formula', e.target.value)} style={{ width: '140px' }} /></td>
                             <td>
                               <select className="input" value={item.priceUnit} onChange={e => updateShutterItem(key, i, 'priceUnit', e.target.value)} style={{ width: '90px' }}>
                                 <option>ML</option>

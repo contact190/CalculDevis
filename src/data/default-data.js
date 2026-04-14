@@ -103,12 +103,17 @@ export const DEFAULT_DATA = {
       { id: 'LAM-45T', name: 'Lame 45 Thermique', price: 0, priceUnit: 'ML', formula: 'L/1000 * ceil(H/45)' }
     ],
     glissieres: [
-      { id: 'GLI-H36-MONO', name: 'Glissière Mono H36', rangeId: 'H36', shutterType: 'MONO', price: 0, priceUnit: 'ML', formula: 'H/1000*2' },
-      { id: 'GLI-H36-PALA', name: 'Glissière Pala H36', rangeId: 'H36', shutterType: 'PALA', price: 0, priceUnit: 'ML', formula: 'H/1000*2' },
-      { id: 'GLI-H48-MONO', name: 'Glissière Mono H48', rangeId: 'H48', shutterType: 'MONO', price: 0, priceUnit: 'ML', formula: 'H/1000*2' },
-      { id: 'GLI-H48-PALA', name: 'Glissière Pala H48', rangeId: 'H48', shutterType: 'PALA', price: 0, priceUnit: 'ML', formula: 'H/1000*2' },
-      { id: 'GLI-INVDC', name: 'L Invisible Double Côté', rangeId: 'H36', shutterType: 'OTHER', price: 0, priceUnit: 'ML', formula: 'H/1000*2' },
-      { id: 'GLI-VISS',  name: 'L Visible Simple Côté', rangeId: 'H36', shutterType: 'OTHER', price: 0, priceUnit: 'ML', formula: 'H/1000' },
+      { id: 'GLI-INVDC', name: 'L Invisible Double Côté', shutterType: 'PALA', price: 0, priceUnit: 'ML', formula: 'H/1000*2', options: [
+        { key: 'width', label: 'Largeur Monobloque', values: ['85', '120', '145'] }
+      ]},
+      { id: 'GLI-VISSC', name: 'L Visible Seul Côté', shutterType: 'MONO', price: 0, priceUnit: 'ML', formula: 'H/1000', options: [
+        { key: 'thickness', label: 'Épaisseur L Visible', values: ['120', '150', '180'] },
+        { key: 'width', label: 'Largeur Monobloque', values: ['85', '120', '145'] }
+      ]},
+      { id: 'GLI-VIDC', name: 'L Visible Double Côté', shutterType: 'MONO', price: 0, priceUnit: 'ML', formula: 'H/1000*2', options: [
+        { key: 'thickness', label: 'Épaisseur L Visible', values: ['120', '150', '180'] }
+      ]},
+      { id: 'GLI-SIMDC', name: 'Simple Double Côté', shutterType: 'PALA', price: 0, priceUnit: 'ML', formula: 'H/1000*2', options: [] },
     ],
     axes: [
       { id: 'AXE-40', name: 'Axe 40', price: 0, priceUnit: 'ML', formula: 'L/1000' },

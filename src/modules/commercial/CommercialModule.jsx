@@ -11,7 +11,7 @@ const EMPTY_CONFIG = {
   optionalSides: { top: false, bottom: false, left: false, right: false },
   selectedOptions: [],
   hasShutter: false,
-  shutterConfig: { caissonId: '', lameId: '', glissiereId: 'AUTO', axeId: '', kitId: '' },
+  shutterConfig: { caissonId: '', lameId: '', glissiereId: 'AUTO', axeId: '', kitId: '', glissiereParams: {} },
   margin: 2.2,
   useCustomLayout: false,
   customLayout: null,
@@ -248,6 +248,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                 ].map(({ key, label, items }) => {
                   let filteredItems = items || [];
                   if (key === 'glissiereId' && currentComp?.rangeId) {
+                      // Show items for this range OR universal items (no rangeId)
                       filteredItems = filteredItems.filter(i => !i.rangeId || i.rangeId === currentComp.rangeId);
                   }
 
@@ -258,14 +259,58 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                     }));
                   };
 
+                  const selectedItemId = config.shutterConfig?.[key];
+                  
+                  // For glissière, we might need to resolve AUTO to show its sub-options
+                  let effectiveItem = null;
+                  if (key === 'glissiereId') {
+                    let id = selectedItemId;
+                    if (id === 'AUTO' && currentComp) {
+                      const kitId = config.shutterConfig?.kitId;
+                      const type = kitId === 'KIT-SANG' ? 'MONO' : (kitId === 'KIT-MOTE' ? 'PALA' : 'OTHER');
+                      const autoG = database.shutterComponents.glissieres.find(g => (!g.rangeId || g.rangeId === currentComp.rangeId) && g.shutterType === type);
+                      id = autoG?.id;
+                    }
+                    effectiveItem = database.shutterComponents.glissieres.find(g => g.id === id);
+                  } else {
+                    effectiveItem = filteredItems.find(i => i.id === selectedItemId);
+                  }
+
+                  const handleParamChange = (pKey, pVal) => {
+                    setConfig(prev => ({
+                      ...prev,
+                      shutterConfig: {
+                        ...(prev.shutterConfig || {}),
+                        glissiereParams: { ...(prev.shutterConfig?.glissiereParams || {}), [pKey]: pVal }
+                      }
+                    }));
+                  };
+
                   return (
-                    <div key={key} className="form-group">
-                      <label className="label" style={{ fontSize: '0.8rem' }}>{label}</label>
-                      <select className="input" value={config.shutterConfig?.[key] || ''} onChange={e => handleShutterChange(e.target.value)}>
-                        {key === 'glissiereId' && <option value="AUTO">-- Automatique (Kit) --</option>}
-                        {filteredItems.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
-                      </select>
-                    </div>
+                    <React.Fragment key={key}>
+                      <div className="form-group">
+                        <label className="label" style={{ fontSize: '0.8rem' }}>{label}</label>
+                        <select className="input" value={selectedItemId || ''} onChange={e => handleShutterChange(e.target.value)}>
+                          {key === 'glissiereId' && <option value="AUTO">-- Automatique (Kit) --</option>}
+                          {filteredItems.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+                        </select>
+                      </div>
+
+                      {/* Render parametric options for glissière */}
+                      {key === 'glissiereId' && effectiveItem?.options?.map(opt => (
+                        <div key={opt.key} className="form-group">
+                          <label className="label" style={{ fontSize: '0.8rem' }}>{opt.label}</label>
+                          <select 
+                            className="input" 
+                            style={{ border: '1px solid #3b82f6', background: '#eff6ff' }}
+                            value={config.shutterConfig?.glissiereParams?.[opt.key] || opt.values[0]} 
+                            onChange={e => handleParamChange(opt.key, e.target.value)}
+                          >
+                            {opt.values.map(v => <option key={v} value={v}>{v} mm</option>)}
+                          </select>
+                        </div>
+                      ))}
+                    </React.Fragment>
                   );
                 })}
               </div>
