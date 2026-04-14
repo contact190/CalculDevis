@@ -11,7 +11,7 @@ const EMPTY_CONFIG = {
   optionalSides: { top: false, bottom: false, left: false, right: false },
   selectedOptions: [],
   hasShutter: false,
-  shutterConfig: { caissonId: '', lameId: '', glissiereId: '', axeId: '', kitId: '' },
+  shutterConfig: { caissonId: '', lameId: '', glissiereId: 'AUTO', axeId: '', kitId: '' },
   margin: 2.2,
   useCustomLayout: false,
   customLayout: null,
@@ -240,7 +240,6 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
             </label>
             {config.hasShutter && database.shutterComponents && (
               <div style={{ marginTop: '1rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                {[
                   { key: 'caissonId', label: 'Caisson', items: database.shutterComponents.caissons },
                   { key: 'lameId', label: 'Lame', items: database.shutterComponents.lames },
                   { key: 'glissiereId', label: 'Glissière', items: database.shutterComponents.glissieres },
@@ -253,26 +252,17 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                   }
 
                   const handleShutterChange = (val) => {
-                    setConfig(prev => {
-                      const nextShutter = { ...(prev.shutterConfig || {}), [key]: val };
-                      
-                      // Auto-select Glissière based on Kit selection
-                      if (key === 'kitId' && currentComp?.rangeId) {
-                        const type = val === 'KIT-SANG' ? 'MONO' : (val === 'KIT-MOTE' ? 'PALA' : null);
-                        if (type) {
-                          const autoG = database.shutterComponents.glissieres.find(g => g.rangeId === currentComp.rangeId && g.shutterType === type);
-                          if (autoG) nextShutter.glissiereId = autoG.id;
-                        }
-                      }
-                      
-                      return { ...prev, shutterConfig: nextShutter };
-                    });
+                    setConfig(prev => ({
+                      ...prev,
+                      shutterConfig: { ...(prev.shutterConfig || {}), [key]: val }
+                    }));
                   };
 
                   return (
                     <div key={key} className="form-group">
                       <label className="label" style={{ fontSize: '0.8rem' }}>{label}</label>
                       <select className="input" value={config.shutterConfig?.[key] || ''} onChange={e => handleShutterChange(e.target.value)}>
+                        {key === 'glissiereId' && <option value="AUTO">-- Automatique (Kit) --</option>}
                         {filteredItems.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
                       </select>
                     </div>

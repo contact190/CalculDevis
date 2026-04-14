@@ -424,7 +424,19 @@ export class FormulaEngine {
         { key: 'kitId',       source: sc.kits }
       ];
       families.forEach(({ key, source }) => {
-        const selectedId = config.shutterConfig[key];
+        let selectedId = config.shutterConfig[key];
+        
+        // Resolve AUTO glissière
+        if (key === 'glissiereId' && selectedId === 'AUTO') {
+          const kitId = config.shutterConfig.kitId;
+          const type = kitId === 'KIT-SANG' ? 'MONO' : (kitId === 'KIT-MOTE' ? 'PALA' : 'OTHER');
+          const composition = this.db.compositions.find(c => c.id === config.compositionId);
+          if (composition) {
+            const autoG = (source || []).find(g => g.rangeId === composition.rangeId && g.shutterType === type);
+            if (autoG) selectedId = autoG.id;
+          }
+        }
+
         const item = (source || []).find(x => x.id === selectedId);
         if (item) {
           const qty = this.evaluate(item.formula || '1', { L, H, HC: shutterHeight });

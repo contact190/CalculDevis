@@ -42,6 +42,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database }) => {
       const colorName = colorInfo?.name || cfg.colorId || 'Standard';
       try {
         const b = engine.calculateBOM(cfg);
+        // Standard profiles
         b.profiles.forEach(p => {
           const mapKey = `${p.id}|${colorName}`;
           const displayName = p.name ? `${p.name} ${p.label ? `[${p.label}]` : ''}` : (p.label || '');
@@ -51,6 +52,19 @@ const ProductionModule = ({ currentConfig, currentQuote, database }) => {
           } else {
             map[mapKey].totalMeasure += measure;
             map[mapKey].originalNames.add(displayName);
+          }
+        });
+        // Shutter profiles (ML base)
+        (b.shutters || []).forEach(s => {
+          if (s.priceUnit === 'ML') {
+            const mapKey = `${s.id}|${colorName}`;
+            const measure = (s.qty || 0) * cfgQty * 1000; // Convert to mm for consistency
+            if (!map[mapKey]) {
+              map[mapKey] = { ...s, originalNames: new Set([s.name]), totalMeasure: measure, colorName };
+            } else {
+              map[mapKey].totalMeasure += measure;
+              map[mapKey].originalNames.add(s.name);
+            }
           }
         });
       } catch {}
@@ -73,14 +87,19 @@ const ProductionModule = ({ currentConfig, currentQuote, database }) => {
         const b = engine.calculateBOM(cfg);
         const items = [...(b.accessories || [])];
         if (b.gasket) items.push(b.gasket);
+        // Add non-profile shutter items
+        (b.shutters || []).forEach(s => {
+          if (s.priceUnit !== 'ML') items.push(s);
+        });
+
         items.forEach(a => {
           const mapKey = `${a.id}|${colorName}`;
           const displayName = a.name ? `${a.name} ${a.label ? `[${a.label}]` : ''}` : (a.label || '');
           if (!map[mapKey]) {
-            map[mapKey] = { ...a, originalNames: new Set([displayName]), totalMeasure: (a.totalMeasure || 0) * cfgQty, totalQty: a.qty * cfgQty, colorName };
+            map[mapKey] = { ...a, originalNames: new Set([displayName]), totalMeasure: (a.totalMeasure || 0) * cfgQty, totalQty: (a.qty || 0) * cfgQty, colorName };
           } else {
             map[mapKey].totalMeasure += (a.totalMeasure || 0) * cfgQty;
-            map[mapKey].totalQty += a.qty * cfgQty;
+            map[mapKey].totalQty += (a.qty || 0) * cfgQty;
             map[mapKey].originalNames.add(displayName);
           }
         });
@@ -200,6 +219,19 @@ const ProductionModule = ({ currentConfig, currentQuote, database }) => {
     doc.text('VITRAGES', 20, y);
     y += 7;
     doc.text(`${bom.glass.name}: ${currentConfig.L} x ${currentConfig.H} mm (Poids: ${bom.glass.weight.toFixed(1)} kg)`, 20, y);
+
+    if (bom.shutters && bom.shutters.length > 0) {
+      y += 15;
+      doc.setFontSize(12);
+      doc.text('COMPOSANTS DU VOLET', 20, y);
+      y += 10;
+      doc.setFontSize(10);
+      bom.shutters.forEach(s => {
+        doc.text(`${s.name}: ${s.qty?.toFixed(2)} ${s.priceUnit} | Formule: ${s.formula}`, 20, y);
+        y += 7;
+        if (y > 270) { doc.addPage(); y = 20; }
+      });
+    }
 
     doc.save(`OF_${currentConfig.compositionId}_${Date.now()}.pdf`);
   };
