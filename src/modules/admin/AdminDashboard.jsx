@@ -1326,6 +1326,8 @@ const AdminDashboard = ({ data, setData }) => {
                       <thead>
                         <tr>
                           <th>Désignation</th>
+                          {key === 'glissiereId' && <th>Gamme</th>}
+                          {key === 'glissiereId' && <th>Type (Auto)</th>}
                           <th>Formule Qté</th>
                           <th>Unité</th>
                           <th>Prix (DZD)</th>
@@ -1335,8 +1337,25 @@ const AdminDashboard = ({ data, setData }) => {
                       <tbody>
                         {(data.shutterComponents?.[key] || []).map((item, i) => (
                           <tr key={item.id}>
-                            <td><input className="input" value={item.name} onChange={e => updateShutterItem(key, i, 'name', e.target.value)} style={{ width: '200px' }} /></td>
-                            <td><input className="input" value={item.formula} onChange={e => updateShutterItem(key, i, 'formula', e.target.value)} style={{ width: '160px' }} /></td>
+                            <td><input className="input" value={item.name} onChange={e => updateShutterItem(key, i, 'name', e.target.value)} style={{ width: '180px' }} /></td>
+                            {key === 'glissiereId' && (
+                              <td>
+                                <select className="input" value={item.rangeId || ''} onChange={e => updateShutterItem(key, i, 'rangeId', e.target.value)} style={{ width: '90px' }}>
+                                  <option value="">Toutes</option>
+                                  {data.ranges.map(r => <option key={r.id} value={r.id}>{r.id}</option>)}
+                                </select>
+                              </td>
+                            )}
+                            {key === 'glissiereId' && (
+                              <td>
+                                <select className="input" value={item.shutterType || 'OTHER'} onChange={e => updateShutterItem(key, i, 'shutterType', e.target.value)} style={{ width: '90px' }}>
+                                  <option value="MONO">Mono (Sangle)</option>
+                                  <option value="PALA">Pala (Moteur)</option>
+                                  <option value="OTHER">Autre</option>
+                                </select>
+                              </td>
+                            )}
+                            <td><input className="input" value={item.formula} onChange={e => updateShutterItem(key, i, 'formula', e.target.value)} style={{ width: '140px' }} /></td>
                             <td>
                               <select className="input" value={item.priceUnit} onChange={e => updateShutterItem(key, i, 'priceUnit', e.target.value)} style={{ width: '90px' }}>
                                 <option>ML</option>
@@ -1344,12 +1363,12 @@ const AdminDashboard = ({ data, setData }) => {
                                 <option>Unité</option>
                               </select>
                             </td>
-                            <td><input className="input" type="number" step="0.01" value={item.price} onChange={e => updateShutterItem(key, i, 'price', e.target.value)} style={{ width: '110px' }} /></td>
+                            <td><input className="input" type="number" step="0.01" value={item.price} onChange={e => updateShutterItem(key, i, 'price', e.target.value)} style={{ width: '100px' }} /></td>
                             <td><button className="btn" onClick={() => deleteShutterItem(key, i)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button></td>
                           </tr>
                         ))}
                         <tr>
-                          <td colSpan="5">
+                          <td colSpan={key === 'glissiereId' ? 7 : 5}>
                             <button className="btn btn-secondary" onClick={() => addShutterItem(key)} style={{ width: '100%', marginTop: '0.4rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
                               <Plus size={16} /> Ajouter
                             </button>

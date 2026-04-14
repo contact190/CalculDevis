@@ -140,6 +140,19 @@ function App() {
         return item;
       });
     }
+
+    // Repair Shutter Components (glissieres Mono/Pala)
+    if (repaired.shutterComponents) {
+      const defaultG = DEFAULT_DATA.shutterComponents.glissieres || [];
+      const currentG = repaired.shutterComponents.glissieres || [];
+      defaultG.forEach(dg => {
+        if (!currentG.some(cg => cg.id === dg.id)) {
+          currentG.push(dg);
+        }
+      });
+      repaired.shutterComponents.glissieres = currentG;
+    }
+
     return repaired;
   };
 
