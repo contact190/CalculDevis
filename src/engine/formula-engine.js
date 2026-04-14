@@ -360,7 +360,7 @@ export class FormulaEngine {
     let shutterHeight = 0;
     if (config.hasShutter && config.shutterConfig?.caissonId) {
       const caisson = this.db.shutterComponents.caissons.find(c => c.id === config.shutterConfig.caissonId);
-      shutterHeight = caisson?.height || 0;
+      shutterHeight = parseFloat(caisson?.height) || 0;
     }
     
     // The Joinery (Window) height is the total opening minus the shutter box

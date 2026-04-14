@@ -1310,7 +1310,15 @@ const AdminDashboard = ({ data, setData }) => {
 
             const addShutterItem = (family) => {
               const id = `${family.slice(0,3).toUpperCase()}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-              const newItem = { id, name: 'Nouvel élément', price: 0, priceUnit: 'ML', formula: '1', barLength: 1 };
+              const newItem = { 
+                id, 
+                name: 'Nouvel élément', 
+                price: 0, 
+                priceUnit: 'ML', 
+                formula: '1', 
+                barLength: 1,
+                ...(family === 'caissons' ? { height: 185 } : {})
+              };
               setData(prev => ({
                 ...prev,
                 shutterComponents: { ...prev.shutterComponents, [family]: [...prev.shutterComponents[family], newItem] }
@@ -1327,6 +1335,7 @@ const AdminDashboard = ({ data, setData }) => {
                       <thead>
                         <tr>
                           <th>Désignation</th>
+                          {key === 'caissons' && <th>Hauteur (mm)</th>}
                           {key === 'glissieres' && <th>Gamme</th>}
                           {key === 'glissieres' && <th>Type (Auto)</th>}
                           {key === 'glissieres' ? (
@@ -1348,6 +1357,9 @@ const AdminDashboard = ({ data, setData }) => {
                         {(data.shutterComponents?.[key] || []).map((item, i) => (
                           <tr key={item.id}>
                             <td><input className="input" value={item.name} onChange={e => updateShutterItem(key, i, 'name', e.target.value)} style={{ width: '180px' }} /></td>
+                            {key === 'caissons' && (
+                              <td><input className="input" type="number" value={item.height || 0} onChange={e => updateShutterItem(key, i, 'height', e.target.value)} style={{ width: '80px' }} /></td>
+                            )}
                             {key === 'glissieres' && (
                               <td>
                                 <select className="input" value={item.rangeId || ''} onChange={e => updateShutterItem(key, i, 'rangeId', e.target.value)} style={{ width: '90px' }}>
@@ -1388,7 +1400,7 @@ const AdminDashboard = ({ data, setData }) => {
                           </tr>
                         ))}
                         <tr>
-                          <td colSpan={key === 'glissieres' ? 8 : 6}>
+                          <td colSpan={key === 'glissieres' ? 8 : (key === 'caissons' ? 7 : 6)}>
                             <button className="btn btn-secondary" onClick={() => addShutterItem(key)} style={{ width: '100%', marginTop: '0.4rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
                               <Plus size={16} /> Ajouter
                             </button>

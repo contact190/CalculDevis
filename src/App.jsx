@@ -141,6 +141,25 @@ function App() {
       });
     }
 
+    // Repair Shutter Components (Caissons)
+    if (repaired.shutterComponents) {
+      const defaultC = DEFAULT_DATA.shutterComponents.caissons || [];
+      let currentC = repaired.shutterComponents.caissons || [];
+      defaultC.forEach(dc => {
+        const existingIdx = currentC.findIndex(cc => cc.id === dc.id);
+        if (existingIdx === -1) {
+          currentC.push(dc);
+        } else {
+          // Sync height if missing
+          currentC[existingIdx] = { 
+            ...currentC[existingIdx], 
+            height: dc.height || currentC[existingIdx].height 
+          };
+        }
+      });
+      repaired.shutterComponents.caissons = currentC;
+    }
+
     // Repair Shutter Components (glissieres Mono/Pala)
     if (repaired.shutterComponents) {
       const defaultG = DEFAULT_DATA.shutterComponents.glissieres || [];
