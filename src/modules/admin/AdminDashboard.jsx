@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Package, Search, Plus, Trash2, Save, Download, Upload, AlertCircle, RefreshCw, Layers, Edit2, ChevronDown, Check, FileSpreadsheet, Info } from 'lucide-react';
+import { Package, Search, Plus, Trash2, Save, Download, Upload, AlertCircle, RefreshCw, Layers, Edit2, ChevronDown, Check, FileSpreadsheet, Info, Copy } from 'lucide-react';
 import { DEFAULT_DATA } from '../../data/default-data';
 import * as XLSX from 'xlsx';
 
@@ -296,6 +296,25 @@ const AdminDashboard = ({ data, setData }) => {
     });
   };
 
+  const handleDuplicateItem = (category, originalItem) => {
+    const newItem = { ...originalItem };
+    let newId = `${originalItem.id}-copie`;
+    
+    // Safety check for unique ID
+    let counter = 1;
+    while (data[category].some(x => x.id === newId)) {
+      newId = `${originalItem.id}-copie-${counter}`;
+      counter++;
+    }
+    
+    newItem.id = newId;
+    
+    setData(prev => ({
+      ...prev,
+      [category]: [...prev[category], newItem]
+    }));
+  };
+
   const handleDeleteGlassProfileCompatibility = (index) => {
     setData(prev => ({ ...prev, glassProfileCompatibility: prev.glassProfileCompatibility.filter((_, i) => i !== index) }));
   };
@@ -567,7 +586,14 @@ const AdminDashboard = ({ data, setData }) => {
                           <td>
                             <MultiSelectColor selectedColors={p.colors || []} allColors={data.colors} onChange={newC => handleUpdateItem('profiles', p.id, 'colors', newC, idx)} />
                           </td>
-                          <td><button className="btn" onClick={() => handleDeleteItem('profiles', p.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button></td>
+                          <td style={{ display: 'flex', gap: '0.3rem' }}>
+                            <button className="btn" onClick={() => handleDuplicateItem('profiles', p)} style={{ padding: '0.4rem', color: '#6366f1' }} title="Dupliquer">
+                              <Copy size={16} />
+                            </button>
+                            <button className="btn" onClick={() => handleDeleteItem('profiles', p.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }} title="Supprimer">
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
                         </tr>
                       );
                     });
@@ -710,7 +736,14 @@ const AdminDashboard = ({ data, setData }) => {
                         </select>
                       </td>
                       <td><input type="number" step="0.01" className="input" value={acc.price} onChange={e => handleUpdateItem('accessories', acc.id, 'price', e.target.value, idx)} style={{ width: '100px' }} /></td>
-                      <td><button className="btn" onClick={() => handleDeleteItem('accessories', acc.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button></td>
+                      <td style={{ display: 'flex', gap: '0.3rem' }}>
+                        <button className="btn" onClick={() => handleDuplicateItem('accessories', acc)} style={{ padding: '0.4rem', color: '#6366f1' }} title="Dupliquer">
+                          <Copy size={16} />
+                        </button>
+                        <button className="btn" onClick={() => handleDeleteItem('accessories', acc.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }} title="Supprimer">
+                          <Trash2 size={16} />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                   <tr>
