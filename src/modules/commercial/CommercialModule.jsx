@@ -57,6 +57,17 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
     });
   };
 
+  const subtotals = useMemo(() => {
+    const bom = priceData?.bom;
+    if (!bom) return { profiles: 0, accessories: 0, glass: 0, shutters: 0 };
+    return {
+      profiles: bom.profiles?.reduce((sum, p) => sum + (p.cost || 0), 0) || 0,
+      accessories: (bom.accessories?.reduce((sum, a) => sum + (a.cost || 0), 0) || 0) + (bom.gasket?.cost || 0),
+      glass: bom.glass?.cost || 0,
+      shutters: bom.shutters?.reduce((sum, s) => sum + (s.cost || 0), 0) || 0
+    };
+  }, [priceData]);
+
   const currentComp = database.compositions?.find(c => c.id === config.compositionId);
   const activeCat = currentComp?.categoryId || database.categories?.[0]?.id || '';
   const activeOpen = currentComp?.openingType || 'Fixe';
@@ -423,6 +434,23 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
             <div style={{ fontSize: '2.5rem', fontWeight: 800 }}>
               {priceData ? `${priceData.priceHT.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD` : '---'}
             </div>
+            <div style={{ marginTop: '1rem', marginBottom: '1rem', paddingTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.1)', fontSize: '0.8rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', opacity: 0.7, marginBottom: '0.2rem' }}>
+                <span>Total Profilés</span><span>{subtotals.profiles.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', opacity: 0.7, marginBottom: '0.2rem' }}>
+                <span>Total Accessoires</span><span>{subtotals.accessories.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', opacity: 0.7, marginBottom: '0.2rem' }}>
+                <span>Total Vitrage</span><span>{subtotals.glass.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</span>
+              </div>
+              {subtotals.shutters > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', opacity: 0.7, marginBottom: '0.2rem' }}>
+                  <span>Total Volet</span><span>{subtotals.shutters.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</span>
+                </div>
+              )}
+            </div>
+
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '1rem' }}>
               <div style={{ opacity: 0.9 }}>TVA (19%)</div>
               <div style={{ fontWeight: 600 }}>{priceData ? `${(priceData.priceHT * 0.19).toFixed(2)} DZD` : '---'}</div>
@@ -558,12 +586,32 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
   // Totals
   const totals = useMemo(() => {
     let ht = 0;
+    let profiles = 0;
+    let accessories = 0;
+    let glass = 0;
+    let shutters = 0;
+
     (quote.items || []).forEach(item => {
       ht += (item.unitPriceHT || 0) * (item.qty || 1);
+      
+      // Aggregate category costs for the whole quote
+      try {
+        const pd = engine.calculatePrice(item.config);
+        if (!pd || !pd.bom) return;
+        
+        const itemQty = Number(item.qty) || 1;
+        profiles += (pd.bom.profiles?.reduce((s, p) => s + (Number(p.cost) || 0), 0) || 0) * itemQty;
+        accessories += ((pd.bom.accessories?.reduce((s, a) => s + (Number(a.cost) || 0), 0) || 0) + (pd.bom.gasket?.cost || 0)) * itemQty;
+        glass += (Number(pd.bom.glass?.cost) || 0) * itemQty;
+        shutters += (pd.bom.shutters?.reduce((s, sh) => s + (Number(sh.cost) || 0), 0) || 0) * itemQty;
+      } catch (e) {
+        console.error("Error calculating subtotals for item:", item.id, e);
+      }
     });
+
     const tva = ht * ((quoteSettings?.tvaRate || 19) / 100);
-    return { ht, tva, ttc: ht + tva };
-  }, [quote.items, quoteSettings]);
+    return { ht, tva, ttc: ht + tva, profiles, accessories, glass, shutters };
+  }, [quote.items, quoteSettings, engine]);
 
   // Consolidated BOM for consumables
   const allBoms = useMemo(() => {
@@ -843,17 +891,45 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
 
     // Right Box: Totals
     const rightBoxX = 110;
-    doc.roundedRect(rightBoxX, y, pw - 15 - rightBoxX, 30, 3, 3);
+    const boxHeight = 45; // Increased height to fit categories
+    doc.roundedRect(rightBoxX, y, pw - 15 - rightBoxX, boxHeight, 3, 3);
     const tvaRate = quoteSettings?.tvaRate || 19;
     
-    doc.text('Montant HT', rightBoxX + 5, y + 8);
-    doc.text(`${formatPrice(totals.ht)} DZD`, pw - 20, y + 8, { align: 'right' });
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text('RÉCAPITULATIF DES COÛTS', rightBoxX + 5, y + 7);
     
-    doc.text(`Total TVA ${tvaRate}%`, rightBoxX + 5, y + 16);
-    doc.text(`${formatPrice(totals.tva)} DZD`, pw - 20, y + 16, { align: 'right' });
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Total Profilés Aluminium', rightBoxX + 5, y + 14);
+    doc.text(`${formatPrice(totals.profiles)} DZD`, pw - 20, y + 14, { align: 'right' });
     
-    doc.text('Total TTC', rightBoxX + 5, y + 24);
-    doc.text(`${formatPrice(totals.ttc)} DZD`, pw - 20, y + 24, { align: 'right' });
+    doc.text('Total Accessoires et Joints', rightBoxX + 5, y + 19);
+    doc.text(`${formatPrice(totals.accessories)} DZD`, pw - 20, y + 19, { align: 'right' });
+    
+    doc.text('Total Vitrage', rightBoxX + 5, y + 24);
+    doc.text(`${formatPrice(totals.glass)} DZD`, pw - 20, y + 24, { align: 'right' });
+    
+    if (totals.shutters > 0) {
+      doc.text('Total Composants Volet', rightBoxX + 5, y + 29);
+      doc.text(`${formatPrice(totals.shutters)} DZD`, pw - 20, y + 29, { align: 'right' });
+    }
+    
+    doc.line(rightBoxX + 5, y + 32, pw - 20, y + 32);
+    
+    doc.setFont('helvetica', 'bold');
+    doc.text('MONTANT TOTAL HT', rightBoxX + 5, y + 38);
+    doc.text(`${formatPrice(totals.ht)} DZD`, pw - 20, y + 38, { align: 'right' });
+    
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.text(`TVA ${tvaRate}% : ${formatPrice(totals.tva)} DZD`, rightBoxX + 5, y + 42);
+    
+    y += boxHeight + 5;
+    
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`NET À PAYER TTC : ${formatPrice(totals.ttc)} DZD`, pw - 15, y, { align: 'right' });
 
     y += 40;
     
@@ -1018,85 +1094,103 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
               <p>Cliquez sur "Ajouter un produit" pour commencer.</p>
             </div>
           ) : (
-            <>
-              <div className="glass shadow-md" style={{ marginBottom: '1.5rem' }}>
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Désignation</th>
-                      <th>Modèle / Dimensions</th>
-                      <th>Finition</th>
-                      <th>Qté</th>
-                      <th>Prix U. HT</th>
-                      <th>Total HT</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(quote.items || []).map((item, idx) => {
-                      const comp = database.compositions?.find(c => c.id === item.config?.compositionId);
-                      const color = database.colors?.find(c => c.id === item.config?.colorId);
-                      const totalHT = (item.unitPriceHT || 0) * (item.qty || 1);
-                      return (
-                        <tr key={item.id}>
-                          <td style={{ fontWeight: 600 }}>
-                            <div>{item.label}</div>
-                            <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{comp?.name}</div>
-                          </td>
-                          <td style={{ fontSize: '0.85rem' }}>
-                            <span style={{ fontWeight: 700, color: '#2563eb' }}>{item.config?.L} × {item.config?.H}</span>{' '}mm
-                          </td>
-                          <td style={{ fontSize: '0.85rem' }}>{color?.name || item.config?.colorId}</td>
-                          <td>
-                            <input type="number" min="1" value={item.qty}
-                              onChange={e => handleQtyChange(item.id, e.target.value)}
-                              style={{ width: '60px', padding: '0.3rem 0.5rem', border: '1px solid #e2e8f0', borderRadius: '0.4rem', textAlign: 'center', fontWeight: 700 }} />
-                          </td>
-                          <td style={{ fontWeight: 600 }}>{(item.unitPriceHT || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
-                          <td style={{ fontWeight: 700, color: '#2563eb' }}>{totalHT.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
-                          <td>
-                            <div style={{ display: 'flex', gap: '0.3rem' }}>
-                              <button onClick={() => startEditProduct(item)} title="Modifier" style={{ padding: '0.3rem', border: '1px solid #e2e8f0', borderRadius: '0.3rem', background: 'white', cursor: 'pointer', color: '#2563eb' }}><Edit2 size={14} /></button>
-                              <button onClick={() => handleDuplicateItem(item)} title="Dupliquer" style={{ padding: '0.3rem', border: '1px solid #e2e8f0', borderRadius: '0.3rem', background: 'white', cursor: 'pointer', color: '#10b981' }}><Copy size={14} /></button>
-                              <button onClick={() => handleDeleteItem(item.id)} title="Supprimer" style={{ padding: '0.3rem', border: '1px solid #fee2e2', borderRadius: '0.3rem', background: '#fef2f2', cursor: 'pointer', color: '#ef4444' }}><Trash2 size={14} /></button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+            <div className="glass shadow-md" style={{ marginBottom: '1.5rem' }}>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Désignation</th>
+                    <th>Modèle / Dimensions</th>
+                    <th>Finition</th>
+                    <th>Qté</th>
+                    <th>Prix U. HT</th>
+                    <th>Total HT</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(quote.items || []).map((item) => {
+                    const comp = database.compositions?.find(c => c.id === item.config?.compositionId);
+                    const color = database.colors?.find(c => c.id === item.config?.colorId);
+                    const totalHT = (item.unitPriceHT || 0) * (item.qty || 1);
+                    return (
+                      <tr key={item.id}>
+                        <td style={{ fontWeight: 600 }}>
+                          <div>{item.label}</div>
+                          <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{comp?.name}</div>
+                        </td>
+                        <td style={{ fontSize: '0.85rem' }}>
+                          <span style={{ fontWeight: 700, color: '#2563eb' }}>{item.config?.L} × {item.config?.H}</span>{' '}mm
+                        </td>
+                        <td style={{ fontSize: '0.85rem' }}>{color?.name || item.config?.colorId}</td>
+                        <td>
+                          <input type="number" min="1" value={item.qty}
+                            onChange={e => handleQtyChange(item.id, e.target.value)}
+                            style={{ width: '60px', padding: '0.3rem 0.5rem', border: '1px solid #e2e8f0', borderRadius: '0.4rem', textAlign: 'center', fontWeight: 700 }} />
+                        </td>
+                        <td style={{ fontWeight: 600 }}>{(item.unitPriceHT || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
+                        <td style={{ fontWeight: 700, color: '#2563eb' }}>{totalHT.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
+                        <td>
+                          <div style={{ display: 'flex', gap: '0.3rem' }}>
+                            <button onClick={() => startEditProduct(item)} title="Modifier" style={{ padding: '0.3rem', border: '1px solid #e2e8f0', borderRadius: '0.3rem', background: 'white', cursor: 'pointer', color: '#2563eb' }}><Edit2 size={14} /></button>
+                            <button onClick={() => handleDuplicateItem(item)} title="Dupliquer" style={{ padding: '0.3rem', border: '1px solid #e2e8f0', borderRadius: '0.3rem', background: 'white', cursor: 'pointer', color: '#10b981' }}><Copy size={14} /></button>
+                            <button onClick={() => handleDeleteItem(item.id)} title="Supprimer" style={{ padding: '0.3rem', border: '1px solid #fee2e2', borderRadius: '0.3rem', background: '#fef2f2', cursor: 'pointer', color: '#ef4444' }}><Trash2 size={14} /></button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Totals — toujours visible dans l'onglet devis */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
+            <div className="price-card shadow-lg" style={{ minWidth: '340px' }}>
+              <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', opacity: 0.6, letterSpacing: '0.08em', marginBottom: '0.75rem' }}>Récapitulatif du Devis</div>
+
+              <div style={{ margin: '0 0 1rem 0', padding: '0.75rem', background: 'rgba(0,0,0,0.15)', borderRadius: '0.5rem', fontSize: '0.85rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+                  <span>🔩 Total Profilés</span><span style={{ fontWeight: 600 }}>{totals.profiles.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+                  <span>⚙️ Total Accessoires</span><span style={{ fontWeight: 600 }}>{totals.accessories.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: totals.shutters > 0 ? '0.4rem' : 0 }}>
+                  <span>🪟 Total Vitrage</span><span style={{ fontWeight: 600 }}>{totals.glass.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</span>
+                </div>
+                {totals.shutters > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>🏠 Total Volets</span><span style={{ fontWeight: 600 }}>{totals.shutters.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</span>
+                  </div>
+                )}
               </div>
 
-              {/* Totals */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <div className="price-card shadow-lg" style={{ minWidth: '320px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', opacity: 0.85 }}>
-                    <span>Total HT</span><span>{totals.ht.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', opacity: 0.85 }}>
-                    <span>TVA ({quoteSettings?.tvaRate || 19}%)</span><span>{totals.tva.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: '1.3rem', borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '0.75rem', marginTop: '0.5rem' }}>
-                    <span>TOTAL TTC</span><span>{totals.ttc.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</span>
-                  </div>
-                  <div style={{ marginTop: '0.4rem', fontSize: '0.75rem', opacity: 0.7, textAlign: 'right' }}>
-                    Validité : {quoteSettings?.validityDays || 30} jours ({validityDate})
-                  </div>
-                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.2rem' }}>
-                    <button onClick={handleSaveGlobalQuote} className="btn shadow-md" style={{ flex: 1, padding: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', background: '#10b981', color: 'white', border: 'none' }}>
-                      <Save size={18} /> Sauvegarder
-                    </button>
-                    <button onClick={generatePDF} className="btn btn-primary shadow-md" style={{ flex: 1, padding: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-                      <FileText size={18} /> Exporter PDF
-                    </button>
-                  </div>
-                </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', opacity: 0.85 }}>
+                <span>Total HT</span><span>{totals.ht.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</span>
               </div>
-            </>
-          )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', opacity: 0.85 }}>
+                <span>TVA ({quoteSettings?.tvaRate || 19}%)</span><span>{totals.tva.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: '1.3rem', borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '0.75rem', marginTop: '0.5rem' }}>
+                <span>TOTAL TTC</span><span>{totals.ttc.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</span>
+              </div>
+              <div style={{ marginTop: '0.4rem', fontSize: '0.75rem', opacity: 0.7, textAlign: 'right' }}>
+                Validité : {quoteSettings?.validityDays || 30} jours ({validityDate})
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.2rem' }}>
+                <button onClick={handleSaveGlobalQuote} className="btn shadow-md" style={{ flex: 1, padding: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', background: '#10b981', color: 'white', border: 'none' }}>
+                  <Save size={18} /> Sauvegarder
+                </button>
+                <button onClick={generatePDF} className="btn btn-primary shadow-md" style={{ flex: 1, padding: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                  <FileText size={18} /> Exporter PDF
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
+
 
       {/* Consumables Tab */}
       {activeListTab === 'consumables' && (
