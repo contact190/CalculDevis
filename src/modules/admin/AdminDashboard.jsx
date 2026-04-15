@@ -313,291 +313,261 @@ const AdminDashboard = ({ data, setData }) => {
 
         <div style={{ padding: '1.5rem' }}>
           {activeTab === 'categories' && (
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Code Catégorie</th>
-                  <th>Nom de la Catégorie</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.categories.map((cat, idx) => (
-                  <tr key={`${cat.id}-${idx}`}>
-                    <td style={{ fontWeight: 600 }}>
-                      <input className="input" value={cat.id} onChange={e => handleUpdateItem('categories', cat.id, 'id', e.target.value, idx)} style={{ width: '150px', fontWeight: 600 }} />
-                    </td>
-                    <td><input className="input" value={cat.name} onChange={e => handleUpdateItem('categories', cat.id, 'name', e.target.value, idx)} style={{ width: '300px' }} /></td>
-                    <td>
-                      <button className="btn" onClick={() => handleDeleteItem('categories', cat.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
+            <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Nom</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.categories.map((cat, idx) => (
+                    <tr key={cat.id}>
+                      <td>{cat.id}</td>
+                      <td><input className="input" value={cat.name} onChange={e => handleUpdateItem('categories', cat.id, 'name', e.target.value, idx)} /></td>
+                      <td><button className="btn" onClick={() => handleDeleteItem('categories', cat.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button></td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td colSpan="3">
+                      <button className="btn btn-secondary" onClick={() => handleAddItem('categories')} style={{ width: '100%', marginTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                        <Plus size={16} /> Ajouter une Catégorie
+                      </button>
                     </td>
                   </tr>
-                ))}
-                <tr>
-                  <td colSpan="3">
-                    <button className="btn btn-secondary" onClick={() => handleAddItem('categories')} style={{ width: '100%', marginTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-                      <Plus size={16} /> Ajouter une Catégorie
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                </tbody>
+              </table>
+            </div>
           )}
 
           {activeTab === 'ranges' && (
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Code</th>
-                  <th>Nom de la Gamme</th>
-                  <th>L min (mm)</th>
-                  <th>L max (mm)</th>
-                  <th>H min (mm)</th>
-                  <th>H max (mm)</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.ranges.map((range, idx) => (
-                  <tr key={`${range.id}-${idx}`}>
-                    <td style={{ fontWeight: 600 }}>
-                      <input className="input" value={range.id} onChange={e => handleUpdateItem('ranges', range.id, 'id', e.target.value, idx)} style={{ width: '80px', fontWeight: 600 }} />
-                    </td>
-                    <td><input className="input" value={range.name} onChange={e => handleUpdateItem('ranges', range.id, 'name', e.target.value, idx)} style={{ width: '150px' }} /></td>
-                    <td><input className="input" type="number" value={range.minL} onChange={e => handleUpdateItem('ranges', range.id, 'minL', e.target.value, idx)} style={{ width: '80px' }} /></td>
-                    <td><input className="input" type="number" value={range.maxL} onChange={e => handleUpdateItem('ranges', range.id, 'maxL', e.target.value, idx)} style={{ width: '80px' }} /></td>
-                    <td><input className="input" type="number" value={range.minH} onChange={e => handleUpdateItem('ranges', range.id, 'minH', e.target.value, idx)} style={{ width: '80px' }} /></td>
-                    <td><input className="input" type="number" value={range.maxH} onChange={e => handleUpdateItem('ranges', range.id, 'maxH', e.target.value, idx)} style={{ width: '80px' }} /></td>
-                    <td>
-                      <button className="btn" onClick={() => handleDeleteItem('ranges', range.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
+            <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Nom commercial</th>
+                    <th>Min L (mm)</th>
+                    <th>Max L (mm)</th>
+                    <th>Min H (mm)</th>
+                    <th>Max H (mm)</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.ranges.map((range, idx) => (
+                    <tr key={range.id}>
+                      <td>{range.id}</td>
+                      <td><input className="input" value={range.name} onChange={e => handleUpdateItem('ranges', range.id, 'name', e.target.value, idx)} /></td>
+                      <td><input type="number" className="input" value={range.minL} onChange={e => handleUpdateItem('ranges', range.id, 'minL', e.target.value, idx)} /></td>
+                      <td><input type="number" className="input" value={range.maxL} onChange={e => handleUpdateItem('ranges', range.id, 'maxL', e.target.value, idx)} /></td>
+                      <td><input type="number" className="input" value={range.minH} onChange={e => handleUpdateItem('ranges', range.id, 'minH', e.target.value, idx)} /></td>
+                      <td><input type="number" className="input" value={range.maxH} onChange={e => handleUpdateItem('ranges', range.id, 'maxH', e.target.value, idx)} /></td>
+                      <td><button className="btn" onClick={() => handleDeleteItem('ranges', range.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button></td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td colSpan="7">
+                      <button className="btn btn-secondary" onClick={() => handleAddItem('ranges')} style={{ width: '100%', marginTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                        <Plus size={16} /> Ajouter une Gamme
+                      </button>
                     </td>
                   </tr>
-                ))}
-                <tr>
-                  <td colSpan="7">
-                    <button className="btn btn-secondary" onClick={() => handleAddItem('ranges')} style={{ width: '100%', marginTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-                      <Plus size={16} /> Ajouter une Gamme
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                </tbody>
+              </table>
+            </div>
           )}
 
           {activeTab === 'profiles' && (
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Référence</th>
-                  <th>Gamme</th>
-                  <th>Désignation</th>
-                  <th>Long. Barre (mm)</th>
-                  <th>Couleurs dispo.</th>
-                  <th>Prix Achat (DZD/Barre)</th>
-                  <th style={{ textAlign: 'right' }}>
-                    <button 
-                      className="btn btn-secondary" 
-                      style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem' }} 
-                      onClick={() => {
-                        const unique = [];
-                        const seen = new Set();
-                        data.profiles.forEach(p => {
-                          if (!seen.has(p.id)) {
-                            unique.push(p);
-                            seen.add(p.id);
-                          }
-                        });
-                        if (unique.length < data.profiles.length) {
-                          setData(prev => ({ ...prev, profiles: unique }));
-                          alert(`${data.profiles.length - unique.length} doublons supprimés.`);
-                        } else {
-                          alert("Aucun doublon détecté.");
-                        }
-                      }}
-                    >
-                      Dédoublonner
-                    </button>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.profiles.map((p, idx) => (
-                  <tr key={`${p.id}-${idx}`}>
-                    <td style={{ fontWeight: 600 }}>
-                      <input className="input" value={p.id} onChange={e => handleUpdateItem('profiles', p.id, 'id', e.target.value, idx)} style={{ width: '100px', fontWeight: 600 }} />
-                    </td>
-                    <td>
-                      <select className="input" value={p.rangeId} onChange={e => handleUpdateItem('profiles', p.id, 'rangeId', e.target.value, idx)} style={{ width: '100px' }}>
-                        {data.ranges.map(r => <option key={r.id} value={r.id}>{r.id}</option>)}
-                      </select>
-                    </td>
-                    <td><input className="input" value={p.name} onChange={e => handleUpdateItem('profiles', p.id, 'name', e.target.value, idx)} style={{ width: '180px' }} /></td>
-                    <td><input className="input" type="number" value={p.barLength} onChange={e => handleUpdateItem('profiles', p.id, 'barLength', e.target.value, idx)} style={{ width: '90px' }} /></td>
-                    <td>
-                      <input className="input" value={p.colors?.join(', ') || ''} onChange={e => handleUpdateItem('profiles', p.id, 'colors', e.target.value.split(',').map(s=>s.trim()), idx)} style={{ width: '150px' }} title="RAL9016, RAL7016..." />
-                    </td>
-                    <td><input className="input" type="number" value={p.pricePerBar || p.pricePerKg} onChange={e => handleUpdateItem('profiles', p.id, 'pricePerBar', e.target.value, idx)} style={{ width: '100px' }} /></td>
-                    <td>
-                      <button className="btn" onClick={() => handleDeleteItem('profiles', p.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
+            <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Gamme</th>
+                    <th>ID / Code</th>
+                    <th>Désignation</th>
+                    <th>Poids (kg/m)</th>
+                    <th>Prix (DZD/Kg)</th>
+                    <th>Lg Barre</th>
+                    <th>Couleurs</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.profiles.map((p, idx) => (
+                    <tr key={p.id}>
+                      <td>
+                        <select className="input" value={p.rangeId} onChange={e => handleUpdateItem('profiles', p.id, 'rangeId', e.target.value, idx)} style={{ width: '100px' }}>
+                          {data.ranges.map(r => <option key={r.id} value={r.id}>{r.id}</option>)}
+                        </select>
+                      </td>
+                      <td>{p.id}</td>
+                      <td><input className="input" value={p.name} onChange={e => handleUpdateItem('profiles', p.id, 'name', e.target.value, idx)} style={{ width: '180px' }} /></td>
+                      <td><input type="number" step="0.001" className="input" value={p.weightPerM} onChange={e => handleUpdateItem('profiles', p.id, 'weightPerM', e.target.value, idx)} style={{ width: '80px' }} /></td>
+                      <td><input type="number" step="0.01" className="input" value={p.pricePerKg} onChange={e => handleUpdateItem('profiles', p.id, 'pricePerKg', e.target.value, idx)} style={{ width: '80px' }} /></td>
+                      <td><input type="number" className="input" value={p.barLength || 6000} onChange={e => handleUpdateItem('profiles', p.id, 'barLength', e.target.value, idx)} style={{ width: '80px' }} /></td>
+                      <td>
+                        <MultiSelectColor selectedColors={p.colors || []} allColors={data.colors} onChange={newC => handleUpdateItem('profiles', p.id, 'colors', newC, idx)} />
+                      </td>
+                      <td><button className="btn" onClick={() => handleDeleteItem('profiles', p.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button></td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td colSpan="8">
+                      <button className="btn btn-secondary" onClick={() => handleAddItem('profiles')} style={{ width: '100%', marginTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                        <Plus size={16} /> Ajouter un Profilé
+                      </button>
                     </td>
                   </tr>
-                ))}
-                <tr>
-                  <td colSpan="7">
-                    <button className="btn btn-secondary" onClick={() => handleAddItem('profiles')} style={{ width: '100%', marginTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-                      <Plus size={16} /> Ajouter un Profilé
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                </tbody>
+              </table>
+            </div>
           )}
 
           {activeTab === 'glass' && (
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Référence</th>
-                  <th>Désignation</th>
-                  <th>Type</th>
-                  <th>Composition</th>
-                  <th>Spécification</th>
-                  <th>Épaisseur (mm)</th>
-                  <th>Prix Achat (DZD/m²)</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.glass.map((g, idx) => (
-                  <tr key={`${g.id}-${idx}`}>
-                    <td style={{ fontWeight: 600 }}>
-                      <input className="input" value={g.id} onChange={e => handleUpdateItem('glass', g.id, 'id', e.target.value, idx)} style={{ width: '100px', fontWeight: 600 }} />
-                    </td>
-                    <td><input className="input" value={g.name} onChange={e => handleUpdateItem('glass', g.id, 'name', e.target.value, idx)} style={{ width: '180px' }} /></td>
-                    <td>
-                      <select className="input" value={g.type} onChange={e => handleUpdateItem('glass', g.id, 'type', e.target.value, idx)} style={{ width: '100px' }}>
-                        <option value="SIMPLE">Simple</option>
-                        <option value="DOUBLE">Double</option>
-                        <option value="TRIPLE">Triple</option>
-                        <option value="SPECIAL">Spécial</option>
-                      </select>
-                    </td>
-                    <td><input className="input" value={g.composition} onChange={e => handleUpdateItem('glass', g.id, 'composition', e.target.value, idx)} style={{ width: '100px' }} /></td>
-                    <td><input className="input" value={g.specification || 'Standard'} onChange={e => handleUpdateItem('glass', g.id, 'specification', e.target.value, idx)} style={{ width: '120px' }} /></td>
-                    <td><input className="input" type="number" value={g.thickness} onChange={e => handleUpdateItem('glass', g.id, 'thickness', e.target.value, idx)} style={{ width: '80px' }} /></td>
-                    <td><input className="input" type="number" value={g.pricePerM2} onChange={e => handleUpdateItem('glass', g.id, 'pricePerM2', e.target.value, idx)} style={{ width: '100px' }} /></td>
-                    <td>
-                      <button className="btn" onClick={() => handleDeleteItem('glass', g.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
+            <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Référence</th>
+                    <th>Désignation</th>
+                    <th>Type</th>
+                    <th>Composition</th>
+                    <th>Spécification</th>
+                    <th>Épaisseur (mm)</th>
+                    <th>Prix Achat (DZD/m²)</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.glass.map((g, idx) => (
+                    <tr key={`${g.id}-${idx}`}>
+                      <td style={{ fontWeight: 600 }}>
+                        <input className="input" value={g.id} onChange={e => handleUpdateItem('glass', g.id, 'id', e.target.value, idx)} style={{ width: '100px', fontWeight: 600 }} />
+                      </td>
+                      <td><input className="input" value={g.name} onChange={e => handleUpdateItem('glass', g.id, 'name', e.target.value, idx)} style={{ width: '180px' }} /></td>
+                      <td>
+                        <select className="input" value={g.type} onChange={e => handleUpdateItem('glass', g.id, 'type', e.target.value, idx)} style={{ width: '100px' }}>
+                          <option value="SIMPLE">Simple</option>
+                          <option value="DOUBLE">Double</option>
+                          <option value="TRIPLE">Triple</option>
+                          <option value="SPECIAL">Spécial</option>
+                        </select>
+                      </td>
+                      <td><input className="input" value={g.composition} onChange={e => handleUpdateItem('glass', g.id, 'composition', e.target.value, idx)} style={{ width: '100px' }} /></td>
+                      <td><input className="input" value={g.specification || 'Standard'} onChange={e => handleUpdateItem('glass', g.id, 'specification', e.target.value, idx)} style={{ width: '120px' }} /></td>
+                      <td><input className="input" type="number" value={g.thickness} onChange={e => handleUpdateItem('glass', g.id, 'thickness', e.target.value, idx)} style={{ width: '80px' }} /></td>
+                      <td><input className="input" type="number" value={g.pricePerM2} onChange={e => handleUpdateItem('glass', g.id, 'pricePerM2', e.target.value, idx)} style={{ width: '100px' }} /></td>
+                      <td>
+                        <button className="btn" onClick={() => handleDeleteItem('glass', g.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
+                      </td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td colSpan="8">
+                      <button className="btn btn-secondary" onClick={() => handleAddItem('glass')} style={{ width: '100%', marginTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                        <Plus size={16} /> Ajouter un Vitrage
+                      </button>
                     </td>
                   </tr>
-                ))}
-                <tr>
-                  <td colSpan="7">
-                    <button className="btn btn-secondary" onClick={() => handleAddItem('glass')} style={{ width: '100%', marginTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-                      <Plus size={16} /> Ajouter un Vitrage
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                </tbody>
+              </table>
+            </div>
           )}
 
           {activeTab === 'colors' && (
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Code / ID</th>
-                  <th>Nom (Ex: RAL9016)</th>
-                  <th>Code Couleur</th>
-                  <th>Facteur Multiplicateur</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.colors.map((c, idx) => (
-                  <tr key={`${c.id}-${idx}`}>
-                    <td style={{ fontWeight: 600 }}>
-                      <input className="input" value={c.id} onChange={e => handleUpdateItem('colors', c.id, 'id', e.target.value, idx)} style={{ width: '100px', fontWeight: 600 }} />
-                    </td>
-                    <td><input className="input" value={c.name} onChange={e => handleUpdateItem('colors', c.id, 'name', e.target.value, idx)} style={{ width: '200px' }} /></td>
-                    <td>
-                      <input 
-                        type="color" 
-                        value={c.hex || '#ffffff'} 
-                        onChange={e => handleUpdateItem('colors', c.id, 'hex', e.target.value, idx)}
-                        style={{ width: '40px', height: '40px', padding: '0', cursor: 'pointer', border: '1px solid #cbd5e1', borderRadius: '4px' }}
-                      />
-                    </td>
-                    <td><input className="input" type="number" step="0.05" value={c.factor} onChange={e => handleUpdateItem('colors', c.id, 'factor', e.target.value, idx)} style={{ width: '100px' }} /></td>
-                    <td>
-                      <button className="btn" onClick={() => handleDeleteItem('colors', c.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
+            <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Code / ID</th>
+                    <th>Nom (Ex: RAL9016)</th>
+                    <th>Code Couleur</th>
+                    <th>Facteur Multiplicateur</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.colors.map((c, idx) => (
+                    <tr key={`${c.id}-${idx}`}>
+                      <td style={{ fontWeight: 600 }}>
+                        <input className="input" value={c.id} onChange={e => handleUpdateItem('colors', c.id, 'id', e.target.value, idx)} style={{ width: '100px', fontWeight: 600 }} />
+                      </td>
+                      <td><input className="input" value={c.name} onChange={e => handleUpdateItem('colors', c.id, 'name', e.target.value, idx)} style={{ width: '200px' }} /></td>
+                      <td>
+                        <input 
+                          type="color" 
+                          value={c.hex || '#ffffff'} 
+                          onChange={e => handleUpdateItem('colors', c.id, 'hex', e.target.value, idx)}
+                          style={{ width: '40px', height: '40px', padding: '0', cursor: 'pointer', border: '1px solid #cbd5e1', borderRadius: '4px' }}
+                        />
+                      </td>
+                      <td><input className="input" type="number" step="0.05" value={c.factor} onChange={e => handleUpdateItem('colors', c.id, 'factor', e.target.value, idx)} style={{ width: '100px' }} /></td>
+                      <td>
+                        <button className="btn" onClick={() => handleDeleteItem('colors', c.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
+                      </td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td colSpan="5">
+                      <button className="btn btn-secondary" onClick={() => handleAddItem('colors')} style={{ width: '100%', marginTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                        <Plus size={16} /> Ajouter une Couleur
+                      </button>
                     </td>
                   </tr>
-                ))}
-                <tr>
-                  <td colSpan="5">
-                    <button className="btn btn-secondary" onClick={() => handleAddItem('colors')} style={{ width: '100%', marginTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-                      <Plus size={16} /> Ajouter une Couleur
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                </tbody>
+              </table>
+            </div>
           )}
 
           {activeTab === 'accessories' && (
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Code Article</th>
-                  <th>Gamme</th>
-                  <th>Désignation</th>
-                  <th>Unité de Vente</th>
-                  <th>Prix Achat (DZD/Unité ou ML)</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.accessories.map((acc, idx) => (
-                  <tr key={`${acc.id}-${idx}`}>
-                    <td style={{ fontWeight: 600 }}>
-                      <input className="input" value={acc.id} onChange={e => handleUpdateItem('accessories', acc.id, 'id', e.target.value, idx)} style={{ width: '100px', fontWeight: 600 }} />
-                    </td>
-                    <td>
-                      <MultiSelectRange 
-                        selectedIds={acc.rangeIds || []} 
-                        allRanges={data.ranges} 
-                        onChange={newIds => handleUpdateItem('accessories', acc.id, 'rangeIds', newIds, idx)} 
-                      />
-                    </td>
-                    <td><input className="input" value={acc.name} onChange={e => handleUpdateItem('accessories', acc.id, 'name', e.target.value, idx)} style={{ width: '200px' }} /></td>
-                    <td>
-                      <select className="input" value={acc.unit} onChange={e => handleUpdateItem('accessories', acc.id, 'unit', e.target.value, idx)} style={{ width: '100px' }}>
-                        <option value="Kit">Kit</option>
-                        <option value="Ml">Ml</option>
-                        <option value="Unité">Unité</option>
-                        <option value="Joint">Joint</option>
-                      </select>
-                    </td>
-                    <td><input className="input" type="number" step="0.01" value={acc.price} onChange={e => handleUpdateItem('accessories', acc.id, 'price', e.target.value, idx)} style={{ width: '100px' }} /></td>
-                    <td>
-                      <button className="btn" onClick={() => handleDeleteItem('accessories', acc.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
+            <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Gamme(s)</th>
+                    <th>Désignation</th>
+                    <th>Unité</th>
+                    <th>Prix (DZD)</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.accessories.map((acc, idx) => (
+                    <tr key={acc.id}>
+                      <td>
+                        <MultiSelectRange selectedIds={acc.rangeIds || []} allRanges={data.ranges} onChange={newIds => handleUpdateItem('accessories', acc.id, 'rangeIds', newIds, idx)} />
+                      </td>
+                      <td><input className="input" value={acc.name} onChange={e => handleUpdateItem('accessories', acc.id, 'name', e.target.value, idx)} style={{ width: '220px' }} /></td>
+                      <td>
+                        <select className="input" value={acc.unit} onChange={e => handleUpdateItem('accessories', acc.id, 'unit', e.target.value, idx)}>
+                          <option>Unité</option>
+                          <option>Kit</option>
+                          <option>Joint</option>
+                          <option>ML</option>
+                          <option>M2</option>
+                          <option>Kg</option>
+                        </select>
+                      </td>
+                      <td><input type="number" step="0.01" className="input" value={acc.price} onChange={e => handleUpdateItem('accessories', acc.id, 'price', e.target.value, idx)} style={{ width: '100px' }} /></td>
+                      <td><button className="btn" onClick={() => handleDeleteItem('accessories', acc.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button></td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td colSpan="5">
+                      <button className="btn btn-secondary" onClick={() => handleAddItem('accessories')} style={{ width: '100%', marginTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                        <Plus size={16} /> Ajouter un Accessoire
+                      </button>
                     </td>
                   </tr>
-                ))}
-                <tr>
-                  <td colSpan="6">
-                    <button className="btn btn-secondary" onClick={() => handleAddItem('accessories')} style={{ width: '100%', marginTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-                      <Plus size={16} /> Ajouter un Accessoire
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                </tbody>
+              </table>
+            </div>
           )}
 
           {activeTab === 'gaskets' && (
-            <table className="data-table">
               <thead>
                 <tr>
                   <th>Gamme</th>
@@ -1207,90 +1177,93 @@ const AdminDashboard = ({ data, setData }) => {
           )}
 
           {activeTab === 'options' && (
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Nom de l'Option</th>
-                  <th>Gamme Associée</th>
-                  <th>Accessoire Inclus</th>
-                  <th>Formule Qté</th>
-                  <th>Remplace Accessoire (Facultatif)</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.options?.map((opt, idx) => (
-                  <tr key={`${opt.id}-${idx}`}>
-                    <td>
-                      <input 
-                        className="input" 
-                        value={opt.name} 
-                        onChange={e => handleUpdateItem('options', opt.id, 'name', e.target.value, idx)} 
-                        style={{ width: '180px' }} 
-                      />
-                    </td>
-                    <td>
-                      <MultiSelectRange 
-                        selectedIds={opt.rangeIds || []} 
-                        allRanges={data.ranges} 
-                        onChange={newIds => handleUpdateItem('options', opt.id, 'rangeIds', newIds, idx)} 
-                      />
-                    </td>
-                    <td>
-                      <select 
-                        className="input" 
-                        value={opt.addAccessoryId} 
-                        onChange={e => handleUpdateItem('options', opt.id, 'addAccessoryId', e.target.value, idx)}
-                        style={{ width: '200px' }}>
-                        <option value="">(Aucun)</option>
-                        {data.accessories.map(p => (
-                          <option key={p.id} value={p.id}>{p.name}</option>
-                        ))}
-                      </select>
-                    </td>
-                    <td>
-                      <input 
-                        className="input" 
-                        value={opt.formula} 
-                        onChange={e => handleUpdateItem('options', opt.id, 'formula', e.target.value, idx)} 
-                        style={{ width: '100px' }} 
-                      />
-                    </td>
-                    <td>
-                      <select 
-                        className="input" 
-                        value={opt.removeAccessoryId || ''} 
-                        onChange={e => handleUpdateItem('options', opt.id, 'removeAccessoryId', e.target.value, idx)}
-                        style={{ width: '200px' }}>
-                        <option value="">(Ne rien supprimer)</option>
-                        {data.accessories.map(p => (
-                          <option key={p.id} value={p.id}>{p.name}</option>
-                        ))}
-                      </select>
-                    </td>
-                    <td>
-                      <button className="btn" onClick={() => handleDeleteItem('options', opt.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
+            <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Nom de l'Option</th>
+                    <th>Gamme Associée</th>
+                    <th>Accessoire Inclus</th>
+                    <th>Formule Qté</th>
+                    <th>Remplace Accessoire (Facultatif)</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.options?.map((opt, idx) => (
+                    <tr key={`${opt.id}-${idx}`}>
+                      <td>
+                        <input 
+                          className="input" 
+                          value={opt.name} 
+                          onChange={e => handleUpdateItem('options', opt.id, 'name', e.target.value, idx)} 
+                          style={{ width: '180px' }} 
+                        />
+                      </td>
+                      <td>
+                        <MultiSelectRange 
+                          selectedIds={opt.rangeIds || []} 
+                          allRanges={data.ranges} 
+                          onChange={newIds => handleUpdateItem('options', opt.id, 'rangeIds', newIds, idx)} 
+                        />
+                      </td>
+                      <td>
+                        <select 
+                          className="input" 
+                          value={opt.addAccessoryId} 
+                          onChange={e => handleUpdateItem('options', opt.id, 'addAccessoryId', e.target.value, idx)}
+                          style={{ width: '200px' }}>
+                          <option value="">(Aucun)</option>
+                          {data.accessories.map(p => (
+                            <option key={p.id} value={p.id}>{p.name}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td>
+                        <input 
+                          className="input" 
+                          value={opt.formula} 
+                          onChange={e => handleUpdateItem('options', opt.id, 'formula', e.target.value, idx)} 
+                          style={{ width: '100px' }} 
+                        />
+                      </td>
+                      <td>
+                        <select 
+                          className="input" 
+                          value={opt.removeAccessoryId || ''} 
+                          onChange={e => handleUpdateItem('options', opt.id, 'removeAccessoryId', e.target.value, idx)}
+                          style={{ width: '200px' }}>
+                          <option value="">(Ne rien supprimer)</option>
+                          {data.accessories.map(p => (
+                            <option key={p.id} value={p.id}>{p.name}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td>
+                        <button className="btn" onClick={() => handleDeleteItem('options', opt.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
+                      </td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td colSpan="6">
+                      <button className="btn btn-secondary" onClick={() => handleAddItem('options')} style={{ width: '100%', marginTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                        <Plus size={16} /> Ajouter une Option
+                      </button>
                     </td>
                   </tr>
-                ))}
-                <tr>
-                  <td colSpan="6">
-                    <button className="btn btn-secondary" onClick={() => handleAddItem('options')} style={{ width: '100%', marginTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-                      <Plus size={16} /> Ajouter une Option
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                </tbody>
+              </table>
+            </div>
           )}
 
           {activeTab === 'volets' && (() => {
             const shutterFamilies = [
-              { key: 'caissons',   label: 'Caissons' },
-              { key: 'lames',     label: 'Lames' },
-              { key: 'glissieres',label: 'Glissières' },
-              { key: 'axes',      label: 'Axes' },
-              { key: 'kits',      label: 'Kits Manœuvre' }
+              { key: 'caissons',    label: 'Caissons' },
+              { key: 'lames',       label: 'Lames' },
+              { key: 'lameFinales', label: 'Lames Finales' },
+              { key: 'glissieres',  label: 'Glissières' },
+              { key: 'axes',        label: 'Axes' },
+              { key: 'kits',        label: 'Kits Manœuvre' }
             ];
 
             const updateShutterItem = (family, idx, field, value) => {
@@ -1335,9 +1308,21 @@ const AdminDashboard = ({ data, setData }) => {
                       <thead>
                         <tr>
                           <th>Désignation</th>
-                          {key === 'caissons' && <th>Hauteur (mm)</th>}
-                          {key === 'glissieres' && <th>Gamme</th>}
-                          {key === 'glissieres' && <th>Type (Auto)</th>}
+                          {key === 'caissons' && (
+                            <>
+                              <th>Hauteur (mm)</th>
+                              <th>Prix Joint HSF</th>
+                              <th>Formule Joint</th>
+                            </>
+                          )}
+                          {key === 'glissieres' && (
+                            <>
+                              <th>Gamme</th>
+                              <th>Type (Auto)</th>
+                              <th>Baguette (Oui)</th>
+                              <th>Prix Baguette</th>
+                            </>
+                          )}
                           {key === 'glissieres' ? (
                             <>
                               <th>Option 1 (Nom)</th>
@@ -1356,26 +1341,34 @@ const AdminDashboard = ({ data, setData }) => {
                       <tbody>
                         {(data.shutterComponents?.[key] || []).map((item, i) => (
                           <tr key={item.id}>
-                            <td><input className="input" value={item.name} onChange={e => updateShutterItem(key, i, 'name', e.target.value)} style={{ width: '180px' }} /></td>
+                             <td><input className="input" value={item.name} onChange={e => updateShutterItem(key, i, 'name', e.target.value)} style={{ width: '180px' }} /></td>
                             {key === 'caissons' && (
-                              <td><input className="input" type="number" value={item.height || 0} onChange={e => updateShutterItem(key, i, 'height', e.target.value)} style={{ width: '80px' }} /></td>
+                              <>
+                                <td><input className="input" type="number" value={item.height || 0} onChange={e => updateShutterItem(key, i, 'height', e.target.value)} style={{ width: '80px' }} /></td>
+                                <td><input className="input" type="number" step="0.01" value={item.jointPrice || 0} onChange={e => updateShutterItem(key, i, 'jointPrice', e.target.value)} style={{ width: '80px' }} /></td>
+                                <td><input className="input" value={item.jointFormula || 'L/1000'} onChange={e => updateShutterItem(key, i, 'jointFormula', e.target.value)} style={{ width: '100px' }} /></td>
+                              </>
                             )}
                             {key === 'glissieres' && (
-                              <td>
-                                <select className="input" value={item.rangeId || ''} onChange={e => updateShutterItem(key, i, 'rangeId', e.target.value)} style={{ width: '90px' }}>
-                                  <option value="">Toutes</option>
-                                  {data.ranges.map(r => <option key={r.id} value={r.id}>{r.id}</option>)}
-                                </select>
-                              </td>
-                            )}
-                            {key === 'glissieres' && (
-                              <td>
-                                <select className="input" value={item.shutterType || 'OTHER'} onChange={e => updateShutterItem(key, i, 'shutterType', e.target.value)} style={{ width: '90px' }}>
-                                  <option value="MONO">Mono (Sangle)</option>
-                                  <option value="PALA">Pala (Moteur)</option>
-                                  <option value="OTHER">Autre</option>
-                                </select>
-                              </td>
+                              <>
+                                <td>
+                                  <select className="input" value={item.rangeId || ''} onChange={e => updateShutterItem(key, i, 'rangeId', e.target.value)} style={{ width: '90px' }}>
+                                    <option value="">Toutes</option>
+                                    {data.ranges.map(r => <option key={r.id} value={r.id}>{r.id}</option>)}
+                                  </select>
+                                </td>
+                                <td>
+                                  <select className="input" value={item.shutterType || 'OTHER'} onChange={e => updateShutterItem(key, i, 'shutterType', e.target.value)} style={{ width: '90px' }}>
+                                    <option value="MONO">Mono (Sangle)</option>
+                                    <option value="PALA">Pala (Moteur)</option>
+                                    <option value="OTHER">Autre</option>
+                                  </select>
+                                </td>
+                                <td style={{ textAlign: 'center' }}>
+                                  <input type="checkbox" checked={item.hasBaguette || false} onChange={e => updateShutterItem(key, i, 'hasBaguette', e.target.checked)} />
+                                </td>
+                                <td><input className="input" type="number" step="0.01" value={item.baguettePrice || 0} onChange={e => updateShutterItem(key, i, 'baguettePrice', e.target.value)} style={{ width: '80px' }} /></td>
+                              </>
                             )}
                             {key === 'glissieres' ? (
                               <>
@@ -1416,55 +1409,57 @@ const AdminDashboard = ({ data, setData }) => {
           })()}
 
           {activeTab === 'traverses' && (
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Désignation</th>
-                  <th>Type</th>
-                  <th>Usage</th>
-                  <th>Profilé Associé</th>
-                  <th>Formule Qté</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(data.traverses || []).map((trv, idx) => (
-                  <tr key={`${trv.id}-${idx}`}>
-                    <td><input className="input" value={trv.name} onChange={e => handleUpdateItem('traverses', trv.id, 'name', e.target.value, idx)} style={{ width: '190px' }} /></td>
-                    <td>
-                      <select className="input" value={trv.type} onChange={e => handleUpdateItem('traverses', trv.id, 'type', e.target.value, idx)} style={{ width: '120px' }}>
-                        <option value="horizontale">Horizontale</option>
-                        <option value="verticale">Verticale</option>
-                      </select>
-                    </td>
-                    <td>
-                      <select className="input" value={trv.usage} onChange={e => handleUpdateItem('traverses', trv.id, 'usage', e.target.value, idx)} style={{ width: '140px' }}>
-                        <option value="fenetre">Fenêtre</option>
-                        <option value="porte">Porte</option>
-                        <option value="pf">Porte-Fenêtre</option>
-                        <option value="coulissant">Coulissant</option>
-                        <option value="universal">Universel</option>
-                      </select>
-                    </td>
-                    <td>
-                      <select className="input" value={trv.profileId || ''} onChange={e => handleUpdateItem('traverses', trv.id, 'profileId', e.target.value, idx)} style={{ width: '200px' }}>
-                        <option value="">(Aucun profil)</option>
-                        {data.profiles.map(p => <option key={p.id} value={p.id}>{p.name} ({p.id})</option>)}
-                      </select>
-                    </td>
-                    <td><input className="input" value={trv.formula || 'L'} onChange={e => handleUpdateItem('traverses', trv.id, 'formula', e.target.value, idx)} style={{ width: '100px' }} /></td>
-                    <td><button className="btn" onClick={() => handleDeleteItem('traverses', trv.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button></td>
+            <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Désignation</th>
+                    <th>Type</th>
+                    <th>Usage</th>
+                    <th>Profilé Associé</th>
+                    <th>Formule Qté</th>
+                    <th>Actions</th>
                   </tr>
-                ))}
-                <tr>
-                  <td colSpan="6">
-                    <button className="btn btn-secondary" onClick={() => handleAddItem('traverses')} style={{ width: '100%', marginTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-                      <Plus size={16} /> Ajouter une Traverse
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {(data.traverses || []).map((trv, idx) => (
+                    <tr key={`${trv.id}-${idx}`}>
+                      <td><input className="input" value={trv.name} onChange={e => handleUpdateItem('traverses', trv.id, 'name', e.target.value, idx)} style={{ width: '190px' }} /></td>
+                      <td>
+                        <select className="input" value={trv.type} onChange={e => handleUpdateItem('traverses', trv.id, 'type', e.target.value, idx)} style={{ width: '120px' }}>
+                          <option value="horizontale">Horizontale</option>
+                          <option value="verticale">Verticale</option>
+                        </select>
+                      </td>
+                      <td>
+                        <select className="input" value={trv.usage} onChange={e => handleUpdateItem('traverses', trv.id, 'usage', e.target.value, idx)} style={{ width: '140px' }}>
+                          <option value="fenetre">Fenêtre</option>
+                          <option value="porte">Porte</option>
+                          <option value="pf">Porte-Fenêtre</option>
+                          <option value="coulissant">Coulissant</option>
+                          <option value="universal">Universel</option>
+                        </select>
+                      </td>
+                      <td>
+                        <select className="input" value={trv.profileId || ''} onChange={e => handleUpdateItem('traverses', trv.id, 'profileId', e.target.value, idx)} style={{ width: '200px' }}>
+                          <option value="">(Aucun profil)</option>
+                          {data.profiles.map(p => <option key={p.id} value={p.id}>{p.name} ({p.id})</option>)}
+                        </select>
+                      </td>
+                      <td><input className="input" value={trv.formula || 'L'} onChange={e => handleUpdateItem('traverses', trv.id, 'formula', e.target.value, idx)} style={{ width: '100px' }} /></td>
+                      <td><button className="btn" onClick={() => handleDeleteItem('traverses', trv.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button></td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td colSpan="6">
+                      <button className="btn btn-secondary" onClick={() => handleAddItem('traverses')} style={{ width: '100%', marginTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                        <Plus size={16} /> Ajouter une Traverse
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           )}
 
           <div style={{ marginTop: '2rem', padding: '1rem', background: '#eff6ff', borderRadius: '0.75rem', display: 'flex', gap: '0.8rem', alignItems: 'flex-start' }}>

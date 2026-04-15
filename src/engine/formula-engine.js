@@ -42,7 +42,7 @@ export class FormulaEngine {
   /**
    * Calculate BOM for a single component (used by global BOM or individual cells)
    */
-  calculateComponentBOM(config, L, H, compositionId, glassId, optionalSides = {}) {
+  calculateComponentBOM(config, L, H, compositionId, glassId, optionalSides, totalH = null) {
     const composition = this.db.compositions.find(c => c.id === compositionId);
     if (!composition) return { profiles: [], accessories: [], glass: null, gasket: null };
 
@@ -68,7 +68,7 @@ export class FormulaEngine {
       const isCouvreJoint = /couvres?[- ]?joints?|cj[vh]?/i.test(searchStr);
 
       if (!isCouvreJoint) {
-        expandedElements.push(el);
+        expandedElements.push({ ...el, isCouvreJoint: false });
         return;
       }
 
@@ -82,11 +82,11 @@ export class FormulaEngine {
         const isGenericH = !hasHaut && !hasBas;
         
         if (isGenericH) {
-          if (optionalSides.top) expandedElements.push({ ...el, label: baseLabel + ' (Haut)', qty: el.qty / 2 });
-          if (optionalSides.bottom) expandedElements.push({ ...el, label: baseLabel + ' (Bas)', qty: el.qty / 2 });
+          if (optionalSides.top) expandedElements.push({ ...el, label: baseLabel + ' (Haut)', qty: el.qty / 2, isCouvreJoint: true });
+          if (optionalSides.bottom) expandedElements.push({ ...el, label: baseLabel + ' (Bas)', qty: el.qty / 2, isCouvreJoint: true });
         } else {
-          if (hasHaut && optionalSides.top) expandedElements.push(el);
-          if (hasBas && optionalSides.bottom) expandedElements.push(el);
+          if (hasHaut && optionalSides.top) expandedElements.push({ ...el, isCouvreJoint: true });
+          if (hasBas && optionalSides.bottom) expandedElements.push({ ...el, isCouvreJoint: true });
         }
       } else if (isVertical) {
         const hasGauche = searchStr.includes('gauche');
@@ -94,19 +94,19 @@ export class FormulaEngine {
         const isGenericV = !hasGauche && !hasDroite;
 
         if (isGenericV) {
-          if (optionalSides.left) expandedElements.push({ ...el, label: baseLabel + ' (Gauche)', qty: el.qty / 2 });
-          if (optionalSides.right) expandedElements.push({ ...el, label: baseLabel + ' (Droite)', qty: el.qty / 2 });
+          if (optionalSides.left) expandedElements.push({ ...el, label: baseLabel + ' (Gauche)', qty: el.qty / 2, isCouvreJoint: true });
+          if (optionalSides.right) expandedElements.push({ ...el, label: baseLabel + ' (Droite)', qty: el.qty / 2, isCouvreJoint: true });
         } else {
-          if (hasGauche && optionalSides.left) expandedElements.push(el);
-          if (hasDroite && optionalSides.right) expandedElements.push(el);
+          if (hasGauche && optionalSides.left) expandedElements.push({ ...el, isCouvreJoint: true });
+          if (hasDroite && optionalSides.right) expandedElements.push({ ...el, isCouvreJoint: true });
         }
       } else {
         // Generic 4-sided
         const vFormula = (el.formula === 'L' || !el.formula) ? 'H' : el.formula;
-        if (optionalSides.top) expandedElements.push({ ...el, label: baseLabel + ' (Haut)', qty: el.qty / 4 });
-        if (optionalSides.bottom) expandedElements.push({ ...el, label: baseLabel + ' (Bas)', qty: el.qty / 4 });
-        if (optionalSides.left) expandedElements.push({ ...el, formula: vFormula, label: baseLabel + ' (Gauche)', qty: el.qty / 4 });
-        if (optionalSides.right) expandedElements.push({ ...el, formula: vFormula, label: baseLabel + ' (Droite)', qty: el.qty / 4 });
+        if (optionalSides.top) expandedElements.push({ ...el, label: baseLabel + ' (Haut)', qty: el.qty / 4, isCouvreJoint: true });
+        if (optionalSides.bottom) expandedElements.push({ ...el, label: baseLabel + ' (Bas)', qty: el.qty / 4, isCouvreJoint: true });
+        if (optionalSides.left) expandedElements.push({ ...el, formula: vFormula, label: baseLabel + ' (Gauche)', qty: el.qty / 4, isCouvreJoint: true });
+        if (optionalSides.right) expandedElements.push({ ...el, formula: vFormula, label: baseLabel + ' (Droite)', qty: el.qty / 4, isCouvreJoint: true });
       }
     });
 
@@ -114,7 +114,10 @@ export class FormulaEngine {
       let elQty = el.qty;
       const isAccessory = el.type === 'accessory';
       const formulaStr = (el.formula && el.formula.trim() !== '') ? el.formula : (isAccessory ? '1' : '');
-      const value = this.evaluate(formulaStr, scope);
+      
+      // Use totalH for Couvre Joint if available
+      const currentScope = (el.isCouvreJoint && totalH !== null) ? { L, H: totalH, HC: totalH - H } : scope;
+      const value = this.evaluate(formulaStr, currentScope);
       const qty = value * elQty;
 
       if (el.type === 'profile') {
@@ -376,8 +379,8 @@ export class FormulaEngine {
       accessories = gridResults.accessories;
       glasses = gridResults.glasses;
     } else {
-      // Simple Mode (Classic)
-      const res = this.calculateComponentBOM(config, L, windowH, config.compositionId, glassId, config.optionalSides);
+      // Simple Mode (Classic) - Pass original H as totalH
+      const res = this.calculateComponentBOM(config, L, windowH, config.compositionId, glassId, config.optionalSides, H);
       profiles = res.profiles;
       accessories = res.accessories;
       if (res.gasket) accessories.push(res.gasket);
@@ -417,11 +420,12 @@ export class FormulaEngine {
     if (config.hasShutter && config.shutterConfig && this.db.shutterComponents) {
       const sc = this.db.shutterComponents;
       const families = [
-        { key: 'caissonId',   source: sc.caissons },
-        { key: 'lameId',      source: sc.lames },
-        { key: 'glissiereId', source: sc.glissieres },
-        { key: 'axeId',       source: sc.axes },
-        { key: 'kitId',       source: sc.kits }
+        { key: 'caissonId',    source: sc.caissons },
+        { key: 'lameId',       source: sc.lames },
+        { key: 'lameFinaleId', source: sc.lameFinales || [] },
+        { key: 'glissiereId',  source: sc.glissieres },
+        { key: 'axeId',        source: sc.axes },
+        { key: 'kitId',        source: sc.kits }
       ];
       families.forEach(({ key, source }) => {
         let selectedId = config.shutterConfig[key];
@@ -430,9 +434,8 @@ export class FormulaEngine {
         if (key === 'glissiereId' && selectedId === 'AUTO') {
           const kitId = config.shutterConfig.kitId;
           const type = kitId === 'KIT-SANG' ? 'MONO' : (kitId === 'KIT-MOTE' ? 'PALA' : 'OTHER');
-          const composition = this.db.compositions.find(c => c.id === config.compositionId);
+          const composition = this.getComposition(config.compositionId);
           if (composition) {
-            // Find universal or range-specific
             const autoG = (source || []).find(g => (!g.rangeId || g.rangeId === composition.rangeId) && g.shutterType === type);
             if (autoG) selectedId = autoG.id;
           }
@@ -443,6 +446,7 @@ export class FormulaEngine {
           const qty = this.evaluate(item.formula || '1', { L, H, HC: shutterHeight });
           
           let displayName = item.name;
+          // ... (keep glissiereParams logic)
           if (key === 'glissiereId' && config.shutterConfig.glissiereParams) {
             const params = config.shutterConfig.glissiereParams;
             const paramStrings = [];
@@ -471,6 +475,36 @@ export class FormulaEngine {
             resolvedFormula: this.resolveFormula(item.formula || '1', { L, H, HC: shutterHeight }),
             cost: finalCost
           });
+
+          // Add Extra Baguette if Glissière and enabled
+          if (key === 'glissiereId' && item.hasBaguette && config.shutterConfig.enableBaguette) {
+            const baguettePrice = item.baguettePrice || 0;
+            const bCost = (qty / barLength) * baguettePrice;
+            shutterPack.push({
+              id: `${item.id}-baguette`,
+              name: `Baguette pour ${item.name}`,
+              qty: qty,
+              priceUnit: item.priceUnit,
+              price: baguettePrice,
+              barLength: barLength,
+              cost: bCost
+            });
+          }
+
+          // Add Joint HSF if Caisson and has price
+          if (key === 'caissonId' && item.jointPrice > 0) {
+            const jointFormula = item.jointFormula || 'L/1000';
+            const jQty = this.evaluate(jointFormula, { L, H, HC: shutterHeight });
+            shutterPack.push({
+              id: `${item.id}-joint`,
+              name: `Joint HSF / Brosse (${item.name})`,
+              qty: jQty,
+              priceUnit: 'ML',
+              price: item.jointPrice,
+              formula: jointFormula,
+              cost: jQty * item.jointPrice
+            });
+          }
         }
       });
     }

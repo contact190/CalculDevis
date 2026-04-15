@@ -254,6 +254,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                 {[
                   { key: 'caissonId', label: 'Caisson', items: database.shutterComponents.caissons },
                   { key: 'lameId', label: 'Lame', items: database.shutterComponents.lames },
+                  { key: 'lameFinaleId', label: 'Lame Finale', items: database.shutterComponents.lameFinales || [] },
                   { key: 'glissiereId', label: 'Glissière', items: database.shutterComponents.glissieres },
                   { key: 'axeId', label: 'Axe', items: database.shutterComponents.axes },
                   { key: 'kitId', label: 'Kit Manœuvre', items: database.shutterComponents.kits }
@@ -310,8 +311,16 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                         </select>
                       </div>
 
-                      {key === 'glissiereId' && (
                         <>
+                          {effectiveItem?.hasBaguette && (
+                            <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.85rem' }}>
+                                <input type="checkbox" checked={config.shutterConfig?.enableBaguette || false}
+                                  onChange={e => setConfig(prev => ({ ...prev, shutterConfig: { ...(prev.shutterConfig || {}), enableBaguette: e.target.checked } }))} />
+                                Activer Baguette Optionnelle (Prix: {effectiveItem.baguettePrice} DZD)
+                              </label>
+                            </div>
+                          )}
                           {effectiveItem?.opt1Label && (
                             <div className="form-group">
                               <label className="label" style={{ fontSize: '0.8rem' }}>{effectiveItem.opt1Label}</label>
@@ -358,7 +367,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
           )}
 
           {/* Detail Table */}
-          <div style={{ marginTop: '2rem', borderTop: '1px solid #f1f5f9', paddingTop: '1.5rem' }}>
+          <div style={{ marginTop: '2rem', borderTop: '1px solid #f1f5f9', paddingTop: '1.5rem', overflowX: 'auto' }}>
             <h3 style={{ fontSize: '0.875rem', fontWeight: 600, color: '#64748b', marginBottom: '1rem' }}>RÉSUMÉ DÉTAILLÉ DU CALCUL</h3>
             <table className="data-table" style={{ fontSize: '0.7rem' }}>
               <thead><tr><th>Composant</th><th>Formule</th><th>Calcul</th><th>Nbre</th><th>Mesure Totale</th><th>Prix Unit.</th><th style={{ textAlign: 'right' }}>Prix Total</th></tr></thead>
@@ -1094,7 +1103,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
               <p>Cliquez sur "Ajouter un produit" pour commencer.</p>
             </div>
           ) : (
-            <div className="glass shadow-md" style={{ marginBottom: '1.5rem' }}>
+            <div className="glass shadow-md" style={{ marginBottom: '1.5rem', overflowX: 'auto' }}>
               <table className="data-table">
                 <thead>
                   <tr>
@@ -1210,7 +1219,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
               {/* Profiles */}
-              <div className="glass shadow-md" style={{ borderLeft: '4px solid #8b5cf6' }}>
+              <div className="glass shadow-md" style={{ borderLeft: '4px solid #8b5cf6', overflowX: 'auto' }}>
                 <h3 style={{ fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#8b5cf6', display: 'inline-block' }}></span>
                   Profilés Aluminium
@@ -1248,14 +1257,14 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
                             <td style={{ color: '#8b5cf6', fontWeight: 700 }}>{(totalMl / 1000).toFixed(2)} m</td>
                           </tr>
                         );
-                    })}
+                      })}
                   </tbody>
                 </table>
               </div>
 
               {/* Accessories */}
               {filteredBoms.some(b => b.bom.accessories?.length > 0 || b.bom.gasket) && (
-                <div className="glass shadow-md" style={{ borderLeft: '4px solid #f59e0b' }}>
+                <div className="glass shadow-md" style={{ borderLeft: '4px solid #f59e0b', overflowX: 'auto' }}>
                   <h3 style={{ fontWeight: 700, marginBottom: '1rem' }}>🔩 Accessoires & Joints</h3>
                   <table className="data-table">
                     <thead>
@@ -1288,7 +1297,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
 
               {/* Glass */}
               {filteredBoms.some(b => b.bom.glass) && (
-                <div className="glass shadow-md" style={{ borderLeft: '4px solid #06b6d4' }}>
+                <div className="glass shadow-md" style={{ borderLeft: '4px solid #06b6d4', overflowX: 'auto' }}>
                   <h3 style={{ fontWeight: 700, marginBottom: '1rem' }}>🪟 Vitrages</h3>
                   <table className="data-table">
                     <thead>
