@@ -719,33 +719,57 @@ const AdminDashboard = ({ data, setData }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.accessories.map((acc, idx) => (
-                    <tr key={acc.id}>
-                      <td>
-                        <MultiSelectRange selectedIds={acc.rangeIds || []} allRanges={data.ranges} onChange={newIds => handleUpdateItem('accessories', acc.id, 'rangeIds', newIds, idx)} />
-                      </td>
-                      <td><input className="input" value={acc.name} onChange={e => handleUpdateItem('accessories', acc.id, 'name', e.target.value, idx)} style={{ width: '220px' }} /></td>
-                      <td>
-                        <select className="input" value={acc.unit} onChange={e => handleUpdateItem('accessories', acc.id, 'unit', e.target.value, idx)}>
-                          <option>Unité</option>
-                          <option>Kit</option>
-                          <option>Joint</option>
-                          <option>ML</option>
-                          <option>M2</option>
-                          <option>Kg</option>
-                        </select>
-                      </td>
-                      <td><input type="number" step="0.01" className="input" value={acc.price} onChange={e => handleUpdateItem('accessories', acc.id, 'price', e.target.value, idx)} style={{ width: '100px' }} /></td>
-                      <td style={{ display: 'flex', gap: '0.3rem' }}>
-                        <button className="btn" onClick={() => handleDuplicateItem('accessories', acc)} style={{ padding: '0.4rem', color: '#6366f1' }} title="Dupliquer">
-                          <Copy size={16} />
-                        </button>
-                        <button className="btn" onClick={() => handleDeleteItem('accessories', acc.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }} title="Supprimer">
-                          <Trash2 size={16} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {(() => {
+                    const sortedAccessories = [...data.accessories].sort((a, b) => {
+                      const lenA = (a.rangeIds || []).length;
+                      const lenB = (b.rangeIds || []).length;
+                      if (lenA > 1 && lenB === 1) return -1;
+                      if (lenA === 1 && lenB > 1) return 1;
+                      const rA = (a.rangeIds || []).join(',');
+                      const rB = (b.rangeIds || []).join(',');
+                      return rA.localeCompare(rB);
+                    });
+                    
+                    let currentGroup = '';
+                    let isGrey = false;
+                    
+                    return sortedAccessories.map((acc) => {
+                      const groupKey = (acc.rangeIds || []).length > 1 ? 'MULTI' : ((acc.rangeIds || [])[0] || 'NONE');
+                      if (groupKey !== currentGroup) {
+                        currentGroup = groupKey;
+                        isGrey = !isGrey;
+                      }
+                      
+                      const idx = data.accessories.indexOf(acc);
+                      return (
+                        <tr key={acc.id} style={{ background: isGrey ? '#f8fafc' : '#ffffff', transition: 'background 0.2s' }}>
+                          <td>
+                            <MultiSelectRange selectedIds={acc.rangeIds || []} allRanges={data.ranges} onChange={newIds => handleUpdateItem('accessories', acc.id, 'rangeIds', newIds, idx)} />
+                          </td>
+                          <td><input className="input" value={acc.name} onChange={e => handleUpdateItem('accessories', acc.id, 'name', e.target.value, idx)} style={{ width: '220px', background: 'transparent' }} /></td>
+                          <td>
+                            <select className="input" value={acc.unit} onChange={e => handleUpdateItem('accessories', acc.id, 'unit', e.target.value, idx)} style={{ background: 'transparent' }}>
+                              <option>Unité</option>
+                              <option>Kit</option>
+                              <option>Joint</option>
+                              <option>ML</option>
+                              <option>M2</option>
+                              <option>Kg</option>
+                            </select>
+                          </td>
+                          <td><input type="number" step="0.01" className="input" value={acc.price} onChange={e => handleUpdateItem('accessories', acc.id, 'price', e.target.value, idx)} style={{ width: '100px', background: 'transparent' }} /></td>
+                          <td style={{ display: 'flex', gap: '0.3rem' }}>
+                            <button className="btn" onClick={() => handleDuplicateItem('accessories', acc)} style={{ padding: '0.4rem', color: '#6366f1' }} title="Dupliquer">
+                              <Copy size={16} />
+                            </button>
+                            <button className="btn" onClick={() => handleDeleteItem('accessories', acc.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }} title="Supprimer">
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    });
+                  })()}
                   <tr>
                     <td colSpan="5">
                       <button className="btn btn-secondary" onClick={() => handleAddItem('accessories')} style={{ width: '100%', marginTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
