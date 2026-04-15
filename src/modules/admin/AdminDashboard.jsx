@@ -65,6 +65,51 @@ const MultiSelectRange = ({ selectedIds = [], allRanges, onChange }) => {
   );
 };
 
+const MultiSelectColor = ({ selectedColors = [], allColors, onChange }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const toggleColor = (id) => {
+    if (selectedColors.includes(id)) {
+      onChange(selectedColors.filter(x => x !== id));
+    } else {
+      onChange([...selectedColors, id]);
+    }
+  };
+  return (
+    <div style={{ position: 'relative', width: '120px' }}>
+      <button 
+        className="input" 
+        onClick={() => setIsOpen(!isOpen)}
+        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', textAlign: 'left', fontSize: '0.8rem', background: 'white' }}
+      >
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {selectedColors.length === 0 ? 'Aucun' : selectedColors.length === allColors.length ? 'Tous' : `${selectedColors.length} coloris`}
+        </span>
+        <ChevronDown size={14} />
+      </button>
+      {isOpen && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 40 }} onClick={() => setIsOpen(false)} />
+          <div style={{ 
+            position: 'absolute', top: '100%', left: 0, 
+            width: '180px',
+            background: 'white', border: '1px solid #e2e8f0', borderRadius: '0.4rem',
+            boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', zIndex: 50,
+            maxHeight: '200px', overflowY: 'auto', padding: '0.5rem'
+          }}>
+            {(allColors || []).map(c => (
+              <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.3rem', cursor: 'pointer', fontSize: '0.75rem' }}>
+                <input type="checkbox" checked={(selectedColors || []).includes(c.id)} onChange={() => toggleColor(c.id)} />
+                <div style={{ width: '12px', height: '12px', borderRadius: '2px', background: c.hex || '#fff', border: '1px solid #e2e8f0' }} />
+                {c.name}
+              </label>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
 const AdminDashboard = ({ data, setData }) => {
   const [activeTab, setActiveTab] = useState('ranges');
   const [editingComposition, setEditingComposition] = useState(null);
@@ -1269,16 +1314,22 @@ const AdminDashboard = ({ data, setData }) => {
 
             const updateShutterItem = (family, idx, field, value) => {
               setData(prev => {
-                const updated = [...prev.shutterComponents[family]];
-                updated[idx] = { ...updated[idx], [field]: field === 'price' ? parseFloat(value) || 0 : value };
-                return { ...prev, shutterComponents: { ...prev.shutterComponents, [family]: updated } };
+                const components = prev.shutterComponents || {};
+                const list = components[family] || [];
+                const updated = [...list];
+                if (updated[idx]) {
+                  updated[idx] = { ...updated[idx], [field]: (field === 'price' || field === 'height' || field === 'jointPrice' || field === 'baguettePrice' || field === 'barLength') ? parseFloat(value) || 0 : value };
+                }
+                return { ...prev, shutterComponents: { ...components, [family]: updated } };
               });
             };
 
             const deleteShutterItem = (family, idx) => {
               setData(prev => {
-                const updated = prev.shutterComponents[family].filter((_, i) => i !== idx);
-                return { ...prev, shutterComponents: { ...prev.shutterComponents, [family]: updated } };
+                const components = prev.shutterComponents || {};
+                const list = components[family] || [];
+                const updated = list.filter((_, i) => i !== idx);
+                return { ...prev, shutterComponents: { ...components, [family]: updated } };
               });
             };
 
@@ -1290,13 +1341,18 @@ const AdminDashboard = ({ data, setData }) => {
                 price: 0, 
                 priceUnit: 'ML', 
                 formula: '1', 
-                barLength: 1,
-                ...(family === 'caissons' ? { height: 185 } : {})
+                barLength: 6400,
+                ...(family === 'caissons' ? { height: 185, jointPrice: 0, jointFormula: 'L/1000' } : {}),
+                ...(family === 'glissieres' ? { hasBaguette: false, baguettePrice: 0 } : {})
               };
-              setData(prev => ({
-                ...prev,
-                shutterComponents: { ...prev.shutterComponents, [family]: [...prev.shutterComponents[family], newItem] }
-              }));
+              setData(prev => {
+                const components = prev.shutterComponents || {};
+                const list = components[family] || [];
+                return {
+                  ...prev,
+                  shutterComponents: { ...components, [family]: [...list, newItem] }
+                };
+              });
             };
 
             return (
