@@ -298,16 +298,17 @@ const AdminDashboard = ({ data, setData }) => {
 
   const handleDuplicateItem = (category, originalItem) => {
     const newItem = { ...originalItem };
-    let newId = `${originalItem.id}-copie`;
     
-    // Safety check for unique ID
-    let counter = 1;
-    while (data[category].some(x => x.id === newId)) {
-      newId = `${originalItem.id}-copie-${counter}`;
-      counter++;
+    // Only handle ID duplication if the item has an ID
+    if (newItem.id) {
+      let newId = `${originalItem.id}-copie`;
+      let counter = 1;
+      while (data[category].some(x => x.id === newId)) {
+        newId = `${originalItem.id}-copie-${counter}`;
+        counter++;
+      }
+      newItem.id = newId;
     }
-    
-    newItem.id = newId;
     
     setData(prev => ({
       ...prev,
@@ -840,8 +841,13 @@ const AdminDashboard = ({ data, setData }) => {
                         placeholder="(L+H)*2"
                       />
                     </td>
-                    <td>
-                      <button className="btn" onClick={() => handleDeleteGasketCompatibility(i)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
+                    <td style={{ display: 'flex', gap: '0.3rem' }}>
+                      <button className="btn" onClick={() => handleDuplicateItem('gasketCompatibility', gc)} style={{ padding: '0.4rem', color: '#6366f1' }} title="Dupliquer">
+                        <Copy size={16} />
+                      </button>
+                      <button className="btn" onClick={() => handleDeleteGasketCompatibility(i)} style={{ padding: '0.4rem', color: '#ef4444' }} title="Supprimer">
+                        <Trash2 size={16} />
+                      </button>
                     </td>
                   </tr>
                 ))}
