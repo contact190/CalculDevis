@@ -1459,8 +1459,10 @@ const AdminDashboard = ({ data, setData }) => {
                             <>
                               <th>Option 1 (Nom)</th>
                               <th>Option 1 (Valeurs)</th>
+                              <th>Option 1 (Prix)</th>
                               <th>Option 2 (Nom)</th>
                               <th>Option 2 (Valeurs)</th>
+                              <th>Option 2 (Prix)</th>
                             </>
                           ) : null}
                           <th>Lg Barre (mm)</th>
@@ -1506,8 +1508,10 @@ const AdminDashboard = ({ data, setData }) => {
                               <>
                                 <td><input className="input" value={item.opt1Label || ''} onChange={e => updateShutterItem(key, i, 'opt1Label', e.target.value)} style={{ width: '120px', fontSize: '0.7rem' }} placeholder="Ex: Largeur" /></td>
                                 <td><input className="input" value={item.opt1Values || ''} onChange={e => updateShutterItem(key, i, 'opt1Values', e.target.value)} style={{ width: '150px', fontSize: '0.7rem' }} placeholder="Ex: 85, 120" /></td>
+                                <td><input className="input" value={item.opt1Prices || ''} onChange={e => updateShutterItem(key, i, 'opt1Prices', e.target.value)} style={{ width: '120px', fontSize: '0.7rem' }} placeholder="Ex: 200, 500" /></td>
                                 <td><input className="input" value={item.opt2Label || ''} onChange={e => updateShutterItem(key, i, 'opt2Label', e.target.value)} style={{ width: '120px', fontSize: '0.7rem' }} placeholder="Ex: Épaisseur" /></td>
                                 <td><input className="input" value={item.opt2Values || ''} onChange={e => updateShutterItem(key, i, 'opt2Values', e.target.value)} style={{ width: '150px', fontSize: '0.7rem' }} placeholder="Ex: 120, 150" /></td>
+                                <td><input className="input" value={item.opt2Prices || ''} onChange={e => updateShutterItem(key, i, 'opt2Prices', e.target.value)} style={{ width: '120px', fontSize: '0.7rem' }} placeholder="Ex: 100, 300" /></td>
                               </>
                             ) : null}
                             <td><input className="input" type="number" value={item.barLength || 6400} onChange={e => updateShutterItem(key, i, 'barLength', e.target.value)} style={{ width: '90px', fontSize: '0.8rem' }} /></td>

@@ -463,14 +463,36 @@ export class FormulaEngine {
             }
           }
 
-          // Proportional pricing logic: Cost = (Qty / BarLength) * Price
+          let itemPrice = item.price || 0;
+          if (key === 'glissiereId' && config.shutterConfig.glissiereParams) {
+            const params = config.shutterConfig.glissiereParams;
+            
+            // Option 1 Plus-Value
+            if (item.opt1Values && item.opt1Prices) {
+              const vals = item.opt1Values.split(',').map(v => v.trim());
+              const prs = item.opt1Prices.split(',').map(p => parseFloat(p.trim()) || 0);
+              const selectedVal = params.opt1 || vals[0];
+              const vIdx = vals.indexOf(selectedVal);
+              if (vIdx !== -1 && prs[vIdx] !== undefined) itemPrice += prs[vIdx];
+            }
+            // Option 2 Plus-Value
+            if (item.opt2Values && item.opt2Prices) {
+              const vals = item.opt2Values.split(',').map(v => v.trim());
+              const prs = item.opt2Prices.split(',').map(p => parseFloat(p.trim()) || 0);
+              const selectedVal = params.opt2 || vals[0];
+              const vIdx = vals.indexOf(selectedVal);
+              if (vIdx !== -1 && prs[vIdx] !== undefined) itemPrice += prs[vIdx];
+            }
+          }
+
           const barLength = parseFloat(item.barLength) || 1;
-          const finalCost = (qty / barLength) * (item.price || 0);
+          const finalCost = (qty / barLength) * itemPrice;
 
           shutterPack.push({
             ...item,
             name: displayName,
             qty: qty,
+            price: itemPrice, // Reflect the summed price in the BOM item
             priceUnit: item.priceUnit,
             resolvedFormula: this.resolveFormula(item.formula || '1', { L, H, HC: shutterHeight }),
             cost: finalCost
