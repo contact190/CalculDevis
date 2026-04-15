@@ -310,7 +310,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                           {filteredItems.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
                         </select>
                       </div>
-
+                      {key === 'glissiereId' && (
                         <>
                           {effectiveItem?.hasBaguette && (
                             <div className="form-group" style={{ gridColumn: 'span 2' }}>
