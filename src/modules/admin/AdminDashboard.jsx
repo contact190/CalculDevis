@@ -161,6 +161,10 @@ const AdminDashboard = ({ data, setData }) => {
   const handleUpdateItem = (category, id, field, value, index = -1) => {
     // Safety check for ID uniqueness
     if (field === 'id') {
+      if (!value || value.trim() === '') {
+        alert("L'identifiant ne peut pas être vide.");
+        return;
+      }
       const exists = data[category].some((item, idx) => item.id === value && idx !== index && item.id !== id);
       if (exists) {
         alert("Cet identifiant existe déjà dans cette catégorie. Veuillez en choisir un autre.");
@@ -169,30 +173,81 @@ const AdminDashboard = ({ data, setData }) => {
     }
 
     setData(prev => {
-      const updated = [...prev[category]];
+      let nextData = { ...prev };
+      
+      // Cascading update for Ranges
+      if (category === 'ranges' && field === 'id' && id !== value) {
+        const oldId = id;
+        const newId = value;
+
+        // Profiles
+        if (nextData.profiles) {
+          nextData.profiles = nextData.profiles.map(p => p.rangeId === oldId ? { ...p, rangeId: newId } : p);
+        }
+        
+        // Accessories
+        if (nextData.accessories) {
+          nextData.accessories = nextData.accessories.map(a => ({
+            ...a,
+            rangeIds: (a.rangeIds || []).map(rid => rid === oldId ? newId : rid)
+          }));
+        }
+
+        // Compositions
+        if (nextData.compositions) {
+          nextData.compositions = nextData.compositions.map(c => c.rangeId === oldId ? { ...c, rangeId: newId } : c);
+        }
+
+        // Gasket Compatibility
+        if (nextData.gasketCompatibility) {
+          nextData.gasketCompatibility = nextData.gasketCompatibility.map(gc => gc.rangeId === oldId ? { ...gc, rangeId: newId } : gc);
+        }
+
+        // Glass Profile Compatibility
+        if (nextData.glassProfileCompatibility) {
+          nextData.glassProfileCompatibility = nextData.glassProfileCompatibility.map(gpc => gpc.rangeId === oldId ? { ...gpc, rangeId: newId } : gpc);
+        }
+
+        // Options
+        if (nextData.options) {
+          nextData.options = nextData.options.map(o => ({
+            ...o,
+            rangeIds: (o.rangeIds || []).map(rid => rid === oldId ? newId : rid)
+          }));
+        }
+
+        // Shutter - Glissieres
+        if (nextData.shutterComponents?.glissieres) {
+          const updatedGlissieres = nextData.shutterComponents.glissieres.map(g => g.rangeId === oldId ? { ...g, rangeId: newId } : g);
+          nextData.shutterComponents = { ...nextData.shutterComponents, glissieres: updatedGlissieres };
+        }
+      }
+
       const parseValue = (val, prevVal) => {
-        if (Array.isArray(prevVal)) return val; // Keep arrays as is
-        if (typeof prevVal === 'number' || ['price', 'pricePerKg', 'pricePerBar', 'weightPerM', 'pricePerM2', 'factor', 'minL', 'maxL', 'minH', 'maxH'].includes(field)) {
+        if (Array.isArray(prevVal)) return val;
+        if (typeof prevVal === 'number' || ['price', 'pricePerKg', 'pricePerBar', 'weightPerM', 'pricePerM2', 'factor', 'minL', 'maxL', 'minH', 'maxH', 'height', 'jointPrice', 'baguettePrice'].includes(field)) {
           return parseFloat(val) || 0;
         }
         return val;
       };
 
-      if (index !== -1 && index < updated.length) {
-        updated[index] = { 
-          ...updated[index], 
-          [field]: parseValue(value, updated[index][field])
+      const updatedCategoryList = [...nextData[category]];
+      if (index !== -1 && index < updatedCategoryList.length) {
+        updatedCategoryList[index] = { 
+          ...updatedCategoryList[index], 
+          [field]: parseValue(value, updatedCategoryList[index][field])
         };
       } else {
-        return {
-          ...prev,
-          [category]: prev[category].map(item => item.id === id ? { 
-            ...item, 
-            [field]: parseValue(value, item[field])
-          } : item)
-        };
+        const itemIdx = updatedCategoryList.findIndex(item => item.id === id);
+        if (itemIdx !== -1) {
+          updatedCategoryList[itemIdx] = { 
+            ...updatedCategoryList[itemIdx], 
+            [field]: parseValue(value, updatedCategoryList[itemIdx][field])
+          };
+        }
       }
-      return { ...prev, [category]: updated };
+      
+      return { ...nextData, [category]: updatedCategoryList };
     });
   };
 
@@ -404,7 +459,14 @@ const AdminDashboard = ({ data, setData }) => {
                 <tbody>
                   {data.ranges.map((range, idx) => (
                     <tr key={range.id}>
-                      <td>{range.id}</td>
+                      <td style={{ fontWeight: 600 }}>
+                        <input 
+                          className="input" 
+                          value={range.id} 
+                          onChange={e => handleUpdateItem('ranges', range.id, 'id', e.target.value, idx)} 
+                          style={{ width: '80px', fontWeight: 600, background: '#f8fafc' }} 
+                        />
+                      </td>
                       <td><input className="input" value={range.name} onChange={e => handleUpdateItem('ranges', range.id, 'name', e.target.value, idx)} /></td>
                       <td><input type="number" className="input" value={range.minL} onChange={e => handleUpdateItem('ranges', range.id, 'minL', e.target.value, idx)} /></td>
                       <td><input type="number" className="input" value={range.maxL} onChange={e => handleUpdateItem('ranges', range.id, 'maxL', e.target.value, idx)} /></td>
