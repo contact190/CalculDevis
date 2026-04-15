@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Package, Search, Plus, Trash2, Save, Download, Upload, AlertCircle, RefreshCw, Layers, Edit2, ChevronDown, Check, FileSpreadsheet, Info } from 'lucide-react';
 import { DEFAULT_DATA } from '../../data/default-data';
 import * as XLSX from 'xlsx';
@@ -441,24 +441,37 @@ const AdminDashboard = ({ data, setData }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.profiles.map((p, idx) => (
-                    <tr key={p.id}>
-                      <td>
-                        <select className="input" value={p.rangeId} onChange={e => handleUpdateItem('profiles', p.id, 'rangeId', e.target.value, idx)} style={{ width: '100px' }}>
-                          {data.ranges.map(r => <option key={r.id} value={r.id}>{r.id}</option>)}
-                        </select>
-                      </td>
-                      <td>{p.id}</td>
-                      <td><input className="input" value={p.name} onChange={e => handleUpdateItem('profiles', p.id, 'name', e.target.value, idx)} style={{ width: '180px' }} /></td>
-                      <td><input type="number" step="0.001" className="input" value={p.weightPerM} onChange={e => handleUpdateItem('profiles', p.id, 'weightPerM', e.target.value, idx)} style={{ width: '80px' }} /></td>
-                      <td><input type="number" step="0.01" className="input" value={p.pricePerKg} onChange={e => handleUpdateItem('profiles', p.id, 'pricePerKg', e.target.value, idx)} style={{ width: '80px' }} /></td>
-                      <td><input type="number" className="input" value={p.barLength || 6000} onChange={e => handleUpdateItem('profiles', p.id, 'barLength', e.target.value, idx)} style={{ width: '80px' }} /></td>
-                      <td>
-                        <MultiSelectColor selectedColors={p.colors || []} allColors={data.colors} onChange={newC => handleUpdateItem('profiles', p.id, 'colors', newC, idx)} />
-                      </td>
-                      <td><button className="btn" onClick={() => handleDeleteItem('profiles', p.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button></td>
-                    </tr>
-                  ))}
+                  {(() => {
+                    const sortedProfiles = [...data.profiles].sort((a, b) => (a.rangeId || '').localeCompare(b.rangeId || ''));
+                    let currentRange = null;
+                    let isGrey = false;
+                    
+                    return sortedProfiles.map((p) => {
+                      if (p.rangeId !== currentRange) {
+                        currentRange = p.rangeId;
+                        isGrey = !isGrey;
+                      }
+                      const idx = data.profiles.indexOf(p);
+                      return (
+                        <tr key={p.id} style={{ background: isGrey ? '#f8fafc' : '#ffffff', transition: 'background 0.2s' }}>
+                          <td>
+                            <select className="input" value={p.rangeId} onChange={e => handleUpdateItem('profiles', p.id, 'rangeId', e.target.value, idx)} style={{ width: '100px', background: 'transparent' }}>
+                              {data.ranges.map(r => <option key={r.id} value={r.id}>{r.id}</option>)}
+                            </select>
+                          </td>
+                          <td style={{ fontWeight: 600, color: '#475569' }}>{p.id}</td>
+                          <td><input className="input" value={p.name} onChange={e => handleUpdateItem('profiles', p.id, 'name', e.target.value, idx)} style={{ width: '180px', background: 'transparent' }} /></td>
+                          <td><input type="number" step="0.001" className="input" value={p.weightPerM} onChange={e => handleUpdateItem('profiles', p.id, 'weightPerM', e.target.value, idx)} style={{ width: '80px', background: 'transparent' }} /></td>
+                          <td><input type="number" step="0.01" className="input" value={p.pricePerKg} onChange={e => handleUpdateItem('profiles', p.id, 'pricePerKg', e.target.value, idx)} style={{ width: '80px', background: 'transparent' }} /></td>
+                          <td><input type="number" className="input" value={p.barLength || 6000} onChange={e => handleUpdateItem('profiles', p.id, 'barLength', e.target.value, idx)} style={{ width: '80px', background: 'transparent' }} /></td>
+                          <td>
+                            <MultiSelectColor selectedColors={p.colors || []} allColors={data.colors} onChange={newC => handleUpdateItem('profiles', p.id, 'colors', newC, idx)} />
+                          </td>
+                          <td><button className="btn" onClick={() => handleDeleteItem('profiles', p.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button></td>
+                        </tr>
+                      );
+                    });
+                  })()}
                   <tr>
                     <td colSpan="8">
                       <button className="btn btn-secondary" onClick={() => handleAddItem('profiles')} style={{ width: '100%', marginTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
