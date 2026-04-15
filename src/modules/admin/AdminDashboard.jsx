@@ -568,6 +568,7 @@ const AdminDashboard = ({ data, setData }) => {
           )}
 
           {activeTab === 'gaskets' && (
+            <table className="data-table">
               <thead>
                 <tr>
                   <th>Gamme</th>
