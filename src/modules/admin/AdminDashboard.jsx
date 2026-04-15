@@ -225,6 +225,35 @@ const AdminDashboard = ({ data, setData }) => {
         }
       }
 
+      // Cascading update for Profiles
+      if (category === 'profiles' && field === 'id' && id !== value) {
+        const oldId = id;
+        const newId = value;
+
+        // Compositions (Elements)
+        if (nextData.compositions) {
+          nextData.compositions = nextData.compositions.map(comp => ({
+            ...comp,
+            elements: (comp.elements || []).map(el => (el.type === 'profile' && el.id === oldId) ? { ...el, id: newId } : el)
+          }));
+        }
+
+        // Traverses
+        if (nextData.traverses) {
+          nextData.traverses = nextData.traverses.map(t => t.profileId === oldId ? { ...t, profileId: newId } : t);
+        }
+
+        // Glass Profile Compatibility
+        if (nextData.glassProfileCompatibility) {
+          nextData.glassProfileCompatibility = nextData.glassProfileCompatibility.map(gpc => {
+            let updated = { ...gpc };
+            if (gpc.profileHId === oldId) updated.profileHId = newId;
+            if (gpc.profileVId === oldId) updated.profileVId = newId;
+            return updated;
+          });
+        }
+      }
+
       const parseValue = (val, prevVal) => {
         if (Array.isArray(prevVal)) return val;
         if (typeof prevVal === 'number' || ['price', 'pricePerKg', 'pricePerBar', 'weightPerM', 'pricePerM2', 'factor', 'minL', 'maxL', 'minH', 'maxH', 'height', 'jointPrice', 'baguettePrice'].includes(field)) {
@@ -523,7 +552,14 @@ const AdminDashboard = ({ data, setData }) => {
                               {data.ranges.map(r => <option key={r.id} value={r.id}>{r.id}</option>)}
                             </select>
                           </td>
-                          <td style={{ fontWeight: 600, color: '#475569' }}>{p.id}</td>
+                          <td style={{ fontWeight: 600 }}>
+                            <input 
+                              className="input" 
+                              value={p.id} 
+                              onChange={e => handleUpdateItem('profiles', p.id, 'id', e.target.value, idx)} 
+                              style={{ width: '100px', fontWeight: 600, background: 'transparent' }} 
+                            />
+                          </td>
                           <td><input className="input" value={p.name} onChange={e => handleUpdateItem('profiles', p.id, 'name', e.target.value, idx)} style={{ width: '180px', background: 'transparent' }} /></td>
                           <td><input type="number" step="0.001" className="input" value={p.weightPerM} onChange={e => handleUpdateItem('profiles', p.id, 'weightPerM', e.target.value, idx)} style={{ width: '80px', background: 'transparent' }} /></td>
                           <td><input type="number" step="0.01" className="input" value={p.pricePerKg} onChange={e => handleUpdateItem('profiles', p.id, 'pricePerKg', e.target.value, idx)} style={{ width: '80px', background: 'transparent' }} /></td>
