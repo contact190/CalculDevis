@@ -197,8 +197,36 @@ body {
 .data-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 600px; /* Force minimum width to trigger scroll on mobile */
 }
+
+.data-table th {
+  background: #f8fafc;
+  padding: 1rem;
+  text-align: left;
+  font-weight: 600;
+  color: #64748b;
+  border-bottom: 2px solid #e2e8f0;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+}
+
+.data-table td {
+  padding: 1rem;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 0.9rem;
+}
+
+.data-table tr:hover {
+  background: #f8fafc;
+}
+
+.price-card {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  color: white;
+  padding: 1.5rem;
+  border-radius: 1rem;
+}
+
 
 @media (max-width: 640px) {
   .data-table {
@@ -367,7 +395,9 @@ body {
 .tab-button.active {
   border-bottom-color: #2563eb;
   color: #2563eb;
+  background: white;
 }
+
 
 /* Flex Mobile Stack Helper */
 @media (max-width: 640px) {
