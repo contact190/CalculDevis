@@ -469,18 +469,18 @@ export class FormulaEngine {
     }
 
     // 6. Volet Roulant
+    const vars = { L, H: windowH, HC: shutterHeight };
     const shutterPack = [];
     if (config.hasShutter && config.shutterConfig && this.db.shutterComponents) {
       const sc = this.db.shutterComponents;
       const families = [
-        { key: 'caissonId', source: sc.caissons },
-        { key: 'lameId', source: sc.lames },
+        { key: 'caissonId',    source: sc.caissons },
+        { key: 'lameId',       source: sc.lames },
         { key: 'lameFinaleId', source: sc.lamesFinales },
-        { key: 'glissiereId', source: sc.glissieres },
-        { key: 'axeId', source: sc.axes },
-        { key: 'moteurId', source: sc.moteurs },
-        { key: 'kitId', source: sc.kits },
-        { key: 'extraId', source: sc.extras }
+        { key: 'glissiereId',  source: sc.glissieres },
+        { key: 'axeId',        source: sc.axes },
+        { key: 'moteurId',     source: sc.moteurs },
+        { key: 'kitId',        source: sc.kits }
       ];
 
       families.forEach(({ key, source }) => {
@@ -499,118 +499,16 @@ export class FormulaEngine {
 
         const item = (source || []).find(x => x.id === selectedId);
         if (item) {
-          // Rule: Couvre Joint reduction ONLY on the caisson length
-          let itemScopeL = L;
-          if (key === 'caissonId' && config.shutterConfig?.hasCouvreJoint) {
-            itemScopeL -= 12;
-          }
-
-          const qty = this.evaluate(item.formula || '1', { L: itemScopeL, H, HC: shutterHeight });
-          
-          let displayName = item.name;
-          // ... (keep glissiereParams logic)
-          if (key === 'glissiereId' && config.shutterConfig.glissiereParams) {
-            const params = config.shutterConfig.glissiereParams;
-            const paramStrings = [];
-            if (item.opt1Label) {
-              const val = params.opt1 || item.opt1Values?.split(',')[0]?.trim();
-              if (val) paramStrings.push(`${item.opt1Label}: ${val}mm`);
-            }
-            if (item.opt2Label) {
-              const val = params.opt2 || item.opt2Values?.split(',')[0]?.trim();
-              if (val) paramStrings.push(`${item.opt2Label}: ${val}mm`);
-            }
-            if (paramStrings.length > 0) {
-              displayName += ` (${paramStrings.join(', ')})`;
-            }
-          }
-
-          let itemPrice = item.price || 0;
-          if (key === 'glissiereId' && config.shutterConfig.glissiereParams) {
-            const params = config.shutterConfig.glissiereParams;
-            
-            // Option 1 Plus-Value
-            if (item.opt1Values && item.opt1Prices) {
-              const vals = item.opt1Values.split(',').map(v => v.trim());
-              const prs = item.opt1Prices.split(',').map(p => parseFloat(p.trim()) || 0);
-              const selectedVal = params.opt1 || vals[0];
-              const vIdx = vals.indexOf(selectedVal);
-              if (vIdx !== -1 && prs[vIdx] !== undefined) itemPrice += prs[vIdx];
-            }
-            // Option 2 Plus-Value
-            if (item.opt2Values && item.opt2Prices) {
-              const vals = item.opt2Values.split(',').map(v => v.trim());
-              const prs = item.opt2Prices.split(',').map(p => parseFloat(p.trim()) || 0);
-              const selectedVal = params.opt2 || vals[0];
-              const vIdx = vals.indexOf(selectedVal);
-              if (vIdx !== -1 && prs[vIdx] !== undefined) itemPrice += prs[vIdx];
-            }
-          }
-
-          const barLength = parseFloat(item.barLength) || 1;
-          const finalCost = (qty / barLength) * itemPrice;
-
-          shutterPack.push({
-            ...item,
-            name: displayName,
-            qty: qty,
-            price: itemPrice, // Reflect the summed price in the BOM item
-            priceUnit: item.priceUnit,
-            resolvedFormula: this.resolveFormula(item.formula || '1', { L, H, HC: shutterHeight }),
-            cost: finalCost
-          });
-
-          // NEW: Process Add-ons for this shutter item
-          if (item.addOns && Array.isArray(item.addOns)) {
-            item.addOns.forEach(addon => {
-              const addonQty = this.evaluate(addon.formula || '1', { L, H, HC: shutterHeight });
-              if (addonQty > 0) {
-                const addonPrice = addon.price || 0;
-                shutterPack.push({
-                  id: `${item.id}-addon-${(addon.name || 'opt').replace(/\s+/g, '-').toLowerCase()}`,
-                  name: `Add-on (${item.name}): ${addon.name}`,
-                  qty: addonQty,
-                  priceUnit: addon.unit || 'Unité',
-                  price: addonPrice,
-                  formula: addon.formula || '1',
-                  cost: addonQty * addonPrice
-                });
-              }
-            });
-          }
-
-
-          // Add Extra Baguette if Glissière and enabled
-          if (key === 'glissiereId' && item.hasBaguette && config.shutterConfig.enableBaguette) {
-            const baguettePrice = item.baguettePrice || 0;
-            const bCost = (qty / barLength) * baguettePrice;
-            shutterPack.push({
-              id: `${item.id}-baguette`,
-              name: `Baguette pour ${item.name}`,
-              qty: qty,
-              priceUnit: item.priceUnit,
-              price: baguettePrice,
-              barLength: barLength,
-              cost: bCost
-            });
-          }
-
-          // Add Joint HSF if Caisson and has price
-          if (key === 'caissonId' && item.jointPrice > 0) {
-            const jointFormula = item.jointFormula || 'L/1000';
-            const jQty = this.evaluate(jointFormula, { L, H, HC: shutterHeight });
-            shutterPack.push({
-              id: `${item.id}-joint`,
-              name: `Joint HSF / Brosse (${item.name})`,
-              qty: jQty,
-              priceUnit: 'ML',
-              price: item.jointPrice,
-              formula: jointFormula,
-              cost: jQty * item.jointPrice
-            });
-          }
+          this.processShutterComponent(item, vars, shutterPack, key, config);
         }
       });
+
+      // 7. Automatic Shutter Extras (All components in 'extras' category)
+      if (sc.extras && Array.isArray(sc.extras)) {
+        sc.extras.forEach(extra => {
+           this.processShutterComponent(extra, vars, shutterPack, 'extraId', config);
+        });
+      }
     }
 
     // --- GROUPING & AGGREGATION ---
@@ -676,6 +574,7 @@ export class FormulaEngine {
 
     return bom;
   }
+
 
   /**
    * Calculate final pricing
