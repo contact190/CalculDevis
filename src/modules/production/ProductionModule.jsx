@@ -786,24 +786,33 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
       {activeTab === 'logistique' && (() => {
         const totalSlots = kitConfig.trolleys * kitConfig.slotsPerTrolley;
         
-        // Build global cut list across entire order
         const globalCuts = []; 
         let itemsWithConfig = 0;
         let bomsCalculated = 0;
         let totalPiecesInBoms = 0;
+        const requestedCompoIds = new Set();
+        const missingCompoIds = new Set();
 
         quoteItems.forEach((item, winIdx) => {
           if (!item.config) return;
+          const cId = item.config.compositionId;
+          if (cId) {
+             requestedCompoIds.add(cId);
+             if (!database.compositions?.find(c => c.id === cId)) missingCompoIds.add(cId);
+          }
+
           itemsWithConfig++;
           try {
             const b = engine.calculateBOM(item.config);
             if (b) bomsCalculated++;
             const qty = item.qty || 1;
             
-            if (b.profiles) {
+            if (b.profiles && Array.isArray(b.profiles)) {
               b.profiles.forEach(p => {
-                totalPiecesInBoms += (p.qty * qty);
-                for (let q = 0; q < p.qty * qty; q++) {
+                // Ensure qty is treated correctly: p.qty is pieces per window
+                const piecesPerUnit = p.qty || 0;
+                totalPiecesInBoms += (piecesPerUnit * qty);
+                for (let q = 0; q < piecesPerUnit * qty; q++) {
                   globalCuts.push({
                     profileId: p.id,
                     profileName: p.name,
@@ -816,8 +825,8 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                 }
               });
             }
-            // Shutter ML components as cuts too
-            if (b.shutters) {
+            // Shutter components
+            if (b.shutters && Array.isArray(b.shutters)) {
               b.shutters.forEach(s => {
                 if (s.priceUnit === 'ML' && s.qty > 0) {
                   const lenMm = Math.round((s.qty || 0) * 1000);
@@ -854,12 +863,11 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         Object.entries(profileGroups).forEach(([profId, { profileName, cuts }]) => {
           const barLen = barLengths[profId] || 6400;
           const sorted = [...cuts].sort((a, b) => b.length - a.length);
-          const bars = []; // { id, used, remaining, pieces: [] }
+          const bars = []; 
           const allLengths = cuts.map(c => c.length);
           const minPieceInOrder = Math.min(...allLengths, 300);
 
           sorted.forEach(cut => {
-            // Find best-fit bar
             let bestBarIdx = -1;
             let minLeft = Infinity;
             bars.forEach((bar, idx) => {
@@ -880,16 +888,14 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
             }
           });
 
-          // Smart waste classification
           bars.forEach(bar => {
             bar.isTrash = bar.remaining < minPieceInOrder;
             bar.waste = bar.remaining;
           });
-
           barsResult[profId] = { profileName, bars, barLen };
         });
 
-        // Assign each BAR (not window) to a chariot slot
+        // Assign each BAR to a chariot slot
         const allBarsFlat = [];
         Object.entries(barsResult).forEach(([profId, { profileName, bars, barLen }]) => {
           bars.forEach(bar => allBarsFlat.push({ ...bar, profileName, barLen, profId }));
@@ -906,8 +912,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
 
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-
-            {/* Devis selector — self-contained for this tab */}
+            {/* Devis selector */}
             <div className="glass shadow-md" style={{ borderLeft: '4px solid #3b82f6' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
                 <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#1e293b', whiteSpace: 'nowrap' }}>📋 Devis source :</span>
@@ -924,7 +929,6 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                     return <option key={q.id} value={q.id}>{q.number}{client ? ` — ${client.nom}` : ''}</option>;
                   })}
                 </select>
-                {/* Diagnostics */}
                 <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
                   <span style={{ fontSize: '0.8rem', background: '#f1f5f9', color: '#475569', padding: '0.2rem 0.7rem', borderRadius: '999px', fontWeight: 600 }}>
                     {quoteItems.length} items
@@ -943,20 +947,18 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                   </span>
                 </div>
               </div>
-              {!selectedGlobalQuoteId && (
-                <p style={{ marginTop: '0.75rem', color: '#ef4444', fontSize: '0.85rem', fontWeight: 600 }}>
-                  ⚠️ Aucun devis sélectionné. Choisissez un devis ci-dessus pour lancer l'optimisation.
-                </p>
+              {missingCompoIds.size > 0 && (
+                <div style={{ marginTop: '0.5rem', color: '#ef4444', fontSize: '0.75rem', fontWeight: 700, background: '#fee2e2', padding: '0.4rem 0.8rem', borderRadius: '4px' }}>
+                   ⚠️ Erreur technique : Composition(s) manquante(s) dans la base actuelle : {[...missingCompoIds].join(', ')}
+                </div>
               )}
             </div>
 
-            {/* Detailed diagnostics for debugging */}
             <div style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'flex', gap: '1rem', padding: '0 0.5rem' }}>
                <span>Debug: totalPiecesInBoms={totalPiecesInBoms}</span>
                <span>globalQuoteId={selectedGlobalQuoteId}</span>
             </div>
 
-            {/* Config panel */}
             <div className="glass shadow-md" style={{ borderLeft: '4px solid #f59e0b' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.5rem' }}>
                 <Package size={20} color="#f59e0b" />
@@ -973,22 +975,16 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                   <input type="number" min={1} max={50} className="input" style={{ marginLeft: '0.5rem', width: '70px' }}
                     value={kitConfig.slotsPerTrolley} onChange={e => setKitConfig(p => ({ ...p, slotsPerTrolley: parseInt(e.target.value) || 1 }))} />
                 </label>
-                <div style={{ padding: '0.5rem 1rem', background: '#fef3c7', borderRadius: '0.5rem', fontSize: '0.8rem', color: '#92400e', fontWeight: 600 }}>
-                  Capacité : {totalSlots} cases | Barres à ranger : {totalBars}
-                  {totalBars > totalSlots && <span style={{ color: '#ef4444', marginLeft: '0.5rem' }}>⚠️ Capacité insuffisante</span>}
-                  {totalBars > 0 && totalBars <= totalSlots && <span style={{ color: '#10b981', marginLeft: '0.5rem' }}>✅ OK</span>}
-                </div>
               </div>
             </div>
 
-            {/* Visual Chariot Plan — each slot = 1 physical bar */}
             <div className="glass shadow-md" style={{ borderLeft: '4px solid #8b5cf6' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.5rem' }}>
                 <Layers size={20} color="#8b5cf6" />
-                <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Plan des Chariots — {totalBars} barres à ranger</h2>
+                <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Plan des Chariots — {totalBars} barres</h2>
               </div>
               {totalBars === 0 ? (
-                <p style={{ color: '#94a3b8', fontStyle: 'italic' }}>Sélectionnez un devis avec des produits pour générer le plan.</p>
+                <p style={{ color: '#94a3b8', fontStyle: 'italic' }}>Aucune barre à afficher.</p>
               ) : (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem' }}>
                   {Array.from({ length: kitConfig.trolleys }, (_, ti) => {
@@ -1009,38 +1005,21 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                                 </span>
                                 {bar ? (
                                   <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ fontWeight: 700, fontSize: '0.775rem', color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                      {bar.profileName}
-                                      <span style={{ fontWeight: 400, color: '#64748b', marginLeft: '0.4rem', fontSize: '0.7rem' }}>{bar.used}mm/{bar.barLen}mm</span>
-                                    </div>
-                                    {/* Mini visual bar */}
+                                    <div style={{ fontWeight: 700, fontSize: '0.775rem', color: '#1e293b' }}>{bar.profileName}</div>
                                     <div style={{ display: 'flex', height: '8px', borderRadius: '3px', overflow: 'hidden', background: '#e2e8f0', margin: '3px 0' }}>
-                                      {bar.pieces.map((piece, pi) => {
-                                        const hue = (piece.windowIdx * 47) % 360;
-                                        return (
-                                          <div key={pi} title={`${piece.label} — ${piece.length}mm — ${piece.windowLabel}`}
-                                            style={{ flex: `0 0 ${(piece.length / bar.barLen) * 100}%`, background: `hsl(${hue},65%,55%)`, borderRight: '1px solid white' }} />
-                                        );
-                                      })}
-                                      {bar.waste > 0 && (
-                                        <div style={{ flex: `0 0 ${(bar.waste / bar.barLen) * 100}%`, background: bar.isTrash ? '#fca5a5' : '#86efac' }} />
-                                      )}
+                                      {bar.pieces.map((piece, pi) => (
+                                        <div key={pi} style={{ flex: `0 0 ${(piece.length / bar.barLen) * 100}%`, background: `hsl(${(piece.windowIdx * 47) % 360},65%,55%)`, borderRight: '1px solid white' }} />
+                                      ))}
+                                      {bar.waste > 0 && <div style={{ flex: `0 0 ${(bar.waste / bar.barLen) * 100}%`, background: bar.isTrash ? '#fca5a5' : '#86efac' }} />}
                                     </div>
-                                    <div style={{ fontSize: '0.62rem', color: '#64748b', display: 'flex', gap: '0.3rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                                      {[...new Set(bar.pieces.map(p => p.windowLabel))].map((wl, i) => {
-                                        const hue = (bar.pieces.find(p => p.windowLabel === wl)?.windowIdx || 0) * 47;
-                                        return (
-                                          <span key={i} style={{ background: `hsl(${hue}deg,60%,92%)`, color: `hsl(${hue}deg,50%,30%)`, padding: '0 0.3rem', borderRadius: '3px', fontWeight: 600 }}>{wl}</span>
-                                        );
-                                      })}
-                                      <span style={{ color: bar.isTrash ? '#ef4444' : '#10b981', marginLeft: 'auto' }}>
-                                        {bar.isTrash ? `🗑 ${bar.waste}mm` : `♻ ${bar.waste}mm`}
-                                      </span>
+                                    <div style={{ fontSize: '0.62rem', color: '#64748b', display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
+                                      {[...new Set(bar.pieces.map(p => p.windowLabel))].map((wl, i) => (
+                                        <span key={i} style={{ background: '#f1f5f9', padding: '0 0.3rem', borderRadius: '3px' }}>{wl}</span>
+                                      ))}
+                                      <span style={{ marginLeft: 'auto' }}>{bar.used}mm</span>
                                     </div>
                                   </div>
-                                ) : (
-                                  <span style={{ fontSize: '0.75rem', color: '#cbd5e1', fontStyle: 'italic' }}>— Vide —</span>
-                                )}
+                                ) : <span style={{ fontSize: '0.75rem', color: '#cbd5e1' }}>— Vide —</span>}
                               </div>
                             );
                           })}
@@ -1052,65 +1031,24 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
               )}
             </div>
 
-            {/* Optimization detail per profile */}
             <div className="glass shadow-md" style={{ borderLeft: '4px solid #10b981' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.5rem' }}>
                 <Scissors size={20} color="#10b981" />
-                <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Détail des Barres par Profilé</h2>
-                <span style={{ fontSize: '0.75rem', color: '#64748b', background: '#f1f5f9', padding: '0.2rem 0.6rem', borderRadius: '999px' }}>
-                  Best-Fit Decreasing — {globalCuts.length} pièces à couper
-                </span>
+                <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Détail des Barres</h2>
               </div>
               {Object.entries(barsResult).map(([profId, { profileName, bars, barLen }]) => (
-                <div key={profId} style={{ marginBottom: '1.5rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', padding: '0.4rem 0.75rem', background: '#f1f5f9', borderRadius: '0.5rem' }}>
-                    <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#1e293b' }}>{profileName}</span>
-                    <span style={{ fontSize: '0.75rem', color: '#7c3aed', background: '#ede9fe', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>{bars.length} barre(s) de {barLen}mm</span>
-                  </div>
-                  {bars.map((bar, bi) => {
-                    const addr = barAddressMap[bar.id] || '—';
-                    return (
-                      <div key={bi} style={{ marginBottom: '0.4rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '0.5rem', overflow: 'hidden' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.35rem 0.75rem', background: '#f1f5f9', borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
-                          <span style={{ fontWeight: 800, fontSize: '0.85rem', color: 'white', background: '#7c3aed', padding: '0.1rem 0.55rem', borderRadius: '4px' }}>{addr}</span>
-                          <span style={{ fontWeight: 600, fontSize: '0.8rem', color: '#475569' }}>{bar.id}</span>
-                          <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Utilisé: <strong>{bar.used}mm</strong> / {barLen}mm</span>
-                          <span style={{ fontSize: '0.75rem', fontWeight: 700, color: bar.isTrash ? '#ef4444' : '#10b981', background: bar.isTrash ? '#fee2e2' : '#d1fae5', padding: '0 0.4rem', borderRadius: '4px', marginLeft: 'auto' }}>
-                            {bar.waste}mm {bar.isTrash ? '🗑️ DÉCHET' : '✅ RÉUTILISABLE'}
-                          </span>
-                        </div>
-                        <div style={{ padding: '0.5rem 0.75rem' }}>
-                          <div style={{ display: 'flex', height: '16px', borderRadius: '4px', overflow: 'hidden', background: '#e2e8f0', marginBottom: '0.4rem' }}>
-                            {bar.pieces.map((piece, pi) => {
-                              const hue = (piece.windowIdx * 47) % 360;
-                              return (
-                                <div key={pi} title={`${piece.label} — ${piece.length}mm — ${piece.windowLabel}`}
-                                  style={{ flex: `0 0 ${(piece.length / barLen) * 100}%`, background: `hsl(${hue},60%,55%)`, borderRight: '1px solid white' }} />
-                              );
-                            })}
-                            {bar.waste > 0 && (
-                              <div style={{ flex: `0 0 ${(bar.waste / barLen) * 100}%`, background: bar.isTrash ? '#fca5a5' : '#86efac' }} />
-                            )}
-                          </div>
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
-                            {bar.pieces.map((piece, pi) => {
-                              const hue = (piece.windowIdx * 47) % 360;
-                              return (
-                                <span key={pi} style={{ fontSize: '0.65rem', padding: '0.15rem 0.45rem', borderRadius: '4px', background: `hsl(${hue},60%,92%)`, color: `hsl(${hue},50%,30%)`, fontWeight: 600 }}>
-                                  {piece.label} {piece.length}mm · {piece.windowLabel}
-                                </span>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                <div key={profId} style={{ marginBottom: '1rem' }}>
+                  <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.4rem' }}>{profileName} ({bars.length} barres)</div>
+                  {bars.map((bar, bi) => (
+                    <div key={bi} style={{ fontSize: '0.75rem', padding: '0.3rem', borderBottom: '1px solid #f1f5f9', display: 'flex', gap: '1rem' }}>
+                      <span style={{ fontWeight: 700 }}>{bar.address}</span>
+                      <span>{bar.id}</span>
+                      <span>{bar.used}mm utilisé</span>
+                      <span style={{ color: bar.isTrash ? '#ef4444' : '#10b981' }}>{bar.waste}mm {bar.isTrash ? 'Déchet' : 'Chute'}</span>
+                    </div>
+                  ))}
                 </div>
               ))}
-              {Object.keys(barsResult).length === 0 && (
-                <p style={{ color: '#94a3b8', fontStyle: 'italic' }}>Sélectionnez un devis avec des produits pour lancer l'optimisation.</p>
-              )}
             </div>
           </div>
         );
