@@ -1296,20 +1296,27 @@ const AdminDashboard = ({ data, setData }) => {
 
           {activeTab === 'gaskets' && (
             <div>
-              {(data.ranges || []).map(range => {
-                const rangeGaskets = (data.gasketCompatibility || []).filter(gc => gc.rangeId === range.id);
+              {(data.ranges || []).concat([{ id: 'unassigned', name: 'Non assignés / Tous' }]).map(range => {
+                const rangeGaskets = (data.gasketCompatibility || []).filter(gc => 
+                  range.id === 'unassigned' 
+                    ? (!gc.rangeId || !data.ranges.find(r => r.id === gc.rangeId)) 
+                    : gc.rangeId === range.id
+                );
                 if (rangeGaskets.length === 0) return null;
 
                 return (
                   <CollapsibleGroup key={range.id} title={range.name || range.id} count={rangeGaskets.length}>
+
                     <div className="table-responsive">
                       <table className="data-table">
                       <thead>
                         <tr>
+                          <th>Gamme</th>
                           <th>Épaisseur Vitrage (mm)</th>
                           <th>Joint Compatible</th>
                           <th>Formule Qté</th>
                           <th>Actions</th>
+
                         </tr>
                       </thead>
                       <tbody>
@@ -1318,14 +1325,25 @@ const AdminDashboard = ({ data, setData }) => {
                           return (
                             <tr key={i}>
                               <td>
+                                <select 
+                                  className="input" 
+                                  value={gc.rangeId || ''} 
+                                  onChange={e => handleUpdateGasketCompatibility(i, 'rangeId', e.target.value)}
+                                  style={{ width: '120px' }}
+                                >
+                                  {(data.ranges || []).map(r => <option key={r.id} value={r.id}>{r.name || r.id}</option>)}
+                                </select>
+                              </td>
+                              <td>
                                 <input 
                                   className="input" 
                                   type="number" 
                                   value={gc.glassThickness || 0} 
                                   onChange={e => handleUpdateGasketCompatibility(i, 'glassThickness', e.target.value)}
-                                  style={{ width: '100px' }} 
+                                  style={{ width: '60px' }} 
                                 />
                               </td>
+
                               <td>
                                 <select 
                                   className="input" 
@@ -1371,9 +1389,14 @@ const AdminDashboard = ({ data, setData }) => {
 
           {activeTab === 'glassProfiles' && (
             <div>
-              {(data.ranges || []).map(range => {
-                const rangeGPS = (data.glassProfileCompatibility || []).filter(gp => gp.rangeId === range.id);
+              {(data.ranges || []).concat([{ id: 'unassigned', name: 'Non assignés / Tous' }]).map(range => {
+                const rangeGPS = (data.glassProfileCompatibility || []).filter(gp => 
+                  range.id === 'unassigned' 
+                    ? (!gp.rangeId || !data.ranges.find(r => r.id === gp.rangeId)) 
+                    : gp.rangeId === range.id
+                );
                 if (rangeGPS.length === 0) return null;
+
 
                 return (
                   <CollapsibleGroup key={range.id} title={range.name || range.id} count={rangeGPS.length}>
@@ -1381,6 +1404,7 @@ const AdminDashboard = ({ data, setData }) => {
                       <table className="data-table">
                         <thead>
                           <tr>
+                            <th>Gamme</th>
                             <th>Vitrage (mm)</th>
                             <th>Parclose H</th>
                             <th>Qté H</th>
@@ -1396,6 +1420,19 @@ const AdminDashboard = ({ data, setData }) => {
                             const i = data.glassProfileCompatibility.indexOf(gc);
                             return (
                               <tr key={i}>
+                                <td data-label="Gamme">
+                                  <select 
+                                    className="input" value={gc.rangeId || ''} 
+                                    onChange={e => {
+                                      const updated = [...(data.glassProfileCompatibility || [])];
+                                      updated[i].rangeId = e.target.value;
+                                      setData(prev => ({ ...prev, glassProfileCompatibility: updated }));
+                                    }}
+                                    style={{ width: '110px' }}>
+                                    <option value="">Sélectionner...</option>
+                                    {(data.ranges || []).map(r => <option key={r.id} value={r.id}>{r.name || r.id}</option>)}
+                                  </select>
+                                </td>
                                 <td data-label="Vitrage">
                                   <input 
                                     className="input" type="number" value={gc.glassThickness || 0} 
@@ -1404,7 +1441,7 @@ const AdminDashboard = ({ data, setData }) => {
                                       updated[i].glassThickness = parseFloat(e.target.value) || 0;
                                       setData(prev => ({ ...prev, glassProfileCompatibility: updated }));
                                     }} 
-                                    style={{ width: '60px' }} 
+                                    style={{ width: '50px' }} 
                                   />
                                 </td>
                                 <td data-label="Parclose H">
