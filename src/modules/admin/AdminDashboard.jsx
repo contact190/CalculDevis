@@ -576,7 +576,7 @@ const AdminDashboard = ({ data, setData }) => {
         </div>
       </header>
 
-      <div className="glass shadow-lg" style={{ padding: 0, overflow: 'hidden' }}>
+      <div className="glass shadow-lg" style={{ padding: 0 }}>
         {/* Tabs */}
         <div className="tabs-container">
           {[

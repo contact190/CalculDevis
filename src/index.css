@@ -363,34 +363,46 @@ body {
 /* Tabs Container Responsive */
 .tabs-container {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.25rem;
   margin-bottom: 2rem;
   border-bottom: 2px solid #e2e8f0;
   padding-bottom: 0.5rem;
   overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none; /* Hide scrollbar for clean UI */
+  flex-wrap: wrap; /* Wrap on desktop */
 }
 
-.tabs-container::-webkit-scrollbar {
-  display: none;
+@media (max-width: 1024px) {
+  .tabs-container {
+    flex-wrap: nowrap; /* Scroll on mobile */
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+  }
+  .tabs-container::-webkit-scrollbar {
+    height: 4px;
+    display: block;
+  }
 }
+
 
 .tab-button {
-  padding: 0.5rem 1.5rem;
-  font-size: 0.9rem;
+  padding: 0.6rem 1rem;
+  font-size: 0.85rem;
   font-weight: 600;
   border: none;
-  background: transparent;
+  background: #f8fafc;
   cursor: pointer;
   border-bottom: 3px solid transparent;
   color: #64748b;
   transition: all 0.2s;
-  white-space: nowrap; /* Keep tabs on one line for scrolling */
+  white-space: nowrap;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
+  border-radius: 0.5rem 0.5rem 0 0;
+  border: 1px solid #e2e8f0;
+  border-bottom: none;
 }
+
 
 .tab-button.active {
   border-bottom-color: #2563eb;
