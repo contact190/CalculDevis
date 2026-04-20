@@ -68,7 +68,7 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
 
   return (
     <div className="animate-fade-in">
-      <header style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <header className="flex-header">
         <div>
           <h1 style={{ fontSize: '1.875rem', fontWeight: 700, color: '#1e293b' }}>Gestion des Clients</h1>
           <p style={{ color: '#64748b' }}>Répertoire de vos clients, entreprises et informations de facturation.</p>

@@ -471,7 +471,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
     
     return (
       <div className="animate-fade-in">
-        <header style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        <header className="flex-header">
           <button onClick={() => setSelectedOrderId(null)} className="btn" style={{ padding: '0.5rem' }}>
             <ArrowLeft size={18} />
           </button>
@@ -487,7 +487,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
         </header>
 
         {/* Tabs */}
-        <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', marginBottom: '1.5rem' }}>
+        <div className="tabs-container flex-wrap">
           {[
             { id: 'measurements', label: 'Prise de Mesures', icon: Ruler },
             { id: 'batches', label: 'Lots Validés', icon: ClipboardList },
@@ -497,12 +497,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
             <button
               key={tab.id}
               onClick={() => setActiveOrderTab(tab.id)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '1rem 1.5rem', border: 'none', background: 'transparent',
-                borderBottom: activeOrderTab === tab.id ? '2px solid #3b82f6' : '2px solid transparent',
-                color: activeOrderTab === tab.id ? '#3b82f6' : '#64748b', fontWeight: activeOrderTab === tab.id ? 600 : 400,
-                cursor: 'pointer', transition: 'all 0.2s'
-              }}
+              className={`tab-button ${activeOrderTab === tab.id ? 'active' : ''}`}
             >
               <tab.icon size={18} /> {tab.label}
             </button>

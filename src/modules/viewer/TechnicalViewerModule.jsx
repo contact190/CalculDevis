@@ -36,7 +36,7 @@ const TechnicalViewerModule = ({ data = {} }) => {
   const singleComponent = [...(data.profiles || []), ...(data.accessories || [])].find(x => x.id === selectedCompId);
 
   return (
-    <div className="module-container" style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: '1.5rem', height: 'calc(100vh - 120px)' }}>
+    <div className="flex-column-mobile" style={{ gap: '1.5rem' }}>
       {/* Sidebar: Selection */}
       <div className="glass" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: '1.25rem', borderBottom: '1px solid #e2e8f0', background: 'white' }}>
@@ -107,7 +107,7 @@ const TechnicalViewerModule = ({ data = {} }) => {
       {/* Main Viewer area */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         {/* Header with Mode Switching */}
-        <div className="glass" style={{ padding: '0.75rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="glass flex-mobile-stack" style={{ padding: '0.75rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', gap: '1.5rem' }}>
             <button 
               onClick={() => setViewMode('2d')}

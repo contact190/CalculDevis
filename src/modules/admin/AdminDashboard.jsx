@@ -578,7 +578,7 @@ const AdminDashboard = ({ data, setData }) => {
 
       <div className="glass shadow-lg" style={{ padding: 0, overflow: 'hidden' }}>
         {/* Tabs */}
-        <div style={{ display: 'flex', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+        <div className="tabs-container">
           {[
             { id: 'ranges', label: 'Gammes & Limites' },
             { id: 'categories', label: 'Catégories' },
@@ -596,15 +596,7 @@ const AdminDashboard = ({ data, setData }) => {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              style={{
-                padding: '1rem 1.5rem',
-                border: 'none',
-                background: activeTab === tab.id ? 'white' : 'transparent',
-                borderBottom: activeTab === tab.id ? '2px solid #2563eb' : '2px solid transparent',
-                color: activeTab === tab.id ? '#2563eb' : '#64748b',
-                fontWeight: activeTab === tab.id ? 600 : 500,
-                cursor: 'pointer'
-              }}
+              className={`tab-button ${activeTab === tab.id ? 'active' : ''}`}
             >
               {tab.label}
             </button>

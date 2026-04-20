@@ -413,7 +413,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
 
   return (
     <div className="animate-fade-in">
-      <header style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <header className="flex-header">
         <div>
           <h1 style={{ fontSize: '1.875rem', fontWeight: 700, color: '#1e293b' }}>Module Production</h1>
           <p style={{ color: '#64748b' }}>Explosion de la recette, liste de débit et liste d'achat pour l'atelier.</p>
@@ -439,32 +439,20 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         </div>
       </header>
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '2rem', borderBottom: '2px solid #e2e8f0', paddingBottom: '0.5rem' }}>
-        <button 
-          onClick={() => setActiveTab('debit')}
-          style={{ padding: '0.5rem 1.5rem', fontSize: '0.9rem', fontWeight: 600, border: 'none', background: 'transparent', cursor: 'pointer', borderBottom: activeTab === 'debit' ? '3px solid #2563eb' : '3px solid transparent', color: activeTab === 'debit' ? '#2563eb' : '#64748b', transition: 'all 0.2s' }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Scissors size={18} /> Liste de Débit
-          </div>
-        </button>
-        <button 
-          onClick={() => setActiveTab('achat')}
-          style={{ padding: '0.5rem 1.5rem', fontSize: '0.9rem', fontWeight: 600, border: 'none', background: 'transparent', cursor: 'pointer', borderBottom: activeTab === 'achat' ? '3px solid #10b981' : '3px solid transparent', color: activeTab === 'achat' ? '#10b981' : '#64748b', transition: 'all 0.2s' }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <ShoppingCart size={18} /> Liste d'Achat
-          </div>
-        </button>
-        <button 
-          onClick={() => setActiveTab('measure')}
-          style={{ padding: '0.5rem 1.5rem', fontSize: '0.9rem', fontWeight: 600, border: 'none', background: 'transparent', cursor: 'pointer', borderBottom: activeTab === 'measure' ? '3px solid #f59e0b' : '3px solid transparent', color: activeTab === 'measure' ? '#f59e0b' : '#64748b', transition: 'all 0.2s' }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Ruler size={18} /> Prise de Mesures
-          </div>
-        </button>
+      <div className="tabs-container">
+        {[
+          { id: 'debit', label: 'Liste de Débit', icon: Scissors },
+          { id: 'achat', label: 'Liste d\'Achat', icon: ShoppingCart },
+          { id: 'measure', label: 'Prise de Mesures', icon: Ruler },
+        ].map(tab => (
+          <button 
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`tab-button ${activeTab === tab.id ? 'active' : ''}`}
+          >
+            <tab.icon size={18} /> {tab.label}
+          </button>
+        ))}
       </div>
 
       {/* Product Filter and PDF Export - Moved outside to apply to both pages */}

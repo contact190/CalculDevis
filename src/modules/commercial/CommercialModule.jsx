@@ -87,7 +87,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
   return (
     <div className="animate-fade-in">
       {/* Top Bar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem', padding: '1rem', background: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
+      <div className="flex-mobile-stack" style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem', padding: '1rem', background: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
         <button onClick={onCancel} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', border: '1px solid #e2e8f0', borderRadius: '0.5rem', background: 'white', cursor: 'pointer', color: '#64748b', fontSize: '0.875rem' }}>
           <ArrowLeft size={16} /> Retour
         </button>
@@ -100,12 +100,12 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
           />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <label style={{ fontSize: '0.8rem', color: '#64748b', whiteSpace: 'nowrap' }}>Quantité:</label>
+          <label style={{ fontSize: '0.8rem', color: '#64748b', whiteSpace: 'nowrap' }}>Qté:</label>
           <input type="number" min="1" value={qty} onChange={e => setQty(parseInt(e.target.value) || 1)}
             style={{ width: '65px', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '0.5rem', textAlign: 'center', fontWeight: 700 }} />
         </div>
-        <button onClick={onSave} disabled={!priceData} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1.2rem', background: priceData ? '#10b981' : '#94a3b8', color: 'white', border: 'none', borderRadius: '0.5rem', cursor: priceData ? 'pointer' : 'not-allowed', fontWeight: 600 }}>
-          <Save size={16} /> Ajouter au devis
+        <button onClick={onSave} disabled={!priceData} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1.2rem', background: priceData ? '#10b981' : '#94a3b8', color: 'white', border: 'none', borderRadius: '0.5rem', cursor: priceData ? 'pointer' : 'not-allowed', fontWeight: 600 }}>
+          <Save size={16} /> Enregistrer
         </button>
       </div>
 
@@ -488,14 +488,16 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
         </div>
 
         {/* Right: Drawing + Price */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          <JoineryCanvas 
-            config={config} 
-            width={350} 
-            height={350} 
-            database={database} 
-            onDrawComplete={(dataUrl) => setConfig(prev => ({...prev, thumbnail: dataUrl}))} 
-          />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', alignItems: 'center' }}>
+          <div style={{ background: 'white', padding: '1rem', borderRadius: '1rem', border: '1px solid #e2e8f0', overflow: 'hidden', width: '100%', display: 'flex', justifyContent: 'center' }}>
+            <JoineryCanvas 
+              config={config} 
+              width={320} 
+              height={320} 
+              database={database} 
+              onDrawComplete={(dataUrl) => setConfig(prev => ({...prev, thumbnail: dataUrl}))} 
+            />
+          </div>
           <div className="price-card shadow-lg">
             <div style={{ marginBottom: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '1rem' }}>
               <label style={{ fontSize: '0.75rem', opacity: 0.8, display: 'block', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Coefficient de Marge</label>
@@ -1200,24 +1202,24 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
       </div>
 
       {/* Quote Header Card */}
-      <div className="glass shadow-md" style={{ marginBottom: '1.5rem', padding: '1.25rem', display: 'flex', alignItems: 'center', gap: '2rem', flexWrap: 'wrap' }}>
-        {quoteSettings?.logoBase64 && <img src={quoteSettings.logoBase64} alt="logo" style={{ height: '50px', objectFit: 'contain' }} />}
-        <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 700, fontSize: '1.1rem', color: '#1e293b' }}>{quoteSettings?.companyName || 'Nom de la Société'}</div>
-          <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{quoteSettings?.companyAddress}</div>
-          <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{quoteSettings?.companyPhone} {quoteSettings?.companyEmail ? '· ' : ''} {quoteSettings?.companyEmail}</div>
-          <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.2rem' }}>
-             {[
-               quoteSettings?.companyRC ? `RC: ${quoteSettings.companyRC}` : null,
-               quoteSettings?.companyIMP ? `IMP: ${quoteSettings.companyIMP}` : null,
-               quoteSettings?.companyMF ? `MF: ${quoteSettings.companyMF}` : null,
-             ].filter(Boolean).join(' · ')}
+      <div className="glass shadow-md flex-header" style={{ marginBottom: '1.5rem', padding: '1.25rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap', flex: 1 }}>
+          {quoteSettings?.logoBase64 && <img src={quoteSettings.logoBase64} alt="logo" style={{ height: '50px', objectFit: 'contain' }} />}
+          <div style={{ flex: 1, minWidth: '200px' }}>
+            <div style={{ fontWeight: 700, fontSize: '1.1rem', color: '#1e293b' }}>{quoteSettings?.companyName || 'Nom de la Société'}</div>
+            <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{quoteSettings?.companyAddress}</div>
+            <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{quoteSettings?.companyPhone} {quoteSettings?.companyEmail ? '· ' : ''} {quoteSettings?.companyEmail}</div>
+            <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.2rem' }}>
+              {[
+                quoteSettings?.companyRC ? `RC: ${quoteSettings.companyRC}` : null,
+                quoteSettings?.companyIMP ? `IMP: ${quoteSettings.companyIMP}` : null,
+                quoteSettings?.companyMF ? `MF: ${quoteSettings.companyMF}` : null,
+              ].filter(Boolean).join(' · ')}
+            </div>
           </div>
-          {quoteSettings?.companyBank && (
-            <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Banque/RIP: {quoteSettings.companyBank}</div>
-          )}
         </div>
-        <div style={{ textAlign: 'right' }}>
+        
+        <div style={{ textAlign: 'right', minWidth: '200px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.5rem' }}>
             <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>N° :</span>
             <input 
@@ -1225,7 +1227,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
               onChange={e => setCurrentQuote(p => ({ ...p, number: e.target.value }))}
               style={{ 
                 fontWeight: 800, fontSize: '1.3rem', color: '#2563eb', border: 'none', 
-                background: 'rgba(37, 99, 235, 0.05)', textAlign: 'right', width: '200px',
+                background: 'rgba(37, 99, 235, 0.05)', textAlign: 'right', width: '150px',
                 padding: '0.2rem 0.5rem', borderRadius: '0.4rem', outline: 'none'
               }}
             />
@@ -1239,24 +1241,21 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
                 padding: '0.2rem', borderRadius: '0.3rem', border: 'none', background: quote.status === 'Brouillon' || !quote.status ? '#fef3c7' : '#dcfce3', color: quote.status === 'Brouillon' || !quote.status ? '#d97706' : '#16a34a', fontSize: '0.8rem', fontWeight: 700, outline: 'none'
               }}
             >
-              <option value="Brouillon">Brouillon (Prix Live)</option>
-              <option value="Validé">Validé (Prix Figé)</option>
-              <option value="Envoyé">Envoyé (Prix Figé)</option>
-              <option value="Confirmé">Confirmé (Prix Figé)</option>
+              <option value="Brouillon">Brouillon</option>
+              <option value="Validé">Validé</option>
+              <option value="Envoyé">Envoyé</option>
+              <option value="Confirmé">Confirmé</option>
             </select>
           </div>
-          <div style={{ fontSize: '0.78rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.3rem', justifyContent: 'flex-end' }}>
+          <div style={{ fontSize: '0.78rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.3rem', justifyContent: 'flex-end', marginBottom: '0.5rem' }}>
             <Calendar size={12} /> {new Date(quote.createdAt || Date.now()).toLocaleDateString('fr-FR')}
           </div>
           <div style={{ fontSize: '0.78rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.3rem', justifyContent: 'flex-end' }}>
-            <Clock size={12} /> Valide jusqu'au {validityDate}
-          </div>
-          <div style={{ fontSize: '0.78rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.3rem', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
             <span style={{ fontWeight: 600 }}>Client :</span>
             <select 
               value={quote.clientId || ''} 
               onChange={e => setCurrentQuote(p => ({ ...p, clientId: e.target.value }))}
-              style={{ padding: '0.2rem', borderRadius: '0.3rem', border: '1px solid #cbd5e1', fontSize: '0.8rem', background: '#f8fafc' }}
+              style={{ padding: '0.2rem', borderRadius: '0.3rem', border: '1px solid #cbd5e1', fontSize: '0.8rem', background: '#f8fafc', maxWidth: '150px' }}
             >
               <option value="">-- Aucun --</option>
               {(database.clients || []).map(c => (
@@ -1268,15 +1267,15 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', borderBottom: '2px solid #e2e8f0', paddingBottom: '0.5rem' }}>
+      <div className="tabs-container">
         {[
           { id: 'quote', label: '📋 Lignes du Devis', count: quote.items?.length || 0 },
           { id: 'consumables', label: '🔩 Consommables (Interne)', count: null },
         ].map(tab => (
           <button key={tab.id} onClick={() => setActiveListTab(tab.id)}
-            style={{ padding: '0.5rem 1.2rem', fontWeight: 600, border: 'none', background: 'transparent', cursor: 'pointer', borderBottom: activeListTab === tab.id ? '3px solid #2563eb' : '3px solid transparent', color: activeListTab === tab.id ? '#2563eb' : '#64748b', transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            className={`tab-button ${activeListTab === tab.id ? 'active' : ''}`}>
             {tab.label}
-            {tab.count !== null && <span style={{ background: '#e2e8f0', borderRadius: '999px', padding: '0 0.5rem', fontSize: '0.75rem' }}>{tab.count}</span>}
+            {tab.count !== null && <span style={{ background: '#e2e8f0', borderRadius: '999px', padding: '0 0.5rem', fontSize: '0.72rem', marginLeft: '0.4rem' }}>{tab.count}</span>}
           </button>
         ))}
       </div>
@@ -1350,7 +1349,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
 
           {/* Totals — toujours visible dans l'onglet devis */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
-            <div className="price-card shadow-lg" style={{ minWidth: '340px' }}>
+            <div className="price-card shadow-lg" style={{ width: '100%', maxWidth: '380px' }}>
               <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', opacity: 0.6, letterSpacing: '0.08em', marginBottom: '0.75rem' }}>Récapitulatif du Devis</div>
 
               <div style={{ margin: '0 0 1rem 0', padding: '0.75rem', background: 'rgba(0,0,0,0.15)', borderRadius: '0.5rem', fontSize: '0.85rem' }}>
