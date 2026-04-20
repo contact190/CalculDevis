@@ -874,19 +874,20 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
           barsResult[profId] = { profileName, bars, barLen };
         });
 
-        // Assign windows to Chariot/Case
-        const windowAssignments = {};
-        quoteItems.forEach((item, wi) => {
-          const absSlot = wi % totalSlots;
-          const trolleyNum = Math.floor(absSlot / kitConfig.slotsPerTrolley) + 1;
-          const caseNum = (absSlot % kitConfig.slotsPerTrolley) + 1;
-          windowAssignments[item.id] = {
-            address: `CH${trolleyNum}-C${String(caseNum).padStart(2, '0')}`,
-            trolley: trolleyNum,
-            slot: caseNum,
-            label: item.label,
-          };
+        // Assign each BAR (not window) to a chariot slot
+        const allBarsFlat = [];
+        Object.entries(barsResult).forEach(([profId, { profileName, bars, barLen }]) => {
+          bars.forEach(bar => allBarsFlat.push({ ...bar, profileName, barLen, profId }));
         });
+        allBarsFlat.forEach((bar, idx) => {
+          const absSlot = idx % Math.max(totalSlots, 1);
+          bar.trolley = Math.floor(absSlot / kitConfig.slotsPerTrolley) + 1;
+          bar.slot = (absSlot % kitConfig.slotsPerTrolley) + 1;
+          bar.address = `CH${bar.trolley}-C${String(bar.slot).padStart(2, '0')}`;
+        });
+        const barAddressMap = {};
+        allBarsFlat.forEach(b => { barAddressMap[b.id] = b.address; });
+        const totalBars = allBarsFlat.length;
 
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
@@ -908,152 +909,149 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                     value={kitConfig.slotsPerTrolley} onChange={e => setKitConfig(p => ({ ...p, slotsPerTrolley: parseInt(e.target.value) || 1 }))} />
                 </label>
                 <div style={{ padding: '0.5rem 1rem', background: '#fef3c7', borderRadius: '0.5rem', fontSize: '0.8rem', color: '#92400e', fontWeight: 600 }}>
-                  Capacité totale : {totalSlots} fenêtres | Commande : {quoteItems.length} fenêtres
-                  {quoteItems.length > totalSlots && <span style={{ color: '#ef4444', marginLeft: '0.5rem' }}>⚠️ Capacité dépassée</span>}
+                  Capacité : {totalSlots} cases | Barres à ranger : {totalBars}
+                  {totalBars > totalSlots && <span style={{ color: '#ef4444', marginLeft: '0.5rem' }}>⚠️ Capacité insuffisante</span>}
+                  {totalBars > 0 && totalBars <= totalSlots && <span style={{ color: '#10b981', marginLeft: '0.5rem' }}>✅ OK</span>}
                 </div>
               </div>
             </div>
 
-            {/* Chariot Map */}
+            {/* Visual Chariot Plan — each slot = 1 physical bar */}
             <div className="glass shadow-md" style={{ borderLeft: '4px solid #8b5cf6' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.5rem' }}>
                 <Layers size={20} color="#8b5cf6" />
-                <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Plan des Chariots</h2>
+                <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Plan des Chariots — {totalBars} barres à ranger</h2>
               </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem' }}>
-                {Array.from({ length: kitConfig.trolleys }, (_, ti) => (
-                  <div key={ti} style={{ flex: '0 0 auto', width: '280px' }}>
-                    <div style={{ background: 'linear-gradient(135deg, #7c3aed, #5b21b6)', color: 'white', fontWeight: 700, fontSize: '0.9rem', padding: '0.6rem 1rem', borderRadius: '0.5rem 0.5rem 0 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      🛒 Chariot {ti + 1}
-                    </div>
-                    <div style={{ border: '2px solid #7c3aed', borderTop: 'none', borderRadius: '0 0 0.5rem 0.5rem', overflow: 'hidden' }}>
-                      {Array.from({ length: kitConfig.slotsPerTrolley }, (_, si) => {
-                        const absSlot = ti * kitConfig.slotsPerTrolley + si;
-                        const winItem = quoteItems[absSlot];
-                        const addr = winItem ? windowAssignments[winItem.id] : null;
-                        return (
-                          <div key={si} style={{ padding: '0.4rem 0.75rem', borderBottom: '1px solid #ede9fe', background: winItem ? '#faf5ff' : '#f8fafc', display: 'flex', alignItems: 'center', gap: '0.6rem', minHeight: '38px' }}>
-                            <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#7c3aed', background: '#ede9fe', padding: '0.1rem 0.4rem', borderRadius: '4px', minWidth: '40px', textAlign: 'center' }}>
-                              C{String(si + 1).padStart(2, '0')}
-                            </span>
-                            {winItem ? (
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontWeight: 600, fontSize: '0.8rem', color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{winItem.label}</div>
-                                <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{winItem.config?.L}×{winItem.config?.H}mm · Qté: {winItem.qty}</div>
+              {totalBars === 0 ? (
+                <p style={{ color: '#94a3b8', fontStyle: 'italic' }}>Sélectionnez un devis avec des produits pour générer le plan.</p>
+              ) : (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem' }}>
+                  {Array.from({ length: kitConfig.trolleys }, (_, ti) => {
+                    const trolleyBars = allBarsFlat.filter(b => b.trolley === ti + 1);
+                    return (
+                      <div key={ti} style={{ flex: '0 0 auto', width: '330px' }}>
+                        <div style={{ background: 'linear-gradient(135deg, #7c3aed, #5b21b6)', color: 'white', fontWeight: 700, fontSize: '0.9rem', padding: '0.6rem 1rem', borderRadius: '0.5rem 0.5rem 0 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span>🛒 Chariot {ti + 1}</span>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 400, opacity: 0.85 }}>{trolleyBars.length}/{kitConfig.slotsPerTrolley} barres</span>
+                        </div>
+                        <div style={{ border: '2px solid #7c3aed', borderTop: 'none', borderRadius: '0 0 0.5rem 0.5rem', overflow: 'hidden' }}>
+                          {Array.from({ length: kitConfig.slotsPerTrolley }, (_, si) => {
+                            const bar = allBarsFlat.find(b => b.trolley === ti + 1 && b.slot === si + 1);
+                            return (
+                              <div key={si} style={{ padding: '0.45rem 0.75rem', borderBottom: '1px solid #ede9fe', background: bar ? '#faf5ff' : '#f8fafc', display: 'flex', alignItems: 'center', gap: '0.6rem', minHeight: '46px' }}>
+                                <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#7c3aed', background: '#ede9fe', padding: '0.1rem 0.4rem', borderRadius: '4px', minWidth: '36px', textAlign: 'center', flexShrink: 0 }}>
+                                  C{String(si + 1).padStart(2, '0')}
+                                </span>
+                                {bar ? (
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontWeight: 700, fontSize: '0.775rem', color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      {bar.profileName}
+                                      <span style={{ fontWeight: 400, color: '#64748b', marginLeft: '0.4rem', fontSize: '0.7rem' }}>{bar.used}mm/{bar.barLen}mm</span>
+                                    </div>
+                                    {/* Mini visual bar */}
+                                    <div style={{ display: 'flex', height: '8px', borderRadius: '3px', overflow: 'hidden', background: '#e2e8f0', margin: '3px 0' }}>
+                                      {bar.pieces.map((piece, pi) => {
+                                        const hue = (piece.windowIdx * 47) % 360;
+                                        return (
+                                          <div key={pi} title={`${piece.label} — ${piece.length}mm — ${piece.windowLabel}`}
+                                            style={{ flex: `0 0 ${(piece.length / bar.barLen) * 100}%`, background: `hsl(${hue},65%,55%)`, borderRight: '1px solid white' }} />
+                                        );
+                                      })}
+                                      {bar.waste > 0 && (
+                                        <div style={{ flex: `0 0 ${(bar.waste / bar.barLen) * 100}%`, background: bar.isTrash ? '#fca5a5' : '#86efac' }} />
+                                      )}
+                                    </div>
+                                    <div style={{ fontSize: '0.62rem', color: '#64748b', display: 'flex', gap: '0.3rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                                      {[...new Set(bar.pieces.map(p => p.windowLabel))].map((wl, i) => {
+                                        const hue = (bar.pieces.find(p => p.windowLabel === wl)?.windowIdx || 0) * 47;
+                                        return (
+                                          <span key={i} style={{ background: `hsl(${hue}deg,60%,92%)`, color: `hsl(${hue}deg,50%,30%)`, padding: '0 0.3rem', borderRadius: '3px', fontWeight: 600 }}>{wl}</span>
+                                        );
+                                      })}
+                                      <span style={{ color: bar.isTrash ? '#ef4444' : '#10b981', marginLeft: 'auto' }}>
+                                        {bar.isTrash ? `🗑 ${bar.waste}mm` : `♻ ${bar.waste}mm`}
+                                      </span>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <span style={{ fontSize: '0.75rem', color: '#cbd5e1', fontStyle: 'italic' }}>— Vide —</span>
+                                )}
                               </div>
-                            ) : (
-                              <span style={{ fontSize: '0.75rem', color: '#cbd5e1', fontStyle: 'italic' }}>— Vide —</span>
-                            )}
-                            {winItem && (
-                              <button
-                                onClick={() => setSelectedLabelItem({ item: winItem, addr: addr?.address })}
-                                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#7c3aed', padding: '0.2rem' }}
-                                title="Voir l'étiquette"
-                              >
-                                <QrCode size={14} />
-                              </button>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
-            {/* Global Cut Optimization Table */}
+            {/* Optimization detail per profile */}
             <div className="glass shadow-md" style={{ borderLeft: '4px solid #10b981' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.5rem' }}>
                 <Scissors size={20} color="#10b981" />
-                <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Optimisation Globale des Barres</h2>
+                <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Détail des Barres par Profilé</h2>
                 <span style={{ fontSize: '0.75rem', color: '#64748b', background: '#f1f5f9', padding: '0.2rem 0.6rem', borderRadius: '999px' }}>
-                  Best-Fit Decreasing — {globalCuts.length} pièces nécessaires
+                  Best-Fit Decreasing — {globalCuts.length} pièces à couper
                 </span>
               </div>
               {Object.entries(barsResult).map(([profId, { profileName, bars, barLen }]) => (
                 <div key={profId} style={{ marginBottom: '1.5rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', padding: '0.4rem 0.75rem', background: '#f1f5f9', borderRadius: '0.5rem' }}>
                     <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#1e293b' }}>{profileName}</span>
                     <span style={{ fontSize: '0.75rem', color: '#7c3aed', background: '#ede9fe', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>{bars.length} barre(s) de {barLen}mm</span>
                   </div>
-                  {bars.map((bar, bi) => (
-                    <div key={bi} style={{ marginBottom: '0.4rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '0.5rem', overflow: 'hidden' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.4rem 0.75rem', background: '#f1f5f9', borderBottom: '1px solid #e2e8f0' }}>
-                        <span style={{ fontWeight: 700, fontSize: '0.8rem', color: '#475569' }}>{bar.id}</span>
-                        <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Utilisé: {bar.used}mm | Chute: </span>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: bar.isTrash ? '#ef4444' : '#10b981',
-                          background: bar.isTrash ? '#fee2e2' : '#d1fae5', padding: '0 0.4rem', borderRadius: '4px' }}>
-                          {bar.waste}mm {bar.isTrash ? '🗑️ DÉCHET' : '✅ RÉUTILISABLE'}
-                        </span>
-                      </div>
-                      {/* Visual bar */}
-                      <div style={{ padding: '0.5rem 0.75rem' }}>
-                        <div style={{ display: 'flex', height: '18px', borderRadius: '4px', overflow: 'hidden', background: '#e2e8f0' }}>
-                          {bar.pieces.map((piece, pi) => {
-                            const addr = windowAssignments[piece.windowItemId];
-                            const hue = (piece.windowIdx * 47) % 360;
-                            return (
-                              <div key={pi} title={`${piece.label} — ${piece.length}mm — ${addr?.address || ''}`}
-                                style={{ flex: `0 0 ${(piece.length / barLen) * 100}%`, background: `hsl(${hue},60%,55%)`, borderRight: '1px solid white' }} />
-                            );
-                          })}
-                          {bar.waste > 0 && (
-                            <div style={{ flex: `0 0 ${(bar.waste / barLen) * 100}%`, background: bar.isTrash ? '#fca5a5' : '#86efac' }} />
-                          )}
+                  {bars.map((bar, bi) => {
+                    const addr = barAddressMap[bar.id] || '—';
+                    return (
+                      <div key={bi} style={{ marginBottom: '0.4rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '0.5rem', overflow: 'hidden' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.35rem 0.75rem', background: '#f1f5f9', borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
+                          <span style={{ fontWeight: 800, fontSize: '0.85rem', color: 'white', background: '#7c3aed', padding: '0.1rem 0.55rem', borderRadius: '4px' }}>{addr}</span>
+                          <span style={{ fontWeight: 600, fontSize: '0.8rem', color: '#475569' }}>{bar.id}</span>
+                          <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Utilisé: <strong>{bar.used}mm</strong> / {barLen}mm</span>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 700, color: bar.isTrash ? '#ef4444' : '#10b981', background: bar.isTrash ? '#fee2e2' : '#d1fae5', padding: '0 0.4rem', borderRadius: '4px', marginLeft: 'auto' }}>
+                            {bar.waste}mm {bar.isTrash ? '🗑️ DÉCHET' : '✅ RÉUTILISABLE'}
+                          </span>
                         </div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem', marginTop: '0.4rem' }}>
-                          {bar.pieces.map((piece, pi) => {
-                            const addr = windowAssignments[piece.windowItemId];
-                            const hue = (piece.windowIdx * 47) % 360;
-                            return (
-                              <span key={pi} style={{ fontSize: '0.65rem', padding: '0.15rem 0.4rem', borderRadius: '4px',
-                                background: `hsl(${hue},60%,92%)`, color: `hsl(${hue},50%,30%)`, fontWeight: 600 }}>
-                                {piece.label} {piece.length}mm · {addr?.address || '?'}
-                              </span>
-                            );
-                          })}
+                        <div style={{ padding: '0.5rem 0.75rem' }}>
+                          <div style={{ display: 'flex', height: '16px', borderRadius: '4px', overflow: 'hidden', background: '#e2e8f0', marginBottom: '0.4rem' }}>
+                            {bar.pieces.map((piece, pi) => {
+                              const hue = (piece.windowIdx * 47) % 360;
+                              return (
+                                <div key={pi} title={`${piece.label} — ${piece.length}mm — ${piece.windowLabel}`}
+                                  style={{ flex: `0 0 ${(piece.length / barLen) * 100}%`, background: `hsl(${hue},60%,55%)`, borderRight: '1px solid white' }} />
+                              );
+                            })}
+                            {bar.waste > 0 && (
+                              <div style={{ flex: `0 0 ${(bar.waste / barLen) * 100}%`, background: bar.isTrash ? '#fca5a5' : '#86efac' }} />
+                            )}
+                          </div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+                            {bar.pieces.map((piece, pi) => {
+                              const hue = (piece.windowIdx * 47) % 360;
+                              return (
+                                <span key={pi} style={{ fontSize: '0.65rem', padding: '0.15rem 0.45rem', borderRadius: '4px', background: `hsl(${hue},60%,92%)`, color: `hsl(${hue},50%,30%)`, fontWeight: 600 }}>
+                                  {piece.label} {piece.length}mm · {piece.windowLabel}
+                                </span>
+                              );
+                            })}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ))}
               {Object.keys(barsResult).length === 0 && (
                 <p style={{ color: '#94a3b8', fontStyle: 'italic' }}>Sélectionnez un devis avec des produits pour lancer l'optimisation.</p>
               )}
             </div>
-
-            {/* Label Modal */}
-            {selectedLabelItem && (
-              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                onClick={() => setSelectedLabelItem(null)}>
-                <div style={{ background: 'white', borderRadius: '1rem', padding: '2rem', width: '320px', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}
-                  onClick={e => e.stopPropagation()}>
-                  <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.5rem' }}>Étiquette de Rangement</div>
-                    <div style={{ fontSize: '2rem', fontWeight: 900, color: '#7c3aed', letterSpacing: '0.05em' }}>{selectedLabelItem.addr}</div>
-                    <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#1e293b', margin: '0.5rem 0' }}>{selectedLabelItem.item.label}</div>
-                    <div style={{ fontSize: '0.875rem', color: '#64748b' }}>
-                      {selectedLabelItem.item.config?.L} × {selectedLabelItem.item.config?.H} mm · Qté: {selectedLabelItem.item.qty}
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'center', margin: '1rem 0' }}>
-                    <QRCodeSVG
-                      value={JSON.stringify({ addr: selectedLabelItem.addr, label: selectedLabelItem.item.label, L: selectedLabelItem.item.config?.L, H: selectedLabelItem.item.config?.H })}
-                      size={140} level="M" />
-                  </div>
-                  <div style={{ textAlign: 'center', fontSize: '0.7rem', color: '#94a3b8', marginBottom: '1rem' }}>Scanner pour identifier le composant</div>
-                  <button onClick={() => setSelectedLabelItem(null)}
-                    style={{ width: '100%', padding: '0.6rem', background: '#7c3aed', color: 'white', border: 'none', borderRadius: '0.5rem', fontWeight: 600, cursor: 'pointer' }}>
-                    Fermer
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         );
       })()}
+
+
 
     </div>
   );
