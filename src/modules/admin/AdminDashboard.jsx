@@ -1147,9 +1147,10 @@ const AdminDashboard = ({ data, setData }) => {
                           );
                         })}
                       </tbody>
-                    </table>
+                      </table>
+                    </div>
                   </CollapsibleGroup>
-                );
+                )
               })}
               <button className="btn btn-secondary" onClick={() => handleAddItem('gasketCompatibility')} style={{ width: '100%', marginTop: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
                 <Plus size={16} /> Ajouter une Compatibilité
@@ -1165,111 +1166,115 @@ const AdminDashboard = ({ data, setData }) => {
 
                 return (
                   <CollapsibleGroup key={range.id} title={range.name || range.id} count={rangeGPS.length}>
-                    <table className="data-table">
-                      <thead>
-                        <tr>
-                          <th>Vitrage (mm)</th>
-                          <th>Parclose H</th>
-                          <th>Qté H</th>
-                          <th>Formule H</th>
-                          <th>Parclose V</th>
-                          <th>Qté V</th>
-                          <th>Formule V</th>
-                          <th>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {rangeGPS.map((gc) => {
-                          const i = data.glassProfileCompatibility.indexOf(gc);
-                          return (
-                            <tr key={i}>
-                              <td>
-                                <input 
-                                  className="input" type="number" value={gc.glassThickness || 0} 
+                    <div className="table-responsive">
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th>Vitrage (mm)</th>
+                            <th>Parclose H</th>
+                            <th>Qté H</th>
+                            <th>Formule H</th>
+                            <th>Parclose V</th>
+                            <th>Qté V</th>
+                            <th>Formule V</th>
+                            <th>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rangeGPS.map((gc) => {
+                            const i = data.glassProfileCompatibility.indexOf(gc);
+                            return (
+                              <tr key={i}>
+                                <td data-label="Vitrage">
+                                  <input 
+                                    className="input" type="number" value={gc.glassThickness || 0} 
+                                    onChange={e => {
+                                      const updated = [...(data.glassProfileCompatibility || [])];
+                                      updated[i].glassThickness = parseFloat(e.target.value) || 0;
+                                      setData(prev => ({ ...prev, glassProfileCompatibility: updated }));
+                                    }} 
+                                    style={{ width: '60px' }} 
+                                  />
+                                </td>
+                                <td data-label="Parclose H">
+                                  <select 
+                                    className="input" value={gc.profileHId || ''} 
+                                    onChange={e => {
+                                      const updated = [...(data.glassProfileCompatibility || [])];
+                                      updated[i].profileHId = e.target.value;
+                                      setData(prev => ({ ...prev, glassProfileCompatibility: updated }));
+                                    }}
+                                    style={{ width: '140px' }}>
+                                    <option value="">Sélectionner...</option>
+                                    {(data?.profiles || [])
+                                      .filter(p => p && (p.rangeIds || (p.rangeId ? [p.rangeId] : [])).includes(gc.rangeId))
+                                      .map(p => <option key={p.id} value={p.id}>{p.name || p.id}</option>)
+                                    }
+                                  </select>
+                                </td>
+                                <td data-label="Qté H">
+                                  <input className="input" type="number" value={gc.qtyH || 0} 
+                                    onChange={e => {
+                                      const updated = [...(data.glassProfileCompatibility || [])];
+                                      updated[i].qtyH = parseFloat(e.target.value) || 0;
+                                      setData(prev => ({ ...prev, glassProfileCompatibility: updated }));
+                                    }} 
+                                    style={{ width: '50px' }} 
+                                  />
+                                </td>
+                                <td data-label="Formule H"><input className="input" value={gc.formulaH || ''} 
                                   onChange={e => {
                                     const updated = [...(data.glassProfileCompatibility || [])];
-                                    updated[i].glassThickness = parseFloat(e.target.value) || 0;
+                                    updated[i].formulaH = e.target.value;
                                     setData(prev => ({ ...prev, glassProfileCompatibility: updated }));
                                   }} 
-                                  style={{ width: '60px' }} 
-                                />
-                              </td>
-                              <td>
-                                <select 
-                                  className="input" value={gc.profileHId || ''} 
+                                  style={{ width: '80px' }} 
+                                /></td>
+                                <td data-label="Parcase V">
+                                  <select 
+                                    className="input" value={gc.profileVId || ''} 
+                                    onChange={e => {
+                                      const updated = [...(data.glassProfileCompatibility || [])];
+                                      updated[i].profileVId = e.target.value;
+                                      setData(prev => ({ ...prev, glassProfileCompatibility: updated }));
+                                    }}
+                                    style={{ width: '140px' }}>
+                                    <option value="">Sélectionner...</option>
+                                    {(data?.profiles || [])
+                                      .filter(p => p && (p.rangeIds || (p.rangeId ? [p.rangeId] : [])).includes(gc.rangeId))
+                                      .map(p => <option key={p.id} value={p.id}>{p.name || p.id}</option>)
+                                    }
+                                  </select>
+                                </td>
+                                <td data-label="Qté V">
+                                  <input className="input" type="number" value={gc.qtyV || 0} 
+                                    onChange={e => {
+                                      const updated = [...(data.glassProfileCompatibility || [])];
+                                      updated[i].qtyV = parseFloat(e.target.value) || 0;
+                                      setData(prev => ({ ...prev, glassProfileCompatibility: updated }));
+                                    }} 
+                                    style={{ width: '50px' }} 
+                                  />
+                                </td>
+                                <td data-label="Formule V"><input className="input" value={gc.formulaV || ''} 
                                   onChange={e => {
                                     const updated = [...(data.glassProfileCompatibility || [])];
-                                    updated[i].profileHId = e.target.value;
-                                    setData(prev => ({ ...prev, glassProfileCompatibility: updated }));
-                                  }}
-                                  style={{ width: '140px' }}>
-                                  <option value="">Sélectionner...</option>
-                                  {(data?.profiles || [])
-                                    .filter(p => p && (p.rangeIds || (p.rangeId ? [p.rangeId] : [])).includes(gc.rangeId))
-                                    .map(p => <option key={p.id} value={p.id}>{p.name || p.id}</option>)
-                                  }
-                                </select>
-                              </td>
-                              <td>
-                                <input className="input" type="number" value={gc.qtyH || 0} 
-                                  onChange={e => {
-                                    const updated = [...(data.glassProfileCompatibility || [])];
-                                    updated[i].qtyH = parseFloat(e.target.value) || 0;
+                                    updated[i].formulaV = e.target.value;
                                     setData(prev => ({ ...prev, glassProfileCompatibility: updated }));
                                   }} 
-                                  style={{ width: '50px' }} 
-                                />
-                              </td>
-                              <td><input className="input" value={gc.formulaH || ''} 
-                                onChange={e => {
-                                  const updated = [...(data.glassProfileCompatibility || [])];
-                                  updated[i].formulaH = e.target.value;
-                                  setData(prev => ({ ...prev, glassProfileCompatibility: updated }));
-                                }} 
-                                style={{ width: '80px' }} 
-                              /></td>
-                              <td>
-                                <select 
-                                  className="input" value={gc.profileVId || ''} 
-                                  onChange={e => {
-                                    const updated = [...(data.glassProfileCompatibility || [])];
-                                    updated[i].profileVId = e.target.value;
-                                    setData(prev => ({ ...prev, glassProfileCompatibility: updated }));
-                                  }}
-                                  style={{ width: '140px' }}>
-                                  <option value="">Sélectionner...</option>
-                                  {(data?.profiles || [])
-                                    .filter(p => p && (p.rangeIds || (p.rangeId ? [p.rangeId] : [])).includes(gc.rangeId))
-                                    .map(p => <option key={p.id} value={p.id}>{p.name || p.id}</option>)
-                                  }
-                                </select>
-                              </td>
-                              <td><input className="input" type="number" value={gc.qtyV || 0} 
-                                onChange={e => {
-                                  const updated = [...(data.glassProfileCompatibility || [])];
-                                  updated[i].qtyV = parseFloat(e.target.value) || 0;
-                                  setData(prev => ({ ...prev, glassProfileCompatibility: updated }));
-                                }} 
-                                style={{ width: '50px' }} 
-                              /></td>
-                              <td><input className="input" value={gc.formulaV || ''} 
-                                onChange={e => {
-                                  const updated = [...(data.glassProfileCompatibility || [])];
-                                  updated[i].formulaV = e.target.value;
-                                  setData(prev => ({ ...prev, glassProfileCompatibility: updated }));
-                                }} 
-                                style={{ width: '80px' }} 
-                              /></td>
-                              <td>
-                                <button className="btn" onClick={() => handleDeleteGlassProfileCompatibility(i)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                                  style={{ width: '80px' }} 
+                                /></td>
+                                <td data-label="Actions" style={{ textAlign: 'right' }}>
+                                  <button className="btn" onClick={() => handleDeleteGlassProfileCompatibility(i)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
                   </CollapsibleGroup>
-                );
+                )
               })}
               <button className="btn btn-secondary" onClick={() => handleAddItem('glassProfileCompatibility')} style={{ width: '100%', marginTop: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
                 <Plus size={16} /> Ajouter une Compatibilité
