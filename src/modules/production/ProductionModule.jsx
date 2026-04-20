@@ -22,6 +22,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
   const [selectedClientId, setSelectedClientId] = useState('');
   const [selectedQuoteId, setSelectedQuoteId] = useState('');
   const [selectedGlobalQuoteId, setSelectedGlobalQuoteId] = useState(currentQuote?.id || '');
+  const [selectedBatchId, setSelectedBatchId] = useState('ALL');
 
   const activeQuote = useMemo(() => {
     const allSources = [...(database?.quotes || []), ...(database?.orders || [])];
@@ -794,7 +795,37 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         const requestedCompoIds = new Set();
         const missingCompoIds = new Set();
 
-        quoteItems.forEach((item, winIdx) => {
+        const globalCuts = []; 
+        let itemsWithConfig = 0;
+        let bomsCalculated = 0;
+        let totalPiecesInBoms = 0;
+        const requestedCompoIds = new Set();
+        const missingCompoIds = new Set();
+
+        const isOrder = database.orders?.some(o => o.id === activeQuote?.id);
+        const batches = isOrder ? (activeQuote?.batches || []) : [];
+        
+        let targetItems = [];
+        if (isOrder && selectedBatchId !== 'ALL') {
+          const batch = batches.find(b => b.id === selectedBatchId);
+          if (batch) {
+            // Expand batch items (measurements)
+            batch.items.forEach(bi => {
+              (bi.measurements || []).forEach(m => {
+                targetItems.push({ 
+                  ...bi, 
+                  config: { ...bi.config, L: m.L, H: m.H }, 
+                  qty: m.qty || 1,
+                  isFromBatch: true 
+                });
+              });
+            });
+          }
+        } else {
+          targetItems = quoteItems;
+        }
+
+        targetItems.forEach((item, winIdx) => {
           if (!item.config) return;
           const cId = item.config.compositionId;
           if (cId) {
@@ -810,7 +841,6 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
             
             if (b.profiles && Array.isArray(b.profiles)) {
               b.profiles.forEach(p => {
-                // Ensure qty is treated correctly: p.qty is pieces per window
                 const piecesPerUnit = p.qty || 0;
                 totalPiecesInBoms += (piecesPerUnit * qty);
                 for (let q = 0; q < piecesPerUnit * qty; q++) {
@@ -940,6 +970,24 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                     })}
                   </optgroup>
                 </select>
+
+                {/* Batch Selector (Only for Orders) */}
+                {isOrder && batches.length > 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', background: '#f5f3ff', padding: '0.4rem 0.8rem', borderRadius: '0.5rem', border: '1px solid #ddd6fe' }}>
+                    <span style={{ fontWeight: 700, fontSize: '0.85rem', color: '#7c3aed', whiteSpace: 'nowrap' }}>📦 Lot de production :</span>
+                    <select 
+                      value={selectedBatchId} 
+                      onChange={e => setSelectedBatchId(e.target.value)}
+                      className="input"
+                      style={{ border: '1px solid #c4b5fd', fontWeight: 600, fontSize: '0.85rem', padding: '0.2rem 0.4rem', height: '32px' }}
+                    >
+                      <option value="ALL">Tout le dossier (Théorique)</option>
+                      {batches.map(b => (
+                        <option key={b.id} value={b.id}>{b.name || b.id} (Cotes Réelles)</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
                   <span style={{ fontSize: '0.8rem', background: '#f1f5f9', color: '#475569', padding: '0.2rem 0.7rem', borderRadius: '999px', fontWeight: 600 }}>
                     {quoteItems.length} items
