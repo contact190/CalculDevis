@@ -162,17 +162,13 @@ function App() {
 
     // Repair Shutter Components (glissieres Mono/Pala)
     if (repaired.shutterComponents) {
-      const defaultG = DEFAULT_DATA.shutterComponents.glissieres || [];
-      let currentG = repaired.shutterComponents.glissieres || [];
+      if (!repaired.shutterComponents.glissieres) repaired.shutterComponents.glissieres = [];
+      let currentG = repaired.shutterComponents.glissieres;
       
       // Migration: Remove old range-specific glissieres
       currentG = currentG.filter(cg => !cg.rangeId);
-
-      if (!repaired.shutterComponents.glissieres) repaired.shutterComponents.glissieres = [];
-      let currentG = repaired.shutterComponents.glissieres;
-      // Migration: Remove old range-specific glissieres
-      currentG = currentG.filter(cg => !cg.rangeId);
       repaired.shutterComponents.glissieres = currentG;
+
 
 
       // MISSION CRITICAL: Migrate existing products to items and handle glissiereIds
