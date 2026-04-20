@@ -787,44 +787,59 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         const totalSlots = kitConfig.trolleys * kitConfig.slotsPerTrolley;
         
         // Build global cut list across entire order
-        const globalCuts = []; // { profileId, profileName, length, windowIdx, windowLabel, qty }
+        const globalCuts = []; 
+        let itemsWithConfig = 0;
+        let bomsCalculated = 0;
+        let totalPiecesInBoms = 0;
+
         quoteItems.forEach((item, winIdx) => {
           if (!item.config) return;
+          itemsWithConfig++;
           try {
             const b = engine.calculateBOM(item.config);
+            if (b) bomsCalculated++;
             const qty = item.qty || 1;
-            b.profiles.forEach(p => {
-              for (let q = 0; q < p.qty * qty; q++) {
-                globalCuts.push({
-                  profileId: p.id,
-                  profileName: p.name,
-                  label: p.label,
-                  length: Math.round(p.length),
-                  windowIdx,
-                  windowLabel: item.label || `Fenêtre #${winIdx + 1}`,
-                  windowItemId: item.id,
-                });
-              }
-            });
-            // Shutter ML components as cuts too
-            (b.shutters || []).forEach(s => {
-              if (s.priceUnit === 'ML' && s.qty > 0) {
-                const lenMm = Math.round((s.qty || 0) * 1000);
-                for (let q = 0; q < qty; q++) {
+            
+            if (b.profiles) {
+              b.profiles.forEach(p => {
+                totalPiecesInBoms += (p.qty * qty);
+                for (let q = 0; q < p.qty * qty; q++) {
                   globalCuts.push({
-                    profileId: s.id,
-                    profileName: s.name,
-                    label: s.name,
-                    length: lenMm,
+                    profileId: p.id,
+                    profileName: p.name,
+                    label: p.label,
+                    length: Math.round(p.length),
                     windowIdx,
                     windowLabel: item.label || `Fenêtre #${winIdx + 1}`,
                     windowItemId: item.id,
-                    isShutter: true,
                   });
                 }
-              }
-            });
-          } catch {}
+              });
+            }
+            // Shutter ML components as cuts too
+            if (b.shutters) {
+              b.shutters.forEach(s => {
+                if (s.priceUnit === 'ML' && s.qty > 0) {
+                  const lenMm = Math.round((s.qty || 0) * 1000);
+                  totalPiecesInBoms += qty;
+                  for (let q = 0; q < qty; q++) {
+                    globalCuts.push({
+                      profileId: s.id,
+                      profileName: s.name,
+                      label: s.name,
+                      length: lenMm,
+                      windowIdx,
+                      windowLabel: item.label || `Fenêtre #${winIdx + 1}`,
+                      windowItemId: item.id,
+                      isShutter: true,
+                    });
+                  }
+                }
+              });
+            }
+          } catch (err) {
+            console.error("BOM Calculation error in Logistics:", err);
+          }
         });
 
         // Group by profileId for per-bar optimization
@@ -911,14 +926,20 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                 </select>
                 {/* Diagnostics */}
                 <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: '0.8rem', background: quoteItems.length > 0 ? '#d1fae5' : '#fee2e2', color: quoteItems.length > 0 ? '#065f46' : '#991b1b', padding: '0.2rem 0.7rem', borderRadius: '999px', fontWeight: 600 }}>
-                    {quoteItems.length} fenêtre(s) dans le devis
+                  <span style={{ fontSize: '0.8rem', background: '#f1f5f9', color: '#475569', padding: '0.2rem 0.7rem', borderRadius: '999px', fontWeight: 600 }}>
+                    {quoteItems.length} items
+                  </span>
+                  <span style={{ fontSize: '0.8rem', background: itemsWithConfig > 0 ? '#d1fae5' : '#fee2e2', color: itemsWithConfig > 0 ? '#065f46' : '#991b1b', padding: '0.2rem 0.7rem', borderRadius: '999px', fontWeight: 600 }}>
+                    {itemsWithConfig} avec config
+                  </span>
+                  <span style={{ fontSize: '0.8rem', background: bomsCalculated > 0 ? '#d1fae5' : '#fee2e2', color: bomsCalculated > 0 ? '#065f46' : '#991b1b', padding: '0.2rem 0.7rem', borderRadius: '999px', fontWeight: 600 }}>
+                    {bomsCalculated} BOMs ok
                   </span>
                   <span style={{ fontSize: '0.8rem', background: globalCuts.length > 0 ? '#d1fae5' : '#fef3c7', color: globalCuts.length > 0 ? '#065f46' : '#92400e', padding: '0.2rem 0.7rem', borderRadius: '999px', fontWeight: 600 }}>
-                    {globalCuts.length} pièce(s) à couper
+                    {globalCuts.length} coupes générées
                   </span>
                   <span style={{ fontSize: '0.8rem', background: '#ede9fe', color: '#5b21b6', padding: '0.2rem 0.7rem', borderRadius: '999px', fontWeight: 600 }}>
-                    {totalBars} barre(s) optimisées
+                    {totalBars} barres
                   </span>
                 </div>
               </div>
@@ -927,6 +948,12 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                   ⚠️ Aucun devis sélectionné. Choisissez un devis ci-dessus pour lancer l'optimisation.
                 </p>
               )}
+            </div>
+
+            {/* Detailed diagnostics for debugging */}
+            <div style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'flex', gap: '1rem', padding: '0 0.5rem' }}>
+               <span>Debug: totalPiecesInBoms={totalPiecesInBoms}</span>
+               <span>globalQuoteId={selectedGlobalQuoteId}</span>
             </div>
 
             {/* Config panel */}
