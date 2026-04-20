@@ -819,7 +819,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         }
 
         // --- 2. CALCULATION LOOP ---
-        targetItems.forEach((item, winIdx) => {
+        targetItems.forEach((item, windowIdx) => {
           if (!item.config) return;
           const cId = item.config.compositionId;
           if (cId) {
