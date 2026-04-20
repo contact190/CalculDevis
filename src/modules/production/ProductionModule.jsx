@@ -936,8 +936,38 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
 
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-            {/* Devis selector */}
-            <div className="glass shadow-md" style={{ borderLeft: '4px solid #3b82f6' }}>
+            {/* Deep Inspection Panel (Debug) */}
+            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '1rem', borderRadius: '0.5rem', fontSize: '0.75rem' }}>
+              <strong style={{ display: 'block', marginBottom: '0.5rem' }}>🔍 Inspecteur de Calcul (Premier article) :</strong>
+              {quoteItems.length > 0 ? (() => {
+                const first = quoteItems[0];
+                const compo = database.compositions?.find(c => c.id === first.config?.compositionId);
+                const b = first.config ? engine.calculateBOM(first.config) : null;
+                return (
+                  <div style={{ display: 'flex', gap: '2rem' }}>
+                    <div>
+                      <strong>Article:</strong> {first.label}<br/>
+                      <strong>Composition:</strong> {compo ? compo.name : <span style={{color:'red'}}>NON TROUVÉE ({first.config?.compositionId})</span>}<br/>
+                      <strong>L x H:</strong> {first.config?.L} x {first.config?.H}
+                    </div>
+                    <div>
+                       <strong>Profiles trouvés dans la BOM:</strong> {b?.profiles?.length || 0}<br/>
+                       <strong>Volets trouvés:</strong> {b?.shutters?.length || 0}<br/>
+                       <strong>Détail Profile 1:</strong> {b?.profiles?.[0] ? `${b.profiles[0].name} (qty:${b.profiles[0].qty})` : 'Aucun'}
+                    </div>
+                    {b?.profiles?.length === 0 && compo?.elements?.length > 0 && (
+                      <div style={{ color: '#ef4444', fontWeight: 600 }}>
+                        ⚠️ ALERTE : La recette a {compo.elements.length} éléments mais le calcul sort 0 profilés ! 
+                        Vérifiez les formules dans l'Admin.
+                      </div>
+                    )}
+                  </div>
+                );
+              })() : 'Aucun article sélectionné'}
+            </div>
+
+            {/* Config panel */}
+            <div className="glass shadow-md" style={{ borderLeft: '4px solid #f59e0b' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
                 <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#1e293b', whiteSpace: 'nowrap' }}>📋 Devis source :</span>
                 <select
