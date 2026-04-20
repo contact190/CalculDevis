@@ -151,10 +151,12 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
                   <tr>
                     <th>N° Devis</th>
                     <th>Date</th>
-                    <th>Nombre de Produits</th>
+                    <th>Statut</th>
+                    <th>Produits</th>
                     <th>Montant HT</th>
                     <th>Montant TTC</th>
                     <th style={{ width: '80px', textAlign: 'center' }}>Actions</th>
+
                   </tr>
                 </thead>
                 <tbody>
@@ -162,9 +164,20 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
                     <tr key={q.id}>
                       <td data-label="N°" style={{ fontWeight: 700, color: '#2563eb' }}>{q.number}</td>
                       <td data-label="Date">{new Date(q.createdAt).toLocaleDateString('fr-FR')}</td>
+                      <td data-label="Statut">
+                        <span style={{ 
+                          padding: '0.2rem 0.5rem', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 600,
+                          background: q.status === 'Validé' ? '#dcfce3' : (q.status === 'Brouillon' || !q.status ? '#fef3c7' : '#e0f2fe'),
+                          color: q.status === 'Validé' ? '#16a34a' : (q.status === 'Brouillon' || !q.status ? '#d97706' : '#0369a1')
+                        }}>
+                          {q.status || 'Brouillon'}
+                          {q.status === 'Validé' && q.validatedAt && ` (${new Date(q.validatedAt).toLocaleDateString('fr-FR')})`}
+                        </span>
+                      </td>
                       <td data-label="Produits">{q.items?.length || 0}</td>
                       <td data-label="HT" style={{ fontWeight: 600 }}>{q.totals?.ht?.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
                       <td data-label="TTC" style={{ fontWeight: 700 }}>{q.totals?.ttc?.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
+
                       <td data-label="Actions" style={{ textAlign: 'center' }}>
                         <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
                           <button onClick={() => { if(onOpenQuote) onOpenQuote(q); }} className="btn" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', color: '#2563eb', borderColor: '#2563eb' }}>
@@ -244,6 +257,7 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
                                 <tr>
                                   <th>N° Devis</th>
                                   <th>Date</th>
+                                  <th>Statut</th>
                                   <th>Produits</th>
                                   <th>Montant HT</th>
                                   <th>Montant TTC</th>
@@ -255,10 +269,20 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
                                   <tr key={q.id}>
                                     <td data-label="N°" style={{ fontWeight: 700, color: '#3b82f6' }}>{q.number}</td>
                                     <td data-label="Date">{new Date(q.createdAt).toLocaleDateString('fr-FR')}</td>
+                                    <td data-label="Statut">
+                                      <span style={{ 
+                                        padding: '0.2rem 0.5rem', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 600,
+                                        background: q.status === 'Validé' ? '#dcfce3' : (q.status === 'Brouillon' || !q.status ? '#fef3c7' : '#e0f2fe'),
+                                        color: q.status === 'Validé' ? '#16a34a' : (q.status === 'Brouillon' || !q.status ? '#d97706' : '#0369a1')
+                                      }}>
+                                        {q.status || 'Brouillon'}
+                                      </span>
+                                    </td>
                                     <td data-label="Prd.">{q.items?.length || 0}</td>
                                     <td data-label="HT" style={{ fontWeight: 600 }}>{q.totals?.ht?.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
                                     <td data-label="TTC" style={{ fontWeight: 700 }}>{q.totals?.ttc?.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
                                     <td data-label="Actions" style={{ textAlign: 'center' }}>
+
                                       <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'center' }}>
                                         <button onClick={() => { if(onOpenQuote) onOpenQuote(q); }} className="btn" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', color: '#2563eb', borderColor: '#2563eb' }}>
                                           Détails

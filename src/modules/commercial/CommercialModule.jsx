@@ -730,7 +730,13 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
       let currentPriceHT = item.unitPriceHT || 0;
       let pd = item.priceData;
 
-      if (!quote.status || quote.status === 'Brouillon') {
+      const validityDays = Number(quoteSettings?.validityDays || 30);
+      const isValidated = quote.status === 'Validé';
+      const isExpired = isValidated && quote.validatedAt && (new Date() - new Date(quote.validatedAt)) > (validityDays * 24 * 60 * 60 * 1000);
+      
+      const shouldLiveRecalculate = !quote.status || quote.status === 'Brouillon' || isExpired;
+
+      if (shouldLiveRecalculate) {
          try {
            const livePd = engine.calculatePrice(item.config);
            if (livePd && livePd.priceHT) {
@@ -739,6 +745,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
            }
          } catch(e) {}
       }
+
 
       ht += currentPriceHT * (item.qty || 1);
       
@@ -832,6 +839,16 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
     setLocalView('list');
   };
 
+  const isQuoteFrozen = useMemo(() => {
+    if (!quote.status || quote.status === 'Brouillon') return false;
+    if (quote.status !== 'Validé') return false; // Orders etc might be handled differently, but Validé is the target here
+    const validityDays = Number(quoteSettings?.validityDays || 30);
+    if (!quote.validatedAt) return false;
+    const diff = new Date() - new Date(quote.validatedAt);
+    return diff <= (validityDays * 24 * 60 * 60 * 1000);
+  }, [quote.status, quote.validatedAt, quoteSettings]);
+
+
   const handleDeleteItem = (id) => {
     if (!window.confirm('Supprimer ce produit du devis ?')) return;
     setCurrentQuote(prev => ({ ...prev, items: prev.items.filter(i => i.id !== id) }));
@@ -869,8 +886,9 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
   const handleStatusChange = (newStatus) => {
     setCurrentQuote(prev => {
       const q = { ...prev, status: newStatus };
-      if (newStatus !== 'Brouillon') {
-        // Freeze/Snapshot the items prices and formulas into the items
+      if (newStatus === 'Validé') {
+        q.validatedAt = new Date().toISOString();
+        // Snapshot
         q.items = (q.items || []).map(item => {
           try {
             const pd = engine.calculatePrice(item.config);
@@ -881,14 +899,13 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
               priceData: JSON.parse(JSON.stringify(pd)),
               config: JSON.parse(JSON.stringify(item.config))
             };
-          } catch(e) {
-            return item;
-          }
+          } catch(e) { return item; }
         });
       }
       return q;
     });
   };
+
 
   const handleSaveGlobalQuote = () => {
     if (setDatabase) {
@@ -1197,11 +1214,20 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
           <button onClick={onNewQuote} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1rem', border: '1px solid #e2e8f0', borderRadius: '0.5rem', background: 'white', cursor: 'pointer', color: '#64748b', fontSize: '0.875rem' }}>
             📄 Nouveau Devis
           </button>
-          <button onClick={startNewProduct} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1.2rem', border: 'none', borderRadius: '0.5rem', background: '#2563eb', color: 'white', cursor: 'pointer', fontWeight: 600 }}>
-            <Plus size={16} /> Ajouter un produit
-          </button>
+          {!isQuoteFrozen && (
+            <button onClick={startNewProduct} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1.2rem', border: 'none', borderRadius: '0.5rem', background: '#2563eb', color: 'white', cursor: 'pointer', fontWeight: 600 }}>
+              <Plus size={16} /> Ajouter un produit
+            </button>
+          )}
         </div>
       </header>
+
+      {isQuoteFrozen && (
+        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1e40af', padding: '0.75rem 1rem', borderRadius: '0.5rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600, fontSize: '0.9rem' }}>
+          <Info size={18} /> Ce devis est figé (Validé le {new Date(quote.validatedAt).toLocaleDateString('fr-FR')}). Validité : {quoteSettings.validityDays || 30} j.
+        </div>
+      )}
+
 
       {/* Quote Header Card */}
       <div className="glass shadow-md flex-header" style={{ marginBottom: '1.5rem', padding: '1.25rem' }}>
@@ -1329,18 +1355,25 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
                         <td data-label="Finition" style={{ fontSize: '0.85rem' }}>{color?.name || item.config?.colorId}</td>
                         <td data-label="Qté">
                           <input type="number" min="1" value={item.qty}
+                            disabled={isQuoteFrozen}
                             onChange={e => handleQtyChange(item.id, e.target.value)}
-                            style={{ width: '60px', padding: '0.3rem 0.5rem', border: '1px solid #e2e8f0', borderRadius: '0.4rem', textAlign: 'center', fontWeight: 700 }} />
+                            style={{ width: '60px', padding: '0.3rem 0.5rem', border: '1px solid #e2e8f0', borderRadius: '0.4rem', textAlign: 'center', fontWeight: 700, background: isQuoteFrozen ? '#f1f5f9' : 'white' }} />
                         </td>
+
                         <td data-label="Prix U. HT" style={{ fontWeight: 600 }}>{effectivePriceHT.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
                         <td data-label="Total HT" style={{ fontWeight: 700, color: '#2563eb' }}>{totalHT.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
                         <td data-label="Actions">
                           <div style={{ display: 'flex', gap: '0.3rem', justifyContent: 'flex-end' }}>
-                            <button onClick={() => startEditProduct(item)} title="Modifier" style={{ padding: '0.3rem', border: '1px solid #e2e8f0', borderRadius: '0.3rem', background: 'white', cursor: 'pointer', color: '#2563eb' }}><Edit2 size={14} /></button>
-                            <button onClick={() => handleDuplicateItem(item)} title="Dupliquer" style={{ padding: '0.3rem', border: '1px solid #e2e8f0', borderRadius: '0.3rem', background: 'white', cursor: 'pointer', color: '#10b981' }}><Copy size={14} /></button>
-                            <button onClick={() => handleDeleteItem(item.id)} title="Supprimer" style={{ padding: '0.3rem', border: '1px solid #fee2e2', borderRadius: '0.3rem', background: '#fef2f2', cursor: 'pointer', color: '#ef4444' }}><Trash2 size={14} /></button>
+                            <button onClick={() => startEditProduct(item)} title={isQuoteFrozen ? "Voir (Lecture seule)" : "Modifier"} style={{ padding: '0.3rem', border: '1px solid #e2e8f0', borderRadius: '0.3rem', background: 'white', cursor: 'pointer', color: '#2563eb' }}>{isQuoteFrozen ? <FileText size={14} /> : <Edit2 size={14} />}</button>
+                            {!isQuoteFrozen && (
+                              <>
+                                <button onClick={() => handleDuplicateItem(item)} title="Dupliquer" style={{ padding: '0.3rem', border: '1px solid #e2e8f0', borderRadius: '0.3rem', background: 'white', cursor: 'pointer', color: '#10b981' }}><Copy size={14} /></button>
+                                <button onClick={() => handleDeleteItem(item.id)} title="Supprimer" style={{ padding: '0.3rem', border: '1px solid #fee2e2', borderRadius: '0.3rem', background: '#fef2f2', cursor: 'pointer', color: '#ef4444' }}><Trash2 size={14} /></button>
+                              </>
+                            )}
                           </div>
                         </td>
+
                       </tr>
                     );
                   })}
@@ -1384,13 +1417,16 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
                 Validité : {quoteSettings?.validityDays || 30} jours ({validityDate})
               </div>
               <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.2rem' }}>
-                <button onClick={handleSaveGlobalQuote} className="btn shadow-md" style={{ flex: 1, padding: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', background: '#10b981', color: 'white', border: 'none' }}>
-                  <Save size={18} /> Sauvegarder
-                </button>
+                {!isQuoteFrozen && (
+                  <button onClick={handleSaveGlobalQuote} className="btn shadow-md" style={{ flex: 1, padding: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', background: '#10b981', color: 'white', border: 'none' }}>
+                    <Save size={18} /> Sauvegarder
+                  </button>
+                )}
                 <button onClick={generatePDF} className="btn btn-primary shadow-md" style={{ flex: 1, padding: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
                   <FileText size={18} /> Exporter PDF
                 </button>
               </div>
+
             </div>
           </div>
         </div>
