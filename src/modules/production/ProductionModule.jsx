@@ -1,10 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { Package, Scissors, Ruler, Download, CheckCircle, Barcode, ShoppingCart, Layers, Edit2, Link2, Link2Off, Plus } from 'lucide-react';
+import { Package, Scissors, Ruler, Download, CheckCircle, Barcode, ShoppingCart, Layers, Edit2, Link2, Link2Off, Plus, QrCode } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { FormulaEngine } from '../../engine/formula-engine';
 import { DEFAULT_DATA } from '../../data/default-data';
 import jsPDF from 'jspdf';
 
-const ProductionModule = ({ currentConfig, currentQuote, database }) => {
+const ProductionModule = ({ currentConfig, currentQuote, database, setData }) => {
   const engine = useMemo(() => new FormulaEngine(database), [database]);
   const [activeTab, setActiveTab] = useState('debit');
   const [barLengths, setBarLengths] = useState({});
@@ -14,7 +15,16 @@ const ProductionModule = ({ currentConfig, currentQuote, database }) => {
   // 'total' = consolidated, or an item ID for a single product
   const [productFilter, setProductFilter] = useState('total');
 
-  const quoteItems = currentQuote?.items || [];
+  // Prise de mesures states
+  const [selectedClientId, setSelectedClientId] = useState('');
+  const [selectedQuoteId, setSelectedQuoteId] = useState('');
+  const [selectedGlobalQuoteId, setSelectedGlobalQuoteId] = useState(currentQuote?.id || '');
+
+  const activeQuote = useMemo(() => {
+    return database?.quotes?.find(q => q.id === selectedGlobalQuoteId) || currentQuote;
+  }, [database?.quotes, selectedGlobalQuoteId, currentQuote]);
+
+  const quoteItems = activeQuote?.items || [];
 
   // Determine which config(s) to aggregate
   const activeConfigs = useMemo(() => {
@@ -27,12 +37,19 @@ const ProductionModule = ({ currentConfig, currentQuote, database }) => {
     return found ? [{ config: found.config, qty: found.qty || 1, label: found.label }] : [];
   }, [quoteItems, productFilter, currentConfig]);
 
-  const bom = useMemo(() => {
-    // For debit (single product view), use currentConfig or first active config
+  const bomResult = useMemo(() => {
     const cfg = activeConfigs[0]?.config || currentConfig;
-    if (!cfg) return null;
-    try { return engine.calculateBOM(cfg); } catch { return null; }
+    if (!cfg) return { bom: null, error: null };
+    try { 
+      const b = engine.calculateBOM(cfg); 
+      return { bom: b, error: null };
+    } catch (e) { 
+      console.error(e); 
+      return { bom: null, error: e.message || 'Erreur inattendue' }; 
+    }
   }, [activeConfigs, engine, currentConfig]);
+  
+  const bom = bomResult.bom;
 
   // Derived arrays for Purchasing List
   const purchasingProfiles = useMemo(() => {
@@ -47,10 +64,12 @@ const ProductionModule = ({ currentConfig, currentQuote, database }) => {
           const mapKey = `${p.id}|${colorName}`;
           const displayName = p.name ? `${p.name} ${p.label ? `[${p.label}]` : ''}` : (p.label || '');
           const measure = p.length * p.qty * cfgQty;
+          const newPieces = Array(p.qty * cfgQty).fill(p.length);
           if (!map[mapKey]) {
-            map[mapKey] = { ...p, originalNames: new Set([displayName]), totalMeasure: measure, colorName };
+            map[mapKey] = { ...p, originalNames: new Set([displayName]), totalMeasure: measure, pieces: newPieces, colorName };
           } else {
             map[mapKey].totalMeasure += measure;
+            map[mapKey].pieces.push(...newPieces);
             map[mapKey].originalNames.add(displayName);
           }
         });
@@ -59,10 +78,12 @@ const ProductionModule = ({ currentConfig, currentQuote, database }) => {
           if (s.priceUnit === 'ML') {
             const mapKey = `${s.id}|${colorName}`;
             const measure = (s.qty || 0) * cfgQty * 1000; // Convert to mm for consistency
+            const newPieces = Array(cfgQty).fill((s.qty || 0) * 1000);
             if (!map[mapKey]) {
-              map[mapKey] = { ...s, originalNames: new Set([s.name]), totalMeasure: measure, colorName };
+              map[mapKey] = { ...s, originalNames: new Set([s.name]), totalMeasure: measure, pieces: newPieces, colorName };
             } else {
               map[mapKey].totalMeasure += measure;
+              map[mapKey].pieces.push(...newPieces);
               map[mapKey].originalNames.add(s.name);
             }
           }
@@ -177,12 +198,14 @@ const ProductionModule = ({ currentConfig, currentQuote, database }) => {
       const combinedId = members.map(p => p.id).join(' + ');
       const combinedName = members.map(p => p.combinedName || p.name).join(' + ');
       const firstBar = barLengths[members[0].id] || 6400;
+      const allPieces = members.flatMap(m => m.pieces || []);
       rows.push({
         _isGroup: true,
         _groupIndex: gi,
         id: combinedId,
         combinedName,
         totalMeasure,
+        pieces: allPieces,
         unitPrice: members[0].unitPrice,
         _barKey: members[0].id // use first member's ID for bar length setting
       });
@@ -267,7 +290,34 @@ const ProductionModule = ({ currentConfig, currentQuote, database }) => {
        const barKey = p._barKey || p.baseId || p.id;
        const bLength = barLengths[barKey] || 6400;
        const ml = p.totalMeasure;
-       const bars = Math.ceil(ml / bLength);
+       // Bin Packing Algorithm (1D Nesting / Next Fit Decreasing)
+       const pieces = p.pieces ? [...p.pieces].sort((a,b) => b - a) : [];
+       let bars = 0;
+       
+       if (pieces.length > 0) {
+         let currentBars = []; // store remaining lengths
+         for (let i = 0; i < pieces.length; i++) {
+           const piece = pieces[i];
+           // Find best fit (Best Fit Decreasing)
+           let bestIdx = -1;
+           let minLeft = Infinity;
+           for (let j = 0; j < currentBars.length; j++) {
+             if (currentBars[j] >= piece && currentBars[j] - piece < minLeft) {
+               bestIdx = j;
+               minLeft = currentBars[j] - piece;
+             }
+           }
+           if (bestIdx !== -1) {
+             currentBars[bestIdx] -= piece;
+           } else {
+             currentBars.push(bLength - piece);
+             bars++;
+           }
+         }
+       } else {
+         bars = Math.ceil(ml / bLength);
+       }
+
        const ref = p._isGroup ? p.id.split(' + ').map(x => x.split('|')[0]).join(' + ') : p.baseId || p.id.split('|')[0];
        
        doc.text(String(ref).substring(0, 18), 15, y);
@@ -353,6 +403,13 @@ const ProductionModule = ({ currentConfig, currentQuote, database }) => {
   };
 
   if (!currentConfig) return <div>Aucune configuration active. Sélectionnez ou configurez un devis dans la page Projet.</div>;
+  if (activeTab === 'debit' && !bom) return (
+     <div style={{ padding: '2rem', color: '#ef4444' }}>
+       Impossible de générer le débit. Vérifiez les formules mathématiques dans l'Administration.
+       <br/><br/>
+       <strong>Détails techniques :</strong> {bomResult.error}
+     </div>
+  );
 
   return (
     <div className="animate-fade-in">
@@ -361,7 +418,20 @@ const ProductionModule = ({ currentConfig, currentQuote, database }) => {
           <h1 style={{ fontSize: '1.875rem', fontWeight: 700, color: '#1e293b' }}>Module Production</h1>
           <p style={{ color: '#64748b' }}>Explosion de la recette, liste de débit et liste d'achat pour l'atelier.</p>
         </div>
-        <div style={{ display: 'flex', gap: '1rem' }}>
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          <select 
+            value={selectedGlobalQuoteId} 
+            onChange={e => { setSelectedGlobalQuoteId(e.target.value); setProductFilter('total'); }}
+            className="input"
+            style={{ fontWeight: 600, maxWidth: '250px' }}
+          >
+            <option value="">Sélectionner un devis enregistré...</option>
+            {currentQuote?.id && <option value={currentQuote.id}>Devis Actif (Non enregistré)</option>}
+            {(database.quotes || []).map(q => {
+              const client = database.clients?.find(c => c.id === q.clientId);
+              return <option key={q.id} value={q.id}>{q.number} {client ? `- ${client.nom}` : ''}</option>;
+            })}
+          </select>
           <button onClick={generatePDF} className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <Download size={18} />
             PDF Débit
@@ -387,7 +457,35 @@ const ProductionModule = ({ currentConfig, currentQuote, database }) => {
             <ShoppingCart size={18} /> Liste d'Achat
           </div>
         </button>
+        <button 
+          onClick={() => setActiveTab('measure')}
+          style={{ padding: '0.5rem 1.5rem', fontSize: '0.9rem', fontWeight: 600, border: 'none', background: 'transparent', cursor: 'pointer', borderBottom: activeTab === 'measure' ? '3px solid #f59e0b' : '3px solid transparent', color: activeTab === 'measure' ? '#f59e0b' : '#64748b', transition: 'all 0.2s' }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Ruler size={18} /> Prise de Mesures
+          </div>
+        </button>
       </div>
+
+      {/* Product Filter and PDF Export - Moved outside to apply to both pages */}
+      {quoteItems.length > 0 && activeTab !== 'measure' && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem 1rem', background: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #e2e8f0', marginBottom: '1.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#64748b', whiteSpace: 'nowrap' }}>📋 Produit à afficher :</span>
+            <select value={productFilter} onChange={e => setProductFilter(e.target.value)} className="input" style={{ width: 'auto', fontWeight: 600 }}>
+              <option value="total">🔢 Tous les produits (Achat uniquement)</option>
+              {quoteItems.map(item => (
+                <option key={item.id} value={item.id}>{item.label} — {item.config?.L}×{item.config?.H}mm (Qté: {item.qty})</option>
+              ))}
+            </select>
+          </div>
+          {activeTab === 'achat' && (
+            <button onClick={generatePurchasePDF} className="btn" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'white', border: '1px solid #cbd5e1' }}>
+              <Download size={16} /> Exporter PDF Achat
+            </button>
+          )}
+        </div>
+      )}
 
       {activeTab === 'debit' && (
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '2rem' }}>
@@ -395,7 +493,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database }) => {
           <div className="glass shadow-md">
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.5rem' }}>
               <Scissors size={20} color="#2563eb" />
-              <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Liste de Débit Profilés</h2>
+              <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Liste de Débit Profilés {productFilter !== 'total' && `- ${(quoteItems.find(i=>i.id===productFilter)?.label)}`}</h2>
             </div>
 
             <table className="data-table">
@@ -423,9 +521,12 @@ const ProductionModule = ({ currentConfig, currentQuote, database }) => {
                       </div>
                     </td>
                     <td>
-                      <button className="btn btn-secondary" style={{ padding: '0.4rem' }} title="Imprimer Code-Barre">
-                        <Barcode size={16} />
-                      </button>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <QRCodeSVG value={`OF-${currentConfig.compositionId}-P${i}-${p.length}mm`} size={24} level="L" />
+                        <button className="btn btn-secondary" style={{ padding: '0.4rem' }} title="Code-Barre Détail">
+                          <Barcode size={16} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -472,24 +573,6 @@ const ProductionModule = ({ currentConfig, currentQuote, database }) => {
       {activeTab === 'achat' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
           
-          {/* Product Filter and PDF Export */}
-          {quoteItems.length > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem 1rem', background: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#64748b', whiteSpace: 'nowrap' }}>📋 Afficher :</span>
-                <select value={productFilter} onChange={e => setProductFilter(e.target.value)} className="input" style={{ width: 'auto', fontWeight: 600 }}>
-                  <option value="total">🔢 Tous les produits (consolidé)</option>
-                  {quoteItems.map(item => (
-                    <option key={item.id} value={item.id}>{item.label} — {item.config?.L}×{item.config?.H}mm (×{item.qty})</option>
-                  ))}
-                </select>
-              </div>
-              <button onClick={generatePurchasePDF} className="btn" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'white', border: '1px solid #cbd5e1' }}>
-                <Download size={16} /> Exporter PDF
-              </button>
-            </div>
-          )}
-
           {/* Table: Achats Profilés */}
           <div className="glass shadow-md" style={{ borderLeft: '4px solid #8b5cf6' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
@@ -543,7 +626,33 @@ const ProductionModule = ({ currentConfig, currentQuote, database }) => {
                   const barKey = p._barKey || p.baseId || p.id;
                   const bLength = barLengths[barKey] || 6400;
                   const ml = p.totalMeasure;
-                  const bars = Math.ceil(ml / bLength);
+                  // Bin Packing Algorithm (1D Nesting / Next Fit Decreasing)
+                  const pieces = p.pieces ? [...p.pieces].sort((a,b) => b - a) : [];
+                  let bars = 0;
+                  
+                  if (pieces.length > 0) {
+                    let currentBars = [];
+                    for (let i = 0; i < pieces.length; i++) {
+                      const piece = pieces[i];
+                      let bestIdx = -1;
+                      let minLeft = Infinity;
+                      for (let j = 0; j < currentBars.length; j++) {
+                        if (currentBars[j] >= piece && currentBars[j] - piece < minLeft) {
+                          bestIdx = j;
+                          minLeft = currentBars[j] - piece;
+                        }
+                      }
+                      if (bestIdx !== -1) {
+                        currentBars[bestIdx] -= piece;
+                      } else {
+                        currentBars.push(bLength - piece);
+                        bars++;
+                      }
+                    }
+                  } else {
+                    bars = Math.ceil(ml / bLength);
+                  }
+
                   const isSelected = jumelageSelection.has(p.id);
                   const rowBg = p._isGroup ? '#faf5ff' : isSelected ? '#ede9fe' : 'transparent';
                   return (

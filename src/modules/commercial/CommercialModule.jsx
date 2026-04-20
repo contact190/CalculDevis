@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Calculator, Package, Settings, FileText, Info, LayoutGrid, Plus, Edit2, Trash2, Copy, ArrowLeft, Save, ChevronDown, ChevronUp, Building2, Phone, Mail, MapPin, Calendar, Clock } from 'lucide-react';
+import { Calculator, Package, Settings, FileText, Info, LayoutGrid, Plus, Edit2, Trash2, Copy, ArrowLeft, Save, ChevronDown, ChevronUp, Building2, Phone, Mail, MapPin, Calendar, Clock, GitCompare } from 'lucide-react';
 import { FormulaEngine } from '../../engine/formula-engine';
 import JoineryCanvas from '../../components/shared/JoineryCanvas';
 import LayoutComposer, { defaultLayout, rescaleTree } from '../../components/shared/LayoutComposer';
@@ -22,6 +22,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
   const engine = useMemo(() => new FormulaEngine(database), [database]);
   const [validation, setValidation] = useState({ valid: true });
   const [priceData, setPriceData] = useState(null);
+  const [compareModalOpen, setCompareModalOpen] = useState(false);
 
   useEffect(() => {
     if (!config.compositionId && database.compositions?.length > 0) {
@@ -200,11 +201,16 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                 {database.colors.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
-            <div className="form-group">
+            <div className="form-group" style={{ position: 'relative' }}>
               <label className="label">Vitrage</label>
-              <select name="glassId" value={config.glassId} onChange={handleChange} className="input">
-                {database.glass.map(g => <option key={g.id} value={g.id}>{g.name} {g.composition ? `(${g.composition})` : ''}</option>)}
-              </select>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <select name="glassId" value={config.glassId} onChange={handleChange} className="input" style={{ flex: 1 }}>
+                  {database.glass.map(g => <option key={g.id} value={g.id}>{g.name} {g.composition ? `(${g.composition})` : ''}</option>)}
+                </select>
+                <button onClick={() => setCompareModalOpen(true)} className="btn btn-secondary" style={{ padding: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Comparer les vitrages">
+                  <GitCompare size={18} />
+                </button>
+              </div>
             </div>
           </div>
 
@@ -243,6 +249,17 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
             </div>
           )}
 
+          {/* Precadre Option */}
+          <div style={{ marginTop: '1rem', padding: '0.75rem 1rem', background: config.hasPrecadre ? '#f0fdf4' : '#f8fafc', borderRadius: '0.75rem', border: `1px solid ${config.hasPrecadre ? '#86efac' : '#e2e8f0'}`, transition: 'all 0.2s' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', fontWeight: 600, color: config.hasPrecadre ? '#166534' : '#1e293b', fontSize: '0.9rem' }}>
+              <input type="checkbox" checked={config.hasPrecadre || false}
+                onChange={e => setConfig(prev => ({ ...prev, hasPrecadre: e.target.checked }))}
+                style={{ width: '1.2rem', height: '1.2rem' }} />
+              🔲 Pose sur Précadre
+              {config.hasPrecadre && <span style={{ fontSize: '0.75rem', fontWeight: 400, color: '#15803d', marginLeft: '0.5rem' }}>→ Chevilles supprimées automatiquement</span>}
+            </label>
+          </div>
+
           {/* Volet Roulant */}
           <div style={{ marginTop: '1.5rem', padding: '1rem', background: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', fontWeight: 600, color: '#1e293b', fontSize: '0.95rem' }}>
@@ -266,9 +283,24 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                   }
 
                   const handleShutterChange = (val) => {
+                    setConfig(prev => ({ 
+                      ...prev, 
+                      shutterConfig: { 
+                        ...(prev.shutterConfig || {}), 
+                        [key]: val,
+                        // Reset params if glissiere changes
+                        ...(key === 'glissiereId' ? { glissiereParams: {} } : {})
+                      } 
+                    }));
+                  };
+
+                  const toggleCouvreJoint = (checked) => {
                     setConfig(prev => ({
                       ...prev,
-                      shutterConfig: { ...(prev.shutterConfig || {}), [key]: val }
+                      shutterConfig: {
+                        ...(prev.shutterConfig || {}),
+                        hasCouvreJoint: checked
+                      }
                     }));
                   };
 
@@ -310,6 +342,17 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                           {filteredItems.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
                         </select>
                       </div>
+
+                      {/* Special Option: Couvre Joint (Only shown once, e.g. next to caisson) */}
+                      {key === 'caissonId' && (
+                        <div className="form-group" style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '0.5rem' }}>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, color: '#1e40af', background: '#eff6ff', padding: '0.4rem 0.75rem', borderRadius: '0.4rem', border: '1px solid #bfdbfe', width: '100%' }}>
+                            <input type="checkbox" checked={config.shutterConfig?.hasCouvreJoint || false}
+                              onChange={e => toggleCouvreJoint(e.target.checked)} />
+                            Pose avec Couvre-Joint (-1.2cm L)
+                          </label>
+                        </div>
+                      )}
                       {key === 'glissiereId' && (
                         <>
                           {effectiveItem?.hasBaguette && (
@@ -356,6 +399,28 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                     </React.Fragment>
                   );
                 })}
+
+                {/* Motor Cable Position (Only if KIT-MOTE is selected) */}
+                {config.shutterConfig?.kitId === 'KIT-MOTE' && (
+                  <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                    <label className="label" style={{ fontSize: '0.8rem', fontWeight: 700 }}>Position du Câble Moteur</label>
+                    <div style={{ display: 'flex', gap: '1rem' }}>
+                      {['Gauche', 'Droite'].map(pos => (
+                        <label key={pos} style={{ 
+                          flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', 
+                          padding: '0.6rem', border: `2px solid ${config.shutterConfig?.motorCablePosition === pos ? '#3b82f6' : '#e2e8f0'}`,
+                          borderRadius: '0.5rem', cursor: 'pointer', background: config.shutterConfig?.motorCablePosition === pos ? '#eff6ff' : 'white',
+                          transition: 'all 0.2s', fontWeight: config.shutterConfig?.motorCablePosition === pos ? 700 : 400
+                        }}>
+                          <input type="radio" name="cablePos" checked={config.shutterConfig?.motorCablePosition === pos}
+                            onChange={() => setConfig(prev => ({ ...prev, shutterConfig: { ...(prev.shutterConfig || {}), motorCablePosition: pos } }))}
+                            style={{ display: 'none' }} />
+                          {pos === 'Gauche' ? '⬅️' : '➡️'} {pos}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -473,12 +538,67 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
           </div>
         </div>
       </div>
+
+      {/* Compare Modal */}
+      {compareModalOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'white', borderRadius: '1rem', padding: '2rem', width: '700px', maxWidth: '90vw', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
+              <h2 style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <GitCompare size={20} color="#2563eb" /> Comparaison des Vitrages
+              </h2>
+              <button onClick={() => setCompareModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem' }}>✕</button>
+            </div>
+            
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Vitrage</th>
+                  <th>Composition</th>
+                  <th>Épaisseur</th>
+                  <th>Performances (Ug)</th>
+                  <th>Poids (kg/m²)</th>
+                  <th>Prix Supplémentaire</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {database.glass.map(g => {
+                  const currentGlassPrice = priceData?.bom?.glass?.cost || 0;
+                  const gPriceEst = config.L * config.H / 1000000 * (g.pricePerM2 || 0) * config.margin;
+                  const diff = gPriceEst - currentGlassPrice;
+                  const isCurrent = g.id === config.glassId;
+                  return (
+                    <tr key={g.id} style={{ background: isCurrent ? '#eff6ff' : 'transparent' }}>
+                      <td style={{ fontWeight: 600 }}>{g.name} {isCurrent && '(Actuel)'}</td>
+                      <td style={{ fontSize: '0.8rem', color: '#64748b' }}>{g.composition || '-'}</td>
+                      <td>{g.thickness || '-'} mm</td>
+                      <td style={{ color: g.ug < 1.5 ? '#10b981' : '#f59e0b', fontWeight: 600 }}>{g.ug || 'N/A'}</td>
+                      <td>{g.weightPerM2 || '-'} kg</td>
+                      <td style={{ fontWeight: 600, color: diff > 0 ? '#ef4444' : (diff < 0 ? '#10b981' : '#64748b') }}>
+                         {diff > 0 ? '+' : ''}{diff.toFixed(2)} DZD
+                      </td>
+                      <td>
+                        {!isCurrent && (
+                          <button onClick={() => { setConfig(prev => ({ ...prev, glassId: g.id })); setCompareModalOpen(false); }} className="btn btn-primary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}>
+                            Choisir
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 // ─── SETTINGS PANEL ────────────────────────────────────────────────────────
-const QuoteSettingsPanel = ({ settings, onSave, onClose }) => {
+export const QuoteSettingsPanel = ({ settings, onSave, onClose, title = "Paramètres du Devis" }) => {
   const [draft, setDraft] = useState({ ...settings });
   const logoRef = useRef();
   const handleLogoUpload = (e) => {
@@ -492,7 +612,7 @@ const QuoteSettingsPanel = ({ settings, onSave, onClose }) => {
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ background: 'white', borderRadius: '1rem', padding: '2rem', width: '560px', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-          <h2 style={{ fontWeight: 700 }}>⚙️ Paramètres du Devis</h2>
+          <h2 style={{ fontWeight: 700 }}>⚙️ {title}</h2>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem' }}>✕</button>
         </div>
 
@@ -601,13 +721,24 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
     let shutters = 0;
 
     (quote.items || []).forEach(item => {
-      ht += (item.unitPriceHT || 0) * (item.qty || 1);
+      let currentPriceHT = item.unitPriceHT || 0;
+      let pd = item.priceData;
+
+      if (!quote.status || quote.status === 'Brouillon') {
+         try {
+           const livePd = engine.calculatePrice(item.config);
+           if (livePd && livePd.priceHT) {
+             currentPriceHT = livePd.priceHT;
+             pd = livePd;
+           }
+         } catch(e) {}
+      }
+
+      ht += currentPriceHT * (item.qty || 1);
       
-      // Aggregate category costs for the whole quote
+      // Aggregate category costs for the whole quote using the effective price data
       try {
-        const pd = engine.calculatePrice(item.config);
         if (!pd || !pd.bom) return;
-        
         const itemQty = Number(item.qty) || 1;
         profiles += (pd.bom.profiles?.reduce((s, p) => s + (Number(p.cost) || 0), 0) || 0) * itemQty;
         accessories += ((pd.bom.accessories?.reduce((s, a) => s + (Number(a.cost) || 0), 0) || 0) + (pd.bom.gasket?.cost || 0)) * itemQty;
@@ -676,13 +807,13 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
   const handleSaveProduct = () => {
     const priceData = engine.calculatePrice(draftConfig);
     const newItem = {
-      id: editingItemId || `ITEM-${Date.now()}`,
+      id: editingItemId || `ITEM-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       label: draftLabel || `Produit ${(quote.items?.length || 0) + 1}`,
-      qty: draftQty,
-      config: { ...draftConfig },
+      qty: draftQty || 1,
+      config: JSON.parse(JSON.stringify(draftConfig)), // Snapshot config (Prices at the time)
       unitPriceHT: priceData?.priceHT || 0,
       unitPriceTTC: priceData?.priceTTC || 0,
-      priceData,
+      priceData: JSON.parse(JSON.stringify(priceData)), // Snapshot bom and prices
     };
     setCurrentQuote(prev => {
       const items = editingItemId
@@ -701,7 +832,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
   };
 
   const handleDuplicateItem = (item) => {
-    const copy = { ...item, id: `ITEM-${Date.now()}`, label: `${item.label} (copie)` };
+    const copy = { ...item, id: `ITEM-${Date.now()}-${Math.floor(Math.random() * 1000)}`, label: `${item.label} (copie)` };
     setCurrentQuote(prev => ({ ...prev, items: [...prev.items, copy] }));
   };
 
@@ -729,14 +860,43 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
     );
   }
 
+  const handleStatusChange = (newStatus) => {
+    setCurrentQuote(prev => {
+      const q = { ...prev, status: newStatus };
+      if (newStatus !== 'Brouillon') {
+        // Freeze/Snapshot the items prices and formulas into the items
+        q.items = (q.items || []).map(item => {
+          try {
+            const pd = engine.calculatePrice(item.config);
+            return {
+              ...item,
+              unitPriceHT: pd?.priceHT || item.unitPriceHT,
+              unitPriceTTC: pd?.priceTTC || item.unitPriceTTC,
+              priceData: JSON.parse(JSON.stringify(pd)),
+              config: JSON.parse(JSON.stringify(item.config))
+            };
+          } catch(e) {
+            return item;
+          }
+        });
+      }
+      return q;
+    });
+  };
+
   const handleSaveGlobalQuote = () => {
     if (setDatabase) {
       const finalQuote = { ...quote, totals };
       setDatabase(prev => {
-        const exists = prev.quotes?.some(q => q.id === quote.id);
-        const quotes = exists 
-          ? (prev.quotes || []).map(q => q.id === quote.id ? finalQuote : q)
-          : [...(prev.quotes || []), finalQuote];
+        // Find if we are updating an existing quote (by original ID if known, or by number)
+        const existsById = prev.quotes?.some(q => q.id === quote.id);
+        
+        let quotes;
+        if (existsById) {
+          quotes = prev.quotes.map(q => q.id === quote.id ? finalQuote : q);
+        } else {
+          quotes = [...(prev.quotes || []), finalQuote];
+        }
         return { ...prev, quotes };
       });
       alert('Devis enregistré avec succès !');
@@ -1056,7 +1216,33 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
           )}
         </div>
         <div style={{ textAlign: 'right' }}>
-          <div style={{ fontWeight: 800, fontSize: '1.3rem', color: '#2563eb' }}>{quote.number}</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.5rem' }}>
+            <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>N° :</span>
+            <input 
+              value={quote.number || ''} 
+              onChange={e => setCurrentQuote(p => ({ ...p, number: e.target.value }))}
+              style={{ 
+                fontWeight: 800, fontSize: '1.3rem', color: '#2563eb', border: 'none', 
+                background: 'rgba(37, 99, 235, 0.05)', textAlign: 'right', width: '200px',
+                padding: '0.2rem 0.5rem', borderRadius: '0.4rem', outline: 'none'
+              }}
+            />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.4rem', marginBottom: '0.4rem' }}>
+            <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>Statut :</span>
+            <select 
+              value={quote.status || 'Brouillon'} 
+              onChange={e => handleStatusChange(e.target.value)}
+              style={{
+                padding: '0.2rem', borderRadius: '0.3rem', border: 'none', background: quote.status === 'Brouillon' || !quote.status ? '#fef3c7' : '#dcfce3', color: quote.status === 'Brouillon' || !quote.status ? '#d97706' : '#16a34a', fontSize: '0.8rem', fontWeight: 700, outline: 'none'
+              }}
+            >
+              <option value="Brouillon">Brouillon (Prix Live)</option>
+              <option value="Validé">Validé (Prix Figé)</option>
+              <option value="Envoyé">Envoyé (Prix Figé)</option>
+              <option value="Confirmé">Confirmé (Prix Figé)</option>
+            </select>
+          </div>
           <div style={{ fontSize: '0.78rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.3rem', justifyContent: 'flex-end' }}>
             <Calendar size={12} /> {new Date(quote.createdAt || Date.now()).toLocaleDateString('fr-FR')}
           </div>
@@ -1120,7 +1306,14 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
                   {(quote.items || []).map((item) => {
                     const comp = database.compositions?.find(c => c.id === item.config?.compositionId);
                     const color = database.colors?.find(c => c.id === item.config?.colorId);
-                    const totalHT = (item.unitPriceHT || 0) * (item.qty || 1);
+                    let effectivePriceHT = item.unitPriceHT || 0;
+                    if (!quote.status || quote.status === 'Brouillon') {
+                      try {
+                        const pd = engine.calculatePrice(item.config);
+                        if (pd && pd.priceHT) effectivePriceHT = pd.priceHT;
+                      } catch(e) {}
+                    }
+                    const totalHT = effectivePriceHT * (item.qty || 1);
                     return (
                       <tr key={item.id}>
                         <td style={{ fontWeight: 600 }}>
@@ -1136,7 +1329,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
                             onChange={e => handleQtyChange(item.id, e.target.value)}
                             style={{ width: '60px', padding: '0.3rem 0.5rem', border: '1px solid #e2e8f0', borderRadius: '0.4rem', textAlign: 'center', fontWeight: 700 }} />
                         </td>
-                        <td style={{ fontWeight: 600 }}>{(item.unitPriceHT || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
+                        <td style={{ fontWeight: 600 }}>{effectivePriceHT.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
                         <td style={{ fontWeight: 700, color: '#2563eb' }}>{totalHT.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
                         <td>
                           <div style={{ display: 'flex', gap: '0.3rem' }}>

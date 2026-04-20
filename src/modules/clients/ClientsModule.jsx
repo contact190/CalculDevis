@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Users, Plus, Edit2, Trash2, FileText, ChevronDown, ChevronUp } from 'lucide-react';
+import { Users, Plus, Edit2, Trash2, FileText, ChevronDown, ChevronUp, CheckCircle } from 'lucide-react';
 
 const ClientsModule = ({ data, setData, onOpenQuote }) => {
   const [editingClient, setEditingClient] = useState(null);
@@ -26,6 +26,36 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
       ...prev,
       clients: prev.clients.map(c => c.id === updated.id ? updated : c)
     }));
+  };
+
+  const handleConvertToOrder = (quote) => {
+    if (!window.confirm(`Voulez-vous transformer le devis ${quote.number} en commande active ?`)) return;
+    
+    const newOrder = {
+      id: `ORD-${quote.number.split('-')[1] || Date.now().toString().slice(-4)}`,
+      quoteId: quote.id,
+      quoteNumber: quote.number,
+      clientId: quote.clientId,
+      createdAt: new Date().toISOString(),
+      status: 'Métré à confirmer',
+      items: ((quote.items || quote.products) || []).map(item => ({
+        ...item,
+        siteMeasurements: [] // This will store { L, H, qty } entered on site
+      }))
+    };
+
+    setData(prev => {
+      // Check if order already exists
+      if (prev.orders?.some(o => o.quoteId === quote.id)) {
+        alert("Une commande existe déjà pour ce devis.");
+        return prev;
+      }
+      return {
+        ...prev,
+        orders: [...(prev.orders || []), newOrder]
+      };
+    });
+    alert(`Commande créée avec succès ! Retrouvez-la dans l'onglet "Commandes".`);
   };
 
   const handleDeleteClient = (id) => {
@@ -135,9 +165,14 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
                     <td style={{ fontWeight: 600 }}>{q.totals?.ht?.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
                     <td style={{ fontWeight: 700 }}>{q.totals?.ttc?.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
                     <td style={{ textAlign: 'center' }}>
-                      <button onClick={() => { if(onOpenQuote) onOpenQuote(q); }} className="btn btn-primary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}>
-                        Ouvrir
-                      </button>
+                      <div style={{ display: 'flex', gap: '0.4rem' }}>
+                        <button onClick={() => { if(onOpenQuote) onOpenQuote(q); }} className="btn" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', color: '#2563eb', borderColor: '#2563eb' }}>
+                          Ouvrir
+                        </button>
+                        <button onClick={() => handleConvertToOrder(q)} className="btn btn-primary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', background: '#10b981' }} title="Transformer en Commande">
+                          <CheckCircle size={14} /> Commande
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -221,9 +256,14 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
                                   <td style={{ fontWeight: 600 }}>{q.totals?.ht?.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
                                   <td style={{ fontWeight: 700 }}>{q.totals?.ttc?.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
                                   <td style={{ textAlign: 'center' }}>
-                                    <button onClick={() => { if(onOpenQuote) onOpenQuote(q); }} className="btn btn-primary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}>
-                                      Charger le devis
-                                    </button>
+                                    <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'center' }}>
+                                      <button onClick={() => { if(onOpenQuote) onOpenQuote(q); }} className="btn" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', color: '#2563eb', borderColor: '#2563eb' }}>
+                                        Détails
+                                      </button>
+                                      <button onClick={() => handleConvertToOrder(q)} className="btn btn-primary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', background: '#10b981' }}>
+                                        Rendre Commande
+                                      </button>
+                                    </div>
                                   </td>
                                 </tr>
                               ))}

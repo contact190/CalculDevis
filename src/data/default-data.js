@@ -18,13 +18,16 @@ export const DEFAULT_DATA = {
     { id: 'CAT-PF', name: 'Porte-Fenêtre' }
   ],
   ranges: [
-    { id: 'H36', name: 'Coulissant H36', minL: 500, maxL: 3000, minH: 500, maxH: 2500 },
-    { id: 'H48', name: 'Battant H48', minL: 400, maxL: 2400, minH: 400, maxH: 2400 },
+    { id: 'H36-2V', name: 'Fenêtre Coulissante H36 (2 Vantaux)', minL: 400, maxL: 4000, minH: 400, maxH: 2400 },
+    { id: 'H36-3V', name: 'Fenêtre Coulissante H36 (3 Vantaux)', minL: 600, maxL: 6000, minH: 400, maxH: 2400 },
+    { id: 'H40-1V', name: 'Fenêtre Battant H40 (1 Vantail)', minL: 350, maxL: 1500, minH: 350, maxH: 2200 },
+    { id: 'H40-2V', name: 'Fenêtre Battant H40 (2 Vantaux)', minL: 700, maxL: 2500, minH: 350, maxH: 2200 },
+    { id: 'H48', name: 'Gamme H48 (Standard)', minL: 400, maxL: 3000, minH: 400, maxH: 2200 },
   ],
   profiles: [
     { 
       id: 'P101', name: 'Dormant H36', 
-      rangeId: 'H36', 
+      rangeIds: ['H36-2V', 'H36-3V'], 
       weightPerM: 1.25, pricePerKg: 4.5, 
       barLength: 6000, 
       colors: ['RAL9016', 'RAL7016', 'BOIS'],
@@ -32,12 +35,54 @@ export const DEFAULT_DATA = {
     },
     { 
       id: 'P102', name: 'Ouvrant H36', 
-      rangeId: 'H36', 
+      rangeIds: ['H36-2V', 'H36-3V'], 
       weightPerM: 1.10, pricePerKg: 4.5, 
       barLength: 6000, 
       colors: ['RAL9016', 'RAL7016'],
       type: 'ALU' 
-    }
+    },
+    { 
+      id: '2BF40-14025', name: 'Dormant H40', 
+      rangeIds: ['H40-1V', 'H40-2V'], 
+      weightPerM: 1.35, pricePerKg: 0, 
+      barLength: 6000, 
+      type: 'ALU' 
+    },
+    { 
+      id: '2BF40-34042', name: 'Ouvrant H40', 
+      rangeIds: ['H40-1V', 'H40-2V'], 
+      weightPerM: 1.25, pricePerKg: 0, 
+      barLength: 6000, 
+      type: 'ALU' 
+    },
+    { 
+      id: 'P-3.02', name: 'Parclose H40', 
+      rangeIds: ['H40-1V', 'H40-2V'], 
+      weightPerM: 0.35, pricePerKg: 0, 
+      barLength: 6000, 
+      type: 'ALU' 
+    },
+    { 
+      id: '2BF40-34037', name: 'Battement central H40', 
+      rangeIds: ['H40-2V'], 
+      weightPerM: 0.95, pricePerKg: 0, 
+      barLength: 6000, 
+      type: 'ALU' 
+    },
+    { 
+      id: '20000-30261', name: 'Profilé Finition H40', 
+      rangeIds: ['H40-2V'], 
+      weightPerM: 0.45, pricePerKg: 0, 
+      barLength: 6000, 
+      type: 'ALU' 
+    },
+    { id: '2CF36-14540', name: 'Dormant H36', rangeIds: ['H36-2V', 'H36-3V'], weightPerM: 1.25, pricePerKg: 0, barLength: 6000, type: 'ALU' },
+    { id: '2CF36-14440', name: 'Dormant 3 rails H36', rangeIds: ['H36-3V'], weightPerM: 1.85, pricePerKg: 0, barLength: 6000, type: 'ALU' },
+    { id: '2CF36-11207', name: 'Traverse/Chicane H36', rangeIds: ['H36-2V', 'H36-3V'], weightPerM: 0.85, pricePerKg: 0, barLength: 6000, type: 'ALU' },
+    { id: '2CF36-35833', name: 'Ouvrant H36', rangeIds: ['H36-2V', 'H36-3V'], weightPerM: 1.15, pricePerKg: 0, barLength: 6000, type: 'ALU' },
+    { id: '2CF36-37037', name: 'Chicane Interne H36', rangeIds: ['H36-2V', 'H36-3V'], weightPerM: 0.95, pricePerKg: 0, barLength: 6000, type: 'ALU' },
+    { id: '2CF36-34037', name: 'Montant Chicane H36', rangeIds: ['H36-2V', 'H36-3V'], weightPerM: 0.90, pricePerKg: 0, barLength: 6000, type: 'ALU' },
+    { id: '2CF36-31200', name: 'Pare-tempête H36', rangeIds: ['H36-3V'], weightPerM: 0.25, pricePerKg: 0, barLength: 6000, type: 'ALU' }
   ],
   glass: [
     { 
@@ -60,21 +105,47 @@ export const DEFAULT_DATA = {
     },
   ],
   accessories: [
-    { id: 'ACC01', name: 'Kit Galet H36', unit: 'Kit', price: 12.50, rangeId: 'H36' },
-    { id: 'ACC02', name: 'Poignée standard', unit: 'Unité', price: 8.90, rangeId: 'H36' },
-    { id: 'JNT01', name: 'Joint vitrage 3mm', unit: 'Joint', price: 0.85, rangeId: 'H36' },
-    { id: 'JNT02', name: 'Joint vitrage 4mm', unit: 'Joint', price: 0.95, rangeId: 'H36' },
-    { id: 'JNT03', name: 'Joint vitrage 5mm', unit: 'Joint', price: 1.10, rangeId: 'H36' },
+    { id: 'ACC01', name: 'Kit Galet H36', unit: 'Kit', price: 12.50, rangeIds: ['H36-2V', 'H36-3V'] },
+    { id: 'ACC02', name: 'Poignée standard', unit: 'Unité', price: 8.90, rangeIds: ['H36-2V', 'H36-3V'] },
+    { id: 'JNT01', name: 'Joint vitrage 3mm', unit: 'Joint', price: 0.85, rangeIds: ['H36-2V', 'H36-3V', 'H40-1V', 'H40-2V'] },
+    { id: 'JNT02', name: 'Joint vitrage 4mm', unit: 'Joint', price: 0.95, rangeIds: ['H36-2V', 'H36-3V', 'H40-1V', 'H40-2V'] },
+    { id: 'JNT03', name: 'Joint vitrage 5mm', unit: 'Joint', price: 1.10, rangeIds: ['H36-2V', 'H36-3V', 'H40-1V', 'H40-2V'] },
+    { id: '40000-22711', name: 'Équerre d\'assemblage', unit: 'Unité', price: 0, rangeIds: ['H40-1V', 'H40-2V'] },
+    { id: '40000-21015', name: 'Équerre d\'alignement', unit: 'Unité', price: 0, rangeIds: ['H40-1V', 'H40-2V'] },
+    { id: '6XXXX-61010', name: 'Bouchon rejet d\'eau', unit: 'Unité', price: 0, rangeIds: ['H40-1V', 'H40-2V'] },
+    { id: 'BC-H36', name: 'Bouchon rejet d\'eau H36', unit: 'Unité', price: 0, rangeIds: ['H36-2V', 'H36-3V'] },
+    { id: '6CXXX-27070', name: 'Joint brosse', unit: 'ML', price: 0, rangeIds: ['H36-2V', 'H36-3V'] },
+    { id: '40034', name: 'Joint vitrage (3-4mm)', unit: 'Joint', price: 0, rangeIds: ['H36-2V', 'H36-3V'] },
+    { id: '40023', name: 'Joint vitrage (2-3mm)', unit: 'Joint', price: 0, rangeIds: ['H36-2V', 'H36-3V'] },
+    { id: '40056', name: 'Joint vitrage (5-6mm)', unit: 'Joint', price: 0, rangeIds: ['H36-2V', 'H36-3V'] },
+    { id: '40079', name: 'Joint vitrage (7-9mm)', unit: 'Joint', price: 0, rangeIds: ['H36-2V', 'H36-3V'] },
+    { id: 'ROULETTE', name: 'Roulette H36', unit: 'Unité', price: 0, rangeIds: ['H36-2V', 'H36-3V'] },
+    { id: '6CF36-60010', name: 'Pièce étanchéité centrale', unit: 'Unité', price: 0, rangeIds: ['H36-2V', 'H36-3V'] },
+    { id: '6CF36-61010', name: 'Base étanchéité ouvrant latéral', unit: 'Unité', price: 0, rangeIds: ['H36-2V', 'H36-3V'] },
+    { id: '6CF36-61110', name: 'Base étanchéité ouvrant central', unit: 'Unité', price: 0, rangeIds: ['H36-2V', 'H36-3V'] },
+    { id: ' mekanisme-MP', name: 'Mécanisme transmission MP', unit: 'Unité', price: 0, rangeIds: ['H36-2V', 'H36-3V'] },
+    { id: ' poignee-droite', name: 'Poignée coudée Droite', unit: 'Unité', price: 0, rangeIds: ['H36-2V', 'H36-3V'] },
+    { id: ' poignee-gauche', name: 'Poignée coudée Gauche', unit: 'Unité', price: 0, rangeIds: ['H36-2V', 'H36-3V'] },
+    { id: '8BXXX-22110', name: 'Kit fermeture 1 vantail', unit: 'Unité', price: 0, rangeIds: ['H40-1V'] },
+    { id: '8BXXX-22120', name: 'Kit fermeture 2 vantaux', unit: 'Unité', price: 0, rangeIds: ['H40-2V'] },
+    { id: '6BF40-60010', name: 'Bouchon battement central', unit: 'Unité', price: 0, rangeIds: ['H40-2V'] },
+    { id: 'PAUMELLE', name: 'Paumelle deux corps', unit: 'Unité', price: 0, rangeIds: ['H40-1V', 'H40-2V'] },
+    { id: 'CREMONE', name: 'Crémone battant', unit: 'Unité', price: 0, rangeIds: ['H40-1V', 'H40-2V'] },
   ],
   gasketCompatibility: [
-    { rangeId: 'H36', glassThickness: 4, gasketId: 'JNT03', formula: '(L+H)*2' },
-    { rangeId: 'H36', glassThickness: 24, gasketId: 'JNT02', formula: '(L+H)*2' },
-    { rangeId: 'H48', glassThickness: 4, gasketId: 'JNT03', formula: '(L+H)*2' },
-    { rangeId: 'H48', glassThickness: 24, gasketId: 'JNT01', formula: '(L+H)*2' },
+    { rangeId: 'H36-2V', glassThickness: 4, gasketId: '40034', formula: '(L+H)*2' },
+    { rangeId: 'H36-2V', glassThickness: 24, gasketId: '40023', formula: '(L+H)*2' },
+    { rangeId: 'H36-3V', glassThickness: 4, gasketId: '40034', formula: '(L+H)*2' },
+    { rangeId: 'H36-3V', glassThickness: 24, gasketId: '40023', formula: '(L+H)*2' },
+    { rangeId: 'H40-1V', glassThickness: 4, gasketId: 'JNT01', formula: '(L+H)*2' },
+    { rangeId: 'H40-2V', glassThickness: 4, gasketId: 'JNT01', formula: '(L+H)*2' },
   ],
-  glassProfileCompatibility: [],
+  glassProfileCompatibility: [
+    { rangeId: 'H40-1V', glassThickness: 4, profileHId: 'P-3.02', qtyH: 2, formulaH: 'L-123', profileVId: 'P-3.02', qtyV: 2, formulaV: 'H-162' },
+    { rangeId: 'H40-2V', glassThickness: 4, profileHId: 'P-3.02', qtyH: 2, formulaH: 'L-123', profileVId: 'P-3.02', qtyV: 2, formulaV: 'H-162' },
+  ],
   options: [
-    { id: 'OPT-MOTEUR', name: 'Motorisation Filaire', rangeId: 'H36', addAccessoryId: 'P101', removeAccessoryId: '', formula: '1' }
+    { id: 'OPT-MOTEUR', name: 'Motorisation Filaire', rangeIds: ['H36-2V', 'H36-3V'], addAccessoryId: 'P101', removeAccessoryId: '', formula: '1' }
   ],
   traverses: [
     { id: 'TRV-F-H',  name: 'Traverse Fenêtre H',     type: 'horizontale', usage: 'fenetre',  profileId: '',  formula: 'L', priceUnit: 'ML' },
@@ -136,7 +207,7 @@ export const DEFAULT_DATA = {
     {
       id: 'COUL-H36',
       name: 'Fenêtre Coulissante H36 (Standard)',
-      rangeId: 'H36',
+      rangeId: 'H36-2V',
       categoryId: 'CAT-F',
       openingType: 'Coulissant',
       hasGasket: true,
@@ -153,6 +224,109 @@ export const DEFAULT_DATA = {
         { type: 'profile', id: 'P102', label: 'Ouvrant Bas', formula: '(L-40)/2', qty: 2 },
         { type: 'accessory', id: 'ACC01', label: 'Kit Roulettes', formula: '1', qty: 2 },
         { type: 'accessory', id: 'ACC02', label: 'Poignée', formula: '1', qty: 1 },
+      ]
+    },
+    {
+      id: 'H40-BATT-1V',
+      name: 'Fenêtre Battant H40 (1 Vantail)',
+      rangeId: 'H40-1V',
+      categoryId: 'CAT-F',
+      openingType: 'Battant',
+      hasGasket: false,
+      glassFormulaL: 'L-137',
+      glassFormulaH: 'H-137',
+      elements: [
+        { type: 'profile', id: '2BF40-14025', label: 'Dormant (L)', formula: 'L', qty: 2 },
+        { type: 'profile', id: '2BF40-14025', label: 'Dormant (H)', formula: 'H', qty: 2 },
+        { type: 'profile', id: '2BF40-34042', label: 'Ouvrant (L)', formula: 'L-39', qty: 2 },
+        { type: 'profile', id: '2BF40-34042', label: 'Ouvrant (H)', formula: 'H-39', qty: 2 },
+        { type: 'accessory', id: '40000-22711', label: 'Équerre d\'assemblage', formula: '1', qty: 8 },
+        { type: 'accessory', id: '40000-21015', label: 'Équerre d\'alignement', formula: '1', qty: 4 },
+        { type: 'accessory', id: 'BC-H36', label: 'Bouchon rejet d\'eau', formula: '1', qty: 2 },
+        { type: 'accessory', id: 'PAUMELLE', label: 'Paumelles', formula: '1', qty: 2 },
+        { type: 'accessory', id: 'CREMONE', label: 'Crémone battant', formula: '1', qty: 1 },
+        { type: 'accessory', id: '8BXXX-22110', label: 'Kit fermeture', formula: '1', qty: 1 }
+      ]
+    },
+    {
+      id: 'H40-BATT-2V',
+      name: 'Fenêtre Battant H40 (2 Vantaux)',
+      rangeId: 'H40-2V',
+      categoryId: 'CAT-F',
+      openingType: 'Battant',
+      hasGasket: false,
+      glassFormulaL: '(L-242)/2',
+      glassFormulaH: 'H-137',
+      glassFormulaQty: '2',
+      elements: [
+        { type: 'profile', id: '2BF40-14025', label: 'Dormant (L)', formula: 'L', qty: 2 },
+        { type: 'profile', id: '2BF40-14025', label: 'Dormant (H)', formula: 'H', qty: 2 },
+        { type: 'profile', id: '2BF40-34042', label: 'Ouvrant (L)', formula: '(L-45)/2', qty: 4 },
+        { type: 'profile', id: '2BF40-34042', label: 'Ouvrant (H)', formula: 'H-39', qty: 4 },
+        { type: 'profile', id: '2BF40-34037', label: 'Battement central', formula: 'H-100', qty: 1 },
+        { type: 'profile', id: '20000-30261', label: 'Profilé Finition', formula: 'H', qty: 1 },
+        { type: 'accessory', id: '40000-22711', label: 'Équerre d\'assemblage', formula: '1', qty: 12 },
+        { type: 'accessory', id: '40000-21015', label: 'Équerre d\'alignement', formula: '1', qty: 8 },
+        { type: 'accessory', id: 'BC-H36', label: 'Bouchon rejet d\'eau', formula: '1', qty: 4 },
+        { type: 'accessory', id: '6BF40-60010', label: 'Bouchon battement central', formula: '1', qty: 1 },
+        { type: 'accessory', id: 'PAUMELLE', label: 'Paumelles', formula: '1', qty: 4 },
+        { type: 'accessory', id: 'CREMONE', label: 'Crémone battant', formula: '1', qty: 1 },
+        { type: 'accessory', id: '8BXXX-22120', label: 'Kit fermeture 2V', formula: '1', qty: 1 }
+      ]
+    },
+    {
+      id: 'H36-COUL-2V',
+      name: 'Fenêtre Coulissante H36 (2 Vantaux)',
+      rangeId: 'H36-2V',
+      categoryId: 'CAT-F',
+      openingType: 'Coulissant',
+      hasGasket: true,
+      glassFormulaL: '(L-194)/2',
+      glassFormulaH: 'H-154',
+      glassFormulaQty: '2',
+      elements: [
+        { type: 'profile', id: '2CF36-14540', label: 'Dormant (L)', formula: 'L', qty: 2 },
+        { type: 'profile', id: '2CF36-14540', label: 'Dormant (H)', formula: 'H', qty: 2 },
+        { type: 'profile', id: '2CF36-11207', label: 'Traverse', formula: 'L-80.5', qty: 2 },
+        { type: 'profile', id: '2CF36-35833', label: 'Ouvrant (L)', formula: '(L-179)/2', qty: 4 },
+        { type: 'profile', id: '2CF36-37037', label: 'Chicane Interne', formula: 'H-66', qty: 2 },
+        { type: 'profile', id: '2CF36-34037', label: 'Montant Chicane', formula: 'H-66', qty: 2 },
+        { type: 'accessory', id: '6CXXX-27070', label: 'Joint Brosse', formula: '4*L+6*H', qty: 1 },
+        { type: 'accessory', id: 'ROULETTE', label: 'Roulettes', formula: '4', qty: 1 },
+        { type: 'accessory', id: ' poignee-droite', label: 'Poignée', formula: '1', qty: 1 }
+      ]
+    },
+    {
+      id: 'H36-COUL-3V',
+      name: 'Fenêtre Coulissante H36 (3 Vantaux)',
+      rangeId: 'H36-3V',
+      categoryId: 'CAT-F',
+      openingType: 'Coulissant',
+      hasGasket: true,
+      glassFormulaL: '(L-218)/3',
+      glassFormulaH: 'H-157',
+      glassFormulaQty: '3',
+      elements: [
+        { type: 'profile', id: '2CF36-14540', label: 'Dormant (L)', formula: 'L', qty: 2 },
+        { type: 'profile', id: '2CF36-14540', label: 'Dormant (H)', formula: 'H', qty: 2 },
+        { type: 'profile', id: '2CF36-14440', label: 'Dormant 3 rails', formula: 'L', qty: 2 },
+        { type: 'profile', id: '2CF36-11207', label: 'Traverse', formula: 'L-80.5', qty: 3 },
+        { type: 'profile', id: '2CF36-35833', label: 'Ouvrant (L)', formula: '(L-186)/3', qty: 6 },
+        { type: 'profile', id: '2CF36-37037', label: 'Chicane Interne', formula: 'H-66', qty: 2 },
+        { type: 'profile', id: '2CF36-34037', label: 'Montant Chicane', formula: 'H-66', qty: 4 },
+        { type: 'profile', id: '2CF36-31200', label: 'Pare-tempête (L)', formula: '(L-244)/3', qty: 6 },
+        { type: 'profile', id: '2CF36-31200', label: 'Pare-tempête (H)', formula: 'H-149', qty: 6 },
+        { type: 'accessory', id: 'ROULETTE', label: 'Roulettes', formula: '6', qty: 1 }
+      ]
+    }
+  ],
+  quotes: [
+    {
+      id: 'D001',
+      clientName: 'EXEMPLE - Projet H36',
+      items: [
+        { id: 'I1', compId: 'H36-COUL-2V', compName: 'H36 2 vanteaux', width: 1800, height: 1200, rangeId: 'H36-2V' },
+        { id: 'I2', compId: 'H40-BATT-2V', compName: 'H40 Battant', width: 1400, height: 1350, rangeId: 'H40-2V' }
       ]
     }
   ],

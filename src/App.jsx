@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
-import { Home, Package, Settings, FileText, ChevronRight, Menu, LogOut, LayoutDashboard, Users, RefreshCw } from 'lucide-react';
+import { Home, Package, Settings, FileText, ChevronRight, Menu, LogOut, LayoutDashboard, Users, RefreshCw, ShoppingBag, ClipboardList, Rotate3D } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import CommercialModule from './modules/commercial/CommercialModule';
 import ProductionModule from './modules/production/ProductionModule';
 import AdminDashboard from './modules/admin/AdminDashboard';
 import ClientsModule from './modules/clients/ClientsModule';
+import OrdersModule from './modules/orders/OrdersModule';
+import TechnicalViewerModule from './modules/viewer/TechnicalViewerModule';
 import { DEFAULT_DATA } from './data/default-data';
 import { syncDatabase } from './utils/supabaseClient';
 
@@ -34,8 +37,8 @@ const makeNewQuote = (settings) => ({
 
 function App() {
   const [activeTab, setActiveTab] = useState('commercial');
-  const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState(null);
+  const queryClient = useQueryClient();
   
   const [database, setDatabase] = useState(DEFAULT_DATA);
 
@@ -139,7 +142,26 @@ function App() {
         if (item.qtyV === undefined) item.qtyV = 2;
         return item;
       });
+      // Legacy ID migration
+      repaired.compositions = (repaired.compositions || []).map(c => {
+        if (c.rangeId === 'H36') c.rangeId = 'H36-2V';
+        if (c.rangeId === 'H40') c.rangeId = 'H40-1V';
+        return c;
+      });
     }
+
+    // Merge missing Profiles, Accessories, Compositions
+    ['ranges', 'profiles', 'accessories', 'compositions'].forEach(key => {
+      if (DEFAULT_DATA[key]) {
+        DEFAULT_DATA[key].forEach(defaultItem => {
+          const exists = repaired[key]?.some(item => item.id === defaultItem.id);
+          if (!exists) {
+            if (!repaired[key]) repaired[key] = [];
+            repaired[key].push(defaultItem);
+          }
+        });
+      }
+    });
 
     // Repair Shutter Components (Caissons)
     if (repaired.shutterComponents) {
@@ -186,16 +208,18 @@ function App() {
       });
       repaired.shutterComponents.glissieres = currentG;
 
-      // MISSION CRITICAL: Migrate existing product glissiereIds in all quotes
+      // MISSION CRITICAL: Migrate existing products to items and handle glissiereIds
       if (repaired.quotes) {
         repaired.quotes.forEach(q => {
-          (q.products || []).forEach(p => {
-            if (p.config?.shutterConfig?.glissiereId) {
-              const oldId = p.config.shutterConfig.glissiereId;
+          // Unify products -> items
+          if (q.products && !q.items) q.items = q.products;
+          
+          (q.items || []).forEach(item => {
+            if (item.config?.shutterConfig?.glissiereId) {
+              const oldId = item.config.shutterConfig.glissiereId;
               if (oldId.includes('-H36') || oldId.includes('-H48')) {
-                // Map "GLI-INVDC-H36" -> "GLI-INVDC"
                 const newId = oldId.replace('-H36', '').replace('-H48', '');
-                p.config.shutterConfig.glissiereId = newId;
+                item.config.shutterConfig.glissiereId = newId;
               }
             }
           });
@@ -203,45 +227,61 @@ function App() {
       }
     }
 
+    if (!repaired.orders) repaired.orders = [];
     return repaired;
   };
 
-  // 1. Initial Cloud Sync (on Mount)
-  React.useEffect(() => {
-    const initDB = async () => {
-      setIsSyncing(true);
+  // 1. Initial Cloud Sync via React Query (Offline-first)
+  const { data: cloudDb, isLoading: isInitialLoading } = useQuery({
+    queryKey: ['database'],
+    queryFn: async () => {
       const cloudData = await syncDatabase.load();
       if (cloudData) {
-        setDatabase(repairDatabase(cloudData));
-        setLastSyncTime(new Date());
+        return repairDatabase(cloudData);
       } else {
-        // Fallback to local if cloud is empty/fails
-        const saved = localStorage.getItem('calculDevisDB');
-        if (saved) {
+        const savedMain = localStorage.getItem('calculDevisDB');
+        const savedQuotes = localStorage.getItem('calculDevisQuotes');
+        if (savedMain) {
            try { 
-             setDatabase(repairDatabase(JSON.parse(saved))); 
-           } catch(e) { 
-             setDatabase(DEFAULT_DATA); 
-           }
+             const parsedMain = JSON.parse(savedMain);
+             if (savedQuotes) parsedMain.quotes = JSON.parse(savedQuotes);
+             return repairDatabase(parsedMain); 
+           } catch(e) {}
         }
       }
-      setIsSyncing(false);
-    };
-    initDB();
-  }, []);
+      return DEFAULT_DATA;
+    },
+    staleTime: 5 * 60 * 1000,
+    networkMode: 'offlineFirst',
+  });
 
-  // 2. Continuous Cloud Sync (on DB change)
   React.useEffect(() => {
-    if (database === DEFAULT_DATA) return; // Wait for initial load
-    
-    localStorage.setItem('calculDevisDB', JSON.stringify(database));
+    if (cloudDb && database === DEFAULT_DATA) {
+      setDatabase(cloudDb);
+      setLastSyncTime(new Date());
+    }
+  }, [cloudDb]);
+
+  // 2. Mutation to Continuous Cloud Sync
+  const syncMutation = useMutation({
+    mutationFn: async (db) => {
+      const { quotes, ...mainDb } = db;
+      localStorage.setItem('calculDevisDB', JSON.stringify(mainDb));
+      localStorage.setItem('calculDevisQuotes', JSON.stringify(quotes || []));
+      return await syncDatabase.save({ mainDb, quotes });
+    },
+    onSuccess: (ok) => {
+      if (ok) setLastSyncTime(new Date());
+    },
+    networkMode: 'offlineFirst',
+  });
+
+  React.useEffect(() => {
+    if (database === DEFAULT_DATA) return;
     
     // Auto-save to Cloud (debounced-ish via useEffect)
-    const timeout = setTimeout(async () => {
-      setIsSyncing(true);
-      const ok = await syncDatabase.save(database);
-      if (ok) setLastSyncTime(new Date());
-      setIsSyncing(false);
+    const timeout = setTimeout(() => {
+      syncMutation.mutate(database);
     }, 2000);
 
     return () => clearTimeout(timeout);
@@ -266,7 +306,9 @@ function App() {
 
   const menuItems = [
     { id: 'commercial', label: 'Commercial', icon: LayoutDashboard },
+    { id: 'orders', label: 'Commandes', icon: ShoppingBag },
     { id: 'production', label: 'Atelier / Production', icon: Package },
+    { id: 'viewer', label: 'Technique 2D/3D', icon: Rotate3D },
     { id: 'clients', label: 'Clients', icon: Users },
     { id: 'admin', label: 'Administration', icon: Settings },
   ];
@@ -322,10 +364,10 @@ function App() {
 
         <div style={{ marginTop: 'auto', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '1rem', paddingBottom: '1rem' }}>
            <div style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.75rem', borderRadius: '0.5rem', background: 'rgba(255,255,255,0.03)' }}>
-              <RefreshCw size={14} className={isSyncing ? "animate-spin" : ""} style={{ color: isSyncing ? '#3b82f6' : '#94a3b8' }} />
+              <RefreshCw size={14} className={syncMutation.isPending || isInitialLoading ? "animate-spin" : ""} style={{ color: (syncMutation.isPending || isInitialLoading) ? '#3b82f6' : '#94a3b8' }} />
               <div>
-                <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 600, color: isSyncing ? '#3b82f6' : '#94a3b8' }}>
-                  {isSyncing ? 'Synchronisation...' : 'Cloud Sync OK'}
+                <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 600, color: (syncMutation.isPending || isInitialLoading) ? '#3b82f6' : '#94a3b8' }}>
+                  {isInitialLoading ? 'Chargement...' : (syncMutation.isPending ? 'Synchronisation...' : 'Cloud Sync OK')}
                 </p>
                 {lastSyncTime && (
                   <p style={{ margin: 0, fontSize: '0.65rem', color: '#64748b' }}>
@@ -372,6 +414,7 @@ function App() {
             currentConfig={currentConfig} 
             currentQuote={currentQuote}
             database={database}
+            setData={setDatabase}
           />
         )}
         {activeTab === 'clients' && (
@@ -383,6 +426,20 @@ function App() {
               setActiveTab('commercial');
             }}
           />
+        )}
+        {activeTab === 'orders' && (
+          <OrdersModule 
+            data={database}
+            setData={setDatabase}
+            quoteSettings={quoteSettings}
+            setQuoteSettings={(settings) => {
+              setQuoteSettings(settings);
+              localStorage.setItem('quoteSettings', JSON.stringify(settings));
+            }}
+          />
+        )}
+        {activeTab === 'viewer' && (
+          <TechnicalViewerModule data={database} />
         )}
         {activeTab === 'admin' && (
           <AdminDashboard 

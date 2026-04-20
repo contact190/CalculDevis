@@ -28,20 +28,34 @@ export const supabaseFetch = async (endpoint, options = {}) => {
 export const syncDatabase = {
   async load() {
     try {
-      const data = await supabaseFetch('app_state?id=eq.main-db', { method: 'GET' });
-      return data && data.length > 0 ? data[0].data : null;
+      const [mainRes, quotesRes] = await Promise.all([
+         supabaseFetch('app_state?id=eq.main-db', { method: 'GET' }),
+         supabaseFetch('app_state?id=eq.quotes-db', { method: 'GET' })
+      ]);
+      const mainData = mainRes && mainRes.length > 0 ? mainRes[0].data : null;
+      if (mainData && quotesRes && quotesRes.length > 0) {
+         mainData.quotes = quotesRes[0].data || [];
+      }
+      return mainData;
     } catch (e) {
       console.error("Failed to load from Supabase:", e);
       return null;
     }
   },
-  async save(dbData) {
+  async save({ mainDb, quotes }) {
     try {
-      await supabaseFetch('app_state', {
-        method: 'POST',
-        headers: { 'Prefer': 'resolution=merge-duplicates' },
-        body: JSON.stringify({ id: 'main-db', data: dbData, updated_at: new Date().toISOString() })
-      });
+      await Promise.all([
+        supabaseFetch('app_state', {
+          method: 'POST',
+          headers: { 'Prefer': 'resolution=merge-duplicates' },
+          body: JSON.stringify({ id: 'main-db', data: mainDb, updated_at: new Date().toISOString() })
+        }),
+        supabaseFetch('app_state', {
+          method: 'POST',
+          headers: { 'Prefer': 'resolution=merge-duplicates' },
+          body: JSON.stringify({ id: 'quotes-db', data: quotes || [], updated_at: new Date().toISOString() })
+        })
+      ]);
       return true;
     } catch (e) {
       console.error("Failed to save to Supabase:", e);
