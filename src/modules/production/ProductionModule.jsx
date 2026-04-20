@@ -795,13 +795,6 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         const requestedCompoIds = new Set();
         const missingCompoIds = new Set();
 
-        const globalCuts = []; 
-        let itemsWithConfig = 0;
-        let bomsCalculated = 0;
-        let totalPiecesInBoms = 0;
-        const requestedCompoIds = new Set();
-        const missingCompoIds = new Set();
-
         const isOrder = database.orders?.some(o => o.id === activeQuote?.id);
         const batches = isOrder ? (activeQuote?.batches || []) : [];
         
