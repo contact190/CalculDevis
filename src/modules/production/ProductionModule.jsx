@@ -496,42 +496,44 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
               <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Liste de Débit Profilés {productFilter !== 'total' && `- ${(quoteItems.find(i=>i.id===productFilter)?.label)}`}</h2>
             </div>
 
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Repère</th>
-                  <th>Désignation</th>
-                  <th>Qté</th>
-                  <th>Longueur</th>
-                  <th>Angles</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {bom.profiles.map((p, i) => (
-                  <tr key={i}>
-                    <td style={{ fontWeight: 600 }}>{p.label}</td>
-                    <td style={{ fontSize: '0.875rem', color: '#64748b' }}>{p.name}</td>
-                    <td>{p.qty}</td>
-                    <td style={{ color: '#2563eb', fontWeight: 700 }}>{Math.round(p.length)} mm</td>
-                    <td>
-                      <div style={{ display: 'flex', gap: '0.4rem' }}>
-                        <span style={{ fontSize: '0.75rem', background: '#f1f5f9', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>{p.cutAngle || 45}°</span>
-                        <span style={{ fontSize: '0.75rem', background: '#f1f5f9', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>{p.cutAngle || 45}°</span>
-                      </div>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                        <QRCodeSVG value={`OF-${currentConfig.compositionId}-P${i}-${p.length}mm`} size={24} level="L" />
-                        <button className="btn btn-secondary" style={{ padding: '0.4rem' }} title="Code-Barre Détail">
-                          <Barcode size={16} />
-                        </button>
-                      </div>
-                    </td>
+            <div className="table-responsive">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Repère</th>
+                    <th>Désignation</th>
+                    <th>Qté</th>
+                    <th>Longueur</th>
+                    <th>Angles</th>
+                    <th>Action</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {bom.profiles.map((p, i) => (
+                    <tr key={i}>
+                      <td data-label="Repère" style={{ fontWeight: 600 }}>{p.label}</td>
+                      <td data-label="Nom" style={{ fontSize: '0.875rem', color: '#64748b' }}>{p.name}</td>
+                      <td data-label="Qté">{p.qty}</td>
+                      <td data-label="Lg" style={{ color: '#2563eb', fontWeight: 700 }}>{Math.round(p.length)} mm</td>
+                      <td data-label="Coupes">
+                        <div style={{ display: 'flex', gap: '0.4rem' }}>
+                          <span style={{ fontSize: '0.75rem', background: '#f1f5f9', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>{p.cutAngle || 45}°</span>
+                          <span style={{ fontSize: '0.75rem', background: '#f1f5f9', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>{p.cutAngle || 45}°</span>
+                        </div>
+                      </td>
+                      <td data-label="QRCode">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <QRCodeSVG value={`OF-${currentConfig.compositionId}-P${i}-${p.length}mm`} size={24} level="L" />
+                          <button className="btn btn-secondary" style={{ padding: '0.4rem' }} title="Code-Barre Détail">
+                            <Barcode size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {/* Right: Glass & Logistics */}
@@ -609,105 +611,107 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                 ℹ️ Cochez les profilés à jumeler ensemble, puis cliquez sur "Confirmer le jumelage".
               </div>
             )}
-            <table className="data-table">
-              <thead>
-                <tr>
-                  {jumelageMode && <th style={{ width: '30px' }}></th>}
-                  <th>Référence</th>
-                  <th>Finition</th>
-                  <th>Désignation</th>
-                  <th>Longueur Barre (mm)</th>
-                  <th>Quantité (Barres)</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {displayProfiles.map((p, i) => {
-                  const barKey = p._barKey || p.baseId || p.id;
-                  const bLength = barLengths[barKey] || 6400;
-                  const ml = p.totalMeasure;
-                  // Bin Packing Algorithm (1D Nesting / Next Fit Decreasing)
-                  const pieces = p.pieces ? [...p.pieces].sort((a,b) => b - a) : [];
-                  let bars = 0;
-                  
-                  if (pieces.length > 0) {
-                    let currentBars = [];
-                    for (let i = 0; i < pieces.length; i++) {
-                      const piece = pieces[i];
-                      let bestIdx = -1;
-                      let minLeft = Infinity;
-                      for (let j = 0; j < currentBars.length; j++) {
-                        if (currentBars[j] >= piece && currentBars[j] - piece < minLeft) {
-                          bestIdx = j;
-                          minLeft = currentBars[j] - piece;
+            <div className="table-responsive">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    {jumelageMode && <th style={{ width: '30px' }}></th>}
+                    <th>Référence</th>
+                    <th>Finition</th>
+                    <th>Désignation</th>
+                    <th>Longueur Barre (mm)</th>
+                    <th>Quantité (Barres)</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {displayProfiles.map((p, i) => {
+                    const barKey = p._barKey || p.baseId || p.id;
+                    const bLength = barLengths[barKey] || 6400;
+                    const ml = p.totalMeasure;
+                    // Bin Packing Algorithm (1D Nesting / Next Fit Decreasing)
+                    const pieces = p.pieces ? [...p.pieces].sort((a,b) => b - a) : [];
+                    let bars = 0;
+                    
+                    if (pieces.length > 0) {
+                      let currentBars = [];
+                      for (let i = 0; i < pieces.length; i++) {
+                        const piece = pieces[i];
+                        let bestIdx = -1;
+                        let minLeft = Infinity;
+                        for (let j = 0; j < currentBars.length; j++) {
+                          if (currentBars[j] >= piece && currentBars[j] - piece < minLeft) {
+                            bestIdx = j;
+                            minLeft = currentBars[j] - piece;
+                          }
+                        }
+                        if (bestIdx !== -1) {
+                          currentBars[bestIdx] -= piece;
+                        } else {
+                          currentBars.push(bLength - piece);
+                          bars++;
                         }
                       }
-                      if (bestIdx !== -1) {
-                        currentBars[bestIdx] -= piece;
-                      } else {
-                        currentBars.push(bLength - piece);
-                        bars++;
-                      }
+                    } else {
+                      bars = Math.ceil(ml / bLength);
                     }
-                  } else {
-                    bars = Math.ceil(ml / bLength);
-                  }
-
-                  const isSelected = jumelageSelection.has(p.id);
-                  const rowBg = p._isGroup ? '#faf5ff' : isSelected ? '#ede9fe' : 'transparent';
-                  return (
-                    <tr key={`pa-${i}`} style={{ background: rowBg }}>
-                      {jumelageMode && !p._isGroup && (
-                        <td>
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => handleJumelageToggle(p.id)}
-                            style={{ cursor: 'pointer', width: '16px', height: '16px' }}
-                          />
-                        </td>
-                      )}
-                      {jumelageMode && p._isGroup && <td></td>}
-                      <td style={{ color: '#64748b', fontSize: '0.75rem', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {p._isGroup ? p.id.split(' + ').map(x => x.split('|')[0]).join(' + ') : p.baseId || p.id.split('|')[0]}
-                      </td>
-                      <td style={{ fontSize: '0.85rem' }}>{p._isGroup ? 'Multicolore / Varié' : p.colorName || 'Standard'}</td>
-                      <td style={{ fontWeight: 600 }}>
-                        {p._isGroup && <span style={{ fontSize: '0.7rem', background: '#8b5cf6', color: 'white', padding: '0.1rem 0.4rem', borderRadius: '999px', marginRight: '0.4rem' }}>Jumelé</span>}
-                        {p.combinedName}
-                        <div style={{ fontSize: '0.7rem', color: '#8b5cf6', marginTop: '0.2rem' }}>Total: {(ml / 1000).toFixed(2)} ML</div>
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <input 
-                            type="number" 
-                            className="input" 
-                            value={bLength}
-                            onChange={(e) => handleBarLengthChange(barKey, e.target.value)}
-                            style={{ width: '80px', padding: '0.2rem 0.5rem', fontSize: '0.8rem' }}
-                          />
-                          <Edit2 size={12} color="#94a3b8" />
-                        </div>
-                      </td>
-                      <td style={{ color: '#8b5cf6', fontWeight: 700, fontSize: '1.1rem' }}>{bars}</td>
-                      <td>
-                        {p._isGroup && (
-                          <button
-                            onClick={() => handleDissolveGroup(p._groupIndex)}
-                            title="Annuler ce jumelage"
-                            style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#ef4444', padding: '0.2rem' }}
-                          >
-                            <Link2Off size={15} />
-                          </button>
+  
+                    const isSelected = jumelageSelection.has(p.id);
+                    const rowBg = p._isGroup ? '#faf5ff' : isSelected ? '#ede9fe' : 'transparent';
+                    return (
+                      <tr key={`pa-${i}`} style={{ background: rowBg }}>
+                        {jumelageMode && !p._isGroup && (
+                          <td data-label="Sélec.">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => handleJumelageToggle(p.id)}
+                              style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                            />
+                          </td>
                         )}
-                      </td>
-                    </tr>
-                  );
-                })}
-
-                {displayProfiles.length === 0 && <tr><td colSpan="7">Aucun profilé trouvé.</td></tr>}
-              </tbody>
-            </table>
+                        {jumelageMode && p._isGroup && <td data-label="-"></td>}
+                        <td data-label="Réf." style={{ color: '#64748b', fontSize: '0.75rem', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {p._isGroup ? p.id.split(' + ').map(x => x.split('|')[0]).join(' + ') : p.baseId || p.id.split('|')[0]}
+                        </td>
+                        <td data-label="Finition" style={{ fontSize: '0.85rem' }}>{p._isGroup ? 'Multicolore / Varié' : p.colorName || 'Standard'}</td>
+                        <td data-label="Nom" style={{ fontWeight: 600 }}>
+                          {p._isGroup && <span style={{ fontSize: '0.7rem', background: '#8b5cf6', color: 'white', padding: '0.1rem 0.4rem', borderRadius: '999px', marginRight: '0.4rem' }}>Jumelé</span>}
+                          {p.combinedName}
+                          <div style={{ fontSize: '0.7rem', color: '#8b5cf6', marginTop: '0.2rem' }}>Total: {(ml / 1000).toFixed(2)} ML</div>
+                        </td>
+                        <td data-label="Lg. Barre">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <input 
+                              type="number" 
+                              className="input" 
+                              value={bLength}
+                              onChange={(e) => handleBarLengthChange(barKey, e.target.value)}
+                              style={{ width: '80px', padding: '0.2rem 0.5rem', fontSize: '0.8rem' }}
+                            />
+                            <Edit2 size={12} color="#94a3b8" />
+                          </div>
+                        </td>
+                        <td data-label="Barres" style={{ color: '#8b5cf6', fontWeight: 700, fontSize: '1.1rem' }}>{bars}</td>
+                        <td data-label="Action">
+                          {p._isGroup && (
+                            <button
+                              onClick={() => handleDissolveGroup(p._groupIndex)}
+                              title="Annuler ce jumelage"
+                              style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#ef4444', padding: '0.2rem' }}
+                            >
+                              <Link2Off size={15} />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+  
+                  {displayProfiles.length === 0 && <tr><td colSpan="7">Aucun profilé trouvé.</td></tr>}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {/* Table: Achats Accessoires & Joints */}
@@ -716,34 +720,36 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
               <Package size={20} color="#f59e0b" />
               <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Liste d'Achat : Accessoires & Joints</h2>
             </div>
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Référence</th>
-                  <th>Finition</th>
-                  <th>Désignation</th>
-                  <th>Longueur / M.L</th>
-                  <th>Quantité</th>
-                </tr>
-              </thead>
-              <tbody>
-                {purchasingAccessories.map((a, i) => {
-                  const isMl = ['M', 'ML', 'JOINT'].includes((a.unit || '').toUpperCase());
-                  return (
-                    <tr key={`aa-${i}`}>
-                      <td style={{ color: '#64748b', fontSize: '0.75rem', fontFamily: 'monospace' }}>{a.baseId || a.id.split('|')[0]}</td>
-                      <td style={{ fontSize: '0.85rem' }}>{a.colorName || 'Standard'}</td>
-                      <td style={{ fontWeight: 600 }}>{a.combinedName || 'Accessoire'}</td>
-                      <td>{isMl ? `${(a.totalMeasure / 1000).toFixed(2)} m` : '—'}</td>
-                      <td style={{ color: '#f59e0b', fontWeight: 700 }}>
-                        {!isMl ? a.totalQty : '—'}
-                      </td>
-                    </tr>
-                  );
-                })}
-                {purchasingAccessories.length === 0 && <tr><td colSpan="5">Aucun accessoire trouvé.</td></tr>}
-              </tbody>
-            </table>
+            <div className="table-responsive">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Référence</th>
+                    <th>Finition</th>
+                    <th>Désignation</th>
+                    <th>Longueur / M.L</th>
+                    <th>Quantité</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {purchasingAccessories.map((a, i) => {
+                    const isMl = ['M', 'ML', 'JOINT'].includes((a.unit || '').toUpperCase());
+                    return (
+                      <tr key={`aa-${i}`}>
+                        <td data-label="Réf." style={{ color: '#64748b', fontSize: '0.75rem', fontFamily: 'monospace' }}>{a.baseId || a.id.split('|')[0]}</td>
+                        <td data-label="Finition" style={{ fontSize: '0.85rem' }}>{a.colorName || 'Standard'}</td>
+                        <td data-label="Nom" style={{ fontWeight: 600 }}>{a.combinedName || 'Accessoire'}</td>
+                        <td data-label="Lg/ML">{isMl ? `${(a.totalMeasure / 1000).toFixed(2)} m` : '—'}</td>
+                        <td data-label="Qté" style={{ color: '#f59e0b', fontWeight: 700 }}>
+                          {!isMl ? a.totalQty : '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {purchasingAccessories.length === 0 && <tr><td colSpan="5">Aucun accessoire trouvé.</td></tr>}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {/* Table: Détails Vitrage */}
@@ -752,29 +758,31 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
               <Layers size={20} color="#06b6d4" />
               <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Liste d'Achat : Vitrages Détaillés</h2>
             </div>
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Référence</th>
-                  <th>Finition</th>
-                  <th>Désignation</th>
-                  <th>Dimensions (L x H)</th>
-                  <th>Quantité</th>
-                </tr>
-              </thead>
-              <tbody>
-                {purchasingGlass.map((g, i) => (
-                  <tr key={`ag-${i}`}>
-                    <td style={{ color: '#64748b', fontSize: '0.75rem', fontFamily: 'monospace' }}>{g.baseId || g.id}</td>
-                    <td style={{ fontSize: '0.85rem' }}>{g.colorName || 'Standard'}</td>
-                    <td style={{ fontWeight: 600 }}>{g.name}</td>
-                    <td style={{ fontWeight: 500 }}>{g.width} x {g.height} mm</td>
-                    <td style={{ color: '#06b6d4', fontWeight: 700 }}>{g.count}u</td>
+            <div className="table-responsive">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Référence</th>
+                    <th>Finition</th>
+                    <th>Désignation</th>
+                    <th>Dimensions (L x H)</th>
+                    <th>Quantité</th>
                   </tr>
-                ))}
-                {purchasingGlass.length === 0 && <tr><td colSpan="5">Aucun vitrage détaillé trouvé.</td></tr>}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {purchasingGlass.map((g, i) => (
+                    <tr key={`ag-${i}`}>
+                      <td data-label="Réf." style={{ color: '#64748b', fontSize: '0.75rem', fontFamily: 'monospace' }}>{g.baseId || g.id}</td>
+                      <td data-label="Finition" style={{ fontSize: '0.85rem' }}>{g.colorName || 'Standard'}</td>
+                      <td data-label="Nom" style={{ fontWeight: 600 }}>{g.name}</td>
+                      <td data-label="Dim." style={{ fontWeight: 500 }}>{g.width} x {g.height} mm</td>
+                      <td data-label="Qté" style={{ color: '#06b6d4', fontWeight: 700 }}>{g.count}u</td>
+                    </tr>
+                  ))}
+                  {purchasingGlass.length === 0 && <tr><td colSpan="5">Aucun vitrage détaillé trouvé.</td></tr>}
+                </tbody>
+              </table>
+            </div>
           </div>
 
         </div>

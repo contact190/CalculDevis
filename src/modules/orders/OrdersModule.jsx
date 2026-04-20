@@ -590,44 +590,46 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
         {activeOrderTab === 'batches' && (
           <div className="glass shadow-md">
             <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1.5rem' }}>Historique des Lots de Fabrication</h3>
-            <table className="data-table">
-               <thead>
-                 <tr>
-                   <th>Code Lot</th>
-                   <th>Date de Lancement</th>
-                   <th>Produits inclus</th>
-                   <th>Action</th>
-                 </tr>
-               </thead>
-               <tbody>
-                 {(selectedOrder.batches || []).map(batch => (
-                   <tr key={batch.id}>
-                     <td style={{ fontWeight: 700 }}>{batch.id}</td>
-                     <td>{new Date(batch.createdAt).toLocaleString('fr-FR')}</td>
-                     <td>
-                        {batch.items?.map(i => {
-                          const q = (i.measurements || []).reduce((s, m) => s+m.qty, 0);
-                          if (q === 0) return null;
-                          return <div key={i.id} style={{ fontSize: '0.8rem' }}>• {i.label} : <strong>{q} u</strong></div>
-                        })}
-                     </td>
-                      <td>
-                        <div style={{ display: 'flex', gap: '0.4rem' }}>
-                          <button onClick={() => { setSelectedBatchId(batch.id); setActiveOrderTab('purchasing'); }} className="btn btn-secondary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}>
-                            Liste Achat
-                          </button>
-                          <button onClick={() => { setSelectedBatchId(batch.id); setActiveOrderTab('glass'); }} className="btn btn-secondary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}>
-                            Liste Vitrage
-                          </button>
-                        </div>
-                      </td>
-                   </tr>
-                 ))}
-                 {(selectedOrder.batches || []).length === 0 && (
-                   <tr><td colSpan="4" style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>Aucun lot validé pour le moment.</td></tr>
-                 )}
-               </tbody>
-            </table>
+            <div className="table-responsive">
+               <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Code Lot</th>
+                      <th>Date de Lancement</th>
+                      <th>Produits inclus</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(selectedOrder.batches || []).map(batch => (
+                      <tr key={batch.id}>
+                        <td data-label="Lot" style={{ fontWeight: 700 }}>{batch.id}</td>
+                        <td data-label="Date">{new Date(batch.createdAt).toLocaleString('fr-FR')}</td>
+                        <td data-label="Produits">
+                           {batch.items?.map(i => {
+                             const q = (i.measurements || []).reduce((s, m) => s+m.qty, 0);
+                             if (q === 0) return null;
+                             return <div key={i.id} style={{ fontSize: '0.8rem' }}>• {i.label} : <strong>{q} u</strong></div>
+                           })}
+                        </td>
+                         <td data-label="Actions">
+                           <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
+                             <button onClick={() => { setSelectedBatchId(batch.id); setActiveOrderTab('purchasing'); }} className="btn btn-secondary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}>
+                               Liste Achat
+                             </button>
+                             <button onClick={() => { setSelectedBatchId(batch.id); setActiveOrderTab('glass'); }} className="btn btn-secondary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}>
+                               Liste Vitrage
+                             </button>
+                           </div>
+                         </td>
+                      </tr>
+                    ))}
+                    {(selectedOrder.batches || []).length === 0 && (
+                      <tr><td colSpan="4" style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>Aucun lot validé pour le moment.</td></tr>
+                    )}
+                  </tbody>
+               </table>
+             </div>
           </div>
         )}
 
@@ -669,60 +671,62 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                     )}
                   </div>
                 </div>
-               <table className="data-table">
-                  <thead>
-                    <tr>
-                      {jumelageMode && <th style={{ width: '40px' }}>Select</th>}
-                      <th>Code</th>
-                      <th>Désignation</th>
-                      <th>Couleur</th>
-                      <th>Total (ML)</th>
-                      <th>Est. Barres (6m)</th>
-                      {jumelageGroups.length > 0 && <th style={{ width: '50px' }}>Action</th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {displayProfiles.map(p => (
-                      <tr key={p.key} style={{ background: p.isGroup ? '#f5f3ff' : 'transparent' }}>
-                        {jumelageMode && (
-                          <td style={{ textAlign: 'center' }}>
-                            {!p.isGroup && (
-                              <input 
-                                type="checkbox" 
-                                checked={jumelageSelection.has(p.key)} 
-                                onChange={() => handleJumelageToggle(p.key)} 
-                                style={{ width: '18px', height: '18px' }}
-                              />
-                            )}
-                          </td>
-                        )}
-                        <td style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{p.id || '---'}</td>
-                        <td style={{ fontWeight: 600 }}>
-                          {p.isGroup ? (
-                            <div style={{ color: '#7c3aed', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                              <Layers size={14} />
-                              {p.label}
-                            </div>
-                          ) : (
-                            <>{p.name} {p.label ? `[${p.label}]` : ''}</>
-                          )}
-                        </td>
-                        <td>{data.colors?.find(c => c.id === p.colorId)?.name || p.colorId}</td>
-                        <td style={{ fontWeight: 700, color: p.isGroup ? '#7c3aed' : '#8b5cf6' }}>{(p.totalMeasure / 1000).toFixed(2)}</td>
-                        <td>{Math.ceil(p.totalMeasure / 6000)}</td>
-                        {jumelageGroups.length > 0 && (
-                          <td>
-                            {p.isGroup && (
-                              <button onClick={() => handleDissolveGroup(p.key.split('-')[1])} style={{ color: '#ef4444', border: 'none', background: 'none', cursor: 'pointer' }} title="Dissoudre le groupe">
-                                <Trash2 size={16} />
-                              </button>
-                            )}
-                          </td>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-               </table>
+               <div className="table-responsive">
+                  <table className="data-table">
+                     <thead>
+                       <tr>
+                         {jumelageMode && <th style={{ width: '40px' }}>Select</th>}
+                         <th>Code</th>
+                         <th>Désignation</th>
+                         <th>Couleur</th>
+                         <th>Total (ML)</th>
+                         <th>Est. Barres (6m)</th>
+                         {jumelageGroups.length > 0 && <th style={{ width: '50px' }}>Action</th>}
+                       </tr>
+                     </thead>
+                     <tbody>
+                       {displayProfiles.map(p => (
+                         <tr key={p.key} style={{ background: p.isGroup ? '#f5f3ff' : 'transparent' }}>
+                           {jumelageMode && (
+                             <td data-label="Sél." style={{ textAlign: 'center' }}>
+                               {!p.isGroup && (
+                                 <input 
+                                   type="checkbox" 
+                                   checked={jumelageSelection.has(p.key)} 
+                                   onChange={() => handleJumelageToggle(p.key)} 
+                                   style={{ width: '18px', height: '18px' }}
+                                 />
+                               )}
+                             </td>
+                           )}
+                           <td data-label="Code" style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{p.id || '---'}</td>
+                           <td data-label="Nom" style={{ fontWeight: 600 }}>
+                             {p.isGroup ? (
+                               <div style={{ color: '#7c3aed', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                 <Layers size={14} />
+                                 {p.label}
+                               </div>
+                             ) : (
+                               <>{p.name} {p.label ? `[${p.label}]` : ''}</>
+                             )}
+                           </td>
+                           <td data-label="Coul.">{data.colors?.find(c => c.id === p.colorId)?.name || p.colorId}</td>
+                           <td data-label="ML" style={{ fontWeight: 700, color: p.isGroup ? '#7c3aed' : '#8b5cf6' }}>{(p.totalMeasure / 1000).toFixed(2)}</td>
+                           <td data-label="Barres">{Math.ceil(p.totalMeasure / 6000)}</td>
+                           {jumelageGroups.length > 0 && (
+                             <td data-label="Actions">
+                               {p.isGroup && (
+                                 <button onClick={() => handleDissolveGroup(p.key.split('-')[1])} style={{ color: '#ef4444', border: 'none', background: 'none', cursor: 'pointer' }} title="Dissoudre le groupe">
+                                   <Trash2 size={16} />
+                                 </button>
+                               )}
+                             </td>
+                           )}
+                         </tr>
+                       ))}
+                     </tbody>
+                  </table>
+                </div>
             </div>
 
             <div className="glass shadow-md" style={{ borderLeft: '4px solid #f59e0b' }}>

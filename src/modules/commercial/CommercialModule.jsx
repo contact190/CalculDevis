@@ -109,7 +109,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 400px', gap: '2rem' }}>
+      <div className="flex-column-mobile" style={{ gap: '2.0rem' }}>
         {/* Left: Config */}
         <div className="glass shadow-lg" style={{ padding: '1.5rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
@@ -432,56 +432,58 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
           )}
 
           {/* Detail Table */}
-          <div style={{ marginTop: '2rem', borderTop: '1px solid #f1f5f9', paddingTop: '1.5rem', overflowX: 'auto' }}>
+          <div style={{ marginTop: '2rem', borderTop: '1px solid #f1f5f9', paddingTop: '1.5rem' }}>
             <h3 style={{ fontSize: '0.875rem', fontWeight: 600, color: '#64748b', marginBottom: '1rem' }}>RÉSUMÉ DÉTAILLÉ DU CALCUL</h3>
-            <table className="data-table" style={{ fontSize: '0.7rem' }}>
-              <thead><tr><th>Composant</th><th>Formule</th><th>Calcul</th><th>Nbre</th><th>Mesure Totale</th><th>Prix Unit.</th><th style={{ textAlign: 'right' }}>Prix Total</th></tr></thead>
-              <tbody>
-                {priceData?.bom.profiles.map((p, i) => (
-                  <tr key={i}>
-                    <td style={{ fontWeight: 600 }}>{p.label}</td><td style={{ color: '#64748b', fontSize: '0.65rem' }}>{p.formula}</td>
-                    <td style={{ color: '#3b82f6', fontSize: '0.65rem' }}>{p.resolvedFormula}</td><td>{p.qty}u</td>
-                    <td>{Math.round(p.totalMeasure)} mm</td><td>{p.unitPrice?.toFixed(2)}</td>
-                    <td style={{ textAlign: 'right', fontWeight: 600 }}>{p.cost.toFixed(2)} DZD</td>
+            <div className="table-responsive">
+              <table className="data-table" style={{ fontSize: '0.7rem' }}>
+                <thead><tr><th>Composant</th><th>Formule</th><th>Calcul</th><th>Nbre</th><th>Mesure Totale</th><th>Prix Unit.</th><th style={{ textAlign: 'right' }}>Prix Total</th></tr></thead>
+                <tbody>
+                  {priceData?.bom.profiles.map((p, i) => (
+                    <tr key={i}>
+                      <td data-label="Composant" style={{ fontWeight: 600 }}>{p.label}</td><td data-label="Formule" style={{ color: '#64748b', fontSize: '0.65rem' }}>{p.formula}</td>
+                      <td data-label="Calcul" style={{ color: '#3b82f6', fontSize: '0.65rem' }}>{p.resolvedFormula}</td><td data-label="Nbre">{p.qty}u</td>
+                      <td data-label="Mesure Totale">{Math.round(p.totalMeasure)} mm</td><td data-label="Prix Unit.">{p.unitPrice?.toFixed(2)}</td>
+                      <td data-label="Prix Total" style={{ textAlign: 'right', fontWeight: 600 }}>{p.cost.toFixed(2)} DZD</td>
+                    </tr>
+                  ))}
+                  {priceData?.bom.accessories.map((acc, i) => (
+                    <tr key={`acc-${i}`}>
+                      <td data-label="Composant" style={{ fontWeight: 600 }}>{acc.label}</td><td data-label="Formule" style={{ color: '#64748b', fontSize: '0.65rem' }}>{acc.formula}</td>
+                      <td data-label="Calcul" style={{ color: '#3b82f6', fontSize: '0.65rem' }}>{acc.resolvedFormula}</td><td data-label="Nbre">{acc.multiplier}u</td>
+                      <td data-label="Mesure Totale">{acc.totalMeasure?.toFixed(2)} {acc.unit === 'Ml' || acc.unit === 'Joint' ? 'mm' : 'u'}</td>
+                      <td data-label="Prix Unit.">{acc.unitPrice?.toFixed(2)}</td><td data-label="Prix Total" style={{ textAlign: 'right', fontWeight: 600 }}>{acc.cost.toFixed(2)} DZD</td>
+                    </tr>
+                  ))}
+                  {priceData?.bom.gasket && (
+                    <tr>
+                      <td data-label="Composant" style={{ fontWeight: 600 }}>Joint de vitrage</td><td data-label="Formule" style={{ color: '#64748b', fontSize: '0.65rem' }}>{priceData.bom.gasket.formula}</td>
+                      <td data-label="Calcul" style={{ color: '#3b82f6', fontSize: '0.65rem' }}>{priceData.bom.gasket.resolvedFormula}</td><td data-label="Nbre">1u</td>
+                      <td data-label="Mesure Totale">{priceData.bom.gasket.totalMeasure.toFixed(2)} mm</td><td data-label="Prix Unit.">{priceData.bom.gasket.unitPrice?.toFixed(2)}</td>
+                      <td data-label="Prix Total" style={{ textAlign: 'right', fontWeight: 600 }}>{priceData.bom.gasket.cost.toFixed(2)} DZD</td>
+                    </tr>
+                  )}
+                  {priceData?.bom.shutters && priceData.bom.shutters.map((s, i) => (
+                    <tr key={`shutter-${i}`}>
+                      <td data-label="Composant" style={{ fontWeight: 600 }}>[Volet] {s.name}</td><td data-label="Formule" style={{ color: '#64748b', fontSize: '0.65rem' }}>{s.formula}</td>
+                      <td data-label="Calcul" style={{ color: '#3b82f6', fontSize: '0.65rem' }}>{s.resolvedFormula || '-'}</td><td data-label="Nbre">{s.qty?.toFixed(2)} {s.priceUnit}</td>
+                      <td data-label="Mesure Totale">-</td><td data-label="Prix Unit.">{s.price?.toFixed(2)}</td>
+                      <td data-label="Prix Total" style={{ textAlign: 'right', fontWeight: 600 }}>{(s.cost || 0).toFixed(2)} DZD</td>
+                    </tr>
+                  ))}
+                  {priceData && (
+                    <tr>
+                      <td data-label="Composant" style={{ fontWeight: 600 }}>Vitrage</td><td data-label="Formule">-</td><td data-label="Calcul">-</td><td data-label="Nbre">{priceData.bom.glass.qty}u</td>
+                      <td data-label="Mesure Totale">{priceData.bom.glass.area.toFixed(2)} m²</td><td data-label="Prix Unit.">{priceData.bom.glass.pricePerM2?.toFixed(2)}</td>
+                      <td data-label="Prix Total" style={{ textAlign: 'right', fontWeight: 600 }}>{priceData.bom.glass.cost.toFixed(2)} DZD</td>
+                    </tr>
+                  )}
+                  <tr style={{ background: '#f1f5f9', fontWeight: 700, fontSize: '0.85rem' }}>
+                    <td colSpan="6" style={{ textAlign: 'right' }}>COÛT TOTAL DE REVIENT</td>
+                    <td data-label="Prix Total" style={{ textAlign: 'right', color: '#1e293b' }}>{priceData ? priceData.cost.toFixed(2) : '0.00'} DZD</td>
                   </tr>
-                ))}
-                {priceData?.bom.accessories.map((acc, i) => (
-                  <tr key={`acc-${i}`}>
-                    <td style={{ fontWeight: 600 }}>{acc.label}</td><td style={{ color: '#64748b', fontSize: '0.65rem' }}>{acc.formula}</td>
-                    <td style={{ color: '#3b82f6', fontSize: '0.65rem' }}>{acc.resolvedFormula}</td><td>{acc.multiplier}u</td>
-                    <td>{acc.totalMeasure?.toFixed(2)} {acc.unit === 'Ml' || acc.unit === 'Joint' ? 'mm' : 'u'}</td>
-                    <td>{acc.unitPrice?.toFixed(2)}</td><td style={{ textAlign: 'right', fontWeight: 600 }}>{acc.cost.toFixed(2)} DZD</td>
-                  </tr>
-                ))}
-                {priceData?.bom.gasket && (
-                  <tr>
-                    <td style={{ fontWeight: 600 }}>Joint de vitrage</td><td style={{ color: '#64748b', fontSize: '0.65rem' }}>{priceData.bom.gasket.formula}</td>
-                    <td style={{ color: '#3b82f6', fontSize: '0.65rem' }}>{priceData.bom.gasket.resolvedFormula}</td><td>1u</td>
-                    <td>{priceData.bom.gasket.totalMeasure.toFixed(2)} mm</td><td>{priceData.bom.gasket.unitPrice?.toFixed(2)}</td>
-                    <td style={{ textAlign: 'right', fontWeight: 600 }}>{priceData.bom.gasket.cost.toFixed(2)} DZD</td>
-                  </tr>
-                )}
-                {priceData?.bom.shutters && priceData.bom.shutters.map((s, i) => (
-                  <tr key={`shutter-${i}`}>
-                    <td style={{ fontWeight: 600 }}>[Volet] {s.name}</td><td style={{ color: '#64748b', fontSize: '0.65rem' }}>{s.formula}</td>
-                    <td style={{ color: '#3b82f6', fontSize: '0.65rem' }}>{s.resolvedFormula || '-'}</td><td>{s.qty?.toFixed(2)} {s.priceUnit}</td>
-                    <td>-</td><td>{s.price?.toFixed(2)}</td>
-                    <td style={{ textAlign: 'right', fontWeight: 600 }}>{(s.cost || 0).toFixed(2)} DZD</td>
-                  </tr>
-                ))}
-                {priceData && (
-                  <tr>
-                    <td style={{ fontWeight: 600 }}>Vitrage</td><td>-</td><td>-</td><td>{priceData.bom.glass.qty}u</td>
-                    <td>{priceData.bom.glass.area.toFixed(2)} m²</td><td>{priceData.bom.glass.pricePerM2?.toFixed(2)}</td>
-                    <td style={{ textAlign: 'right', fontWeight: 600 }}>{priceData.bom.glass.cost.toFixed(2)} DZD</td>
-                  </tr>
-                )}
-                <tr style={{ background: '#f1f5f9', fontWeight: 700, fontSize: '0.85rem' }}>
-                  <td colSpan="6" style={{ textAlign: 'right' }}>COÛT TOTAL DE REVIENT</td>
-                  <td style={{ textAlign: 'right', color: '#1e293b' }}>{priceData ? priceData.cost.toFixed(2) : '0.00'} DZD</td>
-                </tr>
-              </tbody>
-            </table>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
@@ -1289,7 +1291,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
               <p>Cliquez sur "Ajouter un produit" pour commencer.</p>
             </div>
           ) : (
-            <div className="glass shadow-md" style={{ marginBottom: '1.5rem', overflowX: 'auto' }}>
+            <div className="table-responsive shadow-md" style={{ marginBottom: '1.5rem' }}>
               <table className="data-table">
                 <thead>
                   <tr>
@@ -1316,23 +1318,23 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
                     const totalHT = effectivePriceHT * (item.qty || 1);
                     return (
                       <tr key={item.id}>
-                        <td style={{ fontWeight: 600 }}>
+                        <td data-label="Désignation" style={{ fontWeight: 600 }}>
                           <div>{item.label}</div>
                           <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{comp?.name}</div>
                         </td>
-                        <td style={{ fontSize: '0.85rem' }}>
+                        <td data-label="Modèle / Dim." style={{ fontSize: '0.85rem' }}>
                           <span style={{ fontWeight: 700, color: '#2563eb' }}>{item.config?.L} × {item.config?.H}</span>{' '}mm
                         </td>
-                        <td style={{ fontSize: '0.85rem' }}>{color?.name || item.config?.colorId}</td>
-                        <td>
+                        <td data-label="Finition" style={{ fontSize: '0.85rem' }}>{color?.name || item.config?.colorId}</td>
+                        <td data-label="Qté">
                           <input type="number" min="1" value={item.qty}
                             onChange={e => handleQtyChange(item.id, e.target.value)}
                             style={{ width: '60px', padding: '0.3rem 0.5rem', border: '1px solid #e2e8f0', borderRadius: '0.4rem', textAlign: 'center', fontWeight: 700 }} />
                         </td>
-                        <td style={{ fontWeight: 600 }}>{effectivePriceHT.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
-                        <td style={{ fontWeight: 700, color: '#2563eb' }}>{totalHT.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
-                        <td>
-                          <div style={{ display: 'flex', gap: '0.3rem' }}>
+                        <td data-label="Prix U. HT" style={{ fontWeight: 600 }}>{effectivePriceHT.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
+                        <td data-label="Total HT" style={{ fontWeight: 700, color: '#2563eb' }}>{totalHT.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
+                        <td data-label="Actions">
+                          <div style={{ display: 'flex', gap: '0.3rem', justifyContent: 'flex-end' }}>
                             <button onClick={() => startEditProduct(item)} title="Modifier" style={{ padding: '0.3rem', border: '1px solid #e2e8f0', borderRadius: '0.3rem', background: 'white', cursor: 'pointer', color: '#2563eb' }}><Edit2 size={14} /></button>
                             <button onClick={() => handleDuplicateItem(item)} title="Dupliquer" style={{ padding: '0.3rem', border: '1px solid #e2e8f0', borderRadius: '0.3rem', background: 'white', cursor: 'pointer', color: '#10b981' }}><Copy size={14} /></button>
                             <button onClick={() => handleDeleteItem(item.id)} title="Supprimer" style={{ padding: '0.3rem', border: '1px solid #fee2e2', borderRadius: '0.3rem', background: '#fef2f2', cursor: 'pointer', color: '#ef4444' }}><Trash2 size={14} /></button>
@@ -1412,47 +1414,49 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
               {/* Profiles */}
-              <div className="glass shadow-md" style={{ borderLeft: '4px solid #8b5cf6', overflowX: 'auto' }}>
+              <div className="glass shadow-md" style={{ borderLeft: '4px solid #8b5cf6' }}>
                 <h3 style={{ fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#8b5cf6', display: 'inline-block' }}></span>
                   Profilés Aluminium
                 </h3>
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Référence</th>
-                      <th>Finition</th>
-                      <th>Désignation</th>
-                      <th>Longueur unitaire</th>
-                      <th>Quantité totale</th>
-                      <th>Consommation (ML)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {consolidatedProfiles
-                      .filter(p => consumableFilter === 'all' || p.items.some(it => it.itemId === consumableFilter))
-                      .map((p, i) => {
-                        const item = quote.items?.find(it => it.id === p.items[0]?.itemId);
-                        const color = database.colors?.find(c => c.id === item?.config?.colorId);
-                        const totalMl = consumableFilter === 'all' 
-                          ? p.totalMeasure 
-                          : p.items.filter(it => it.itemId === consumableFilter).reduce((s, it) => {
-                              const itm = quote.items?.find(qi => qi.id === it.itemId);
-                              return s + it.perUnit * (itm?.qty || 1);
-                            }, 0);
-                        return (
-                          <tr key={i}>
-                            <td style={{ color: '#64748b', fontSize: '0.75rem', fontFamily: 'monospace' }}>{p.id}</td>
-                            <td style={{ fontSize: '0.85rem' }}>{color?.name || '—'}</td>
-                            <td style={{ fontWeight: 600 }}>{p.name}</td>
-                            <td>{Math.round(p.length)} mm</td>
-                            <td style={{ fontWeight: 700 }}>{p.qty}</td>
-                            <td style={{ color: '#8b5cf6', fontWeight: 700 }}>{(totalMl / 1000).toFixed(2)} m</td>
-                          </tr>
-                        );
-                      })}
-                  </tbody>
-                </table>
+                <div className="table-responsive">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Référence</th>
+                        <th>Finition</th>
+                        <th>Désignation</th>
+                        <th>Longueur unitaire</th>
+                        <th>Quantité totale</th>
+                        <th>Consommation (ML)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {consolidatedProfiles
+                        .filter(p => consumableFilter === 'all' || p.items.some(it => it.itemId === consumableFilter))
+                        .map((p, i) => {
+                          const item = quote.items?.find(it => it.id === p.items[0]?.itemId);
+                          const color = database.colors?.find(c => c.id === item?.config?.colorId);
+                          const totalMl = consumableFilter === 'all' 
+                            ? p.totalMeasure 
+                            : p.items.filter(it => it.itemId === consumableFilter).reduce((s, it) => {
+                                const itm = quote.items?.find(qi => qi.id === it.itemId);
+                                return s + it.perUnit * (itm?.qty || 1);
+                              }, 0);
+                          return (
+                            <tr key={i}>
+                              <td data-label="Ref" style={{ color: '#64748b', fontSize: '0.75rem', fontFamily: 'monospace' }}>{p.id}</td>
+                              <td data-label="Finit." style={{ fontSize: '0.85rem' }}>{color?.name || '—'}</td>
+                              <td data-label="Nom" style={{ fontWeight: 600 }}>{p.name}</td>
+                              <td data-label="L. Unit">{Math.round(p.length)} mm</td>
+                              <td data-label="Qté Tot." style={{ fontWeight: 700 }}>{p.qty}</td>
+                              <td data-label="Consom." style={{ color: '#8b5cf6', fontWeight: 700 }}>{(totalMl / 1000).toFixed(2)} m</td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
 
               {/* Accessories */}

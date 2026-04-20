@@ -145,51 +145,53 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
           
           <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid #e2e8f0' }}>
             <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: '#1e293b', marginBottom: '1rem' }}>Historique des Devis</h3>
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>N° Devis</th>
-                  <th>Date</th>
-                  <th>Nombre de Produits</th>
-                  <th>Montant HT</th>
-                  <th>Montant TTC</th>
-                  <th style={{ width: '80px', textAlign: 'center' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(data.quotes || []).filter(q => q.clientId === editingClient.id).map(q => (
-                  <tr key={q.id}>
-                    <td style={{ fontWeight: 700, color: '#2563eb' }}>{q.number}</td>
-                    <td>{new Date(q.createdAt).toLocaleDateString('fr-FR')}</td>
-                    <td>{q.items?.length || 0}</td>
-                    <td style={{ fontWeight: 600 }}>{q.totals?.ht?.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
-                    <td style={{ fontWeight: 700 }}>{q.totals?.ttc?.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
-                    <td style={{ textAlign: 'center' }}>
-                      <div style={{ display: 'flex', gap: '0.4rem' }}>
-                        <button onClick={() => { if(onOpenQuote) onOpenQuote(q); }} className="btn" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', color: '#2563eb', borderColor: '#2563eb' }}>
-                          Ouvrir
-                        </button>
-                        <button onClick={() => handleConvertToOrder(q)} className="btn btn-primary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', background: '#10b981' }} title="Transformer en Commande">
-                          <CheckCircle size={14} /> Commande
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {(data.quotes || []).filter(q => q.clientId === editingClient.id).length === 0 && (
+            <div className="table-responsive">
+              <table className="data-table">
+                <thead>
                   <tr>
-                    <td colSpan="6" style={{ textAlign: 'center', padding: '1rem', color: '#94a3b8' }}>
-                      Aucun devis enregistré pour ce client.
-                    </td>
+                    <th>N° Devis</th>
+                    <th>Date</th>
+                    <th>Nombre de Produits</th>
+                    <th>Montant HT</th>
+                    <th>Montant TTC</th>
+                    <th style={{ width: '80px', textAlign: 'center' }}>Actions</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {(data.quotes || []).filter(q => q.clientId === editingClient.id).map(q => (
+                    <tr key={q.id}>
+                      <td data-label="N°" style={{ fontWeight: 700, color: '#2563eb' }}>{q.number}</td>
+                      <td data-label="Date">{new Date(q.createdAt).toLocaleDateString('fr-FR')}</td>
+                      <td data-label="Produits">{q.items?.length || 0}</td>
+                      <td data-label="HT" style={{ fontWeight: 600 }}>{q.totals?.ht?.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
+                      <td data-label="TTC" style={{ fontWeight: 700 }}>{q.totals?.ttc?.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
+                      <td data-label="Actions" style={{ textAlign: 'center' }}>
+                        <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
+                          <button onClick={() => { if(onOpenQuote) onOpenQuote(q); }} className="btn" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', color: '#2563eb', borderColor: '#2563eb' }}>
+                            Ouvrir
+                          </button>
+                          <button onClick={() => handleConvertToOrder(q)} className="btn btn-primary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', background: '#10b981' }} title="Transformer en Commande">
+                            <CheckCircle size={14} /> Commande
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {(data.quotes || []).filter(q => q.clientId === editingClient.id).length === 0 && (
+                    <tr>
+                      <td colSpan="6" style={{ textAlign: 'center', padding: '1rem', color: '#94a3b8' }}>
+                        Aucun devis enregistré pour ce client.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       ) : null}
 
-      <div className="glass shadow-md">
+      <div className="table-responsive">
         <table className="data-table">
           <thead>
             <tr>
@@ -207,12 +209,12 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
               return (
               <React.Fragment key={c.id}>
                 <tr>
-                  <td style={{ fontWeight: 600, color: '#64748b' }}>{c.id}</td>
-                  <td style={{ fontWeight: 600 }}>{c.nom}</td>
-                  <td>{c.telephone || '-'}</td>
-                  <td>{c.email || '-'}</td>
-                  <td>{c.nif || '-'}</td>
-                  <td style={{ textAlign: 'center' }}>
+                  <td data-label="ID" style={{ fontWeight: 600, color: '#64748b' }}>{c.id}</td>
+                  <td data-label="Nom" style={{ fontWeight: 600 }}>{c.nom}</td>
+                  <td data-label="Tél.">{c.telephone || '-'}</td>
+                  <td data-label="Email">{c.email || '-'}</td>
+                  <td data-label="NIF">{c.nif || '-'}</td>
+                  <td data-label="Actions" style={{ textAlign: 'center' }}>
                     <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'center' }}>
                       <button className="btn" onClick={() => setExpandedClient(expandedClient === c.id ? null : c.id)} title="Voir les devis" style={{ padding: '0.4rem', color: clientQuotes.length > 0 ? '#3b82f6' : '#94a3b8', background: expandedClient === c.id ? '#e0f2fe' : 'transparent' }}>
                         <FileText size={16} />
@@ -236,39 +238,41 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
                         {clientQuotes.length === 0 ? (
                            <p style={{ color: '#64748b', fontSize: '0.9rem', margin: 0 }}>Aucun devis enregistré pour ce client.</p>
                         ) : (
-                          <table className="data-table" style={{ background: 'white' }}>
-                            <thead>
-                              <tr>
-                                <th>N° Devis</th>
-                                <th>Date</th>
-                                <th>Produits</th>
-                                <th>Montant HT</th>
-                                <th>Montant TTC</th>
-                                <th style={{ textAlign: 'center' }}>Action</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {clientQuotes.map(q => (
-                                <tr key={q.id}>
-                                  <td style={{ fontWeight: 700, color: '#3b82f6' }}>{q.number}</td>
-                                  <td>{new Date(q.createdAt).toLocaleDateString('fr-FR')}</td>
-                                  <td>{q.items?.length || 0}</td>
-                                  <td style={{ fontWeight: 600 }}>{q.totals?.ht?.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
-                                  <td style={{ fontWeight: 700 }}>{q.totals?.ttc?.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
-                                  <td style={{ textAlign: 'center' }}>
-                                    <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'center' }}>
-                                      <button onClick={() => { if(onOpenQuote) onOpenQuote(q); }} className="btn" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', color: '#2563eb', borderColor: '#2563eb' }}>
-                                        Détails
-                                      </button>
-                                      <button onClick={() => handleConvertToOrder(q)} className="btn btn-primary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', background: '#10b981' }}>
-                                        Rendre Commande
-                                      </button>
-                                    </div>
-                                  </td>
+                          <div className="table-responsive">
+                            <table className="data-table" style={{ background: 'white' }}>
+                              <thead>
+                                <tr>
+                                  <th>N° Devis</th>
+                                  <th>Date</th>
+                                  <th>Produits</th>
+                                  <th>Montant HT</th>
+                                  <th>Montant TTC</th>
+                                  <th style={{ textAlign: 'center' }}>Action</th>
                                 </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                              </thead>
+                              <tbody>
+                                {clientQuotes.map(q => (
+                                  <tr key={q.id}>
+                                    <td data-label="N°" style={{ fontWeight: 700, color: '#3b82f6' }}>{q.number}</td>
+                                    <td data-label="Date">{new Date(q.createdAt).toLocaleDateString('fr-FR')}</td>
+                                    <td data-label="Prd.">{q.items?.length || 0}</td>
+                                    <td data-label="HT" style={{ fontWeight: 600 }}>{q.totals?.ht?.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
+                                    <td data-label="TTC" style={{ fontWeight: 700 }}>{q.totals?.ttc?.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
+                                    <td data-label="Actions" style={{ textAlign: 'center' }}>
+                                      <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'center' }}>
+                                        <button onClick={() => { if(onOpenQuote) onOpenQuote(q); }} className="btn" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', color: '#2563eb', borderColor: '#2563eb' }}>
+                                          Détails
+                                        </button>
+                                        <button onClick={() => handleConvertToOrder(q)} className="btn btn-primary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', background: '#10b981' }}>
+                                          Rendre Commande
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
                         )}
                       </div>
                     </td>

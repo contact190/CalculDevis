@@ -317,7 +317,7 @@ function App() {
     <div className="app-container">
       {/* Sidebar */}
       <aside className="sidebar shadow-2xl">
-        <div style={{ padding: '0 0.5rem', marginBottom: '2.5rem' }}>
+        <div className="sidebar-logo" style={{ padding: '0 0.5rem', marginBottom: '2.5rem' }}>
           <h1 style={{ fontSize: '1.25rem', fontWeight: 800, letterSpacing: '-0.5px', color: 'white', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <div style={{ width: '32px', height: '32px', background: '#3b82f6', borderRadius: '8px', display: 'grid', placeItems: 'center' }}>
               <Home size={18} color="white" />
@@ -326,8 +326,8 @@ function App() {
           </h1>
         </div>
 
-        <nav style={{ flex: 1 }}>
-          <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+        <nav className="sidebar-nav" style={{ flex: 1 }}>
+          <ul className="sidebar-nav" style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             {menuItems.map(item => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
@@ -335,26 +335,12 @@ function App() {
                 <li key={item.id}>
                   <button 
                     onClick={() => setActiveTab(item.id)}
-                    style={{
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '1rem',
-                      padding: '0.875rem 1.25rem',
-                      borderRadius: '0.75rem',
-                      border: 'none',
-                      background: isActive ? 'rgba(59, 130, 246, 0.15)' : 'transparent',
-                      color: isActive ? '#3b82f6' : '#94a3b8',
-                      cursor: 'pointer',
-                      fontSize: '0.95rem',
-                      fontWeight: isActive ? 600 : 400,
-                      transition: 'all 0.2s',
-                      textAlign: 'left'
-                    }}
+                    className={`nav-button ${isActive ? 'active' : ''}`}
+                    title={item.label}
                   >
                     <Icon size={20} />
-                    {item.label}
-                    {isActive && <ChevronRight size={16} style={{ marginLeft: 'auto' }} />}
+                    <span className="nav-label">{item.label}</span>
+                    {isActive && <ChevronRight size={16} className="nav-arrow" style={{ marginLeft: 'auto' }} />}
                   </button>
                 </li>
               );
@@ -378,12 +364,12 @@ function App() {
            </div>
         </div>
 
-        <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '1rem' }}>
+        <div className="sidebar-footer" style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '1rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem' }}>
             <div style={{ width: '40px', height: '40px', background: '#334155', borderRadius: '50%', display: 'grid', placeItems: 'center' }}>
               <span style={{ fontWeight: 600 }}>JD</span>
             </div>
-            <div>
+            <div className="nav-label">
               <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600, color: 'white' }}>Jean Dupont</p>
               <p style={{ margin: 0, fontSize: '0.75rem', color: '#94a3b8' }}>Administrateur</p>
             </div>
