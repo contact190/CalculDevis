@@ -558,6 +558,26 @@ export class FormulaEngine {
             cost: finalCost
           });
 
+          // NEW: Process Add-ons for this shutter item
+          if (item.addOns && Array.isArray(item.addOns)) {
+            item.addOns.forEach(addon => {
+              const addonQty = this.evaluate(addon.formula || '1', { L, H, HC: shutterHeight });
+              if (addonQty > 0) {
+                const addonPrice = addon.price || 0;
+                shutterPack.push({
+                  id: `${item.id}-addon-${(addon.name || 'opt').replace(/\s+/g, '-').toLowerCase()}`,
+                  name: `Add-on (${item.name}): ${addon.name}`,
+                  qty: addonQty,
+                  priceUnit: addon.unit || 'Unité',
+                  price: addonPrice,
+                  formula: addon.formula || '1',
+                  cost: addonQty * addonPrice
+                });
+              }
+            });
+          }
+
+
           // Add Extra Baguette if Glissière and enabled
           if (key === 'glissiereId' && item.hasBaguette && config.shutterConfig.enableBaguette) {
             const baguettePrice = item.baguettePrice || 0;

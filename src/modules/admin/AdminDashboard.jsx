@@ -152,6 +152,7 @@ const CollapsibleGroup = ({ title, children, defaultOpen = false, count = 0 }) =
 
 const AdminDashboard = ({ data, setData }) => {
   const [activeTab, setActiveTab] = useState('ranges');
+  const [editingAddonItem, setEditingAddonItem] = useState(null); // { family, idx, item }
   const [editingComposition, setEditingComposition] = useState(null);
 
   const handleAddComposition = () => {
@@ -602,6 +603,106 @@ const AdminDashboard = ({ data, setData }) => {
             </button>
           ))}
         </div>
+        
+        {/* Add-ons Manager Modal */}
+        {editingAddonItem && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '1rem' }}>
+            <div className="glass" style={{ width: '100%', maxWidth: '800px', maxHeight: '90vh', overflowY: 'auto' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                <h3 style={{ margin: 0 }}>Options Supplémentaires (Add-ons) : {editingAddonItem.item.name}</h3>
+                <button onClick={() => setEditingAddonItem(null)} className="btn btn-secondary"><Plus size={18} style={{ transform: 'rotate(45deg)' }} /> Fermer</button>
+              </div>
+              
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Nom de l'option</th>
+                    <th>Formule Quantité (ex: 1, L/1000)</th>
+                    <th>Prix Unit. (DZD)</th>
+                    <th>Unité</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(editingAddonItem.item.addOns || []).map((addon, ai) => (
+                    <tr key={ai}>
+                      <td><input className="input" value={addon.name} onChange={e => {
+                        const newAddons = [...(editingAddonItem.item.addOns || [])];
+                        newAddons[ai].name = e.target.value;
+                        if (editingAddonItem.isShutter) {
+                          updateShutterItem(editingAddonItem.family, editingAddonItem.idx, 'addOns', newAddons);
+                        } else {
+                          handleUpdateItem(editingAddonItem.family, editingAddonItem.item.id, 'addOns', newAddons, editingAddonItem.idx);
+                        }
+                      }} /></td>
+                      <td><input className="input" value={addon.formula} onChange={e => {
+                        const newAddons = [...(editingAddonItem.item.addOns || [])];
+                        newAddons[ai].formula = e.target.value;
+                        if (editingAddonItem.isShutter) {
+                          updateShutterItem(editingAddonItem.family, editingAddonItem.idx, 'addOns', newAddons);
+                        } else {
+                          handleUpdateItem(editingAddonItem.family, editingAddonItem.item.id, 'addOns', newAddons, editingAddonItem.idx);
+                        }
+                      }} /></td>
+                      <td><input className="input" type="number" value={addon.price} onChange={e => {
+                        const newAddons = [...(editingAddonItem.item.addOns || [])];
+                        newAddons[ai].price = parseFloat(e.target.value) || 0;
+                        if (editingAddonItem.isShutter) {
+                          updateShutterItem(editingAddonItem.family, editingAddonItem.idx, 'addOns', newAddons);
+                        } else {
+                          handleUpdateItem(editingAddonItem.family, editingAddonItem.item.id, 'addOns', newAddons, editingAddonItem.idx);
+                        }
+                      }} /></td>
+                      <td>
+                        <select className="input" value={addon.unit || 'Unité'} onChange={e => {
+                          const newAddons = [...(editingAddonItem.item.addOns || [])];
+                          newAddons[ai].unit = e.target.value;
+                          if (editingAddonItem.isShutter) {
+                            updateShutterItem(editingAddonItem.family, editingAddonItem.idx, 'addOns', newAddons);
+                          } else {
+                            handleUpdateItem(editingAddonItem.family, editingAddonItem.item.id, 'addOns', newAddons, editingAddonItem.idx);
+                          }
+                        }}>
+                          <option>Unité</option>
+                          <option>ML</option>
+                          <option>M2</option>
+                        </select>
+                      </td>
+                      <td><button className="btn" onClick={() => {
+                        const newAddons = (editingAddonItem.item.addOns || []).filter((_, i) => i !== ai);
+                        if (editingAddonItem.isShutter) {
+                          updateShutterItem(editingAddonItem.family, editingAddonItem.idx, 'addOns', newAddons);
+                        } else {
+                          handleUpdateItem(editingAddonItem.family, editingAddonItem.item.id, 'addOns', newAddons, editingAddonItem.idx);
+                        }
+                      }} style={{ color: '#ef4444' }}><Trash2 size={16} /></button></td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td colSpan="5">
+                      <button className="btn btn-secondary" style={{ width: '100%' }} onClick={() => {
+                        const newAddons = [...(editingAddonItem.item.addOns || []), { name: 'Nouvel add-on', formula: '1', price: 0, unit: 'Unité' }];
+                        if (editingAddonItem.isShutter) {
+                          updateShutterItem(editingAddonItem.family, editingAddonItem.idx, 'addOns', newAddons);
+                        } else {
+                          handleUpdateItem(editingAddonItem.family, editingAddonItem.item.id, 'addOns', newAddons, editingAddonItem.idx);
+                        }
+                      }}>
+                        <Plus size={16} /> Ajouter une ligne d'option
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+
+              </table>
+              
+              <div style={{ marginTop: '1.5rem', textAlign: 'right' }}>
+                 <button onClick={() => setEditingAddonItem(null)} className="btn btn-primary">Valider</button>
+              </div>
+            </div>
+          </div>
+        )}
+
 
         <div style={{ padding: '1.5rem' }}>
           {activeTab === 'categories' && (
@@ -998,6 +1099,7 @@ const AdminDashboard = ({ data, setData }) => {
                             <th>Désignation</th>
                             <th>Unité</th>
                             <th>Prix (DZD)</th>
+                            <th>Add-ons (JSON)</th>
                             <th>Actions</th>
                           </tr>
                         </thead>
@@ -1056,6 +1158,12 @@ const AdminDashboard = ({ data, setData }) => {
                                   </select>
                                 </td>
                                 <td data-label="Prix"><input type="number" step="0.01" className="input" value={acc.price} onChange={e => handleUpdateItem('accessories', acc.id, 'price', e.target.value, idx)} style={{ width: '100px' }} /></td>
+                                <td data-label="Add-ons">
+                                  <button className="base-btn btn-secondary" onClick={() => setEditingAddonItem({ family: 'accessories', idx, item: acc, isShutter: false })} style={{ fontSize: '0.75rem', padding: '0.4rem 0.6rem' }}>
+                                    🔧 Options ({acc.addOns?.length || 0})
+                                  </button>
+                                </td>
+
                                 <td data-label="Actions" style={{ display: 'flex', gap: '0.3rem', justifyContent: 'flex-end' }}>
                                   <button className="btn" onClick={() => handleDuplicateItem('accessories', acc)} style={{ padding: '0.4rem', color: '#6366f1' }}><Copy size={16} /></button>
                                   <button className="btn" onClick={() => handleDeleteItem('accessories', acc.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
@@ -1806,12 +1914,20 @@ const AdminDashboard = ({ data, setData }) => {
                 const updated = [...list];
                 if (updated[idx]) {
                   const item = { ...updated[idx], [field]: (field === 'price' || field === 'height' || field === 'jointPrice' || field === 'baguettePrice' || field === 'barLength') ? parseFloat(value) || 0 : value };
+                  if (field === 'addOnsJSON') {
+                    try {
+                      item.addOns = JSON.parse(value);
+                    } catch (e) {
+                      // Silently fail or track error in item if needed
+                    }
+                  }
                   delete item._isNew;
                   updated[idx] = item;
                 }
                 return { ...prev, shutterComponents: { ...components, [family]: updated } };
               });
             };
+
 
             const deleteShutterItem = (family, idx) => {
               setData(prev => {
@@ -1884,6 +2000,7 @@ const AdminDashboard = ({ data, setData }) => {
                           <th>Formule Qté</th>
                           <th>Unité</th>
                           <th>Prix (DZD)</th>
+                          <th>Add-ons (JSON)</th>
                           <th>Actions</th>
                         </tr>
                       </thead>
@@ -1940,11 +2057,18 @@ const AdminDashboard = ({ data, setData }) => {
                               </select>
                             </td>
                             <td><input className="input" type="number" step="0.01" value={item.price} onChange={e => updateShutterItem(key, i, 'price', e.target.value)} style={{ width: '100px' }} /></td>
+                            <td>
+                              <button className="base-btn btn-secondary" onClick={() => setEditingAddonItem({ family: key, idx: i, item, isShutter: true })} style={{ fontSize: '0.75rem', padding: '0.4rem 0.6rem' }}>
+                                 🔧 Options ({item.addOns?.length || 0})
+                              </button>
+                            </td>
                             <td><button className="btn" onClick={() => deleteShutterItem(key, i)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button></td>
+
+
                           </tr>
                         ))}
                         <tr>
-                          <td colSpan={key === 'glissieres' ? 8 : (key === 'caissons' ? 7 : 6)}>
+                          <td colSpan={key === 'glissieres' ? 15 : (key === 'caissons' ? 10 : 9)}>
                             <button className="btn btn-secondary" onClick={() => addShutterItem(key)} style={{ width: '100%', marginTop: '0.4rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
                               <Plus size={16} /> Ajouter
                             </button>
