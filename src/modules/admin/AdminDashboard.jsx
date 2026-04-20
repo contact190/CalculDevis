@@ -605,128 +605,167 @@ const AdminDashboard = ({ data, setData }) => {
         </div>
         
         {/* Add-ons Manager Modal */}
-        {editingAddonItem && (
-          <div style={{ 
-            position: 'fixed', 
-            top: 0, 
-            left: 0, 
-            width: '100vw', 
-            height: '100vh', 
-            background: 'rgba(0,0,0,0.6)', 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center', 
-            zIndex: 9999, 
-            padding: '1rem',
-            backdropFilter: 'blur(4px)'
-          }}>
-            <div className="glass shadow-2xl" style={{ 
-              width: '100%', 
-              maxWidth: '900px', 
-              maxHeight: '85vh', 
-              overflowY: 'auto',
-              background: 'white',
-              color: '#1e293b',
-              padding: '2rem',
-              borderRadius: '1rem',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
-            }}>
+        {editingAddonItem && (() => {
+          const currentItem = editingAddonItem.isShutter 
+            ? (data.shutterComponents?.[editingAddonItem.family]?.[editingAddonItem.idx])
+            : (data[editingAddonItem.family]?.find(x => x.id === editingAddonItem.item.id));
+            
+          if (!currentItem) return null;
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                <h3 style={{ margin: 0 }}>Options Supplémentaires (Add-ons) : {editingAddonItem.item.name}</h3>
-                <button onClick={() => setEditingAddonItem(null)} className="btn btn-secondary"><Plus size={18} style={{ transform: 'rotate(45deg)' }} /> Fermer</button>
-              </div>
-              
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Nom de l'option</th>
-                    <th>Formule Quantité (ex: 1, L/1000)</th>
-                    <th>Prix Unit. (DZD)</th>
-                    <th>Unité</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(editingAddonItem.item.addOns || []).map((addon, ai) => (
-                    <tr key={ai}>
-                      <td><input className="input" value={addon.name} onChange={e => {
-                        const newAddons = [...(editingAddonItem.item.addOns || [])];
-                        newAddons[ai].name = e.target.value;
-                        if (editingAddonItem.isShutter) {
-                          updateShutterItem(editingAddonItem.family, editingAddonItem.idx, 'addOns', newAddons);
-                        } else {
-                          handleUpdateItem(editingAddonItem.family, editingAddonItem.item.id, 'addOns', newAddons, editingAddonItem.idx);
-                        }
-                      }} /></td>
-                      <td><input className="input" value={addon.formula} onChange={e => {
-                        const newAddons = [...(editingAddonItem.item.addOns || [])];
-                        newAddons[ai].formula = e.target.value;
-                        if (editingAddonItem.isShutter) {
-                          updateShutterItem(editingAddonItem.family, editingAddonItem.idx, 'addOns', newAddons);
-                        } else {
-                          handleUpdateItem(editingAddonItem.family, editingAddonItem.item.id, 'addOns', newAddons, editingAddonItem.idx);
-                        }
-                      }} /></td>
-                      <td><input className="input" type="number" value={addon.price} onChange={e => {
-                        const newAddons = [...(editingAddonItem.item.addOns || [])];
-                        newAddons[ai].price = parseFloat(e.target.value) || 0;
-                        if (editingAddonItem.isShutter) {
-                          updateShutterItem(editingAddonItem.family, editingAddonItem.idx, 'addOns', newAddons);
-                        } else {
-                          handleUpdateItem(editingAddonItem.family, editingAddonItem.item.id, 'addOns', newAddons, editingAddonItem.idx);
-                        }
-                      }} /></td>
-                      <td>
-                        <select className="input" value={addon.unit || 'Unité'} onChange={e => {
-                          const newAddons = [...(editingAddonItem.item.addOns || [])];
-                          newAddons[ai].unit = e.target.value;
+          return (
+            <div style={{ 
+              position: 'fixed', 
+              top: 0, 
+              left: 0, 
+              width: '100vw', 
+              height: '100vh', 
+              background: 'rgba(0,0,0,0.6)', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              zIndex: 9999, 
+              padding: '1rem',
+              backdropFilter: 'blur(4px)'
+            }}>
+              <div className="glass shadow-2xl" style={{ 
+                width: '100%', 
+                maxWidth: '900px', 
+                maxHeight: '85vh', 
+                overflowY: 'auto',
+                background: 'white',
+                color: '#1e293b',
+                padding: '2rem',
+                borderRadius: '1rem',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+              }}>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                  <h3 style={{ margin: 0 }}>Options Supplémentaires : {currentItem.name}</h3>
+                  <button onClick={() => setEditingAddonItem(null)} className="btn btn-secondary"> Fermer</button>
+                </div>
+                
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Nom de l'option</th>
+                      <th>Lier à un article (Optionnel)</th>
+                      <th>Formule Quantité (ex: 1, L/1000)</th>
+                      <th>Prix Unit. (DZD)</th>
+                      <th>Unité</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {(currentItem.addOns || []).map((addon, ai) => (
+                      <tr key={ai}>
+                        <td><input className="input" value={addon.name} onChange={e => {
+                          const newAddons = [...(currentItem.addOns || [])];
+                          newAddons[ai].name = e.target.value;
                           if (editingAddonItem.isShutter) {
                             updateShutterItem(editingAddonItem.family, editingAddonItem.idx, 'addOns', newAddons);
                           } else {
-                            handleUpdateItem(editingAddonItem.family, editingAddonItem.item.id, 'addOns', newAddons, editingAddonItem.idx);
+                            handleUpdateItem(editingAddonItem.family, currentItem.id, 'addOns', newAddons, editingAddonItem.idx);
+                          }
+                        }} /></td>
+                        <td>
+                          <select className="input" value={addon.linkedId || ''} onChange={e => {
+                            const newAddons = [...(currentItem.addOns || [])];
+                            const linkedId = e.target.value;
+                            newAddons[ai].linkedId = linkedId;
+                            // Auto-fill price and name if linked
+                            if (linkedId) {
+                               const linked = data.accessories.find(a => a.id === linkedId) || data.profiles.find(p => p.id === linkedId);
+                               if (linked) {
+                                  newAddons[ai].name = linked.name;
+                                  newAddons[ai].price = linked.price || 0;
+                                  newAddons[ai].unit = linked.unit || 'ML';
+                               }
+                            }
+                            if (editingAddonItem.isShutter) {
+                              updateShutterItem(editingAddonItem.family, editingAddonItem.idx, 'addOns', newAddons);
+                            } else {
+                              handleUpdateItem(editingAddonItem.family, currentItem.id, 'addOns', newAddons, editingAddonItem.idx);
+                            }
+                          }}>
+                            <option value="">(Libre)</option>
+                            <optgroup label="Accessoires">
+                              {data.accessories.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                            </optgroup>
+                            <optgroup label="Profilés">
+                              {data.profiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                            </optgroup>
+                          </select>
+                        </td>
+
+                        <td><input className="input" value={addon.formula} onChange={e => {
+                          const newAddons = [...(currentItem.addOns || [])];
+                          newAddons[ai].formula = e.target.value;
+                          if (editingAddonItem.isShutter) {
+                            updateShutterItem(editingAddonItem.family, editingAddonItem.idx, 'addOns', newAddons);
+                          } else {
+                            handleUpdateItem(editingAddonItem.family, currentItem.id, 'addOns', newAddons, editingAddonItem.idx);
+                          }
+                        }} /></td>
+                        <td><input className="input" type="number" value={addon.price} onChange={e => {
+                          const newAddons = [...(currentItem.addOns || [])];
+                          newAddons[ai].price = parseFloat(e.target.value) || 0;
+                          if (editingAddonItem.isShutter) {
+                            updateShutterItem(editingAddonItem.family, editingAddonItem.idx, 'addOns', newAddons);
+                          } else {
+                            handleUpdateItem(editingAddonItem.family, currentItem.id, 'addOns', newAddons, editingAddonItem.idx);
+                          }
+                        }} /></td>
+                        <td>
+                          <select className="input" value={addon.unit || 'Unité'} onChange={e => {
+                            const newAddons = [...(currentItem.addOns || [])];
+                            newAddons[ai].unit = e.target.value;
+                            if (editingAddonItem.isShutter) {
+                              updateShutterItem(editingAddonItem.family, editingAddonItem.idx, 'addOns', newAddons);
+                            } else {
+                              handleUpdateItem(editingAddonItem.family, currentItem.id, 'addOns', newAddons, editingAddonItem.idx);
+                            }
+                          }}>
+                            <option>Unité</option>
+                            <option>ML</option>
+                            <option>M2</option>
+                          </select>
+                        </td>
+                        <td><button className="btn" onClick={() => {
+                          const newAddons = (currentItem.addOns || []).filter((_, i) => i !== ai);
+                          if (editingAddonItem.isShutter) {
+                            updateShutterItem(editingAddonItem.family, editingAddonItem.idx, 'addOns', newAddons);
+                          } else {
+                            handleUpdateItem(editingAddonItem.family, currentItem.id, 'addOns', newAddons, editingAddonItem.idx);
+                          }
+                        }} style={{ color: '#ef4444' }}><Trash2 size={16} /></button></td>
+                      </tr>
+                    ))}
+                    <tr>
+                      <td colSpan="6">
+                        <button className="btn btn-secondary" style={{ width: '100%', padding: '1rem', fontWeight: 'bold' }} onClick={() => {
+                          const newAddons = [...(currentItem.addOns || []), { name: 'Nouvel add-on', formula: '1', price: 0, unit: 'Unité' }];
+                          if (editingAddonItem.isShutter) {
+                            updateShutterItem(editingAddonItem.family, editingAddonItem.idx, 'addOns', newAddons);
+                          } else {
+                            handleUpdateItem(editingAddonItem.family, currentItem.id, 'addOns', newAddons, editingAddonItem.idx);
                           }
                         }}>
-                          <option>Unité</option>
-                          <option>ML</option>
-                          <option>M2</option>
-                        </select>
+                          <Plus size={16} /> Ajouter une nouvelle ligne d'option
+                        </button>
                       </td>
-                      <td><button className="btn" onClick={() => {
-                        const newAddons = (editingAddonItem.item.addOns || []).filter((_, i) => i !== ai);
-                        if (editingAddonItem.isShutter) {
-                          updateShutterItem(editingAddonItem.family, editingAddonItem.idx, 'addOns', newAddons);
-                        } else {
-                          handleUpdateItem(editingAddonItem.family, editingAddonItem.item.id, 'addOns', newAddons, editingAddonItem.idx);
-                        }
-                      }} style={{ color: '#ef4444' }}><Trash2 size={16} /></button></td>
                     </tr>
-                  ))}
-                  <tr>
-                    <td colSpan="5">
-                      <button className="btn btn-secondary" style={{ width: '100%' }} onClick={() => {
-                        const newAddons = [...(editingAddonItem.item.addOns || []), { name: 'Nouvel add-on', formula: '1', price: 0, unit: 'Unité' }];
-                        if (editingAddonItem.isShutter) {
-                          updateShutterItem(editingAddonItem.family, editingAddonItem.idx, 'addOns', newAddons);
-                        } else {
-                          handleUpdateItem(editingAddonItem.family, editingAddonItem.item.id, 'addOns', newAddons, editingAddonItem.idx);
-                        }
-                      }}>
-                        <Plus size={16} /> Ajouter une ligne d'option
-                      </button>
-                    </td>
-                  </tr>
-                </tbody>
 
-              </table>
-              
-              <div style={{ marginTop: '1.5rem', textAlign: 'right' }}>
-                 <button onClick={() => setEditingAddonItem(null)} className="btn btn-primary">Valider</button>
+                  </tbody>
+                </table>
+                
+                <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
+                   <button onClick={() => setEditingAddonItem(null)} className="btn btn-primary" style={{ padding: '0.8rem 2rem' }}>Valider et Fermer</button>
+                </div>
               </div>
             </div>
-          </div>
-        )}
-
+          );
+        })()}
 
         <div style={{ padding: '1.5rem' }}>
           {activeTab === 'categories' && (
@@ -1928,8 +1967,11 @@ const AdminDashboard = ({ data, setData }) => {
               { key: 'lameFinales', label: 'Lames Finales' },
               { key: 'glissieres',  label: 'Glissières' },
               { key: 'axes',        label: 'Axes' },
-              { key: 'kits',        label: 'Kits Manœuvre' }
+              { key: 'moteurs',     label: 'Moteurs' },
+              { key: 'kits',        label: 'Kits Manœuvre' },
+              { key: 'extras',      label: 'Composants Divers' }
             ];
+
 
             const updateShutterItem = (family, idx, field, value) => {
               setData(prev => {

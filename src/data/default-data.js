@@ -196,8 +196,10 @@ export const DEFAULT_DATA = {
       { id: 'KIT-MOTE',   name: 'Kit Moteur',    price: 0, priceUnit: 'Unité', formula: '1', barLength: 1 },
       { id: 'KIT-TUNN',   name: 'Kit Tunnel',    price: 0, priceUnit: 'ML',    formula: 'L/1000', barLength: 1 },
       { id: 'KIT-MANI',   name: 'Kit Manivelle', price: 0, priceUnit: 'Unité', formula: '1', barLength: 1 }
-    ]
+    ],
+    extras: []
   },
+
   colors: [
     { id: 'RAL9016', name: 'Blanc 9016', hex: '#FFFFFF', factor: 1.0 },
     { id: 'RAL7016', name: 'Gris Anthracite', hex: '#373F43', factor: 1.15 },

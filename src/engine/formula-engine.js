@@ -479,8 +479,10 @@ export class FormulaEngine {
         { key: 'glissiereId', source: sc.glissieres },
         { key: 'axeId', source: sc.axes },
         { key: 'moteurId', source: sc.moteurs },
-        { key: 'kitId', source: sc.kits }
+        { key: 'kitId', source: sc.kits },
+        { key: 'extraId', source: sc.extras }
       ];
+
       families.forEach(({ key, source }) => {
         let selectedId = config.shutterConfig[key];
         
