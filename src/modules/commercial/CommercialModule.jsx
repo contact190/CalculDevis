@@ -351,7 +351,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                           <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, color: '#1e40af', background: '#eff6ff', padding: '0.4rem 0.75rem', borderRadius: '0.4rem', border: '1px solid #bfdbfe', width: '100%' }}>
                             <input type="checkbox" checked={config.shutterConfig?.hasCouvreJoint || false}
                               onChange={e => toggleCouvreJoint(e.target.checked)} />
-                            Pose avec Couvre-Joint (-1.2cm L)
+                            Pose avec Couvre-Joint (-3mm L)
                           </label>
                         </div>
                       )}

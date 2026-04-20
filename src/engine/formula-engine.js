@@ -370,9 +370,103 @@ export class FormulaEngine {
     return { profiles, accessories, glasses };
   }
 
+  processShutterComponent(item, vars, shutterPack, key = '', config = {}) {
+    const { L, H, HC } = vars;
+    const barLength = parseFloat(item.barLength) || 1;
+    
+    // Rule: Couvre Joint reduction ONLY on the caisson length
+    let itemScopeL = L;
+    if (key === 'caissonId' && config.shutterConfig?.hasCouvreJoint) {
+      itemScopeL -= 3;
+    }
+
+    const qty = this.evaluate(item.formula || '1', { L: itemScopeL, H, HC });
+    if (qty <= 0) return;
+
+    let itemPrice = item.price || 0;
+    let displayName = item.name;
+
+    // Handle Glissiere Params
+    if (key === 'glissiereId' && config.shutterConfig?.glissiereParams) {
+      const params = config.shutterConfig.glissiereParams;
+      const paramStrings = [];
+      if (item.opt1Label) {
+        const val = params.opt1 || item.opt1Values?.split(',')[0]?.trim();
+        if (val) paramStrings.push(`${item.opt1Label}: ${val}mm`);
+      }
+      if (item.opt2Label) {
+        const val = params.opt2 || item.opt2Values?.split(',')[0]?.trim();
+        if (val) paramStrings.push(`${item.opt2Label}: ${val}mm`);
+      }
+      if (paramStrings.length > 0) displayName += ` (${paramStrings.join(', ')})`;
+
+      // Option Plus-Values
+      if (item.opt1Values && item.opt1Prices) {
+        const vals = item.opt1Values.split(',').map(v => v.trim());
+        const prs = item.opt1Prices.split(',').map(p => parseFloat(p.trim()) || 0);
+        const selectedVal = params.opt1 || vals[0];
+        const vIdx = vals.indexOf(selectedVal);
+        if (vIdx !== -1 && prs[vIdx] !== undefined) itemPrice += prs[vIdx];
+      }
+      if (item.opt2Values && item.opt2Prices) {
+        const vals = item.opt2Values.split(',').map(v => v.trim());
+        const prs = item.opt2Prices.split(',').map(p => parseFloat(p.trim()) || 0);
+        const selectedVal = params.opt2 || vals[0];
+        const vIdx = vals.indexOf(selectedVal);
+        if (vIdx !== -1 && prs[vIdx] !== undefined) itemPrice += prs[vIdx];
+      }
+    }
+
+    const finalCost = (qty / barLength) * itemPrice;
+
+    shutterPack.push({
+      ...item,
+      name: displayName,
+      qty: qty,
+      price: itemPrice,
+      priceUnit: item.priceUnit,
+      resolvedFormula: this.resolveFormula(item.formula || '1', { L: itemScopeL, H, HC }),
+      cost: finalCost
+    });
+
+    // Process Add-ons
+    if (item.addOns && Array.isArray(item.addOns)) {
+      item.addOns.forEach(addon => {
+        const addonQty = this.evaluate(addon.formula || '1', { L: itemScopeL, H, HC });
+        if (addonQty > 0) {
+          const addonPrice = addon.price || 0;
+          shutterPack.push({
+            id: `${item.id}-addon-${(addon.name || 'opt').replace(/\s+/g, '-').toLowerCase()}`,
+            name: `Add-on (${item.name}): ${addon.name}`,
+            qty: addonQty,
+            priceUnit: addon.unit || 'Unité',
+            price: addonPrice,
+            formula: addon.formula || '1',
+            cost: addonQty * addonPrice
+          });
+        }
+      });
+    }
+
+    // Baguette
+    if (key === 'glissiereId' && item.hasBaguette && config.shutterConfig?.enableBaguette) {
+      const baguettePrice = item.baguettePrice || 0;
+      const bCost = (qty / barLength) * baguettePrice;
+      shutterPack.push({
+        id: `${item.id}-baguette`,
+        name: `Baguette pour ${item.name}`,
+        qty: qty,
+        priceUnit: 'ML',
+        price: baguettePrice,
+        cost: bCost
+      });
+    }
+  }
+
   /**
    * Calculate BOM (Bill of Materials) for a given configuration
    */
+
   calculateBOM(config) {
     let { L, H, glassId } = config;
     
