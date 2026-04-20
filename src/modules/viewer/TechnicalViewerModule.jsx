@@ -36,7 +36,7 @@ const TechnicalViewerModule = ({ data = {} }) => {
   const singleComponent = [...(data.profiles || []), ...(data.accessories || [])].find(x => x.id === selectedCompId);
 
   return (
-    <div className="flex-column-mobile" style={{ gap: '1.5rem' }}>
+    <div className="sidebar-layout">
       {/* Sidebar: Selection */}
       <div className="glass" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: '1.25rem', borderBottom: '1px solid #e2e8f0', background: 'white' }}>

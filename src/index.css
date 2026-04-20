@@ -89,24 +89,81 @@ body {
 .flex-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
+  align-items: flex-start;
+  gap: 1.5rem;
   margin-bottom: 2rem;
 }
 
 @media (max-width: 768px) {
   .flex-header {
-    flex-direction: column;
-    align-items: stretch;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 1rem;
   }
-  
   .flex-header > div {
-    text-align: center;
+    text-align: left;
   }
-  
-  .flex-header .btn {
-    width: 100%;
-    justify-content: center;
+}
+
+/* Inputs & Buttons */
+.input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  font-size: 0.95rem;
+  background: white;
+  transition: all 0.2s;
+  color: #1e293b;
+  outline: none;
+}
+
+.input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.btn {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+  font-size: 0.95rem;
+}
+
+.btn-primary {
+  background: #2563eb;
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #1d4ed8;
+}
+
+.btn-secondary {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.btn-secondary:hover {
+  background: #e2e8f0;
+}
+
+/* Helper for Sidebar + Main Layout on Desktop */
+.sidebar-layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 1.5rem;
+}
+
+@media (max-width: 1024px) {
+  .sidebar-layout {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -331,5 +388,13 @@ body {
   .nav-label {
     display: block;
     font-size: 0.65rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .data-table td input.input {
+    width: 100% !important;
+    min-width: 0 !important;
+    margin-top: 0.25rem;
   }
 }

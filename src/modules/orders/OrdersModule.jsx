@@ -546,10 +546,11 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                       {(item.siteMeasurements || []).map((m, mIdx) => (
                         <tr key={m.id}>
                           <td>{mIdx + 1}</td>
-                          <td><input type="number" className="input" value={m.L} onChange={e => updateSiteMeasurement(idx, m.id, 'L', e.target.value)} style={{ width: '100px' }} /></td>
-                          <td><input type="number" className="input" value={m.H} onChange={e => updateSiteMeasurement(idx, m.id, 'H', e.target.value)} style={{ width: '100px' }} /></td>
-                          <td><input type="number" className="input" value={m.qty} onChange={e => updateSiteMeasurement(idx, m.id, 'qty', e.target.value)} style={{ width: '80px' }} /></td>
+                          <td><input type="number" className="input" value={m.L} onChange={e => updateSiteMeasurement(idx, m.id, 'L', e.target.value)} style={{ minWidth: '100px' }} /></td>
+                          <td><input type="number" className="input" value={m.H} onChange={e => updateSiteMeasurement(idx, m.id, 'H', e.target.value)} style={{ minWidth: '100px' }} /></td>
+                          <td><input type="number" className="input" value={m.qty} onChange={e => updateSiteMeasurement(idx, m.id, 'qty', e.target.value)} style={{ minWidth: '80px' }} /></td>
                           <td><button onClick={() => removeSiteMeasurement(idx, m.id)} style={{ color: '#ef4444', border: 'none', background: 'transparent', cursor: 'pointer' }}><Trash2 size={16} /></button></td>
+
                         </tr>
                       ))}
                       {(!item.siteMeasurements || item.siteMeasurements.length === 0) && (

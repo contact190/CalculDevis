@@ -1183,12 +1183,12 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
       )}
 
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem' }}>
+      <header className="flex-header">
         <div>
           <h1 style={{ fontSize: '1.875rem', fontWeight: 700, color: '#1e293b' }}>Devis Commercial</h1>
           <p style={{ color: '#64748b' }}>Gérez vos produits et générez vos devis professionnels.</p>
         </div>
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
           <button onClick={() => setShowSettings(true)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1rem', border: '1px solid #e2e8f0', borderRadius: '0.5rem', background: 'white', cursor: 'pointer', color: '#64748b', fontSize: '0.875rem' }}>
             <Settings size={16} /> Paramètres
           </button>
