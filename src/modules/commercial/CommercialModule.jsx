@@ -274,8 +274,10 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                   { key: 'lameFinaleId', label: 'Lame Finale', items: database.shutterComponents.lameFinales || [] },
                   { key: 'glissiereId', label: 'Glissière', items: database.shutterComponents.glissieres },
                   { key: 'axeId', label: 'Axe', items: database.shutterComponents.axes },
-                  { key: 'kitId', label: 'Kit Manœuvre', items: database.shutterComponents.kits }
+                  { key: 'kitId', label: 'Kit Manœuvre', items: database.shutterComponents.kits },
+                  { key: 'extraId', label: 'Composant Divers', items: database.shutterComponents.extras || [] }
                 ].map(({ key, label, items }) => {
+
                   let filteredItems = items || [];
                   if (key === 'glissiereId' && currentComp?.rangeId) {
                       // Show items for this range OR universal items (no rangeId)
