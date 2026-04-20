@@ -150,36 +150,14 @@ function App() {
       });
     }
 
-    // Merge missing Profiles, Accessories, Compositions
-    ['ranges', 'profiles', 'accessories', 'compositions'].forEach(key => {
-      if (DEFAULT_DATA[key]) {
-        DEFAULT_DATA[key].forEach(defaultItem => {
-          const exists = repaired[key]?.some(item => item.id === defaultItem.id);
-          if (!exists) {
-            if (!repaired[key]) repaired[key] = [];
-            repaired[key].push(defaultItem);
-          }
-        });
-      }
-    });
+    // Note: We no longer auto-merge missing default items here 
+    // to allow users to permanently delete them.
+
 
     // Repair Shutter Components (Caissons)
     if (repaired.shutterComponents) {
-      const defaultC = DEFAULT_DATA.shutterComponents.caissons || [];
-      let currentC = repaired.shutterComponents.caissons || [];
-      defaultC.forEach(dc => {
-        const existingIdx = currentC.findIndex(cc => cc.id === dc.id);
-        if (existingIdx === -1) {
-          currentC.push(dc);
-        } else {
-          // Sync height if missing
-          currentC[existingIdx] = { 
-            ...currentC[existingIdx], 
-            height: dc.height || currentC[existingIdx].height 
-          };
-        }
-      });
-      repaired.shutterComponents.caissons = currentC;
+      // Just ensure the object structure exists, don't force default items
+      if (!repaired.shutterComponents.caissons) repaired.shutterComponents.caissons = [];
     }
 
     // Repair Shutter Components (glissieres Mono/Pala)
@@ -190,23 +168,12 @@ function App() {
       // Migration: Remove old range-specific glissieres
       currentG = currentG.filter(cg => !cg.rangeId);
 
-      defaultG.forEach(dg => {
-        const existingIdx = currentG.findIndex(cg => cg.id === dg.id);
-        if (existingIdx === -1) {
-          currentG.push(dg);
-        } else {
-          currentG[existingIdx] = { 
-            ...currentG[existingIdx], 
-            ...dg,
-            opt1Label: dg.opt1Label, 
-            opt1Values: dg.opt1Values,
-            opt2Label: dg.opt2Label,
-            opt2Values: dg.opt2Values,
-            barLength: dg.barLength
-          };
-        }
-      });
+      if (!repaired.shutterComponents.glissieres) repaired.shutterComponents.glissieres = [];
+      let currentG = repaired.shutterComponents.glissieres;
+      // Migration: Remove old range-specific glissieres
+      currentG = currentG.filter(cg => !cg.rangeId);
       repaired.shutterComponents.glissieres = currentG;
+
 
       // MISSION CRITICAL: Migrate existing products to items and handle glissiereIds
       if (repaired.quotes) {
