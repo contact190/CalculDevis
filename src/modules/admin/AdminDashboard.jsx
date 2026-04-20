@@ -606,8 +606,32 @@ const AdminDashboard = ({ data, setData }) => {
         
         {/* Add-ons Manager Modal */}
         {editingAddonItem && (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '1rem' }}>
-            <div className="glass" style={{ width: '100%', maxWidth: '800px', maxHeight: '90vh', overflowY: 'auto' }}>
+          <div style={{ 
+            position: 'fixed', 
+            top: 0, 
+            left: 0, 
+            width: '100vw', 
+            height: '100vh', 
+            background: 'rgba(0,0,0,0.6)', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            zIndex: 9999, 
+            padding: '1rem',
+            backdropFilter: 'blur(4px)'
+          }}>
+            <div className="glass shadow-2xl" style={{ 
+              width: '100%', 
+              maxWidth: '900px', 
+              maxHeight: '85vh', 
+              overflowY: 'auto',
+              background: 'white',
+              color: '#1e293b',
+              padding: '2rem',
+              borderRadius: '1rem',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+            }}>
+
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                 <h3 style={{ margin: 0 }}>Options Supplémentaires (Add-ons) : {editingAddonItem.item.name}</h3>
                 <button onClick={() => setEditingAddonItem(null)} className="btn btn-secondary"><Plus size={18} style={{ transform: 'rotate(45deg)' }} /> Fermer</button>
