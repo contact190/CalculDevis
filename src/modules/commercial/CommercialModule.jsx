@@ -1199,7 +1199,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
             <Plus size={16} /> Ajouter un produit
           </button>
         </div>
-      </div>
+      </header>
 
       {/* Quote Header Card */}
       <div className="glass shadow-md flex-header" style={{ marginBottom: '1.5rem', padding: '1.25rem' }}>
