@@ -24,8 +24,9 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
   const [selectedGlobalQuoteId, setSelectedGlobalQuoteId] = useState(currentQuote?.id || '');
 
   const activeQuote = useMemo(() => {
-    return database?.quotes?.find(q => q.id === selectedGlobalQuoteId) || currentQuote;
-  }, [database?.quotes, selectedGlobalQuoteId, currentQuote]);
+    const allSources = [...(database?.quotes || []), ...(database?.orders || [])];
+    return allSources.find(q => q.id === selectedGlobalQuoteId) || currentQuote;
+  }, [database?.quotes, database?.orders, selectedGlobalQuoteId, currentQuote]);
 
   const quoteItems = activeQuote?.items || [];
 
@@ -922,12 +923,22 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                   className="input"
                   style={{ fontWeight: 600, flex: 1, minWidth: '220px' }}
                 >
-                  <option value="">— Sélectionner un devis —</option>
-                  {currentQuote?.id && <option value={currentQuote.id}>Devis Actif (en cours)</option>}
-                  {(database.quotes || []).map(q => {
-                    const client = database.clients?.find(c => c.id === q.clientId);
-                    return <option key={q.id} value={q.id}>{q.number}{client ? ` — ${client.nom}` : ''}</option>;
-                  })}
+                  <option value="">— Sélectionner un document —</option>
+                  {currentQuote?.id && <option value={currentQuote.id}>⭐ Devis Actif (Écran Commercial)</option>}
+                  
+                  <optgroup label="🛒 COMMANDES (Payé/Confirmé)">
+                    {(database.orders || []).map(o => {
+                      const client = database.clients?.find(c => c.id === o.clientId);
+                      return <option key={o.id} value={o.id}>📦 {o.number || o.id}{client ? ` — ${client.nom}` : ''}</option>;
+                    })}
+                  </optgroup>
+
+                  <optgroup label="📋 DEVIS ( Brouillon / Attente )">
+                    {(database.quotes || []).map(q => {
+                      const client = database.clients?.find(c => c.id === q.clientId);
+                      return <option key={q.id} value={q.id}>📄 {q.number}{client ? ` — ${client.nom}` : ''}</option>;
+                    })}
+                  </optgroup>
                 </select>
                 <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
                   <span style={{ fontSize: '0.8rem', background: '#f1f5f9', color: '#475569', padding: '0.2rem 0.7rem', borderRadius: '999px', fontWeight: 600 }}>
