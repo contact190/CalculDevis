@@ -788,6 +788,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
       {activeTab === 'logistique' && (() => {
         const totalSlots = kitConfig.trolleys * kitConfig.slotsPerTrolley;
         
+        // --- 1. INITIALIZATION ---
         const globalCuts = []; 
         let itemsWithConfig = 0;
         let bomsCalculated = 0;
@@ -802,22 +803,22 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         if (isOrder && selectedBatchId !== 'ALL') {
           const batch = batches.find(b => b.id === selectedBatchId);
           if (batch) {
-            // Expand batch items (measurements)
             batch.items.forEach(bi => {
               (bi.measurements || []).forEach(m => {
                 targetItems.push({ 
                   ...bi, 
                   config: { ...bi.config, L: m.L, H: m.H }, 
-                  qty: m.qty || 1,
+                  qty: Number(m.qty) || 1,
                   isFromBatch: true 
                 });
               });
             });
           }
         } else {
-          targetItems = quoteItems;
+          targetItems = quoteItems.map(i => ({ ...i, qty: Number(i.qty) || 1 }));
         }
 
+        // --- 2. CALCULATION LOOP ---
         targetItems.forEach((item, winIdx) => {
           if (!item.config) return;
           const cId = item.config.compositionId;
@@ -829,53 +830,61 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
           itemsWithConfig++;
           try {
             const b = engine.calculateBOM(item.config);
-            if (b) bomsCalculated++;
-            const qty = item.qty || 1;
-            
-            if (b.profiles && Array.isArray(b.profiles)) {
-              b.profiles.forEach(p => {
-                const piecesPerUnit = p.qty || 0;
-                totalPiecesInBoms += (piecesPerUnit * qty);
-                for (let q = 0; q < piecesPerUnit * qty; q++) {
-                  globalCuts.push({
-                    profileId: p.id,
-                    profileName: p.name,
-                    label: p.label,
-                    length: Math.round(p.length),
-                    windowIdx,
-                    windowLabel: item.label || `Fenêtre #${winIdx + 1}`,
-                    windowItemId: item.id,
-                  });
-                }
-              });
-            }
-            // Shutter components
-            if (b.shutters && Array.isArray(b.shutters)) {
-              b.shutters.forEach(s => {
-                if (s.priceUnit === 'ML' && s.qty > 0) {
-                  const lenMm = Math.round((s.qty || 0) * 1000);
-                  totalPiecesInBoms += qty;
-                  for (let q = 0; q < qty; q++) {
+            if (b) {
+              bomsCalculated++;
+              const qty = Math.max(1, Number(item.qty) || 1);
+              
+              if (b.profiles && Array.isArray(b.profiles)) {
+                b.profiles.forEach(p => {
+                  const piecesPerUnit = Math.max(0, Number(p.qty) || 0);
+                  const totalPieces = piecesPerUnit * qty;
+                  totalPiecesInBoms += totalPieces;
+                  
+                  for (let q = 0; q < totalPieces; q++) {
                     globalCuts.push({
-                      profileId: s.id,
-                      profileName: s.name,
-                      label: s.name,
-                      length: lenMm,
+                      profileId: p.id,
+                      profileName: p.name,
+                      label: p.label,
+                      length: Math.round(p.length),
                       windowIdx,
                       windowLabel: item.label || `Fenêtre #${winIdx + 1}`,
                       windowItemId: item.id,
-                      isShutter: true,
+                      isBatch: !!item.isFromBatch
                     });
                   }
-                }
-              });
+                });
+              }
+
+              if (b.shutters && Array.isArray(b.shutters)) {
+                b.shutters.forEach(s => {
+                  if (s.priceUnit === 'ML' && s.qty > 0) {
+                    const lenMm = Math.round((Number(s.qty) || 0) * 1000);
+                    totalPiecesInBoms += qty;
+                    for (let q = 0; q < qty; q++) {
+                      globalCuts.push({
+                        profileId: s.id,
+                        profileName: s.name,
+                        label: s.name,
+                        length: lenMm,
+                        windowIdx,
+                        windowLabel: item.label || `Fenêtre #${winIdx + 1}`,
+                        windowItemId: item.id,
+                        isShutter: true,
+                        isBatch: !!item.isFromBatch
+                      });
+                    }
+                  }
+                });
+              }
             }
           } catch (err) {
-            console.error("BOM Calculation error in Logistics:", err);
+            console.error("Logistics Calculation Error:", err);
           }
         });
 
-        // Group by profileId for per-bar optimization
+        console.log(`Logistique Debug: targetItems=${targetItems.length}, bomsCalculated=${bomsCalculated}, globalCuts=${globalCuts.length}`);
+
+        // --- 3. OPTIMIZATION (BFD) ---
         const profileGroups = {};
         globalCuts.forEach(cut => {
           if (!profileGroups[cut.profileId]) profileGroups[cut.profileId] = { profileName: cut.profileName, cuts: [] };
