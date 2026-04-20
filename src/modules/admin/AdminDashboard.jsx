@@ -173,6 +173,54 @@ const AdminDashboard = ({ data, setData }) => {
     setEditingComposition(newComp);
   };
 
+  // Shutter Helpers (Moved to Top for Accessibility)
+  const updateShutterItem = (family, idx, field, value) => {
+    setData(prev => {
+      const components = prev.shutterComponents || {};
+      const list = components[family] || [];
+      const updated = [...list];
+      if (updated[idx] !== undefined) {
+        const item = { ...updated[idx], [field]: (field === 'price' || field === 'height' || field === 'jointPrice' || field === 'baguettePrice' || field === 'barLength') ? parseFloat(value) || 0 : value };
+        delete item._isNew;
+        updated[idx] = item;
+      }
+      return { ...prev, shutterComponents: { ...components, [family]: updated } };
+    });
+  };
+
+  const deleteShutterItem = (family, idx) => {
+    setData(prev => {
+      const components = prev.shutterComponents || {};
+      const list = components[family] || [];
+      const updated = list.filter((_, i) => i !== idx);
+      return { ...prev, shutterComponents: { ...components, [family]: updated } };
+    });
+  };
+
+  const addShutterItem = (family) => {
+    const id = `${family.slice(0,3).toUpperCase()}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const newItem = { 
+      id, 
+      name: 'Nouvel élément', 
+      price: 0, 
+      priceUnit: 'ML', 
+      formula: '1', 
+      barLength: 6400,
+      ...(family === 'caissons' ? { height: 185, jointPrice: 0, jointFormula: 'L/1000' } : {}),
+      ...(family === 'glissieres' ? { hasBaguette: false, baguettePrice: 0 } : {}),
+      _isNew: true
+    };
+    setData(prev => {
+      const components = prev.shutterComponents || {};
+      const list = components[family] || [];
+      return {
+        ...prev,
+        shutterComponents: { ...components, [family]: [...list, newItem] }
+      };
+    });
+  };
+
+
   const handleDeleteComposition = (id) => {
     setData(prev => ({ ...prev, compositions: prev.compositions.filter(c => c.id !== id) }));
     return true;
@@ -1972,60 +2020,6 @@ const AdminDashboard = ({ data, setData }) => {
               { key: 'extras',      label: 'Composants Divers' }
             ];
 
-
-            const updateShutterItem = (family, idx, field, value) => {
-              setData(prev => {
-                const components = prev.shutterComponents || {};
-                const list = components[family] || [];
-                const updated = [...list];
-                if (updated[idx]) {
-                  const item = { ...updated[idx], [field]: (field === 'price' || field === 'height' || field === 'jointPrice' || field === 'baguettePrice' || field === 'barLength') ? parseFloat(value) || 0 : value };
-                  if (field === 'addOnsJSON') {
-                    try {
-                      item.addOns = JSON.parse(value);
-                    } catch (e) {
-                      // Silently fail or track error in item if needed
-                    }
-                  }
-                  delete item._isNew;
-                  updated[idx] = item;
-                }
-                return { ...prev, shutterComponents: { ...components, [family]: updated } };
-              });
-            };
-
-
-            const deleteShutterItem = (family, idx) => {
-              setData(prev => {
-                const components = prev.shutterComponents || {};
-                const list = components[family] || [];
-                const updated = list.filter((_, i) => i !== idx);
-                return { ...prev, shutterComponents: { ...components, [family]: updated } };
-              });
-            };
-
-            const addShutterItem = (family) => {
-              const id = `${family.slice(0,3).toUpperCase()}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-              const newItem = { 
-                id, 
-                name: 'Nouvel élément', 
-                price: 0, 
-                priceUnit: 'ML', 
-                formula: '1', 
-                barLength: 6400,
-                ...(family === 'caissons' ? { height: 185, jointPrice: 0, jointFormula: 'L/1000' } : {}),
-                ...(family === 'glissieres' ? { hasBaguette: false, baguettePrice: 0 } : {}),
-                _isNew: true
-              };
-              setData(prev => {
-                const components = prev.shutterComponents || {};
-                const list = components[family] || [];
-                return {
-                  ...prev,
-                  shutterComponents: { ...components, [family]: [...list, newItem] }
-                };
-              });
-            };
 
             return (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
