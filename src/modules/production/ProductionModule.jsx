@@ -891,6 +891,44 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
 
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+
+            {/* Devis selector — self-contained for this tab */}
+            <div className="glass shadow-md" style={{ borderLeft: '4px solid #3b82f6' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#1e293b', whiteSpace: 'nowrap' }}>📋 Devis source :</span>
+                <select
+                  value={selectedGlobalQuoteId}
+                  onChange={e => setSelectedGlobalQuoteId(e.target.value)}
+                  className="input"
+                  style={{ fontWeight: 600, flex: 1, minWidth: '220px' }}
+                >
+                  <option value="">— Sélectionner un devis —</option>
+                  {currentQuote?.id && <option value={currentQuote.id}>Devis Actif (en cours)</option>}
+                  {(database.quotes || []).map(q => {
+                    const client = database.clients?.find(c => c.id === q.clientId);
+                    return <option key={q.id} value={q.id}>{q.number}{client ? ` — ${client.nom}` : ''}</option>;
+                  })}
+                </select>
+                {/* Diagnostics */}
+                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '0.8rem', background: quoteItems.length > 0 ? '#d1fae5' : '#fee2e2', color: quoteItems.length > 0 ? '#065f46' : '#991b1b', padding: '0.2rem 0.7rem', borderRadius: '999px', fontWeight: 600 }}>
+                    {quoteItems.length} fenêtre(s) dans le devis
+                  </span>
+                  <span style={{ fontSize: '0.8rem', background: globalCuts.length > 0 ? '#d1fae5' : '#fef3c7', color: globalCuts.length > 0 ? '#065f46' : '#92400e', padding: '0.2rem 0.7rem', borderRadius: '999px', fontWeight: 600 }}>
+                    {globalCuts.length} pièce(s) à couper
+                  </span>
+                  <span style={{ fontSize: '0.8rem', background: '#ede9fe', color: '#5b21b6', padding: '0.2rem 0.7rem', borderRadius: '999px', fontWeight: 600 }}>
+                    {totalBars} barre(s) optimisées
+                  </span>
+                </div>
+              </div>
+              {!selectedGlobalQuoteId && (
+                <p style={{ marginTop: '0.75rem', color: '#ef4444', fontSize: '0.85rem', fontWeight: 600 }}>
+                  ⚠️ Aucun devis sélectionné. Choisissez un devis ci-dessus pour lancer l'optimisation.
+                </p>
+              )}
+            </div>
+
             {/* Config panel */}
             <div className="glass shadow-md" style={{ borderLeft: '4px solid #f59e0b' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.5rem' }}>
