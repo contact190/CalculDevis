@@ -65,10 +65,10 @@ export class FormulaEngine {
 
       const searchStr = (label + ' ' + itemName).toLowerCase();
       const isCouvreJoint = /couvres?[- ]?joints?|cj[vh]?/i.test(searchStr);
-      const isDormant = /dormant|cadre|chassis/i.test(searchStr) && !searchStr.includes('ouvrant') && !searchStr.includes('chicane');
+      const isDormant = /dormant|cadre|chassis/i.test(searchStr);
 
       if (!isCouvreJoint && !isDormant) {
-        expandedElements.push({ ...el, isCouvreJoint: false });
+        expandedElements.push({ ...el, isFrame: false, isCouvreJoint: false });
         return;
       }
 
