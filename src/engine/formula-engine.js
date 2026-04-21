@@ -572,9 +572,9 @@ export class FormulaEngine {
     const frameCompId = (mainOp && mainOp.compositionId) ? mainOp.compositionId : config.compositionId;
     
     if (frameCompId) {
-       // Ensure at least one side is true for the global perimeter, otherwise default to all true
-       const hasAnySide = config.optionalSides && Object.values(config.optionalSides).some(v => v === true);
-       const globalOpt = hasAnySide ? config.optionalSides : { top: true, bottom: true, left: true, right: true };
+       // Use config.optionalSides directly or default to all true if missing.
+       // The Dormant profiles now stay visible even if these are false, only covers follow these toggles.
+       const globalOpt = config.optionalSides || { top: true, bottom: true, left: true, right: true };
        
        const frameRes = this.calculateComponentBOM(config, L, H, frameCompId, config.glassId, globalOpt, H, L, H);
        
