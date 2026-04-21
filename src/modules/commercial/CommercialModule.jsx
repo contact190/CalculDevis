@@ -22,8 +22,8 @@ const EMPTY_CONFIG = {
       { id: 'fix1', type: 'fixe', glassId: '', width: 400, height: 1500, subParts: null }
     ],
     orientation: 'horizontal',
-    unionId: '', 
-    traverseId: '',
+    unionId: 'AUTO', 
+    traverseId: 'AUTO',
     shutterMode: 'total',
   }
 };
@@ -442,8 +442,9 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                          const key = config.compoundType === 'fix_coulissant' ? 'unionId' : 'traverseId';
                          setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, [key]: e.target.value } }));
                       }}>
-                         <option value="">-- Sélectionner l'union/traverse --</option>
-                         {database.profiles.filter(p => !!p.isUnion || (config.compoundType === 'fix_ouvrant' && p.name.toLowerCase().includes('traverse'))).map(p => <option key={p.id} value={p.id}>{p.name} ({p.thickness}mm)</option>)}
+                         <option value="AUTO">AUTO (Calcul automatique)</option>
+                         <option value="">-- Sélectionner manuellement --</option>
+                         {database.profiles.filter(p => !!p.usage || !!p.isUnion || (config.compoundType === 'fix_ouvrant' && p.name.toLowerCase().includes('traverse'))).map(p => <option key={p.id} value={p.id}>{p.name} ({p.thickness}mm)</option>)}
                       </select>
                    </div>
                    <div className="form-group">

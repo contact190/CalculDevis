@@ -592,7 +592,23 @@ export class FormulaEngine {
        }
     }
 
-    const divProfile = this.db.profiles.find(p => p.id === (compoundType === 'fix_coulissant' ? unionId : traverseId));
+    // Auto-resolve Union/Traverse profile if set to AUTO
+    let effectiveUnionId = unionId;
+    let effectiveTraverseId = traverseId;
+
+    if (effectiveUnionId === 'AUTO') {
+      const targetUsage = isHorizontal ? 'union_h' : 'union_l';
+      const autoProfile = this.db.profiles.find(p => p.usage === targetUsage);
+      if (autoProfile) effectiveUnionId = autoProfile.id;
+    }
+    if (effectiveTraverseId === 'AUTO') {
+      const targetUsage = isHorizontal ? 'traverse_h' : 'traverse_l';
+      const autoProfile = this.db.profiles.find(p => p.usage === targetUsage);
+      if (autoProfile) effectiveTraverseId = autoProfile.id;
+    }
+
+    const divProfileId = (compoundType === 'fix_coulissant' ? effectiveUnionId : effectiveTraverseId);
+    const divProfile = this.db.profiles.find(p => p.id === divProfileId);
     const divThick = divProfile?.thickness || 0;
 
     const processPartList = (partList, boxL, boxH, direction) => {
@@ -677,7 +693,20 @@ export class FormulaEngine {
       if (gid === 'AUTO') {
         const kitId = config.shutterConfig.kitId;
         const type = kitId === 'KIT-SANG' ? 'MONO' : (kitId === 'KIT-MOTE' ? 'PALA' : 'OTHER');
-        const composition = this.db.compositions.find(c => c.id === config.compositionId);
+        
+        // Find composition for range detection
+        let composition = this.db.compositions.find(c => c.id === config.compositionId);
+        if (!composition && config.compoundConfig?.parts) {
+          const parts = config.compoundConfig.parts;
+          const mainOp = parts.find(p => p.type === 'opening' && p.compositionId) || 
+                         parts.find(p => p.compositionId) || 
+                         parts.find(p => p.type === 'opening') || 
+                         parts[0];
+          if (mainOp?.compositionId) {
+            composition = this.db.compositions.find(c => c.id === mainOp.compositionId);
+          }
+        }
+
         if (composition) {
           const autoG = (sc.glissieres || []).find(g => (!g.rangeId || g.rangeId === composition.rangeId) && g.shutterType === type);
           if (autoG) gid = autoG.id;
@@ -801,7 +830,14 @@ export class FormulaEngine {
         if (key === 'glissiereId' && selectedId === 'AUTO') {
           const kitId = config.shutterConfig.kitId;
           const type = kitId === 'KIT-SANG' ? 'MONO' : (kitId === 'KIT-MOTE' ? 'PALA' : 'OTHER');
-          const composition = this.db.compositions.find(c => c.id === config.compositionId);
+          
+          let compositionId = config.compositionId;
+          if (!compositionId && config.compoundConfig?.parts) {
+             const parts = config.compoundConfig.parts;
+             compositionId = (parts.find(p => p.type === 'opening' && p.compositionId) || parts.find(p => p.compositionId))?.compositionId;
+          }
+
+          const composition = this.db.compositions.find(c => c.id === compositionId);
           if (composition) {
             const autoG = (source || []).find(g => (!g.rangeId || g.rangeId === composition.rangeId) && g.shutterType === type);
             if (autoG) selectedId = autoG.id;
