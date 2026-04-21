@@ -548,6 +548,22 @@ export class FormulaEngine {
         });
       }
 
+      // 1. Calculate Global Frame once for the top level
+      if (partList === parts) {
+         const mainOp = parts.find(p => p.type === 'opening') || parts[0];
+         const frameRes = this.calculateComponentBOM(config, L, H, mainOp.compositionId || config.compositionId, config.glassId, config.optionalSides, H, L, H);
+         
+         const frameProfiles = frameRes.profiles.filter(p => 
+            p.label?.toLowerCase().includes('dormant') || p.name?.toLowerCase().includes('dormant') ||
+            p.label?.toLowerCase().includes('cadre') || p.name?.toLowerCase().includes('cadre') ||
+            p.label?.toLowerCase().includes('couvre') || p.name?.toLowerCase().includes('couvre')
+         ).map(p => ({ ...p, source: 'Cadre Global' }));
+         results.profiles.push(...frameProfiles);
+
+         // Optional: Add only top-level accessories that are NOT frame-related if needed?
+         // User said "cadre global n'a pas d'accessoire", so we skip accessories from frameRes.
+      }
+
       partList.forEach((part, idx) => {
         let pW = isH ? (part.width || (boxL / partList.length)) : boxL;
         let pH = isH ? boxH : (part.height || (boxH / partList.length));
@@ -559,23 +575,18 @@ export class FormulaEngine {
            return;
         }
 
-        // Determine which sides share a divider
-        const sides = { top: true, bottom: true, left: true, right: true };
-        if (partList.length > 1) {
-           if (isH) {
-              if (idx > 0) sides.left = false;
-              if (idx < partList.length - 1) sides.right = false;
-           } else {
-              if (idx > 0) sides.top = false;
-              if (idx < partList.length - 1) sides.bottom = false;
-           }
-        }
-
         const compId = part.compositionId || config.compositionId || parts.find(p=>p.type==='opening')?.compositionId;
-        const res = this.calculateComponentBOM(config, pW, pH, compId, pGlassId, sides, pH, pW, pH);
+        // Calculate sub-part with NO frame sides
+        const res = this.calculateComponentBOM(config, pW, pH, compId, pGlassId, { top: false, bottom: false, left: false, right: false }, pH, pW, pH);
         
-        results.profiles.push(...res.profiles.map(p => ({ ...p, source: sourceLabel })));
-        results.accessories.push(...res.accessories.map(a => ({ ...a, source: sourceLabel })));
+        // Filter out ANY redundant frame/dormant/couvre from sub-part
+        const filterFn = (item) => {
+           const s = ((item.label || '') + ' ' + (item.name || '')).toLowerCase();
+           return !s.includes('dormant') && !s.includes('cadre') && !s.includes('couvre') && !s.includes('chassis');
+        };
+
+        results.profiles.push(...res.profiles.filter(filterFn).map(p => ({ ...p, source: sourceLabel })));
+        results.accessories.push(...res.accessories.filter(filterFn).map(a => ({ ...a, source: sourceLabel })));
         if (res.gasket) results.accessories.push({ ...res.gasket, source: sourceLabel });
         if (res.glass) results.glasses.push({ ...res.glass, source: sourceLabel });
       });
