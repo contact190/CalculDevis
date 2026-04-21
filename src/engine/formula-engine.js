@@ -62,15 +62,15 @@ export class FormulaEngine {
 
       const searchStr = (label + ' ' + itemName).toLowerCase();
       const isCouvreJoint = /couvres?[- ]?joints?|cj[vh]?/i.test(searchStr);
-      const isDormant = /dormant|cadre|chassis|batit|traverse|dorme/i.test(searchStr);
+      const isDormant = /dormant|cadre|chassis|batit|dorme/i.test(searchStr);
 
       if (!isCouvreJoint && !isDormant) {
         expandedElements.push({ ...el, isFrame: false, isCouvreJoint: false });
         return;
       }
 
-      const isHorizontal = /haut|bas|h$|\bh\b|cjh|couvres?[- ]?joints?h/i.test(searchStr);
-      const isVertical = /gauche|droite|v$|\bv\b|cjv|couvres?[- ]?joints?v/i.test(searchStr);
+      const isHorizontal = /haut|bas|cjh|couvres?[- ]?joints?h/i.test(searchStr) || (/\bl\b| l$/i.test(searchStr));
+      const isVertical = /gauche|droite|cjv|couvres?[- ]?joints?v/i.test(searchStr) || (/\bh\b| h$/i.test(searchStr));
       const baseLabel = label || itemName;
       const isActuallyCouvreJoint = isCouvreJoint;
 
@@ -548,7 +548,7 @@ export class FormulaEngine {
        
        const frameRes = this.calculateComponentBOM(config, L, H, frameCompId, config.glassId, globalOpt, H, L, H);
        
-       const isFrameProfile = p => !!p.isFrame || /dormant|cadre|chassis|batit|traverse|couvre/i.test((p.label + ' ' + p.name).toLowerCase());
+       const isFrameProfile = p => !!p.isFrame || /dormant|cadre|chassis|batit|couvre/i.test((p.label + ' ' + p.name).toLowerCase());
        
        const frameProfiles = frameRes.profiles.filter(isFrameProfile)
                             .map(p => ({ ...p, source: 'Cadre Global' }));
