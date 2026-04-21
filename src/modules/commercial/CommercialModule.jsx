@@ -18,10 +18,10 @@ const EMPTY_CONFIG = {
   compoundType: 'none',
   compoundConfig: {
     parts: [
-      { id: 'main', type: 'opening', compositionId: '', glassId: '', width: 800, height: 1500 },
-      { id: 'fix1', type: 'fixe', glassId: '', width: 400, height: 1500 }
+      { id: 'main', type: 'opening', compositionId: '', glassId: '', width: 800, height: 1500, subParts: null },
+      { id: 'fix1', type: 'fixe', glassId: '', width: 400, height: 1500, subParts: null }
     ],
-    orientation: 'horizontal', // horizontal (side-by-side) or vertical (stacked)
+    orientation: 'horizontal',
     unionId: '', 
     traverseId: '',
     shutterMode: 'total',
@@ -201,103 +201,195 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                    </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', padding: '1rem', background: 'white', borderRadius: '10px', border: '1px dashed #cbd5e1', justifyContent: 'center', overflowX: 'auto' }}>
-                   {config.compoundConfig?.parts?.map((part, idx) => (
-                      <div key={part.id + '-viz'} style={{ 
-                         width: config.compoundConfig.orientation === 'horizontal' ? '80px' : '150px',
-                         height: config.compoundConfig.orientation === 'horizontal' ? '120px' : '40px',
-                         background: part.type === 'opening' ? '#eff6ff' : '#f8fafc',
-                         border: '2px solid',
-                         borderColor: part.type === 'opening' ? '#3b82f6' : '#94a3b8',
-                         borderRadius: '6px',
-                         display: 'flex',
-                         flexDirection: 'column',
-                         alignItems: 'center',
-                         justifyContent: 'center',
-                         position: 'relative',
-                         flexShrink: 0
-                      }}>
-                         <span style={{ fontSize: '0.65rem', fontWeight: 800, color: part.type === 'opening' ? '#2563eb' : '#64748b' }}>{part.type === 'opening' ? 'OUVRANT' : 'FIXE'}</span>
-                         <span style={{ fontSize: '0.6rem', color: '#94a3b8' }}>{config.compoundConfig.orientation === 'horizontal' ? part.width : part.height}mm</span>
-                         {idx < config.compoundConfig.parts.length - 1 && (
-                            <div style={{ 
-                               position: 'absolute', 
-                               right: config.compoundConfig.orientation === 'horizontal' ? '-10px' : 'auto', 
-                               bottom: config.compoundConfig.orientation === 'horizontal' ? 'auto' : '-10px',
-                               width: config.compoundConfig.orientation === 'horizontal' ? '6px' : '100%',
-                               height: config.compoundConfig.orientation === 'horizontal' ? '100%' : '6px',
-                               background: '#cbd5e1' 
-                            }}></div>
-                         )}
-                      </div>
-                   ))}
+                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', padding: '1rem', background: 'white', borderRadius: '10px', border: '1px dashed #cbd5e1', justifyContent: 'center', overflowX: 'auto', minHeight: '140px' }}>
+                   {(() => {
+                      const renderNodes = (list, dir) => {
+                         const isH = dir !== 'vertical';
+                         return (
+                            <div style={{ display: 'flex', flexDirection: isH ? 'row' : 'column', gap: '4px', flex: 1, alignItems: 'stretch' }}>
+                               {list.map((part, idx) => (
+                                  <React.Fragment key={part.id}>
+                                     <div style={{ 
+                                        flex: 1,
+                                        minWidth: isH ? '60px' : 'auto',
+                                        minHeight: isH ? 'auto' : '40px',
+                                        background: part.type === 'opening' ? '#eff6ff' : (part.type === 'group' ? 'transparent' : '#f8fafc'),
+                                        border: part.type === 'group' ? '1px dashed #e2e8f0' : '2px solid',
+                                        borderColor: part.type === 'opening' ? '#3b82f6' : (part.type === 'group' ? 'transparent' : '#94a3b8'),
+                                        borderRadius: '6px',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        padding: '4px'
+                                     }}>
+                                        {part.type === 'group' && part.subParts ? (
+                                           renderNodes(part.subParts, isH ? 'vertical' : 'horizontal')
+                                        ) : (
+                                           <>
+                                              <span style={{ fontSize: '0.55rem', fontWeight: 800, color: part.type === 'opening' ? '#2563eb' : '#64748b' }}>{part.type.toUpperCase()}</span>
+                                              <span style={{ fontSize: '0.5rem', color: '#94a3b8' }}>{isH ? part.width : part.height}mm</span>
+                                           </>
+                                        )}
+                                     </div>
+                                     {idx < list.length - 1 && (
+                                        <div style={{ width: isH ? '2px' : '100%', height: isH ? '100%' : '2px', background: '#cbd5e1' }}></div>
+                                     )}
+                                  </React.Fragment>
+                               ))}
+                            </div>
+                         );
+                      };
+                      return renderNodes(config.compoundConfig.parts, config.compoundConfig.orientation);
+                   })()}
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1.5rem' }}>
                    <label className="label">Séquence des blocs (G à D / Haut en Bas)</label>
                    {config.compoundConfig?.parts?.map((part, idx) => (
-                     <div key={part.id} className="glass shadow-sm" style={{ padding: '1rem', display: 'grid', gridTemplateColumns: 'auto 1fr 1fr 1fr 40px', gap: '1rem', alignItems: 'center', border: '1px solid #e2e8f0' }}>
-                        <div style={{ fontWeight: 800, color: '#94a3b8' }}>#{idx+1}</div>
-                        
-                        <div>
-                           <label style={{ fontSize: '0.7rem', color: '#64748b', display: 'block', marginBottom: '0.3rem' }}>Type & Dimension</label>
-                           <div style={{ display: 'flex', gap: '0.4rem' }}>
-                              <select className="input" style={{ width: '100px', fontSize: '0.8rem', padding: '0.3rem' }} value={part.type} onChange={e => {
-                                 const newList = [...config.compoundConfig.parts];
-                                 newList[idx].type = e.target.value;
-                                 setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, parts: newList } }));
-                              }}>
-                                 <option value="opening">Ouverture</option>
-                                 <option value="fixe">Fixe</option>
-                              </select>
-                              <input type="number" className="input" style={{ width: '70px', fontSize: '0.8rem', padding: '0.3rem' }} value={config.compoundConfig.orientation === 'horizontal' ? part.width : part.height} onChange={e => {
-                                 const newList = [...config.compoundConfig.parts];
-                                 const val = parseInt(e.target.value) || 0;
-                                 if (config.compoundConfig.orientation === 'horizontal') newList[idx].width = val;
-                                 else newList[idx].height = val;
-                                 setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, parts: newList } }));
-                              }} />
+                     <div key={part.id} style={{ marginBottom: '1rem' }}>
+                        <div className="glass shadow-sm" style={{ padding: '1rem', display: 'grid', gridTemplateColumns: 'auto 1fr 1fr 1fr 80px 40px', gap: '1rem', alignItems: 'center', border: '1px solid #e2e8f0' }}>
+                           <div style={{ fontWeight: 800, color: '#94a3b8' }}>#{idx+1}</div>
+                           
+                           <div>
+                              <label style={{ fontSize: '0.7rem', color: '#64748b', display: 'block', marginBottom: '0.3rem' }}>Type & Dimension</label>
+                              <div style={{ display: 'flex', gap: '0.4rem' }}>
+                                 <select className="input" style={{ width: '100px', fontSize: '0.8rem', padding: '0.3rem' }} value={part.type} onChange={e => {
+                                    const newList = [...config.compoundConfig.parts];
+                                    newList[idx].type = e.target.value;
+                                    setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, parts: newList } }));
+                                 }}>
+                                    <option value="opening">Ouverture</option>
+                                    <option value="fixe">Fixe</option>
+                                    <option value="group">Groupe</option>
+                                 </select>
+                                 <input type="number" className="input" style={{ width: '70px', fontSize: '0.8rem', padding: '0.3rem' }} value={config.compoundConfig.orientation === 'horizontal' ? part.width : part.height} onChange={e => {
+                                    const newList = [...config.compoundConfig.parts];
+                                    const val = parseInt(e.target.value) || 0;
+                                    if (config.compoundConfig.orientation === 'horizontal') newList[idx].width = val;
+                                    else newList[idx].height = val;
+                                    setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, parts: newList } }));
+                                 }} />
+                              </div>
                            </div>
-                        </div>
 
-                        <div>
-                           <label style={{ fontSize: '0.7rem', color: '#64748b', display: 'block', marginBottom: '0.3rem' }}>Configuration</label>
-                           {part.type === 'opening' ? (
-                              <select className="input" style={{ fontSize: '0.8rem', padding: '0.3rem' }} value={part.compositionId || ''} onChange={e => {
+                           <div>
+                              <label style={{ fontSize: '0.7rem', color: '#64748b', display: 'block', marginBottom: '0.3rem' }}>Configuration</label>
+                              {part.type === 'opening' ? (
+                                 <select className="input" style={{ fontSize: '0.8rem', padding: '0.3rem' }} value={part.compositionId || ''} onChange={e => {
+                                    const newList = [...config.compoundConfig.parts];
+                                    newList[idx].compositionId = e.target.value;
+                                    setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, parts: newList } }));
+                                 }}>
+                                    <option value="">-- Composition --</option>
+                                    {database.compositions.filter(c => 
+                                       (config.compoundType === 'fix_coulissant' && c.openingType === 'Coulissant') ||
+                                       (config.compoundType === 'fix_ouvrant' && c.openingType !== 'Coulissant' && c.openingType !== 'Fixe')
+                                    ).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                 </select>
+                              ) : part.type === 'group' ? (
+                                 <div style={{ fontSize: '0.8rem', color: '#7c3aed', fontWeight: 700 }}>Divisé {config.compoundConfig.orientation === 'horizontal' ? 'H' : 'V'}</div>
+                              ) : (
+                                 <div style={{ fontSize: '0.8rem', color: '#0ea5e9', fontWeight: 600, padding: '0.3rem' }}>Vitrage direct</div>
+                              )}
+                           </div>
+
+                           <div>
+                              <label style={{ fontSize: '0.7rem', color: '#64748b', display: 'block', marginBottom: '0.3rem' }}>Vitrage</label>
+                              <select className="input" style={{ fontSize: '0.8rem', padding: '0.3rem' }} disabled={part.type === 'group'} value={part.glassId || ''} onChange={e => {
                                  const newList = [...config.compoundConfig.parts];
-                                 newList[idx].compositionId = e.target.value;
+                                 newList[idx].glassId = e.target.value;
                                  setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, parts: newList } }));
                               }}>
-                                 <option value="">-- Composition --</option>
-                                 {database.compositions.filter(c => 
-                                    (config.compoundType === 'fix_coulissant' && c.openingType === 'Coulissant') ||
-                                    (config.compoundType === 'fix_ouvrant' && c.openingType !== 'Coulissant' && c.openingType !== 'Fixe')
-                                 ).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                 <option value="">(Vitrage global)</option>
+                                 {database.glass?.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
                               </select>
-                           ) : (
-                              <div style={{ fontSize: '0.8rem', color: '#0ea5e9', fontWeight: 600, padding: '0.3rem' }}>Vitrage direct {config.compoundType === 'fix_ouvrant' && '(Traverse)'}</div>
-                           )}
-                        </div>
+                           </div>
 
-                        <div>
-                           <label style={{ fontSize: '0.7rem', color: '#64748b', display: 'block', marginBottom: '0.3rem' }}>Vitrage</label>
-                           <select className="input" style={{ fontSize: '0.8rem', padding: '0.3rem' }} value={part.glassId || ''} onChange={e => {
-                              const newList = [...config.compoundConfig.parts];
-                              newList[idx].glassId = e.target.value;
+                           <div style={{ display: 'flex', gap: '0.2rem' }}>
+                              {part.type !== 'group' ? (
+                                 <button className="btn" style={{ fontSize: '0.65rem', padding: '0.3rem', background: '#f5f3ff', color: '#7c3aed' }} onClick={() => {
+                                    const newList = [...config.compoundConfig.parts];
+                                    newList[idx].type = 'group';
+                                    newList[idx].subParts = [
+                                       { id: `sub-${Date.now()}-1`, type: part.type, compositionId: part.compositionId, glassId: part.glassId, width: part.width, height: part.height },
+                                       { id: `sub-${Date.now()}-2`, type: 'fixe', glassId: '', width: 500, height: 500 }
+                                    ];
+                                    setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, parts: newList } }));
+                                 }}>Diviser</button>
+                              ) : (
+                                 <button className="btn" style={{ fontSize: '0.65rem', padding: '0.3rem', background: '#fef2f2', color: '#ef4444' }} onClick={() => {
+                                    const newList = [...config.compoundConfig.parts];
+                                    newList[idx].type = 'opening';
+                                    newList[idx].subParts = null;
+                                    setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, parts: newList } }));
+                                 }}>Annuler</button>
+                              )}
+                           </div>
+
+                           <button className="btn" style={{ color: '#ef4444', padding: '0.3rem', border: 'none' }} onClick={() => {
+                              if (config.compoundConfig.parts.length <= 1) return;
+                              const newList = config.compoundConfig.parts.filter((_, i) => i !== idx);
                               setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, parts: newList } }));
                            }}>
-                              <option value="">(Vitrage global)</option>
-                              {database.glass?.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-                           </select>
+                              <Trash2 size={16} />
+                           </button>
                         </div>
-
-                        <button className="btn" style={{ color: '#ef4444', padding: '0.3rem', border: 'none' }} onClick={() => {
-                           if (config.compoundConfig.parts.length <= 1) return;
-                           const newList = config.compoundConfig.parts.filter((_, i) => i !== idx);
-                           setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, parts: newList } }));
-                        }}>
-                           <Trash2 size={16} />
-                        </button>
+                        
+                        {/* Sub-parts rendering */}
+                        {part.type === 'group' && part.subParts && (
+                           <div style={{ marginLeft: '3rem', marginTop: '0.5rem', padding: '0.8rem', borderLeft: '3px solid #7c3aed', background: '#f5f3ff', borderRadius: '0 8px 8px 0' }}>
+                              <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#7c3aed', marginBottom: '0.5rem' }}>DIVISION {config.compoundConfig.orientation === 'horizontal' ? 'VERTICALE' : 'HORIZONTALE'}</div>
+                              {part.subParts.map((sub, sidx) => (
+                                 <div key={sub.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 40px', gap: '0.5rem', alignItems: 'center', marginBottom: '0.3rem' }}>
+                                    <div style={{ display: 'flex', gap: '0.3rem' }}>
+                                       <select className="input" style={{ fontSize: '0.75rem', padding: '0.2rem' }} value={sub.type} onChange={e => {
+                                          const newList = [...config.compoundConfig.parts];
+                                          newList[idx].subParts[sidx].type = e.target.value;
+                                          setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, parts: newList } }));
+                                       }}>
+                                          <option value="opening">Ouvrant</option>
+                                          <option value="fixe">Fixe</option>
+                                       </select>
+                                       <input type="number" className="input" style={{ width: '60px', fontSize: '0.75rem', padding: '0.2rem' }} value={config.compoundConfig.orientation === 'horizontal' ? sub.height : sub.width} onChange={e => {
+                                          const newList = [...config.compoundConfig.parts];
+                                          const val = parseInt(e.target.value) || 0;
+                                          if (config.compoundConfig.orientation === 'horizontal') newList[idx].subParts[sidx].height = val;
+                                          else newList[idx].subParts[sidx].width = val;
+                                          setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, parts: newList } }));
+                                       }} />
+                                    </div>
+                                    <select className="input" style={{ fontSize: '0.75rem', padding: '0.2rem' }} disabled={sub.type !== 'opening'} value={sub.compositionId || ''} onChange={e => {
+                                       const newList = [...config.compoundConfig.parts];
+                                       newList[idx].subParts[sidx].compositionId = e.target.value;
+                                       setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, parts: newList } }));
+                                    }}>
+                                       <option value="">-- Composition --</option>
+                                       {database.compositions.filter(c => (config.compoundType === 'fix_coulissant' && c.openingType === 'Coulissant') || (config.compoundType === 'fix_ouvrant' && c.openingType !== 'Coulissant' && c.openingType !== 'Fixe')).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                    </select>
+                                    <select className="input" style={{ fontSize: '0.75rem', padding: '0.2rem' }} value={sub.glassId || ''} onChange={e => {
+                                       const newList = [...config.compoundConfig.parts];
+                                       newList[idx].subParts[sidx].glassId = e.target.value;
+                                       setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, parts: newList } }));
+                                    }}>
+                                       <option value="">(Vitrage global)</option>
+                                       {database.glass?.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                                    </select>
+                                    <button className="btn" style={{ color: '#ef4444', padding: '0' }} onClick={() => {
+                                       if (part.subParts.length <= 1) return;
+                                       const newList = [...config.compoundConfig.parts];
+                                       newList[idx].subParts = part.subParts.filter((_, i) => i !== sidx);
+                                       setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, parts: newList } }));
+                                    }}><Trash2 size={14} /></button>
+                                 </div>
+                              ))}
+                              <button className="btn btn-secondary" style={{ fontSize: '0.65rem', padding: '0.2rem 0.5rem', marginTop: '0.3rem' }} onClick={() => {
+                                 const newList = [...config.compoundConfig.parts];
+                                 newList[idx].subParts.push({ id: `sub-${Date.now()}`, type: 'fixe', glassId: '', width: 500, height: 500 });
+                                 setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, parts: newList } }));
+                              }}>+ Sous-partie</button>
+                           </div>
+                        )}
                      </div>
                    ))}
                    <button className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'white', alignSelf: 'flex-start' }} onClick={() => {
