@@ -83,11 +83,11 @@ export class FormulaEngine {
         const isGenericH = !hasHaut && !hasBas;
         
         if (isGenericH) {
-          if (opt.top) expandedElements.push({ ...el, label: baseLabel + ' (Haut)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint });
-          if (opt.bottom) expandedElements.push({ ...el, label: baseLabel + ' (Bas)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint });
+          if (opt.top) expandedElements.push({ ...el, label: baseLabel + ' (Haut)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
+          if (opt.bottom) expandedElements.push({ ...el, label: baseLabel + ' (Bas)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
         } else {
-          if (hasHaut && opt.top) expandedElements.push({ ...el, isCouvreJoint: isActuallyCouvreJoint });
-          if (hasBas && opt.bottom) expandedElements.push({ ...el, isCouvreJoint: isActuallyCouvreJoint });
+          if (hasHaut && opt.top) expandedElements.push({ ...el, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
+          if (hasBas && opt.bottom) expandedElements.push({ ...el, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
         }
       } else if (isVertical) {
         const hasGauche = searchStr.includes('gauche');
@@ -95,19 +95,19 @@ export class FormulaEngine {
         const isGenericV = !hasGauche && !hasDroite;
 
         if (isGenericV) {
-          if (opt.left) expandedElements.push({ ...el, label: baseLabel + ' (Gauche)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint });
-          if (opt.right) expandedElements.push({ ...el, label: baseLabel + ' (Droite)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint });
+          if (opt.left) expandedElements.push({ ...el, label: baseLabel + ' (Gauche)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
+          if (opt.right) expandedElements.push({ ...el, label: baseLabel + ' (Droite)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
         } else {
-          if (hasGauche && opt.left) expandedElements.push({ ...el, isCouvreJoint: isActuallyCouvreJoint });
-          if (hasDroite && opt.right) expandedElements.push({ ...el, isCouvreJoint: isActuallyCouvreJoint });
+          if (hasGauche && opt.left) expandedElements.push({ ...el, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
+          if (hasDroite && opt.right) expandedElements.push({ ...el, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
         }
       } else {
         // Generic 4-sided (like a dormant defined as 4qty but one formula)
         const vFormula = (el.formula === 'L' || !el.formula) ? 'H' : el.formula;
-        if (opt.top) expandedElements.push({ ...el, label: baseLabel + ' (Haut)', qty: el.qty / 4, isCouvreJoint: isActuallyCouvreJoint });
-        if (opt.bottom) expandedElements.push({ ...el, label: baseLabel + ' (Bas)', qty: el.qty / 4, isCouvreJoint: isActuallyCouvreJoint });
-        if (opt.left) expandedElements.push({ ...el, formula: vFormula, label: baseLabel + ' (Gauche)', qty: el.qty / 4, isCouvreJoint: isActuallyCouvreJoint });
-        if (opt.right) expandedElements.push({ ...el, formula: vFormula, label: baseLabel + ' (Droite)', qty: el.qty / 4, isCouvreJoint: isActuallyCouvreJoint });
+        if (opt.top) expandedElements.push({ ...el, label: baseLabel + ' (Haut)', qty: el.qty / 4, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
+        if (opt.bottom) expandedElements.push({ ...el, label: baseLabel + ' (Bas)', qty: el.qty / 4, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
+        if (opt.left) expandedElements.push({ ...el, formula: vFormula, label: baseLabel + ' (Gauche)', qty: el.qty / 4, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
+        if (opt.right) expandedElements.push({ ...el, formula: vFormula, label: baseLabel + ' (Droite)', qty: el.qty / 4, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
       }
     });
 
@@ -147,6 +147,8 @@ export class FormulaEngine {
             ...pRef,
             label: el.label,
             qty: elQty,
+            isFrame: el.isFrame,
+            isCouvreJoint: el.isCouvreJoint,
             length: safeValue,
             formula: el.formula,
             resolvedFormula: this.resolveFormula(el.formula, scope),
@@ -167,6 +169,8 @@ export class FormulaEngine {
             ...aRef,
             label: el.label,
             qty: finalQty,
+            isFrame: el.isFrame,
+            isCouvreJoint: el.isCouvreJoint,
             multiplier: el.qty || 1,
             formula: el.formula || '1',
             resolvedFormula: this.resolveFormula(el.formula || '1', scope),
@@ -563,17 +567,12 @@ export class FormulaEngine {
          const frameCompId = mainOp?.compositionId || config.compositionId;
          const frameRes = this.calculateComponentBOM(config, L, H, frameCompId, config.glassId, config.optionalSides, H, L, H);
          
-         const frameProfiles = frameRes.profiles.filter(p => 
-            p.label?.toLowerCase().includes('dormant') || p.name?.toLowerCase().includes('dormant') ||
-            p.label?.toLowerCase().includes('cadre') || p.name?.toLowerCase().includes('cadre') ||
-            p.label?.toLowerCase().includes('couvre') || p.name?.toLowerCase().includes('couvre')
-         ).map(p => ({ ...p, source: 'Cadre Global' }));
+         const frameProfiles = frameRes.profiles.filter(p => !!p.isFrame)
+                              .map(p => ({ ...p, source: 'Cadre Global' }));
          results.profiles.push(...frameProfiles);
 
-         const frameAccs = frameRes.accessories.filter(a => 
-            a.label?.toLowerCase().includes('dormant') || a.name?.toLowerCase().includes('dormant') ||
-            a.label?.toLowerCase().includes('cadre') || a.name?.toLowerCase().includes('cadre')
-         ).map(a => ({ ...a, source: 'Cadre Global' }));
+         const frameAccs = frameRes.accessories.filter(a => !!a.isFrame)
+                              .map(a => ({ ...a, source: 'Cadre Global' }));
          results.accessories.push(...frameAccs);
 
          if (frameRes.gasket) {
@@ -610,9 +609,10 @@ export class FormulaEngine {
         const res = this.calculateComponentBOM(config, pW, pH, compId, pGlassId, { top: false, bottom: false, left: false, right: false }, pH, pW, pH);
         
         const filterFn = (item) => {
+           // Skip everything that belongs to the global frame perimeter
+           if (item.isFrame) return false;
+           
            const s = ((item.label || '') + ' ' + (item.name || '')).toLowerCase();
-           // Always remove frame/covers from sub-parts
-           if (s.includes('dormant') || s.includes('cadre') || s.includes('couvre') || s.includes('chassis')) return false;
            
            // If it's a FIXE part, also remove OPENING specific components
            if (part.type === 'fixe') {
