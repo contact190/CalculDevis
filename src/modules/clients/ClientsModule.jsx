@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Users, Plus, Edit2, Trash2, FileText, ChevronDown, ChevronUp, CheckCircle } from 'lucide-react';
+import { Users, Plus, Edit2, Trash2, FileText, ChevronDown, ChevronUp, CheckCircle, Copy } from 'lucide-react';
 
 const ClientsModule = ({ data, setData, onOpenQuote }) => {
   const [editingClient, setEditingClient] = useState(null);
@@ -56,6 +56,24 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
       };
     });
     alert(`Commande créée avec succès ! Retrouvez-la dans l'onglet "Commandes".`);
+  };
+
+  const handleDuplicateQuote = (quote) => {
+    const newId = `QUOTE-${Date.now()}`;
+    const newQuote = {
+      ...quote,
+      id: newId,
+      number: `${quote.number.split('-Copie')[0]}-Copie`,
+      status: 'Brouillon',
+      createdAt: new Date().toISOString(),
+      validatedAt: null
+    };
+    
+    setData(prev => ({
+      ...prev,
+      quotes: [...(prev.quotes || []), newQuote]
+    }));
+    alert(`Devis ${quote.number} dupliqué en tant que Brouillon.`);
   };
 
   const handleDeleteClient = (id) => {
@@ -183,6 +201,9 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
                           <button onClick={() => { if(onOpenQuote) onOpenQuote(q); }} className="btn" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', color: '#2563eb', borderColor: '#2563eb' }}>
                             Ouvrir
                           </button>
+                          <button onClick={() => handleDuplicateQuote(q)} className="btn" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', color: '#6366f1', borderColor: '#6366f1' }} title="Dupliquer">
+                            <Copy size={14} />
+                          </button>
                           <button onClick={() => handleConvertToOrder(q)} className="btn btn-primary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', background: '#10b981' }} title="Transformer en Commande">
                             <CheckCircle size={14} /> Commande
                           </button>
@@ -287,8 +308,11 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
                                         <button onClick={() => { if(onOpenQuote) onOpenQuote(q); }} className="btn" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', color: '#2563eb', borderColor: '#2563eb' }}>
                                           Détails
                                         </button>
+                                        <button onClick={() => handleDuplicateQuote(q)} className="btn" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', color: '#6366f1', borderColor: '#6366f1' }} title="Dupliquer">
+                                          <Copy size={12} /> Copie
+                                        </button>
                                         <button onClick={() => handleConvertToOrder(q)} className="btn btn-primary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', background: '#10b981' }}>
-                                          Rendre Commande
+                                          Commander
                                         </button>
                                       </div>
                                     </td>
