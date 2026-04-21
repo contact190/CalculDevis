@@ -128,7 +128,18 @@ export class FormulaEngine {
       if (el.type === 'profile') {
         const pRef = this.db.profiles.find(p => p.id === el.id);
         if (pRef) {
-          const unitPrice = (pRef.pricePerBar || pRef.pricePerKg || 0);
+          let unitPrice = 0;
+          let cost = 0;
+          
+          if (pRef.pricePerBar) {
+            unitPrice = pRef.pricePerBar;
+            cost = (qty / (pRef.barLength || 6000)) * unitPrice;
+          } else if (pRef.pricePerKg) {
+            unitPrice = pRef.pricePerKg;
+            // (Length in m) * (kg/m) * (price/kg)
+            cost = (qty / 1000) * (pRef.weightPerM || 1) * unitPrice;
+          }
+
           profiles.push({
             ...pRef,
             label: el.label,
@@ -139,7 +150,7 @@ export class FormulaEngine {
             error: isError ? "Formule Invalide" : null,
             unitPrice: unitPrice,
             totalMeasure: safeValue * elQty,
-            cost: (qty / (pRef.barLength || 6000)) * unitPrice
+            cost: cost
           });
         }
       } else if (el.type === 'accessory') {
@@ -259,7 +270,9 @@ export class FormulaEngine {
             error: isErrorV ? "Formule Invalide" : null,
             unitPrice: unitPrice,
             totalMeasure: safeVValue * vQty,
-            cost: ((safeVValue * vQty) / (pVRef.barLength || 6000)) * unitPrice
+            cost: pVRef.pricePerBar 
+              ? ((safeVValue * vQty) / (pVRef.barLength || 6000)) * unitPrice
+              : ((safeVValue * vQty) / 1000) * (pVRef.weightPerM || 1) * unitPrice
           });
         }
       });
@@ -333,13 +346,17 @@ export class FormulaEngine {
           const pRef = this.db.profiles.find(p => p.id === trv.profileId);
           if (pRef) {
             const len = H; // Spans height of CURRENT grid
+            const pPrice = pRef.pricePerBar 
+              ? (len / (pRef.barLength || 6000)) * pRef.pricePerBar
+              : (pRef.pricePerKg ? (len / 1000) * (pRef.weightPerM || 1) * pRef.pricePerKg : 0);
+
             profiles.push({
               ...pRef,
               label: `Traverse Verticale (L:${Math.round(L)} H:${Math.round(H)})`,
               qty: 1,
               length: len,
               formula: 'H',
-              cost: (len / (pRef.barLength || 6000)) * (pRef.pricePerBar || pRef.pricePerKg || 0)
+              cost: pPrice
             });
           }
         }
@@ -354,13 +371,17 @@ export class FormulaEngine {
           const pRef = this.db.profiles.find(p => p.id === trv.profileId);
           if (pRef) {
             const len = L; // Spans width of CURRENT grid
+            const pPrice = pRef.pricePerBar 
+              ? (len / (pRef.barLength || 6000)) * pRef.pricePerBar
+              : (pRef.pricePerKg ? (len / 1000) * (pRef.weightPerM || 1) * pRef.pricePerKg : 0);
+
             profiles.push({
               ...pRef,
               label: `Traverse Horizontale (L:${Math.round(L)} H:${Math.round(H)})`,
               qty: 1,
               length: len,
               formula: 'L',
-              cost: (len / (pRef.barLength || 6000)) * (pRef.pricePerBar || pRef.pricePerKg || 0)
+              cost: pPrice
             });
           }
         }
