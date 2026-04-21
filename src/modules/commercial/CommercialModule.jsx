@@ -201,6 +201,38 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                    </div>
                 </div>
 
+                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', padding: '1rem', background: 'white', borderRadius: '10px', border: '1px dashed #cbd5e1', justifyContent: 'center', overflowX: 'auto' }}>
+                   {config.compoundConfig?.parts?.map((part, idx) => (
+                      <div key={part.id + '-viz'} style={{ 
+                         width: config.compoundConfig.orientation === 'horizontal' ? '80px' : '150px',
+                         height: config.compoundConfig.orientation === 'horizontal' ? '120px' : '40px',
+                         background: part.type === 'opening' ? '#eff6ff' : '#f8fafc',
+                         border: '2px solid',
+                         borderColor: part.type === 'opening' ? '#3b82f6' : '#94a3b8',
+                         borderRadius: '6px',
+                         display: 'flex',
+                         flexDirection: 'column',
+                         alignItems: 'center',
+                         justifyContent: 'center',
+                         position: 'relative',
+                         flexShrink: 0
+                      }}>
+                         <span style={{ fontSize: '0.65rem', fontWeight: 800, color: part.type === 'opening' ? '#2563eb' : '#64748b' }}>{part.type === 'opening' ? 'OUVRANT' : 'FIXE'}</span>
+                         <span style={{ fontSize: '0.6rem', color: '#94a3b8' }}>{config.compoundConfig.orientation === 'horizontal' ? part.width : part.height}mm</span>
+                         {idx < config.compoundConfig.parts.length - 1 && (
+                            <div style={{ 
+                               position: 'absolute', 
+                               right: config.compoundConfig.orientation === 'horizontal' ? '-10px' : 'auto', 
+                               bottom: config.compoundConfig.orientation === 'horizontal' ? 'auto' : '-10px',
+                               width: config.compoundConfig.orientation === 'horizontal' ? '6px' : '100%',
+                               height: config.compoundConfig.orientation === 'horizontal' ? '100%' : '6px',
+                               background: '#cbd5e1' 
+                            }}></div>
+                         )}
+                      </div>
+                   ))}
+                </div>
+
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1.5rem' }}>
                    <label className="label">Séquence des blocs (G à D / Haut en Bas)</label>
                    {config.compoundConfig?.parts?.map((part, idx) => (
