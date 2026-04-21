@@ -120,8 +120,11 @@ export class FormulaEngine {
           const allowLeft = isActuallyCouvreJoint ? opt.left : true;
           const allowRight = isActuallyCouvreJoint ? opt.right : true;
           
-          if (allowLeft) expandedElements.push({ ...el, label: baseLabel + ' (Gauche)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
-          if (allowRight) expandedElements.push({ ...el, label: baseLabel + ' (Droite)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
+          // Force vertical formula if it's generic L/H
+          const formula = (el.formula === 'L' || !el.formula) ? 'H' : el.formula;
+
+          if (allowLeft) expandedElements.push({ ...el, formula, label: baseLabel + ' (Gauche)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
+          if (allowRight) expandedElements.push({ ...el, formula, label: baseLabel + ' (Droite)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
         } else {
           const allowLeft = isActuallyCouvreJoint ? opt.left : true;
           const allowRight = isActuallyCouvreJoint ? opt.right : true;
@@ -180,6 +183,9 @@ export class FormulaEngine {
             ...pRef,
             label: el.label,
             qty: elQty,
+            formula: el.formula,
+            resolvedFormula: this.resolveFormula(formulaStr, currentScope),
+            calculation: `${this.resolveFormula(formulaStr, currentScope)}`,
             isFrame: el.isFrame,
             isCouvreJoint: el.isCouvreJoint,
             length: safeValue,
