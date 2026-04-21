@@ -534,6 +534,34 @@ export class FormulaEngine {
     const results = { profiles: [], accessories: [], glasses: [] };
     const isHorizontal = orientation !== 'vertical';
     
+    // 1. Calculate Global Frame once at the very start
+    // Find the most relevant part to determine the global dormant profile
+    const mainOp = parts.find(p => p.type === 'opening' && p.compositionId) || 
+                   parts.find(p => p.compositionId) || 
+                   parts.find(p => p.type === 'opening') || 
+                   parts[0];
+    
+    // Robust fallback for composition ID
+    const frameCompId = (mainOp && mainOp.compositionId) ? mainOp.compositionId : config.compositionId;
+    
+    if (frameCompId) {
+       const frameRes = this.calculateComponentBOM(config, L, H, frameCompId, config.glassId, config.optionalSides, H, L, H);
+       
+       const isFrameProfile = p => !!p.isFrame || /dormant|cadre|chassis|batit|traverse|couvre/i.test((p.label + ' ' + p.name).toLowerCase());
+       
+       const frameProfiles = frameRes.profiles.filter(isFrameProfile)
+                            .map(p => ({ ...p, source: 'Cadre Global' }));
+       results.profiles.push(...frameProfiles);
+
+       const frameAccs = frameRes.accessories.filter(a => !!a.isFrame || /dormant|cadre|chassis/i.test((a.label + ' ' + a.name).toLowerCase()))
+                            .map(a => ({ ...a, source: 'Cadre Global' }));
+       results.accessories.push(...frameAccs);
+
+       if (frameRes.gasket) {
+          results.accessories.push({ ...frameRes.gasket, source: 'Cadre Global' });
+       }
+    }
+
     const divProfile = this.db.profiles.find(p => p.id === (compoundType === 'fix_coulissant' ? unionId : traverseId));
     const divThick = divProfile?.thickness || 0;
 
@@ -551,35 +579,6 @@ export class FormulaEngine {
           source: 'Jonction',
           qty: divQty, length: len, cost: dCost * divQty
         });
-      }
-
-      // 1. Calculate Global Frame once for the top level
-      if (partList === parts) {
-         // Find the most relevant part to determine the global dormant profile
-         // Priority 1: Any part of type 'opening'
-         // Priority 2: Any part with a composition explicitly set
-         // Priority 3: The very first part
-         const mainOp = parts.find(p => p.type === 'opening' && p.compositionId) || 
-                        parts.find(p => p.compositionId) || 
-                        parts.find(p => p.type === 'opening') || 
-                        parts[0];
-         
-         const frameCompId = mainOp?.compositionId || config.compositionId;
-         const frameRes = this.calculateComponentBOM(config, L, H, frameCompId, config.glassId, config.optionalSides, H, L, H);
-         
-         const isFrameProfile = p => !!p.isFrame || /dormant|cadre|chassis|batit|traverse|couvre/i.test((p.label + ' ' + p.name).toLowerCase());
-         
-         const frameProfiles = frameRes.profiles.filter(isFrameProfile)
-                              .map(p => ({ ...p, source: 'Cadre Global' }));
-         results.profiles.push(...frameProfiles);
-
-         const frameAccs = frameRes.accessories.filter(a => !!a.isFrame || /dormant|cadre|chassis/i.test((a.label + ' ' + a.name).toLowerCase()))
-                              .map(a => ({ ...a, source: 'Cadre Global' }));
-         results.accessories.push(...frameAccs);
-
-         if (frameRes.gasket) {
-            results.accessories.push({ ...frameRes.gasket, source: 'Cadre Global' });
-         }
       }
 
       partList.forEach((part, idx) => {
