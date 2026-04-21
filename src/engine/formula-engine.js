@@ -582,24 +582,29 @@ export class FormulaEngine {
     
     const frameCompId = (mainOp && mainOp.compositionId) ? mainOp.compositionId : config.compositionId;
     
-    if (!isMultiChassis && frameCompId) {
-       // Use config.optionalSides directly or default to all true if missing.
-       // The Dormant profiles now stay visible even if these are false, only covers follow these toggles.
+    if (frameCompId) {
        const globalOpt = config.optionalSides || { top: true, bottom: true, left: true, right: true };
-       
        const frameRes = this.calculateComponentBOM(config, L, H, frameCompId, config.glassId, globalOpt, totalH, L, totalH);
        
-       const isFrameProfile = p => !!p.isFrame || /dormant|cadre|chassis|batit|couvre/i.test((p.label + ' ' + p.name).toLowerCase());
+       const isCouvreJointFn = p => /couvres?[- ]?joints?|cj[vh]?/i.test(((p.label || '') + ' ' + (p.name || '')).toLowerCase());
+       const isDormantFn = p => /dormant|cadre|chassis|batit|dorme/i.test(((p.label || '') + ' ' + (p.name || '')).toLowerCase());
+
+       // In Multi-Chassis: ONLY keep covers. In Single-Chassis: keep both dormant and covers.
+       const frameProfiles = frameRes.profiles.filter(p => {
+          if (isMultiChassis) return isCouvreJointFn(p);
+          return isDormantFn(p) || isCouvreJointFn(p);
+       }).map(p => ({ ...p, source: 'Cadre Global' }));
        
-       const frameProfiles = frameRes.profiles.filter(isFrameProfile)
-                            .map(p => ({ ...p, source: 'Cadre Global' }));
        results.profiles.push(...frameProfiles);
 
-       const frameAccs = frameRes.accessories.filter(a => !!a.isFrame || /dormant|cadre|chassis/i.test((a.label + ' ' + a.name).toLowerCase()))
-                            .map(a => ({ ...a, source: 'Cadre Global' }));
+       const frameAccs = frameRes.accessories.filter(a => {
+          if (isMultiChassis) return isCouvreJointFn(a);
+          return isDormantFn(a) || isCouvreJointFn(a);
+       }).map(a => ({ ...a, source: 'Cadre Global' }));
+       
        results.accessories.push(...frameAccs);
 
-       if (frameRes.gasket) {
+       if (!isMultiChassis && frameRes.gasket) {
           results.accessories.push({ ...frameRes.gasket, source: 'Cadre Global' });
        }
     }
