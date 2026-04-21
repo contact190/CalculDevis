@@ -778,6 +778,7 @@ const AdminDashboard = ({ data, setData }) => {
                             <option>ML</option>
                             <option>M2</option>
                             <option>Barre</option>
+                            <option>Joint</option>
                           </select>
                         </td>
                         <td><button className="btn" onClick={() => {
@@ -2155,6 +2156,7 @@ const AdminDashboard = ({ data, setData }) => {
                                 <option>M2</option>
                                 <option>Unité</option>
                                 <option>Barre</option>
+                                <option>Joint</option>
                               </select>
                             </td>
                             <td><input className="input" type="number" step="0.01" value={item.price} onChange={e => updateShutterItem(key, i, 'price', e.target.value)} style={{ width: '100px' }} /></td>

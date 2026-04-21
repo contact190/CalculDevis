@@ -80,13 +80,11 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         });
         // Shutter profiles (Linear items)
         (b.shutters || []).forEach(s => {
-          const unit = (s.priceUnit || '').toUpperCase();
-          if (unit === 'ML' || unit === 'BARRE') {
+          const unit = (s.priceUnit || '').toUpperCase().trim();
+          if (unit === 'ML' || unit === 'BARRE' || unit === 'JOINT') {
             const mapKey = `${s.id}|${colorName}`;
-            // If ML and qty is small (meters), multiply by 1000 for mm. 
-            // If ML and qty is large (mm), or if BARRE, keep as is.
-            const unitClean = (s.priceUnit || '').toUpperCase().trim();
-            const qtyMultiplier = (unitClean === 'ML' && s.qty < 50) ? 1000 : 1;
+            // If ML/JOINT and qty is small (meters), multiply by 1000 for mm. 
+            const qtyMultiplier = (['ML', 'JOINT'].includes(unit) && s.qty < 50) ? 1000 : 1;
             const measure = (s.qty || 0) * cfgQty * qtyMultiplier;
             const newPieces = Array(cfgQty).fill((s.qty || 0) * qtyMultiplier);
             
@@ -121,8 +119,8 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         if (b.gasket) items.push(b.gasket);
         // Add non-profile shutter items
         (b.shutters || []).forEach(s => {
-          const unit = (s.priceUnit || '').toUpperCase();
-          if (unit !== 'ML' && unit !== 'BARRE') items.push(s);
+          const unit = (s.priceUnit || '').toUpperCase().trim();
+          if (unit !== 'ML' && unit !== 'BARRE' && unit !== 'JOINT') items.push(s);
         });
 
         items.forEach(a => {
