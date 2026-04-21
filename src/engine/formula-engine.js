@@ -560,8 +560,15 @@ export class FormulaEngine {
          ).map(p => ({ ...p, source: 'Cadre Global' }));
          results.profiles.push(...frameProfiles);
 
-         // Optional: Add only top-level accessories that are NOT frame-related if needed?
-         // User said "cadre global n'a pas d'accessoire", so we skip accessories from frameRes.
+         const frameAccs = frameRes.accessories.filter(a => 
+            a.label?.toLowerCase().includes('dormant') || a.name?.toLowerCase().includes('dormant') ||
+            a.label?.toLowerCase().includes('cadre') || a.name?.toLowerCase().includes('cadre')
+         ).map(a => ({ ...a, source: 'Cadre Global' }));
+         results.accessories.push(...frameAccs);
+
+         if (frameRes.gasket) {
+            results.accessories.push({ ...frameRes.gasket, source: 'Cadre Global' });
+         }
       }
 
       partList.forEach((part, idx) => {
