@@ -36,11 +36,8 @@ export class FormulaEngine {
     return resolved;
   }
 
-  /**
-   * Calculate BOM for a single component (used by global BOM or individual cells)
-    // Ensure at least one side is true, otherwise default to all true (safety for empty/corrupted configs)
-    const hasAnySide = optionalSides && Object.values(optionalSides).some(v => v === true);
-    const opt = hasAnySide ? optionalSides : { top: true, bottom: true, left: true, right: true };
+  calculateComponentBOM(config, L, H, compositionId, glassId, optionalSides, totalH = null, originalL = null, originalH = null) {
+    const opt = optionalSides || { top: true, bottom: true, left: true, right: true };
     const composition = this.db.compositions.find(c => c.id === compositionId);
     if (!composition) return { profiles: [], accessories: [], glass: null, gasket: null };
 
@@ -545,7 +542,11 @@ export class FormulaEngine {
     const frameCompId = (mainOp && mainOp.compositionId) ? mainOp.compositionId : config.compositionId;
     
     if (frameCompId) {
-       const frameRes = this.calculateComponentBOM(config, L, H, frameCompId, config.glassId, config.optionalSides, H, L, H);
+       // Ensure at least one side is true for the global perimeter, otherwise default to all true
+       const hasAnySide = config.optionalSides && Object.values(config.optionalSides).some(v => v === true);
+       const globalOpt = hasAnySide ? config.optionalSides : { top: true, bottom: true, left: true, right: true };
+       
+       const frameRes = this.calculateComponentBOM(config, L, H, frameCompId, config.glassId, globalOpt, H, L, H);
        
        const isFrameProfile = p => !!p.isFrame || /dormant|cadre|chassis|batit|traverse|couvre/i.test((p.label + ' ' + p.name).toLowerCase());
        
