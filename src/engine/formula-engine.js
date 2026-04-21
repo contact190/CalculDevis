@@ -564,34 +564,44 @@ export class FormulaEngine {
         }
 
         if (compoundType === 'fix_coulissant') {
+          // Independent units joined by Union/Transom
           const res = this.calculateComponentBOM(config, pW, pH, part.compositionId || config.compositionId, pGlassId, { top: true, bottom: true, left: true, right: true }, pH, pW, pH);
           results.profiles.push(...res.profiles);
           results.accessories.push(...res.accessories);
           if (res.gasket) results.accessories.push(res.gasket);
           if (res.glass) results.glasses.push(res.glass);
         } else {
-          if (idx === 0 && partList === parts) {
+          // Single Frame Divided by Transoms
+          if (idx === 0 && partList === parts) { 
              const mainOp = parts.find(p => p.type === 'opening') || parts[0];
              const frameRes = this.calculateComponentBOM(config, L, H, mainOp.compositionId || config.compositionId, config.glassId, config.optionalSides, H, L, H);
-             results.profiles.push(...frameRes.profiles.filter(p => p.label?.toLowerCase().includes('dormant') || p.name?.toLowerCase().includes('dormant')));
-             results.accessories.push(...frameRes.accessories.filter(a => a.label?.toLowerCase().includes('dormant') || a.name?.toLowerCase().includes('dormant')));
+             // Keep ONLY Frame/Dormant/Couvre from the top-level call
+             const frameOnly = frameRes.profiles.filter(p => 
+                p.label?.toLowerCase().includes('dormant') || p.name?.toLowerCase().includes('dormant') ||
+                p.label?.toLowerCase().includes('cadre') || p.name?.toLowerCase().includes('cadre') ||
+                p.label?.toLowerCase().includes('couvre') || p.name?.toLowerCase().includes('couvre')
+             );
+             results.profiles.push(...frameOnly);
+             
+             // Same for accessories related to frame
+             const frameAccs = frameRes.accessories.filter(a => 
+                a.label?.toLowerCase().includes('dormant') || a.name?.toLowerCase().includes('dormant') ||
+                a.label?.toLowerCase().includes('cadre') || a.name?.toLowerCase().includes('cadre')
+             );
+             results.accessories.push(...frameAccs);
           }
 
           const compId = part.compositionId || config.compositionId || parts.find(p=>p.type==='opening')?.compositionId;
           const res = this.calculateComponentBOM(config, pW, pH, compId, pGlassId, { top: false, bottom: false, left: false, right: false }, pH, pW, pH);
           
-          results.profiles.push(...res.profiles.filter(p => 
-            !p.label?.toLowerCase().includes('dormant') && 
-            !p.name?.toLowerCase().includes('dormant') &&
-            !p.label?.toLowerCase().includes('couvre') &&
-            !p.name?.toLowerCase().includes('couvre')
-          ));
-          results.accessories.push(...res.accessories.filter(a => 
-            !a.label?.toLowerCase().includes('dormant') && 
-            !a.name?.toLowerCase().includes('dormant') &&
-            !a.label?.toLowerCase().includes('couvre') &&
-            !a.name?.toLowerCase().includes('couvre')
-          ));
+          // REMOVE any frame/dormant/cadre/couvre from internal sub-parts
+          const filterFn = (item) => {
+             const s = ((item.label || '') + ' ' + (item.name || '')).toLowerCase();
+             return !s.includes('dormant') && !s.includes('cadre') && !s.includes('couvre') && !s.includes('chassis');
+          };
+          
+          results.profiles.push(...res.profiles.filter(filterFn));
+          results.accessories.push(...res.accessories.filter(filterFn));
           if (res.glass) results.glasses.push(res.glass);
         }
       });
