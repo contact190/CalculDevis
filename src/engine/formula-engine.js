@@ -372,7 +372,7 @@ export class FormulaEngine {
 
   processShutterComponent(item, vars, shutterPack, key = '', config = {}) {
     const { L, H, HC } = vars;
-    const barLength = parseFloat(item.barLength) || 1;
+    const barLength = parseFloat(item.barLength) || 6400; // Default to 6400mm to match UI if not set
     
     // Rule: Couvre Joint reduction ONLY on the caisson length
     let itemScopeL = L;
@@ -417,12 +417,23 @@ export class FormulaEngine {
       }
     }
 
-    const finalCost = (qty / barLength) * itemPrice;
+    let finalCost = 0;
+    const unitRaw = (item.priceUnit || 'Unité').toUpperCase();
+    
+    if (unitRaw === 'BARRE') {
+      finalCost = (qty / barLength) * itemPrice;
+    } else {
+      // For ML, M2, Unité, we assume qty reflects the correct unit.
+      // E.g., if ML, qty should be formatted via formula to be linear meters (L/1000).
+      // However, historically if unit was ML and barLength was 1, it was qty/1 * price = qty * price.
+      finalCost = qty * itemPrice;
+    }
 
     shutterPack.push({
       ...item,
       name: displayName,
       qty: qty,
+      barLength: barLength,
       price: itemPrice,
       priceUnit: item.priceUnit,
       resolvedFormula: this.resolveFormula(item.formula || '1', { L: itemScopeL, H, HC }),
@@ -435,6 +446,23 @@ export class FormulaEngine {
         const addonQty = this.evaluate(addon.formula || '1', { L: itemScopeL, H, HC });
         if (addonQty > 0) {
           const addonPrice = addon.price || 0;
+          const addonUnit = (addon.unit || 'Unité').toUpperCase();
+          
+          let addonCost = 0;
+          if (addonUnit === 'BARRE') {
+            // Find linked bar length or default
+            let addBarLen = 6400;
+            if (addon.linkedId) {
+              const linkedArt = this.db.profiles.find(p => p.id === addon.linkedId) || 
+                               (this.db.shutterComponents.lames || []).find(l => l.id === addon.linkedId) ||
+                               (this.db.shutterComponents.glissieres || []).find(g => g.id === addon.linkedId);
+              if (linkedArt && linkedArt.barLength) addBarLen = parseFloat(linkedArt.barLength);
+            }
+            addonCost = (addonQty / addBarLen) * addonPrice;
+          } else {
+            addonCost = addonQty * addonPrice;
+          }
+
           shutterPack.push({
             id: `${item.id}-addon-${(addon.name || 'opt').replace(/\s+/g, '-').toLowerCase()}`,
             name: `Add-on (${item.name}): ${addon.name}`,
@@ -442,7 +470,7 @@ export class FormulaEngine {
             priceUnit: addon.unit || 'Unité',
             price: addonPrice,
             formula: addon.formula || '1',
-            cost: addonQty * addonPrice
+            cost: addonCost
           });
         }
       });
@@ -451,11 +479,13 @@ export class FormulaEngine {
     // Baguette
     if (key === 'glissiereId' && item.hasBaguette && config.shutterConfig?.enableBaguette) {
       const baguettePrice = item.baguettePrice || 0;
-      const bCost = (qty / barLength) * baguettePrice;
+      // Baguette is explicitly set to ML, so cost is simply qty * price
+      const bCost = qty * baguettePrice;
       shutterPack.push({
         id: `${item.id}-baguette`,
         name: `Baguette pour ${item.name}`,
         qty: qty,
+        barLength: barLength,
         priceUnit: 'ML',
         price: baguettePrice,
         cost: bCost

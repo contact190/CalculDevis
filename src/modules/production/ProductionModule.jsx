@@ -15,7 +15,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
   // 'total' = consolidated, or an item ID for a single product
   const [productFilter, setProductFilter] = useState('total');
   // Kitting / Logistics
-  const [kitConfig, setKitConfig] = useState({ trolleys: 2, slotsPerTrolley: 10 });
+  const [kitConfig, setKitConfig] = useState({ trolleys: 2, slotsPerTrolley: 10, barsPerSlot: 1 });
   const [selectedLabelItem, setSelectedLabelItem] = useState(null);
 
   // Prise de mesures states
@@ -78,12 +78,17 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
             map[mapKey].originalNames.add(displayName);
           }
         });
-        // Shutter profiles (ML base)
+        // Shutter profiles (Linear items)
         (b.shutters || []).forEach(s => {
-          if (s.priceUnit === 'ML') {
+          const unit = (s.priceUnit || '').toUpperCase();
+          if (unit === 'ML' || unit === 'BARRE') {
             const mapKey = `${s.id}|${colorName}`;
-            const measure = (s.qty || 0) * cfgQty * 1000; // Convert to mm for consistency
-            const newPieces = Array(cfgQty).fill((s.qty || 0) * 1000);
+            // If ML, we assume qty is in meters (L/1000), so multiply by 1000 for mm
+            // If BARRE, we assume qty is already in mm (L-1)
+            const qtyMultiplier = unit === 'ML' ? 1000 : 1;
+            const measure = (s.qty || 0) * cfgQty * qtyMultiplier;
+            const newPieces = Array(cfgQty).fill((s.qty || 0) * qtyMultiplier);
+            
             if (!map[mapKey]) {
               map[mapKey] = { ...s, originalNames: new Set([s.name]), totalMeasure: measure, pieces: newPieces, colorName };
             } else {
@@ -115,7 +120,8 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         if (b.gasket) items.push(b.gasket);
         // Add non-profile shutter items
         (b.shutters || []).forEach(s => {
-          if (s.priceUnit !== 'ML') items.push(s);
+          const unit = (s.priceUnit || '').toUpperCase();
+          if (unit !== 'ML' && unit !== 'BARRE') items.push(s);
         });
 
         items.forEach(a => {
@@ -928,17 +934,22 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
           barsResult[profId] = { profileName, bars, barLen };
         });
 
-        // Assign each BAR to a chariot slot
+        // Assign each BAR to a chariot slot based on barsPerSlot
+        const barsPerSlot = kitConfig.barsPerSlot || 1;
         const allBarsFlat = [];
         Object.entries(barsResult).forEach(([profId, { profileName, bars, barLen }]) => {
           bars.forEach(bar => allBarsFlat.push({ ...bar, profileName, barLen, profId }));
         });
+        
         allBarsFlat.forEach((bar, idx) => {
-          const absSlot = idx % Math.max(totalSlots, 1);
-          bar.trolley = Math.floor(absSlot / kitConfig.slotsPerTrolley) + 1;
-          bar.slot = (absSlot % kitConfig.slotsPerTrolley) + 1;
+          const slotIdxTotal = Math.floor(idx / barsPerSlot);
+          const trolleyIdx = Math.floor(slotIdxTotal / kitConfig.slotsPerTrolley);
+          
+          bar.trolley = trolleyIdx + 1;
+          bar.slot = (slotIdxTotal % kitConfig.slotsPerTrolley) + 1;
           bar.address = `CH${bar.trolley}-C${String(bar.slot).padStart(2, '0')}`;
         });
+
         const barAddressMap = {};
         allBarsFlat.forEach(b => { barAddressMap[b.id] = b.address; });
         const totalBars = allBarsFlat.length;
@@ -1066,6 +1077,11 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                   <input type="number" min={1} max={50} className="input" style={{ marginLeft: '0.5rem', width: '70px' }}
                     value={kitConfig.slotsPerTrolley} onChange={e => setKitConfig(p => ({ ...p, slotsPerTrolley: parseInt(e.target.value) || 1 }))} />
                 </label>
+                <label style={{ fontWeight: 600, fontSize: '0.875rem', color: '#374151' }}>
+                  Barres par case
+                  <input type="number" min={1} max={10} className="input" style={{ marginLeft: '0.5rem', width: '70px' }}
+                    value={kitConfig.barsPerSlot} onChange={e => setKitConfig(p => ({ ...p, barsPerSlot: parseInt(e.target.value) || 1 }))} />
+                </label>
               </div>
             </div>
 
@@ -1079,38 +1095,74 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
               ) : (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem' }}>
                   {Array.from({ length: kitConfig.trolleys }, (_, ti) => {
-                    const trolleyBars = allBarsFlat.filter(b => b.trolley === ti + 1);
                     return (
-                      <div key={ti} style={{ flex: '0 0 auto', width: '330px' }}>
-                        <div style={{ background: 'linear-gradient(135deg, #7c3aed, #5b21b6)', color: 'white', fontWeight: 700, fontSize: '0.9rem', padding: '0.6rem 1rem', borderRadius: '0.5rem 0.5rem 0 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div key={ti} style={{ flex: '1 1 450px', minWidth: '400px' }}>
+                        <div style={{ background: 'linear-gradient(135deg, #7c3aed, #5b21b6)', color: 'white', fontWeight: 700, fontSize: '0.95rem', padding: '0.75rem 1rem', borderRadius: '0.5rem 0.5rem 0 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                           <span>🛒 Chariot {ti + 1}</span>
-                          <span style={{ fontSize: '0.75rem', fontWeight: 400, opacity: 0.85 }}>{trolleyBars.length}/{kitConfig.slotsPerTrolley} barres</span>
                         </div>
-                        <div style={{ border: '2px solid #7c3aed', borderTop: 'none', borderRadius: '0 0 0.5rem 0.5rem', overflow: 'hidden' }}>
+                        <div style={{ border: '2px solid #7c3aed', borderTop: 'none', borderRadius: '0 0 0.5rem 0.5rem', background: '#f8fafc' }}>
                           {Array.from({ length: kitConfig.slotsPerTrolley }, (_, si) => {
-                            const bar = allBarsFlat.find(b => b.trolley === ti + 1 && b.slot === si + 1);
+                            const slotBars = allBarsFlat.filter(b => b.trolley === ti + 1 && b.slot === si + 1);
                             return (
-                              <div key={si} style={{ padding: '0.45rem 0.75rem', borderBottom: '1px solid #ede9fe', background: bar ? '#faf5ff' : '#f8fafc', display: 'flex', alignItems: 'center', gap: '0.6rem', minHeight: '46px' }}>
-                                <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#7c3aed', background: '#ede9fe', padding: '0.1rem 0.4rem', borderRadius: '4px', minWidth: '36px', textAlign: 'center', flexShrink: 0 }}>
-                                  C{String(si + 1).padStart(2, '0')}
-                                </span>
-                                {bar ? (
-                                  <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ fontWeight: 700, fontSize: '0.775rem', color: '#1e293b' }}>{bar.profileName}</div>
-                                    <div style={{ display: 'flex', height: '8px', borderRadius: '3px', overflow: 'hidden', background: '#e2e8f0', margin: '3px 0' }}>
-                                      {bar.pieces.map((piece, pi) => (
-                                        <div key={pi} style={{ flex: `0 0 ${(piece.length / bar.barLen) * 100}%`, background: `hsl(${(piece.windowIdx * 47) % 360},65%,55%)`, borderRight: '1px solid white' }} />
-                                      ))}
-                                      {bar.waste > 0 && <div style={{ flex: `0 0 ${(bar.waste / bar.barLen) * 100}%`, background: bar.isTrash ? '#fca5a5' : '#86efac' }} />}
-                                    </div>
-                                    <div style={{ fontSize: '0.62rem', color: '#64748b', display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
-                                      {[...new Set(bar.pieces.map(p => p.windowLabel))].map((wl, i) => (
-                                        <span key={i} style={{ background: '#f1f5f9', padding: '0 0.3rem', borderRadius: '3px' }}>{wl}</span>
-                                      ))}
-                                      <span style={{ marginLeft: 'auto' }}>{bar.used}mm</span>
-                                    </div>
+                              <div key={si} style={{ padding: '0.75rem', borderBottom: '1px solid #ede9fe', background: slotBars.length > 0 ? 'white' : 'transparent' }}>
+                                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                                  <span style={{ fontSize: '0.8rem', fontWeight: 900, color: '#7c3aed', background: '#ede9fe', padding: '0.2rem 0.6rem', borderRadius: '4px', alignSelf: 'flex-start', minWidth: '45px', textAlign: 'center' }}>
+                                    C{String(si + 1).padStart(2, '0')}
+                                  </span>
+                                  <div style={{ flex: 1 }}>
+                                    {slotBars.length > 0 ? (
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                        {slotBars.map((bar, bi) => (
+                                          <div key={bi} style={{ background: '#fafafa', border: '1px solid #f1f5f9', borderRadius: '6px', padding: '0.5rem' }}>
+                                            <div style={{ fontWeight: 800, fontSize: '0.75rem', color: '#1e293b', marginBottom: '0.3rem', display: 'flex', justifyContent: 'space-between' }}>
+                                              <span>{bar.profileName} <span style={{fontWeight:400, color:'#64748b'}}>(L={bar.barLen}mm)</span></span>
+                                              <span style={{color:'#7c3aed'}}>#{bi+1}</span>
+                                            </div>
+                                            <div style={{ display: 'flex', height: '24px', borderRadius: '4px', overflow: 'hidden', background: '#e2e8f0', position: 'relative' }}>
+                                              {bar.pieces.map((piece, pi) => (
+                                                <div key={pi} style={{ 
+                                                  flex: `0 0 ${(piece.length / bar.barLen) * 100}%`, 
+                                                  background: `hsl(${(piece.windowIdx * 47) % 360},65%,55%)`, 
+                                                  borderRight: '1px solid rgba(255,255,255,0.4)',
+                                                  display: 'grid',
+                                                  placeItems: 'center',
+                                                  color: 'white',
+                                                  fontSize: '0.65rem',
+                                                  fontWeight: 700,
+                                                  position: 'relative',
+                                                  overflow: 'hidden'
+                                                }}>
+                                                  {piece.length >= 400 && <span>{piece.length}</span>}
+                                                </div>
+                                              ))}
+                                              {bar.waste > 0 && (
+                                                <div style={{ 
+                                                  flex: `0 0 ${(bar.waste / bar.barLen) * 100}%`, 
+                                                  background: bar.isTrash ? '#fca5a5' : '#86efac',
+                                                  display: 'grid',
+                                                  placeItems: 'center',
+                                                  fontSize: '0.6rem',
+                                                  color: bar.isTrash ? '#991b1b' : '#065f46'
+                                                }}>
+                                                  {bar.waste >= 300 && <span>{bar.waste}</span>}
+                                                </div>
+                                              )}
+                                            </div>
+                                            <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.25rem', flexWrap: 'wrap' }}>
+                                              {bar.pieces.map((p, i) => (
+                                                <span key={i} style={{ fontSize: '0.6rem', background: '#f1f5f9', padding: '1px 4px', borderRadius: '3px', color: '#475569' }}>
+                                                  {p.label} ({p.length}) - {p.windowLabel}
+                                                </span>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <span style={{ fontSize: '0.8rem', color: '#cbd5e1', fontStyle: 'italic' }}>— Vide —</span>
+                                    )}
                                   </div>
-                                ) : <span style={{ fontSize: '0.75rem', color: '#cbd5e1' }}>— Vide —</span>}
+                                </div>
                               </div>
                             );
                           })}

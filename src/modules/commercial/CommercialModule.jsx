@@ -467,8 +467,14 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                   {priceData?.bom.shutters && priceData.bom.shutters.map((s, i) => (
                     <tr key={`shutter-${i}`}>
                       <td data-label="Composant" style={{ fontWeight: 600 }}>[Volet] {s.name}</td><td data-label="Formule" style={{ color: '#64748b', fontSize: '0.65rem' }}>{s.formula}</td>
-                      <td data-label="Calcul" style={{ color: '#3b82f6', fontSize: '0.65rem' }}>{s.resolvedFormula || '-'}</td><td data-label="Nbre">{s.qty?.toFixed(2)} {s.priceUnit}</td>
-                      <td data-label="Mesure Totale">-</td><td data-label="Prix Unit.">{s.price?.toFixed(2)}</td>
+                      <td data-label="Calcul" style={{ color: '#3b82f6', fontSize: '0.65rem' }}>{s.resolvedFormula || '-'}</td>
+                      <td data-label="Nbre">
+                        {s.priceUnit === 'Barre' ? (s.qty / (s.barLength || 6400)).toFixed(2) : s.qty?.toFixed(2)} {s.priceUnit}
+                      </td>
+                      <td data-label="Mesure Totale">
+                        {s.priceUnit === 'Barre' || s.priceUnit === 'ML' ? `${Math.round(s.priceUnit === 'ML' ? s.qty * 1000 : s.qty)} mm` : '-'}
+                      </td>
+                      <td data-label="Prix Unit.">{s.price?.toFixed(2)}</td>
                       <td data-label="Prix Total" style={{ textAlign: 'right', fontWeight: 600 }}>{(s.cost || 0).toFixed(2)} DZD</td>
                     </tr>
                   ))}

@@ -777,6 +777,7 @@ const AdminDashboard = ({ data, setData }) => {
                             <option>Unité</option>
                             <option>ML</option>
                             <option>M2</option>
+                            <option>Barre</option>
                           </select>
                         </td>
                         <td><button className="btn" onClick={() => {
