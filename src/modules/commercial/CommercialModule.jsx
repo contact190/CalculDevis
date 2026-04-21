@@ -8,7 +8,7 @@ import jsPDF from 'jspdf';
 const EMPTY_CONFIG = {
   L: 1200, H: 2150,
   compositionId: '', colorId: '', glassId: '',
-  optionalSides: { top: false, bottom: false, left: false, right: false },
+  optionalSides: { top: true, bottom: true, left: true, right: true },
   selectedOptions: [],
   hasShutter: false,
   shutterConfig: { caissonId: '', lameId: '', glissiereId: 'AUTO', axeId: '', kitId: '', glissiereParams: {} },

@@ -38,9 +38,9 @@ export class FormulaEngine {
 
   /**
    * Calculate BOM for a single component (used by global BOM or individual cells)
-   */
-  calculateComponentBOM(config, L, H, compositionId, glassId, optionalSides, totalH = null, originalL = null, originalH = null) {
-    const opt = optionalSides || { top: true, bottom: true, left: true, right: true };
+    // Ensure at least one side is true, otherwise default to all true (safety for empty/corrupted configs)
+    const hasAnySide = optionalSides && Object.values(optionalSides).some(v => v === true);
+    const opt = hasAnySide ? optionalSides : { top: true, bottom: true, left: true, right: true };
     const composition = this.db.compositions.find(c => c.id === compositionId);
     if (!composition) return { profiles: [], accessories: [], glass: null, gasket: null };
 
