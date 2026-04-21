@@ -829,7 +829,7 @@ export class FormulaEngine {
       shutters: shutterPack
     };
 
-    return bom;
+    return this.mergeBOM(bom);
   }
 
 
@@ -898,5 +898,31 @@ export class FormulaEngine {
     }
 
     return { valid: true };
+  }
+
+  mergeBOM(bom) {
+    const merge = (list, keyFields) => {
+       const map = new Map();
+       list.forEach(item => {
+          const key = keyFields.map(f => item[f]).join('|');
+          if (map.has(key)) {
+             const existing = map.get(key);
+             existing.qty = (existing.qty || 0) + (item.qty || 0);
+             existing.cost = (existing.cost || 0) + (item.cost || 0);
+             if (existing.area !== undefined) existing.area += (item.area || 0);
+             if (existing.weight !== undefined) existing.weight += (item.weight || 0);
+          } else {
+             map.set(key, { ...item });
+          }
+       });
+       return Array.from(map.values());
+    };
+
+    return {
+       ...bom,
+       profiles: merge(bom.profiles || [], ['id', 'length', 'label']),
+       accessories: merge(bom.accessories || [], ['id', 'label']),
+       glasses: merge(bom.glasses || [], ['id', 'label', 'width', 'height'])
+    };
   }
 }
