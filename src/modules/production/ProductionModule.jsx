@@ -857,7 +857,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
             </div>
           </div>
 
-          </div>
+
 
           {/* Section: Gestion des Chutes & Déchets */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
