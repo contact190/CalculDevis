@@ -15,16 +15,11 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
     ctx.clearRect(0, 0, width, height);
     
     const { L, H, compositionId, optionalSides = {} } = config;
-    const composition = database.compositions.find(c => c.id === compositionId);
-    const rangeId = composition?.rangeId;
     if (!L || !H) return;
 
-    // Calculate scaling
     const margin = 80;
     const drawAreaW = width - margin * 2;
     const drawAreaH = height - margin * 2;
-    
-    const scale = Math.min(drawAreaW / L, drawAreaH / H);
     
     // Calculate Caisson height
     let caissonH = 0;
@@ -33,10 +28,13 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
       caissonH = parseFloat(cRef?.height) || 0;
     }
 
+    const totalH_val = H + caissonH;
+    const scale = Math.min(drawAreaW / L, drawAreaH / totalH_val);
+    
     const dW = L * scale;
-    const dH_total = H * scale; // Total visual height
+    const dH_window = H * scale;
     const dCaissonH = caissonH * scale;
-    const dWindowH = (H - caissonH) * scale;
+    const dH_total = (H + caissonH) * scale;
     
     const offsetX = (width - dW) / 2;
     const offsetY = (height - dH_total) / 2;
@@ -52,15 +50,15 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
       ctx.fillRect(offsetX, offsetY, dW, dCaissonH);
       ctx.strokeRect(offsetX, offsetY, dW, dCaissonH);
       
-      // Add a small circle or line to indicate shutter roll
+      // Add a small circle to indicate shutter roll
       ctx.beginPath();
       ctx.arc(offsetX + dW - dCaissonH/2, offsetY + dCaissonH/2, dCaissonH/3, 0, Math.PI * 2);
       ctx.stroke();
     }
     
-    // Update offsetY for window part
+    // Window part starts AFTER total caisson
     const winOffsetY = offsetY + dCaissonH;
-    const dH = dWindowH; // For compatibility with rest of code
+    const dH = dH_window; // For compatibility with rest of code
     
     // 0. Draw Architraves (Couvre-joints optionnels)
     const cjW = 40 * scale; // 40mm

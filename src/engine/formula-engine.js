@@ -41,10 +41,16 @@ export class FormulaEngine {
     const composition = this.db.compositions.find(c => c.id === compositionId);
     if (!composition) return { profiles: [], accessories: [], glass: null, gasket: null };
 
+    let HC = 0;
+    if (config.hasShutter && config.shutterConfig?.caissonId && this.db.shutterComponents) {
+      const cRef = this.db.shutterComponents.caissons.find(c => c.id === config.shutterConfig.caissonId);
+      HC = parseFloat(cRef?.height) || 0;
+    }
+
     const profiles = [];
     const accessories = [];
-    const scope = { L, H };
-    const originalScope = { L: originalL || L, H: originalH || H };
+    const scope = { L, H, HC };
+    const originalScope = { L: originalL || L, H: originalH || H, HC };
 
     const expandedElements = [];
 
@@ -553,7 +559,7 @@ export class FormulaEngine {
    * Calculate BOM (Bill of Materials) for a given configuration
    */
 
-  calculateCompoundBOM(config, L, H) {
+  calculateCompoundBOM(config, L, H, totalH) {
     const { compoundType, compoundConfig } = config;
     if (!compoundConfig || !compoundConfig.parts) return { profiles: [], accessories: [], glasses: [] };
     const { parts, unionId, traverseId, orientation } = compoundConfig;
@@ -575,7 +581,7 @@ export class FormulaEngine {
        // The Dormant profiles now stay visible even if these are false, only covers follow these toggles.
        const globalOpt = config.optionalSides || { top: true, bottom: true, left: true, right: true };
        
-       const frameRes = this.calculateComponentBOM(config, L, H, frameCompId, config.glassId, globalOpt, H, config.L, config.H);
+       const frameRes = this.calculateComponentBOM(config, L, H, frameCompId, config.glassId, globalOpt, totalH, L, totalH);
        
        const isFrameProfile = p => !!p.isFrame || /dormant|cadre|chassis|batit|couvre/i.test((p.label + ' ' + p.name).toLowerCase());
        
@@ -731,27 +737,29 @@ export class FormulaEngine {
       shutterHeight = parseFloat(caisson?.height) || 0;
     }
     
-    // The Joinery (Window) height is the total opening minus the shutter box
-    const windowH = H - shutterHeight;
+    // The Joinery (Window) height is config.H
+    // The Total height (for covers) is H + shutterHeight
+    const windowH = H;
+    const totalH = H + shutterHeight;
 
     let profiles = [];
     let accessories = [];
     let glasses = [];
 
     if (config.compoundType && config.compoundType !== 'none') {
-      const compRes = this.calculateCompoundBOM(config, L, windowH);
+      const compRes = this.calculateCompoundBOM(config, L, windowH, totalH);
       profiles = compRes.profiles;
       accessories = compRes.accessories;
       glasses = compRes.glasses;
     } else if (config.useCustomLayout && config.customLayout && config.customLayout.cols) {
-      // For custom layouts, we'll pass original L/H for covers
-      const gridResults = this.calculateGridBOM(config.customLayout, L, windowH, config, H, config.L, config.H);
+      // For custom layouts, we'll pass totalH for covers
+      const gridResults = this.calculateGridBOM(config.customLayout, L, windowH, config, totalH, L, totalH);
       profiles = gridResults.profiles;
       accessories = gridResults.accessories;
       glasses = gridResults.glasses;
     } else {
-      // Simple Mode (Classic) - Pass original H as totalH AND original L/H for covers
-      const res = this.calculateComponentBOM(config, L, windowH, config.compositionId, glassId, config.optionalSides, H, config.L, config.H);
+      // Simple Mode (Classic) - Pass totalH as both totalH AND originalH for covers
+      const res = this.calculateComponentBOM(config, L, windowH, config.compositionId, glassId, config.optionalSides, totalH, L, totalH);
       profiles = res.profiles;
       accessories = res.accessories;
       if (res.gasket) accessories.push(res.gasket);
