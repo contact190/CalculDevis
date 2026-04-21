@@ -536,14 +536,13 @@ export class FormulaEngine {
 
       // Add Dividers for this level
       if (divProfile && divQty > 0) {
-        // Traverse length should ideally be inner frame dimension. 
-        // For now L or H is total, we might subtract approx 100mm for frame if it's divided frame
         const frameDeduct = (compoundType === 'fix_ouvrant') ? 90 : 0; 
         const len = (isH ? boxH : boxL) - frameDeduct;
         const dCost = divProfile.pricePerBar ? (len / divProfile.barLength * divProfile.pricePerBar) : ((len/1000) * divProfile.weightPerM * divProfile.pricePerKg);
         results.profiles.push({
           ...divProfile,
           label: compoundType === 'fix_coulissant' ? 'Profilé d\'Union' : 'Traverse',
+          source: 'Jonction',
           qty: divQty, length: len, cost: dCost * divQty
         });
       }
@@ -552,11 +551,7 @@ export class FormulaEngine {
         let pW = isH ? (part.width || (boxL / partList.length)) : boxL;
         let pH = isH ? boxH : (part.height || (boxH / partList.length));
         const pGlassId = part.glassId || config.glassId;
-
-        // Apply deduction from dividers for sub-parts calculation
-        // If we have Dividers, they occupy space.
-        // But usually user inputs 'Inner' or 'Visible' widths. 
-        // Let's assume the user inputs are technical dimensions.
+        const sourceLabel = `Partie ${idx + 1}`;
 
         if (part.type === 'group' && part.subParts) {
            processPartList(part.subParts, pW, pH, isH ? 'vertical' : 'horizontal');
@@ -564,45 +559,41 @@ export class FormulaEngine {
         }
 
         if (compoundType === 'fix_coulissant') {
-          // Independent units joined by Union/Transom
           const res = this.calculateComponentBOM(config, pW, pH, part.compositionId || config.compositionId, pGlassId, { top: true, bottom: true, left: true, right: true }, pH, pW, pH);
-          results.profiles.push(...res.profiles);
-          results.accessories.push(...res.accessories);
-          if (res.gasket) results.accessories.push(res.gasket);
-          if (res.glass) results.glasses.push(res.glass);
+          results.profiles.push(...res.profiles.map(p => ({ ...p, source: sourceLabel })));
+          results.accessories.push(...res.accessories.map(a => ({ ...a, source: sourceLabel })));
+          if (res.gasket) results.accessories.push({ ...res.gasket, source: sourceLabel });
+          if (res.glass) results.glasses.push({ ...res.glass, source: sourceLabel });
         } else {
-          // Single Frame Divided by Transoms
-          if (idx === 0 && partList === parts) { 
+          if (idx === 0 && partList === parts) {
              const mainOp = parts.find(p => p.type === 'opening') || parts[0];
              const frameRes = this.calculateComponentBOM(config, L, H, mainOp.compositionId || config.compositionId, config.glassId, config.optionalSides, H, L, H);
-             // Keep ONLY Frame/Dormant/Couvre from the top-level call
+             
              const frameOnly = frameRes.profiles.filter(p => 
                 p.label?.toLowerCase().includes('dormant') || p.name?.toLowerCase().includes('dormant') ||
                 p.label?.toLowerCase().includes('cadre') || p.name?.toLowerCase().includes('cadre') ||
                 p.label?.toLowerCase().includes('couvre') || p.name?.toLowerCase().includes('couvre')
-             );
+             ).map(p => ({ ...p, source: 'Cadre Global' }));
              results.profiles.push(...frameOnly);
              
-             // Same for accessories related to frame
              const frameAccs = frameRes.accessories.filter(a => 
                 a.label?.toLowerCase().includes('dormant') || a.name?.toLowerCase().includes('dormant') ||
                 a.label?.toLowerCase().includes('cadre') || a.name?.toLowerCase().includes('cadre')
-             );
+             ).map(a => ({ ...a, source: 'Cadre Global' }));
              results.accessories.push(...frameAccs);
           }
 
           const compId = part.compositionId || config.compositionId || parts.find(p=>p.type==='opening')?.compositionId;
           const res = this.calculateComponentBOM(config, pW, pH, compId, pGlassId, { top: false, bottom: false, left: false, right: false }, pH, pW, pH);
           
-          // REMOVE any frame/dormant/cadre/couvre from internal sub-parts
           const filterFn = (item) => {
              const s = ((item.label || '') + ' ' + (item.name || '')).toLowerCase();
              return !s.includes('dormant') && !s.includes('cadre') && !s.includes('couvre') && !s.includes('chassis');
           };
           
-          results.profiles.push(...res.profiles.filter(filterFn));
-          results.accessories.push(...res.accessories.filter(filterFn));
-          if (res.glass) results.glasses.push(res.glass);
+          results.profiles.push(...res.profiles.filter(filterFn).map(p => ({ ...p, source: sourceLabel })));
+          results.accessories.push(...res.accessories.filter(filterFn).map(a => ({ ...a, source: sourceLabel })));
+          if (res.glass) results.glasses.push({ ...res.glass, source: sourceLabel });
         }
       });
     };
@@ -911,6 +902,14 @@ export class FormulaEngine {
              existing.cost = (existing.cost || 0) + (item.cost || 0);
              if (existing.area !== undefined) existing.area += (item.area || 0);
              if (existing.weight !== undefined) existing.weight += (item.weight || 0);
+             
+             // Merge sources
+             if (item.source && existing.source) {
+                const sources = new Set([...existing.source.split(', '), item.source]);
+                existing.source = Array.from(sources).join(', ');
+             } else if (item.source) {
+                existing.source = item.source;
+             }
           } else {
              map.set(key, { ...item });
           }
