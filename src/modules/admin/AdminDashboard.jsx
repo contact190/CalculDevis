@@ -180,7 +180,7 @@ const AdminDashboard = ({ data, setData }) => {
       const list = components[family] || [];
       const updated = [...list];
       if (updated[idx] !== undefined) {
-        const item = { ...updated[idx], [field]: (field === 'price' || field === 'height' || field === 'jointPrice' || field === 'baguettePrice' || field === 'barLength') ? parseFloat(value) || 0 : value };
+        const item = { ...updated[idx], [field]: (field === 'price' || field === 'height' || field === 'jointPrice' || field === 'baguettePrice' || field === 'barLength' || field === 'scrapThreshold') ? parseFloat(value) || 0 : value };
         delete item._isNew;
         updated[idx] = item;
       }
@@ -985,6 +985,7 @@ const AdminDashboard = ({ data, setData }) => {
                             <th>Poids (kg/m)</th>
                             <th>Prix (DZD/Kg)</th>
                             <th>Lg Barre</th>
+                            <th>Seuil Chute</th>
                             <th>Couleurs</th>
                             <th>Actions</th>
                           </tr>
@@ -1059,6 +1060,7 @@ const AdminDashboard = ({ data, setData }) => {
                                 <td><input type="number" step="0.001" className="input" value={p.weightPerM} onChange={e => handleUpdateItem('profiles', p.id, 'weightPerM', e.target.value, idx)} style={{ width: '80px' }} /></td>
                                 <td><input type="number" step="0.01" className="input" value={p.pricePerKg} onChange={e => handleUpdateItem('profiles', p.id, 'pricePerKg', e.target.value, idx)} style={{ width: '80px' }} /></td>
                                 <td><input type="number" className="input" value={p.barLength || 6000} onChange={e => handleUpdateItem('profiles', p.id, 'barLength', e.target.value, idx)} style={{ width: '80px' }} /></td>
+                                <td><input type="number" className="input" value={p.scrapThreshold || 0} onChange={e => handleUpdateItem('profiles', p.id, 'scrapThreshold', e.target.value, idx)} style={{ width: '80px' }} placeholder="Ex: 500" /></td>
                                 <td><MultiSelectColor selectedColors={p.colors || []} allColors={data.colors} onChange={newC => handleUpdateItem('profiles', p.id, 'colors', newC, idx)} /></td>
                                 <td style={{ display: 'flex', gap: '0.3rem' }}>
                                   <button className="btn" onClick={() => handleDuplicateItem('profiles', p)} style={{ padding: '0.4rem', color: '#6366f1' }}><Copy size={16} /></button>
@@ -2097,6 +2099,7 @@ const AdminDashboard = ({ data, setData }) => {
                           ) : null}
 
                           {key !== 'extras' && <th>Lg Barre (mm)</th>}
+                          {key !== 'extras' && <th>Seuil Chute</th>}
 
                           <th>Formule Qté</th>
                           <th>Unité</th>
@@ -2148,6 +2151,7 @@ const AdminDashboard = ({ data, setData }) => {
                               </>
                             ) : null}
                             {key !== 'extras' && <td><input className="input" type="number" value={item.barLength || 6400} onChange={e => updateShutterItem(key, i, 'barLength', e.target.value)} style={{ width: '90px', fontSize: '0.8rem' }} /></td>}
+                            {key !== 'extras' && <td><input className="input" type="number" value={item.scrapThreshold || 0} onChange={e => updateShutterItem(key, i, 'scrapThreshold', e.target.value)} style={{ width: '90px', fontSize: '0.8rem' }} placeholder="Ex: 500" /></td>}
 
                             <td><input className="input" value={item.formula || ''} onChange={e => updateShutterItem(key, i, 'formula', e.target.value)} style={{ width: '140px' }} /></td>
                             <td>

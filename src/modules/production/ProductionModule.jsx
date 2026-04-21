@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Package, Scissors, Ruler, Download, CheckCircle, Barcode, ShoppingCart, Layers, Edit2, Link2, Link2Off, Plus, QrCode } from 'lucide-react';
+import { Package, Scissors, Ruler, Download, CheckCircle, Barcode, ShoppingCart, Layers, Edit2, Link2, Link2Off, Plus, QrCode, Trash2 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { FormulaEngine } from '../../engine/formula-engine';
 import { DEFAULT_DATA } from '../../data/default-data';
@@ -228,6 +228,79 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
 
     return rows;
   }, [purchasingProfiles, jumelageGroups, barLengths]);
+
+  const chutesData = useMemo(() => {
+    const scraps = [];
+    const reusable = [];
+    
+    displayProfiles.forEach(p => {
+       const barKey = p._barKey || p.baseId || p.id;
+       const bLength = barLengths[barKey] || p.barLength || 6400;
+       const sThreshold = p.scrapThreshold || 0;
+       const pieces = p.pieces ? [...p.pieces].sort((a,b) => b - a) : [];
+       
+       if (pieces.length > 0) {
+          const currentBars = [];
+          pieces.forEach(piece => {
+            let bestIdx = -1;
+            let minLeft = Infinity;
+            for (let j = 0; j < currentBars.length; j++) {
+              if (currentBars[j] >= piece && currentBars[j] - piece < minLeft) {
+                bestIdx = j;
+                minLeft = currentBars[j] - piece;
+              }
+            }
+            if (bestIdx !== -1) {
+              currentBars[bestIdx] -= piece;
+            } else {
+              currentBars.push(bLength - piece);
+            }
+          });
+          
+          currentBars.forEach(remaining => {
+            if (remaining > 5) { // Only count if more than 5mm
+              const chute = {
+                id: p.id,
+                baseId: p.baseId || p.id.split('|')[0],
+                name: p.combinedName || p.name,
+                length: Math.round(remaining),
+                color: p.colorName || 'Std'
+              };
+              if (sThreshold > 0 && remaining <= sThreshold) {
+                scraps.push(chute);
+              } else if (sThreshold > 0) {
+                reusable.push(chute);
+              } else {
+                // If no threshold, everything is scrap by default or we pick a sane default?
+                // User said "si il reste plus sera considirer comme chutte reutilisable"
+                // This implies threshold 0 means everything is reusable?
+                // Let's assume threshold defaults to something small like 300mm if not set? 
+                // No, let's stick to what user said. If remaining <= threshold -> scrap.
+                scraps.push(chute);
+              }
+            }
+          });
+       }
+    });
+    
+    return { scraps, reusable };
+  }, [displayProfiles, barLengths]);
+
+  const exportChutesCSV = (type) => {
+    const target = type === 'scraps' ? chutesData.scraps : chutesData.reusable;
+    const title = type === 'scraps' ? 'Déchets_Chutes_Non_Reutilisables' : 'Chutes_Reutilisables';
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + "Référence;Désignation;Couleur;Longueur (mm)\n"
+      + target.map(c => `${c.baseId};${c.name};${c.color};${c.length}`).join("\n");
+    
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `${title}_${activeQuote?.number || 'Export'}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const generatePDF = () => {
     const doc = jsPDF();
@@ -781,6 +854,75 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                   {purchasingGlass.length === 0 && <tr><td colSpan="5">Aucun vitrage détaillé trouvé.</td></tr>}
                 </tbody>
               </table>
+            </div>
+          </div>
+
+          </div>
+
+          {/* Section: Gestion des Chutes & Déchets */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+            {/* Liste des Chutes Réutilisables */}
+            <div className="glass shadow-md" style={{ borderLeft: '4px solid #14b8a6' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1rem' }}>
+                <CheckCircle size={20} color="#14b8a6" />
+                <h2 style={{ fontSize: '1.125rem', fontWeight: 600, flex: 1, margin: 0 }}>Chutes Réutilisables ({chutesData.reusable.length})</h2>
+                <button onClick={() => exportChutesCSV('reusable')} className="btn btn-secondary" style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                   <Download size={14} /> CSV
+                </button>
+              </div>
+              <div className="table-responsive" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                <table className="data-table" style={{ fontSize: '0.85rem' }}>
+                  <thead style={{ position: 'sticky', top: 0, background: 'white', zIndex: 1 }}>
+                    <tr>
+                      <th>Profilé</th>
+                      <th>Coloris</th>
+                      <th>Longueur</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {chutesData.reusable.map((c, i) => (
+                      <tr key={`reu-${i}`}>
+                        <td>{c.name}</td>
+                        <td>{c.color}</td>
+                        <td style={{ fontWeight: 700, color: '#0d9488' }}>{c.length} mm</td>
+                      </tr>
+                    ))}
+                    {chutesData.reusable.length === 0 && <tr><td colSpan="3" style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>Aucune chute réutilisable.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Liste des Déchets (Chutes non-réutilisables) */}
+            <div className="glass shadow-md" style={{ borderLeft: '4px solid #ef4444' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1rem' }}>
+                <Trash2 size={20} color="#ef4444" />
+                <h2 style={{ fontSize: '1.125rem', fontWeight: 600, flex: 1, margin: 0 }}>Déchets / Chutes (A jeter) ({chutesData.scraps.length})</h2>
+                <button onClick={() => exportChutesCSV('scraps')} className="btn btn-secondary" style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                   <Download size={14} /> CSV
+                </button>
+              </div>
+              <div className="table-responsive" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                <table className="data-table" style={{ fontSize: '0.85rem' }}>
+                  <thead style={{ position: 'sticky', top: 0, background: 'white', zIndex: 1 }}>
+                    <tr>
+                      <th>Profilé</th>
+                      <th>Coloris</th>
+                      <th>Longueur</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {chutesData.scraps.map((c, i) => (
+                      <tr key={`scr-${i}`}>
+                        <td>{c.name}</td>
+                        <td>{c.color}</td>
+                        <td style={{ fontWeight: 600, color: '#ef4444' }}>{c.length} mm</td>
+                      </tr>
+                    ))}
+                    {chutesData.scraps.length === 0 && <tr><td colSpan="3" style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>Aucun déchet.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
 
