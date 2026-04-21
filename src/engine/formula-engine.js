@@ -64,8 +64,9 @@ export class FormulaEngine {
 
       const searchStr = (label + ' ' + itemName).toLowerCase();
       const isCouvreJoint = /couvres?[- ]?joints?|cj[vh]?/i.test(searchStr);
+      const isDormant = /dormant|cadre|chassis/i.test(searchStr) && !searchStr.includes('ouvrant') && !searchStr.includes('chicane');
 
-      if (!isCouvreJoint) {
+      if (!isCouvreJoint && !isDormant) {
         expandedElements.push({ ...el, isCouvreJoint: false });
         return;
       }
@@ -73,6 +74,7 @@ export class FormulaEngine {
       const isHorizontal = /haut|bas|h$|\bh\b|cjh|couvres?[- ]?joints?h/i.test(searchStr);
       const isVertical = /gauche|droite|v$|\bv\b|cjv|couvres?[- ]?joints?v/i.test(searchStr);
       const baseLabel = label || itemName;
+      const isActuallyCouvreJoint = isCouvreJoint;
 
       if (isHorizontal) {
         const hasHaut = searchStr.includes('haut');
@@ -80,11 +82,11 @@ export class FormulaEngine {
         const isGenericH = !hasHaut && !hasBas;
         
         if (isGenericH) {
-          if (optionalSides.top) expandedElements.push({ ...el, label: baseLabel + ' (Haut)', qty: el.qty / 2, isCouvreJoint: true });
-          if (optionalSides.bottom) expandedElements.push({ ...el, label: baseLabel + ' (Bas)', qty: el.qty / 2, isCouvreJoint: true });
+          if (optionalSides.top) expandedElements.push({ ...el, label: baseLabel + ' (Haut)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint });
+          if (optionalSides.bottom) expandedElements.push({ ...el, label: baseLabel + ' (Bas)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint });
         } else {
-          if (hasHaut && optionalSides.top) expandedElements.push({ ...el, isCouvreJoint: true });
-          if (hasBas && optionalSides.bottom) expandedElements.push({ ...el, isCouvreJoint: true });
+          if (hasHaut && optionalSides.top) expandedElements.push({ ...el, isCouvreJoint: isActuallyCouvreJoint });
+          if (hasBas && optionalSides.bottom) expandedElements.push({ ...el, isCouvreJoint: isActuallyCouvreJoint });
         }
       } else if (isVertical) {
         const hasGauche = searchStr.includes('gauche');
@@ -92,19 +94,19 @@ export class FormulaEngine {
         const isGenericV = !hasGauche && !hasDroite;
 
         if (isGenericV) {
-          if (optionalSides.left) expandedElements.push({ ...el, label: baseLabel + ' (Gauche)', qty: el.qty / 2, isCouvreJoint: true });
-          if (optionalSides.right) expandedElements.push({ ...el, label: baseLabel + ' (Droite)', qty: el.qty / 2, isCouvreJoint: true });
+          if (optionalSides.left) expandedElements.push({ ...el, label: baseLabel + ' (Gauche)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint });
+          if (optionalSides.right) expandedElements.push({ ...el, label: baseLabel + ' (Droite)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint });
         } else {
-          if (hasGauche && optionalSides.left) expandedElements.push({ ...el, isCouvreJoint: true });
-          if (hasDroite && optionalSides.right) expandedElements.push({ ...el, isCouvreJoint: true });
+          if (hasGauche && optionalSides.left) expandedElements.push({ ...el, isCouvreJoint: isActuallyCouvreJoint });
+          if (hasDroite && optionalSides.right) expandedElements.push({ ...el, isCouvreJoint: isActuallyCouvreJoint });
         }
       } else {
-        // Generic 4-sided
+        // Generic 4-sided (like a dormant defined as 4qty but one formula)
         const vFormula = (el.formula === 'L' || !el.formula) ? 'H' : el.formula;
-        if (optionalSides.top) expandedElements.push({ ...el, label: baseLabel + ' (Haut)', qty: el.qty / 4, isCouvreJoint: true });
-        if (optionalSides.bottom) expandedElements.push({ ...el, label: baseLabel + ' (Bas)', qty: el.qty / 4, isCouvreJoint: true });
-        if (optionalSides.left) expandedElements.push({ ...el, formula: vFormula, label: baseLabel + ' (Gauche)', qty: el.qty / 4, isCouvreJoint: true });
-        if (optionalSides.right) expandedElements.push({ ...el, formula: vFormula, label: baseLabel + ' (Droite)', qty: el.qty / 4, isCouvreJoint: true });
+        if (optionalSides.top) expandedElements.push({ ...el, label: baseLabel + ' (Haut)', qty: el.qty / 4, isCouvreJoint: isActuallyCouvreJoint });
+        if (optionalSides.bottom) expandedElements.push({ ...el, label: baseLabel + ' (Bas)', qty: el.qty / 4, isCouvreJoint: isActuallyCouvreJoint });
+        if (optionalSides.left) expandedElements.push({ ...el, formula: vFormula, label: baseLabel + ' (Gauche)', qty: el.qty / 4, isCouvreJoint: isActuallyCouvreJoint });
+        if (optionalSides.right) expandedElements.push({ ...el, formula: vFormula, label: baseLabel + ' (Droite)', qty: el.qty / 4, isCouvreJoint: isActuallyCouvreJoint });
       }
     });
 
@@ -536,8 +538,7 @@ export class FormulaEngine {
 
       // Add Dividers for this level
       if (divProfile && divQty > 0) {
-        const frameDeduct = (compoundType === 'fix_ouvrant') ? 90 : 0; 
-        const len = (isH ? boxH : boxL) - frameDeduct;
+        const len = (isH ? boxH : boxL);
         const dCost = divProfile.pricePerBar ? (len / divProfile.barLength * divProfile.pricePerBar) : ((len/1000) * divProfile.weightPerM * divProfile.pricePerKg);
         results.profiles.push({
           ...divProfile,
@@ -558,37 +559,25 @@ export class FormulaEngine {
            return;
         }
 
-        if (compoundType === 'fix_coulissant') {
-          const res = this.calculateComponentBOM(config, pW, pH, part.compositionId || config.compositionId, pGlassId, { top: true, bottom: true, left: true, right: true }, pH, pW, pH);
-          results.profiles.push(...res.profiles.map(p => ({ ...p, source: sourceLabel })));
-          results.accessories.push(...res.accessories.map(a => ({ ...a, source: sourceLabel })));
-          if (res.gasket) results.accessories.push({ ...res.gasket, source: sourceLabel });
-          if (res.glass) results.glasses.push({ ...res.glass, source: sourceLabel });
-        } else {
-          if (idx === 0 && partList === parts) {
-             const mainOp = parts.find(p => p.type === 'opening') || parts[0];
-             const frameRes = this.calculateComponentBOM(config, L, H, mainOp.compositionId || config.compositionId, config.glassId, config.optionalSides, H, L, H);
-             
-             const frameOnly = frameRes.profiles.filter(p => 
-                p.label?.toLowerCase().includes('dormant') || p.name?.toLowerCase().includes('dormant') ||
-                p.label?.toLowerCase().includes('cadre') || p.name?.toLowerCase().includes('cadre') ||
-                p.label?.toLowerCase().includes('couvre') || p.name?.toLowerCase().includes('couvre')
-             ).map(p => ({ ...p, source: 'Cadre Global' }));
-             results.profiles.push(...frameOnly);
-          }
-
-          const compId = part.compositionId || config.compositionId || parts.find(p=>p.type==='opening')?.compositionId;
-          const res = this.calculateComponentBOM(config, pW, pH, compId, pGlassId, { top: false, bottom: false, left: false, right: false }, pH, pW, pH);
-          
-          const filterFn = (item) => {
-             const s = ((item.label || '') + ' ' + (item.name || '')).toLowerCase();
-             return !s.includes('dormant') && !s.includes('cadre') && !s.includes('couvre') && !s.includes('chassis');
-          };
-          
-          results.profiles.push(...res.profiles.filter(filterFn).map(p => ({ ...p, source: sourceLabel })));
-          results.accessories.push(...res.accessories.filter(filterFn).map(a => ({ ...a, source: sourceLabel })));
-          if (res.glass) results.glasses.push({ ...res.glass, source: sourceLabel });
+        // Determine which sides share a divider
+        const sides = { top: true, bottom: true, left: true, right: true };
+        if (partList.length > 1) {
+           if (isH) {
+              if (idx > 0) sides.left = false;
+              if (idx < partList.length - 1) sides.right = false;
+           } else {
+              if (idx > 0) sides.top = false;
+              if (idx < partList.length - 1) sides.bottom = false;
+           }
         }
+
+        const compId = part.compositionId || config.compositionId || parts.find(p=>p.type==='opening')?.compositionId;
+        const res = this.calculateComponentBOM(config, pW, pH, compId, pGlassId, sides, pH, pW, pH);
+        
+        results.profiles.push(...res.profiles.map(p => ({ ...p, source: sourceLabel })));
+        results.accessories.push(...res.accessories.map(a => ({ ...a, source: sourceLabel })));
+        if (res.gasket) results.accessories.push({ ...res.gasket, source: sourceLabel });
+        if (res.glass) results.glasses.push({ ...res.glass, source: sourceLabel });
       });
     };
 
