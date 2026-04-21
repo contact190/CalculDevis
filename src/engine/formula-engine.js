@@ -536,7 +536,10 @@ export class FormulaEngine {
 
       // Add Dividers for this level
       if (divProfile && divQty > 0) {
-        const len = isH ? boxH : boxL;
+        // Traverse length should ideally be inner frame dimension. 
+        // For now L or H is total, we might subtract approx 100mm for frame if it's divided frame
+        const frameDeduct = (compoundType === 'fix_ouvrant') ? 90 : 0; 
+        const len = (isH ? boxH : boxL) - frameDeduct;
         const dCost = divProfile.pricePerBar ? (len / divProfile.barLength * divProfile.pricePerBar) : ((len/1000) * divProfile.weightPerM * divProfile.pricePerKg);
         results.profiles.push({
           ...divProfile,
@@ -550,31 +553,45 @@ export class FormulaEngine {
         let pH = isH ? boxH : (part.height || (boxH / partList.length));
         const pGlassId = part.glassId || config.glassId;
 
+        // Apply deduction from dividers for sub-parts calculation
+        // If we have Dividers, they occupy space.
+        // But usually user inputs 'Inner' or 'Visible' widths. 
+        // Let's assume the user inputs are technical dimensions.
+
         if (part.type === 'group' && part.subParts) {
-           // Recurse with opposite direction
            processPartList(part.subParts, pW, pH, isH ? 'vertical' : 'horizontal');
            return;
         }
 
         if (compoundType === 'fix_coulissant') {
-          const res = this.calculateComponentBOM(config, pW, pH, part.compositionId || config.compositionId, pGlassId, { top: false, bottom: false, left: false, right: false }, H, config.L, config.H);
+          const res = this.calculateComponentBOM(config, pW, pH, part.compositionId || config.compositionId, pGlassId, { top: true, bottom: true, left: true, right: true }, pH, pW, pH);
           results.profiles.push(...res.profiles);
           results.accessories.push(...res.accessories);
           if (res.gasket) results.accessories.push(res.gasket);
           if (res.glass) results.glasses.push(res.glass);
         } else {
-          // Frame unique divided
-          if (idx === 0 && partList === parts) { // Only for top-level frame
+          if (idx === 0 && partList === parts) {
              const mainOp = parts.find(p => p.type === 'opening') || parts[0];
-             const frameRes = this.calculateComponentBOM(config, L, H, mainOp.compositionId || config.compositionId, config.glassId, config.optionalSides, H, config.L, config.H);
+             const frameRes = this.calculateComponentBOM(config, L, H, mainOp.compositionId || config.compositionId, config.glassId, config.optionalSides, H, L, H);
              results.profiles.push(...frameRes.profiles.filter(p => p.label?.toLowerCase().includes('dormant') || p.name?.toLowerCase().includes('dormant')));
+             results.accessories.push(...frameRes.accessories.filter(a => a.label?.toLowerCase().includes('dormant') || a.name?.toLowerCase().includes('dormant')));
           }
 
           const compId = part.compositionId || config.compositionId || parts.find(p=>p.type==='opening')?.compositionId;
-          const res = this.calculateComponentBOM(config, pW, pH, compId, pGlassId, { top: false, bottom: false, left: false, right: false }, H, config.L, config.H);
+          const res = this.calculateComponentBOM(config, pW, pH, compId, pGlassId, { top: false, bottom: false, left: false, right: false }, pH, pW, pH);
           
-          results.profiles.push(...res.profiles.filter(p => !p.label?.toLowerCase().includes('dormant') && !p.name?.toLowerCase().includes('dormant')));
-          results.accessories.push(...res.accessories.filter(a => !a.label?.toLowerCase().includes('dormant') && !a.name?.toLowerCase().includes('dormant')));
+          results.profiles.push(...res.profiles.filter(p => 
+            !p.label?.toLowerCase().includes('dormant') && 
+            !p.name?.toLowerCase().includes('dormant') &&
+            !p.label?.toLowerCase().includes('couvre') &&
+            !p.name?.toLowerCase().includes('couvre')
+          ));
+          results.accessories.push(...res.accessories.filter(a => 
+            !a.label?.toLowerCase().includes('dormant') && 
+            !a.name?.toLowerCase().includes('dormant') &&
+            !a.label?.toLowerCase().includes('couvre') &&
+            !a.name?.toLowerCase().includes('couvre')
+          ));
           if (res.glass) results.glasses.push(res.glass);
         }
       });
