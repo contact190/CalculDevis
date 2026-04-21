@@ -560,18 +560,17 @@ export class FormulaEngine {
 
     const results = { profiles: [], accessories: [], glasses: [] };
     const isHorizontal = orientation !== 'vertical';
+    const isMultiChassis = compoundType === 'fix_coulissant';
     
-    // 1. Calculate Global Frame once at the very start
-    // Find the most relevant part to determine the global dormant profile
+    // 1. Calculate Global Frame once at the very start (ONLY for fix_ouvrant / Single Chassi)
     const mainOp = parts.find(p => p.type === 'opening' && p.compositionId) || 
                    parts.find(p => p.compositionId) || 
                    parts.find(p => p.type === 'opening') || 
                    parts[0];
     
-    // Robust fallback for composition ID
     const frameCompId = (mainOp && mainOp.compositionId) ? mainOp.compositionId : config.compositionId;
     
-    if (frameCompId) {
+    if (!isMultiChassis && frameCompId) {
        // Use config.optionalSides directly or default to all true if missing.
        // The Dormant profiles now stay visible even if these are false, only covers follow these toggles.
        const globalOpt = config.optionalSides || { top: true, bottom: true, left: true, right: true };
@@ -632,17 +631,18 @@ export class FormulaEngine {
         // If still no compId for a fixe, it's a "Direct Glazing" (no internal profiles)
         if (!compId && part.type === 'fixe') {
            if (pGlassId) {
-              const glassRes = this.calculateComponentBOM(config, pW, pH, null, pGlassId, { top: false, bottom: false, left: false, right: false, isSubPart: true }, pH, pW, pH);
+              const glassRes = this.calculateComponentBOM(config, pW, pH, null, pGlassId, isMultiChassis ? config.optionalSides : { top: false, bottom: false, left: false, right: false, isSubPart: true }, pH, pW, pH);
               if (glassRes.glass) results.glasses.push({ ...glassRes.glass, source: sourceLabel });
            }
            return;
         }
 
-        const res = this.calculateComponentBOM(config, pW, pH, compId, pGlassId, { top: false, bottom: false, left: false, right: false, isSubPart: true }, pH, pW, pH);
+        const subPartOpt = isMultiChassis ? config.optionalSides : { top: false, bottom: false, left: false, right: false, isSubPart: true };
+        const res = this.calculateComponentBOM(config, pW, pH, compId, pGlassId, subPartOpt, pH, pW, pH);
         
         const filterFn = (item) => {
-           // Skip everything that belongs to the global frame perimeter
-           if (item.isFrame) return false;
+           // Skip everything that belongs to the global frame perimeter (only in single chassis mode)
+           if (!isMultiChassis && item.isFrame) return false;
            
            const s = ((item.label || '') + ' ' + (item.name || '')).toLowerCase();
            
