@@ -550,8 +550,17 @@ export class FormulaEngine {
 
       // 1. Calculate Global Frame once for the top level
       if (partList === parts) {
-         const mainOp = parts.find(p => p.type === 'opening') || parts[0];
-         const frameRes = this.calculateComponentBOM(config, L, H, mainOp.compositionId || config.compositionId, config.glassId, config.optionalSides, H, L, H);
+         // Find the most relevant part to determine the global dormant profile
+         // Priority 1: Any part of type 'opening'
+         // Priority 2: Any part with a composition explicitly set
+         // Priority 3: The very first part
+         const mainOp = parts.find(p => p.type === 'opening' && p.compositionId) || 
+                        parts.find(p => p.compositionId) || 
+                        parts.find(p => p.type === 'opening') || 
+                        parts[0];
+         
+         const frameCompId = mainOp?.compositionId || config.compositionId;
+         const frameRes = this.calculateComponentBOM(config, L, H, frameCompId, config.glassId, config.optionalSides, H, L, H);
          
          const frameProfiles = frameRes.profiles.filter(p => 
             p.label?.toLowerCase().includes('dormant') || p.name?.toLowerCase().includes('dormant') ||
@@ -582,14 +591,34 @@ export class FormulaEngine {
            return;
         }
 
-        const compId = part.compositionId || config.compositionId || parts.find(p=>p.type==='opening')?.compositionId;
-        // Calculate sub-part with NO frame sides
+        // Resolve composition ID: Don't fallback to opening recipes for a Fixe part unless explicitly set
+        let compId = part.compositionId;
+        if (!compId && part.type === 'opening') {
+           compId = config.compositionId || parts.find(p=>p.type==='opening')?.compositionId;
+        }
+        
+        // If still no compId for a fixe, it's a "Direct Glazing" (no internal profiles)
+        if (!compId && part.type === 'fixe') {
+           if (pGlassId) {
+              const glassRes = this.calculateComponentBOM(config, pW, pH, null, pGlassId, { top: false, bottom: false, left: false, right: false }, pH, pW, pH);
+              if (glassRes.glass) results.glasses.push({ ...glassRes.glass, source: sourceLabel });
+           }
+           return;
+        }
+
         const res = this.calculateComponentBOM(config, pW, pH, compId, pGlassId, { top: false, bottom: false, left: false, right: false }, pH, pW, pH);
         
-        // Filter out ANY redundant frame/dormant/couvre from sub-part
         const filterFn = (item) => {
            const s = ((item.label || '') + ' ' + (item.name || '')).toLowerCase();
-           return !s.includes('dormant') && !s.includes('cadre') && !s.includes('couvre') && !s.includes('chassis');
+           // Always remove frame/covers from sub-parts
+           if (s.includes('dormant') || s.includes('cadre') || s.includes('couvre') || s.includes('chassis')) return false;
+           
+           // If it's a FIXE part, also remove OPENING specific components
+           if (part.type === 'fixe') {
+              const opTerms = ['ouvrant', 'vantail', 'chicane', 'panneau', 'reducteur', 'poignee', 'cremone', 'paumelle', 'galet', 'serrure'];
+              if (opTerms.some(t => s.includes(t))) return false;
+           }
+           return true;
         };
 
         results.profiles.push(...res.profiles.filter(filterFn).map(p => ({ ...p, source: sourceLabel })));
