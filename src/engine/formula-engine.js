@@ -74,17 +74,36 @@ export class FormulaEngine {
       const baseLabel = label || itemName;
       const isActuallyCouvreJoint = isCouvreJoint;
 
+      // SUB-PARTS never get expanded frame elements (they only get their own internal opening profiles)
+      if (opt.isSubPart && (isDormant || isCouvreJoint)) {
+        return;
+      }
+
+      // ACCESSORIES never get expanded/split
+      if (el.type === 'accessory') {
+        expandedElements.push({ ...el, isFrame: isDormant || isCouvreJoint, isCouvreJoint: isActuallyCouvreJoint });
+        return;
+      }
+
+      // PROFILES expansion logic
       if (isHorizontal) {
         const hasHaut = searchStr.includes('haut');
         const hasBas = searchStr.includes('bas');
         const isGenericH = !hasHaut && !hasBas;
         
         if (isGenericH) {
-          if (opt.top) expandedElements.push({ ...el, label: baseLabel + ' (Haut)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
-          if (opt.bottom) expandedElements.push({ ...el, label: baseLabel + ' (Bas)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
+          // If it's a cover-joint, obey optionalSides. If it's a Dormant, it's mandatory unless opt is completely false (sub-part case)
+          const allowTop = isActuallyCouvreJoint ? opt.top : true;
+          const allowBottom = isActuallyCouvreJoint ? opt.bottom : true;
+          
+          if (allowTop) expandedElements.push({ ...el, label: baseLabel + ' (Haut)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
+          if (allowBottom) expandedElements.push({ ...el, label: baseLabel + ' (Bas)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
         } else {
-          if (hasHaut && opt.top) expandedElements.push({ ...el, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
-          if (hasBas && opt.bottom) expandedElements.push({ ...el, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
+          const allowTop = isActuallyCouvreJoint ? opt.top : true;
+          const allowBottom = isActuallyCouvreJoint ? opt.bottom : true;
+          
+          if (hasHaut && allowTop) expandedElements.push({ ...el, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
+          if (hasBas && allowBottom) expandedElements.push({ ...el, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
         }
       } else if (isVertical) {
         const hasGauche = searchStr.includes('gauche');
@@ -92,19 +111,30 @@ export class FormulaEngine {
         const isGenericV = !hasGauche && !hasDroite;
 
         if (isGenericV) {
-          if (opt.left) expandedElements.push({ ...el, label: baseLabel + ' (Gauche)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
-          if (opt.right) expandedElements.push({ ...el, label: baseLabel + ' (Droite)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
+          const allowLeft = isActuallyCouvreJoint ? opt.left : true;
+          const allowRight = isActuallyCouvreJoint ? opt.right : true;
+          
+          if (allowLeft) expandedElements.push({ ...el, label: baseLabel + ' (Gauche)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
+          if (allowRight) expandedElements.push({ ...el, label: baseLabel + ' (Droite)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
         } else {
-          if (hasGauche && opt.left) expandedElements.push({ ...el, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
-          if (hasDroite && opt.right) expandedElements.push({ ...el, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
+          const allowLeft = isActuallyCouvreJoint ? opt.left : true;
+          const allowRight = isActuallyCouvreJoint ? opt.right : true;
+          
+          if (hasGauche && allowLeft) expandedElements.push({ ...el, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
+          if (hasDroite && allowRight) expandedElements.push({ ...el, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
         }
       } else {
         // Generic 4-sided (like a dormant defined as 4qty but one formula)
+        const allowTop = isActuallyCouvreJoint ? opt.top : true;
+        const allowBottom = isActuallyCouvreJoint ? opt.bottom : true;
+        const allowLeft = isActuallyCouvreJoint ? opt.left : true;
+        const allowRight = isActuallyCouvreJoint ? opt.right : true;
+
         const vFormula = (el.formula === 'L' || !el.formula) ? 'H' : el.formula;
-        if (opt.top) expandedElements.push({ ...el, label: baseLabel + ' (Haut)', qty: el.qty / 4, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
-        if (opt.bottom) expandedElements.push({ ...el, label: baseLabel + ' (Bas)', qty: el.qty / 4, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
-        if (opt.left) expandedElements.push({ ...el, formula: vFormula, label: baseLabel + ' (Gauche)', qty: el.qty / 4, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
-        if (opt.right) expandedElements.push({ ...el, formula: vFormula, label: baseLabel + ' (Droite)', qty: el.qty / 4, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
+        if (allowTop) expandedElements.push({ ...el, label: baseLabel + ' (Haut)', qty: el.qty / 4, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
+        if (allowBottom) expandedElements.push({ ...el, label: baseLabel + ' (Bas)', qty: el.qty / 4, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
+        if (allowLeft) expandedElements.push({ ...el, formula: vFormula, label: baseLabel + ' (Gauche)', qty: el.qty / 4, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
+        if (allowRight) expandedElements.push({ ...el, formula: vFormula, label: baseLabel + ' (Droite)', qty: el.qty / 4, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
       }
     });
 
@@ -602,13 +632,13 @@ export class FormulaEngine {
         // If still no compId for a fixe, it's a "Direct Glazing" (no internal profiles)
         if (!compId && part.type === 'fixe') {
            if (pGlassId) {
-              const glassRes = this.calculateComponentBOM(config, pW, pH, null, pGlassId, { top: false, bottom: false, left: false, right: false }, pH, pW, pH);
+              const glassRes = this.calculateComponentBOM(config, pW, pH, null, pGlassId, { top: false, bottom: false, left: false, right: false, isSubPart: true }, pH, pW, pH);
               if (glassRes.glass) results.glasses.push({ ...glassRes.glass, source: sourceLabel });
            }
            return;
         }
 
-        const res = this.calculateComponentBOM(config, pW, pH, compId, pGlassId, { top: false, bottom: false, left: false, right: false }, pH, pW, pH);
+        const res = this.calculateComponentBOM(config, pW, pH, compId, pGlassId, { top: false, bottom: false, left: false, right: false, isSubPart: true }, pH, pW, pH);
         
         const filterFn = (item) => {
            // Skip everything that belongs to the global frame perimeter
