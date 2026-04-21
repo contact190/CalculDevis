@@ -65,7 +65,7 @@ export class FormulaEngine {
 
       const searchStr = (label + ' ' + itemName).toLowerCase();
       const isCouvreJoint = /couvres?[- ]?joints?|cj[vh]?/i.test(searchStr);
-      const isDormant = /dormant|cadre|chassis/i.test(searchStr);
+      const isDormant = /dormant|cadre|chassis|batit|traverse|dorme/i.test(searchStr);
 
       if (!isCouvreJoint && !isDormant) {
         expandedElements.push({ ...el, isFrame: false, isCouvreJoint: false });
@@ -567,11 +567,13 @@ export class FormulaEngine {
          const frameCompId = mainOp?.compositionId || config.compositionId;
          const frameRes = this.calculateComponentBOM(config, L, H, frameCompId, config.glassId, config.optionalSides, H, L, H);
          
-         const frameProfiles = frameRes.profiles.filter(p => !!p.isFrame)
+         const isFrameProfile = p => !!p.isFrame || /dormant|cadre|chassis|batit|traverse|couvre/i.test((p.label + ' ' + p.name).toLowerCase());
+         
+         const frameProfiles = frameRes.profiles.filter(isFrameProfile)
                               .map(p => ({ ...p, source: 'Cadre Global' }));
          results.profiles.push(...frameProfiles);
 
-         const frameAccs = frameRes.accessories.filter(a => !!a.isFrame)
+         const frameAccs = frameRes.accessories.filter(a => !!a.isFrame || /dormant|cadre|chassis/i.test((a.label + ' ' + a.name).toLowerCase()))
                               .map(a => ({ ...a, source: 'Cadre Global' }));
          results.accessories.push(...frameAccs);
 
