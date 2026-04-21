@@ -392,12 +392,36 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                         )}
                      </div>
                    ))}
-                   <button className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'white', alignSelf: 'flex-start' }} onClick={() => {
-                      const newPart = { id: `part-${Date.now()}`, type: 'fixe', glassId: '', width: 500, height: 1500 };
-                      setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, parts: [...prev.compoundConfig.parts, newPart] } }));
-                   }}>
-                      <Plus size={16} /> Ajouter une partie Fixe
-                   </button>
+                   <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+                      <button className="btn btn-secondary" style={{ flex: '1 1 140px', fontSize: '0.75rem', padding: '0.5rem', background: 'white', display: 'flex', alignItems: 'center', gap: '0.3rem' }} onClick={() => {
+                         const newList = [
+                            { id: `fix-${Date.now()}`, type: 'fixe', glassId: '', width: 500, height: 1500, subParts: null },
+                            ...config.compoundConfig.parts
+                         ];
+                         setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, orientation: 'horizontal', parts: newList } }));
+                      }}><Plus size={14} /> Fixe Gauche</button>
+                      <button className="btn btn-secondary" style={{ flex: '1 1 140px', fontSize: '0.75rem', padding: '0.5rem', background: 'white', display: 'flex', alignItems: 'center', gap: '0.3rem' }} onClick={() => {
+                         const newList = [
+                            ...config.compoundConfig.parts,
+                            { id: `fix-${Date.now()}`, type: 'fixe', glassId: '', width: 500, height: 1500, subParts: null }
+                         ];
+                         setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, orientation: 'horizontal', parts: newList } }));
+                      }}><Plus size={14} /> Fixe Droite</button>
+                      <button className="btn btn-secondary" style={{ flex: '1 1 140px', fontSize: '0.75rem', padding: '0.5rem', background: 'white', display: 'flex', alignItems: 'center', gap: '0.3rem' }} onClick={() => {
+                         const newList = [
+                            { id: `fix-${Date.now()}`, type: 'fixe', glassId: '', width: 1500, height: 500, subParts: null },
+                            ...config.compoundConfig.parts
+                         ];
+                         setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, orientation: 'vertical', parts: newList } }));
+                      }}><Plus size={14} /> Imposte (Haut)</button>
+                      <button className="btn btn-secondary" style={{ flex: '1 1 140px', fontSize: '0.75rem', padding: '0.5rem', background: 'white', display: 'flex', alignItems: 'center', gap: '0.3rem' }} onClick={() => {
+                         const newList = [
+                            ...config.compoundConfig.parts,
+                            { id: `fix-${Date.now()}`, type: 'fixe', glassId: '', width: 1500, height: 500, subParts: null }
+                         ];
+                         setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, orientation: 'vertical', parts: newList } }));
+                      }}><Plus size={14} /> Allége (Bas)</button>
+                   </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem', background: '#f1f5f9', padding: '1rem', borderRadius: '8px' }}>
