@@ -546,6 +546,8 @@ const AdminDashboard = ({ data, setData }) => {
               weightPerM: parseFloat(normalizedRow.poids) || 0,
               pricePerKg: parseFloat(normalizedRow.prix) || 0,
               barLength: parseFloat(normalizedRow.lgbarre) || 6000,
+              thickness: parseFloat(normalizedRow.epaisseur) || 0,
+              isUnion: !!normalizedRow.isunion,
               colors: normalizedRow.couleurs ? normalizedRow.couleurs.toString().split(',').map(s => s.trim()) : ['RAL9016'],
               type: 'ALU',
               _isNew: true
@@ -984,7 +986,9 @@ const AdminDashboard = ({ data, setData }) => {
                             <th>Désignation</th>
                             <th>Poids (kg/m)</th>
                             <th>Prix (DZD/Kg)</th>
+                            <th>Épaisseur (mm)</th>
                             <th>Lg Barre</th>
+                            <th>Union?</th>
                             <th>Seuil Chute</th>
                             <th>Couleurs</th>
                             <th>Actions</th>

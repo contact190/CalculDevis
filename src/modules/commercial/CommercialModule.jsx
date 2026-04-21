@@ -15,6 +15,17 @@ const EMPTY_CONFIG = {
   margin: 2.2,
   useCustomLayout: false,
   customLayout: null,
+  compoundType: 'none', // none, fix_coulissant, fix_ouvrant, fix_porte
+  compoundConfig: {
+    part1Id: '', // Usually the Fix
+    part2Id: '', // Usually the Opening
+    unionId: '', // For fix_coulissant
+    traverseId: '', // For fix_ouvrant
+    position: 'right', // relative to opening
+    part1Width: 600,
+    part1Height: 600,
+    shutterMode: 'total', // total or opening_only
+  }
 };
 
 // ─── SUB-COMPONENT: Product Configurator (View B) ──────────────────────────
@@ -140,25 +151,129 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
             </div>
 
             {/* Mode Toggle */}
-            <div>
-              <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem', background: '#f1f5f9', padding: '0.3rem', borderRadius: '0.5rem' }}>
-                <button onClick={() => setConfig(prev => ({ ...prev, useCustomLayout: false }))}
-                  style={{ flex: 1, padding: '0.45rem', borderRadius: '0.4rem', border: 'none', background: !config.useCustomLayout ? 'white' : 'transparent', fontWeight: !config.useCustomLayout ? 700 : 400, color: !config.useCustomLayout ? '#1d4ed8' : '#64748b', cursor: 'pointer', fontSize: '0.82rem' }}>
-                  Modèle Simple
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <label className="label">Type de Configuration</label>
+              <div style={{ display: 'flex', gap: '0.3rem', background: '#f1f5f9', padding: '0.3rem', borderRadius: '0.5rem' }}>
+                <button onClick={() => setConfig(prev => ({ ...prev, useCustomLayout: false, compoundType: 'none' }))}
+                  style={{ flex: 1, padding: '0.45rem', borderRadius: '0.4rem', border: 'none', background: (!config.useCustomLayout && config.compoundType === 'none') ? 'white' : 'transparent', fontWeight: (!config.useCustomLayout && config.compoundType === 'none') ? 700 : 400, color: (!config.useCustomLayout && config.compoundType === 'none') ? '#1d4ed8' : '#64748b', cursor: 'pointer', fontSize: '0.75rem' }}>
+                  Standard
+                </button>
+                <button onClick={() => setConfig(prev => ({ ...prev, useCustomLayout: false, compoundType: 'fix_coulissant' }))}
+                  style={{ flex: 1, padding: '0.45rem', borderRadius: '0.4rem', border: 'none', background: (config.compoundType !== 'none') ? 'white' : 'transparent', fontWeight: (config.compoundType !== 'none') ? 700 : 400, color: (config.compoundType !== 'none') ? '#0891b2' : '#64748b', cursor: 'pointer', fontSize: '0.75rem' }}>
+                  🧩 Assemblé
                 </button>
                 <button onClick={() => setConfig(prev => ({ ...prev, useCustomLayout: true, customLayout: prev.customLayout || defaultLayout() }))}
-                  style={{ flex: 1, padding: '0.45rem', borderRadius: '0.4rem', border: 'none', background: config.useCustomLayout ? 'white' : 'transparent', fontWeight: config.useCustomLayout ? 700 : 400, color: config.useCustomLayout ? '#7c3aed' : '#64748b', cursor: 'pointer', fontSize: '0.82rem' }}>
-                  🖼️ Composition Personnalisée
+                  style={{ flex: 1, padding: '0.45rem', borderRadius: '0.4rem', border: 'none', background: config.useCustomLayout ? 'white' : 'transparent', fontWeight: config.useCustomLayout ? 700 : 400, color: config.useCustomLayout ? '#7c3aed' : '#64748b', cursor: 'pointer', fontSize: '0.75rem' }}>
+                  🖼️ Libre
                 </button>
               </div>
             </div>
           </div>
 
-          {config.useCustomLayout && (
+          {config.useCustomLayout && config.compoundType === 'none' && (
             <LayoutComposer layout={config.customLayout || defaultLayout()} onChange={newLayout => setConfig(prev => ({ ...prev, customLayout: newLayout }))} database={database} globalConfig={config} />
           )}
 
-          <div style={{ display: config.useCustomLayout ? 'none' : 'block' }}>
+          {config.compoundType !== 'none' && (
+            <div style={{ background: '#f0f9ff', padding: '1.5rem', borderRadius: '12px', border: '1px solid #bae6fd', marginBottom: '1.5rem', animation: 'slideIn 0.3s ease' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.2rem' }}>
+                   <div style={{ background: '#3b82f6', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'grid', placeItems: 'center', fontWeight: 800 }}>🧩</div>
+                   <div>
+                      <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0369a1' }}>Modèle Composé : {config.compoundType.replace('_',' + ').toUpperCase()}</h3>
+                      <p style={{ margin: 0, fontSize: '0.75rem', color: '#0ea5e9' }}>Assemblage automatique de menuiseries complémentaires.</p>
+                   </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="label">Choix du Modèle</label>
+                  <select className="input" value={config.compoundType} onChange={e => setConfig(prev => ({ ...prev, compoundType: e.target.value }))}>
+                    <option value="fix_coulissant">Fixe + Coulissant (Assemblage par Union)</option>
+                    <option value="fix_ouvrant">Fixe + Ouvrant (Cadre unique divisé)</option>
+                    <option value="fix_porte">Fixe + Porte (Cadre unique divisé)</option>
+                  </select>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
+                  <div className="form-group">
+                    <label className="label">1. Partie FIXE</label>
+                    <select className="input" value={config.compoundConfig?.part1Id} onChange={e => setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, part1Id: e.target.value } }))}>
+                      <option value="">-- Choisir une composition fixe --</option>
+                      {database.compositions.filter(c => c.openingType === 'Fixe').map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="label">2. Partie OUVRANTE</label>
+                    <select className="input" value={config.compoundConfig?.part2Id} onChange={e => setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, part2Id: e.target.value } }))}>
+                      <option value="">-- Choisir une composition ouvrante --</option>
+                      {database.compositions.filter(c => 
+                         (config.compoundType === 'fix_coulissant' && c.openingType === 'Coulissant') ||
+                         (config.compoundType === 'fix_ouvrant' && c.openingType !== 'Coulissant' && c.openingType !== 'Fixe') ||
+                         (config.compoundType === 'fix_porte' && c.openingType === 'Porte')
+                      ).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                {config.compoundType === 'fix_coulissant' && (
+                  <div className="form-group" style={{ marginTop: '1rem' }}>
+                    <label className="label">Profilé d'UNION (Jonction)</label>
+                    <select className="input" value={config.compoundConfig?.unionId} onChange={e => setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, unionId: e.target.value } }))}>
+                      <option value="">-- Sélectionner l'union --</option>
+                      {database.profiles.filter(p => !!p.isUnion).map(p => <option key={p.id} value={p.id}>{p.name} ({p.thickness}mm)</option>)}
+                    </select>
+                  </div>
+                )}
+
+                {(config.compoundType === 'fix_ouvrant' || config.compoundType === 'fix_porte') && (
+                  <div className="form-group" style={{ marginTop: '1rem' }}>
+                    <label className="label">Profilé de DIVISION (Traverse)</label>
+                    <select className="input" value={config.compoundConfig?.traverseId} onChange={e => setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, traverseId: e.target.value } }))}>
+                      <option value="">-- Sélectionner la traverse --</option>
+                      {database.profiles.filter(p => p.name.toLowerCase().includes('traverse') || p.name.toLowerCase().includes('union')).map(p => <option key={p.id} value={p.id}>{p.name} ({p.thickness}mm)</option>)}
+                    </select>
+                  </div>
+                )}
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1.5rem' }}>
+                   <div className="form-group">
+                      <label className="label">Position du FIXE</label>
+                      <select className="input" value={config.compoundConfig?.position} onChange={e => setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, position: e.target.value } }))}>
+                        <option value="left">À Gauche</option>
+                        <option value="right">À Droite</option>
+                        <option value="top">En Haut</option>
+                        <option value="bottom">En Bas</option>
+                      </select>
+                   </div>
+                   <div className="form-group">
+                      <label className="label">Dimension du FIXE (mm)</label>
+                      <input type="number" className="input" 
+                        value={(config.compoundConfig?.position === 'left' || config.compoundConfig?.position === 'right') ? config.compoundConfig?.part1Width : config.compoundConfig?.part1Height} 
+                        onChange={e => {
+                          const val = parseInt(e.target.value) || 0;
+                          const isHorizontal = config.compoundConfig?.position === 'left' || config.compoundConfig?.position === 'right';
+                          setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, [isHorizontal ? 'part1Width' : 'part1Height']: val } }));
+                        }} 
+                      />
+                   </div>
+                </div>
+
+                <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'white', borderRadius: '8px', border: '1px dashed #cbd5e1' }}>
+                  <h4 style={{ margin: '0 0 0.8rem 0', fontSize: '0.85rem', fontWeight: 700, color: '#475569' }}>⚙️ Paramètres du VOLET</h4>
+                  <div style={{ display: 'flex', gap: '1rem' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.85rem' }}>
+                      <input type="radio" checked={config.compoundConfig?.shutterMode === 'total'} onChange={() => setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, shutterMode: 'total' } }))} />
+                      Volet sur TOUTE la largeur
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.85rem' }}>
+                      <input type="radio" checked={config.compoundConfig?.shutterMode === 'opening_only'} onChange={() => setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, shutterMode: 'opening_only' } }))} />
+                      Volet sur OUVERTURE uniquement
+                    </label>
+                  </div>
+                </div>
+            </div>
+          )}
+
+          <div style={{ display: (config.useCustomLayout || config.compoundType !== 'none') ? 'none' : 'block' }}>
             <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0', marginBottom: '1rem' }}>
               <div className="form-group" style={{ marginBottom: '1rem' }}>
                 <label className="label" style={{ color: '#3b82f6' }}>1. Catégorie</label>

@@ -76,13 +76,13 @@ export const DEFAULT_DATA = {
       barLength: 6000, 
       type: 'ALU' 
     },
-    { id: '2CF36-14540', name: 'Dormant H36', rangeIds: ['H36-2V', 'H36-3V'], weightPerM: 1.25, pricePerKg: 0, barLength: 6000, type: 'ALU' },
-    { id: '2CF36-14440', name: 'Dormant 3 rails H36', rangeIds: ['H36-3V'], weightPerM: 1.85, pricePerKg: 0, barLength: 6000, type: 'ALU' },
-    { id: '2CF36-11207', name: 'Traverse/Chicane H36', rangeIds: ['H36-2V', 'H36-3V'], weightPerM: 0.85, pricePerKg: 0, barLength: 6000, type: 'ALU' },
-    { id: '2CF36-35833', name: 'Ouvrant H36', rangeIds: ['H36-2V', 'H36-3V'], weightPerM: 1.15, pricePerKg: 0, barLength: 6000, type: 'ALU' },
-    { id: '2CF36-37037', name: 'Chicane Interne H36', rangeIds: ['H36-2V', 'H36-3V'], weightPerM: 0.95, pricePerKg: 0, barLength: 6000, type: 'ALU' },
-    { id: '2CF36-34037', name: 'Montant Chicane H36', rangeIds: ['H36-2V', 'H36-3V'], weightPerM: 0.90, pricePerKg: 0, barLength: 6000, type: 'ALU' },
-    { id: '2CF36-31200', name: 'Pare-tempête H36', rangeIds: ['H36-3V'], weightPerM: 0.25, pricePerKg: 0, barLength: 6000, type: 'ALU' }
+    { id: '2CF36-14540', name: 'Dormant H36', rangeIds: ['H36-2V', 'H36-3V'], weightPerM: 1.25, pricePerKg: 0, barLength: 6000, type: 'ALU', thickness: 45, isUnion: false },
+    { id: '2CF36-14440', name: 'Dormant 3 rails H36', rangeIds: ['H36-3V'], weightPerM: 1.85, pricePerKg: 0, barLength: 6000, type: 'ALU', thickness: 110, isUnion: false },
+    { id: '2CF36-11207', name: 'Traverse/Chicane H36', rangeIds: ['H36-2V', 'H36-3V'], weightPerM: 0.85, pricePerKg: 0, barLength: 6000, type: 'ALU', thickness: 36, isUnion: false },
+    { id: '2CF36-35833', name: 'Ouvrant H36', rangeIds: ['H36-2V', 'H36-3V'], weightPerM: 1.15, pricePerKg: 0, barLength: 6000, type: 'ALU', thickness: 36, isUnion: false },
+    { id: '2CF36-37037', name: 'Chicane Interne H36', rangeIds: ['H36-2V', 'H36-3V'], weightPerM: 0.95, pricePerKg: 0, barLength: 6000, type: 'ALU', thickness: 30, isUnion: false },
+    { id: '2CF36-34037', name: 'Montant Chicane H36', rangeIds: ['H36-2V', 'H36-3V'], weightPerM: 0.90, pricePerKg: 0, barLength: 6000, type: 'ALU', thickness: 30, isUnion: false },
+    { id: '2CF36-31200', name: 'Pare-tempête H36', rangeIds: ['H36-3V'], weightPerM: 0.25, pricePerKg: 0, barLength: 6000, type: 'ALU', thickness: 15, isUnion: false }
   ],
   glass: [
     { 

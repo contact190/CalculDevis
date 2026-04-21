@@ -61,24 +61,44 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
 
     ctx.strokeStyle = oldStroke;
 
-    // 1. Draw outer frame (Dormant)
-    ctx.strokeRect(offsetX, offsetY, dW, dH);
-    
-    // 2. Draw inner offset (Ouvrant approx)
-    const frameW = 10 * scale; // 10mm visual frame
-    ctx.strokeRect(offsetX + frameW, offsetY + frameW, dW - frameW * 2, dH - frameW * 2);
+    const drawJoinery = (x, y, w, h, compId) => {
+      const comp = database.compositions.find(c => c.id === compId);
+      const rid = comp?.rangeId;
+      ctx.strokeRect(x, y, w, h);
+      const fW = 10 * scale; 
+      ctx.strokeRect(x + fW, y + fW, w - fW * 2, h - fW * 2);
+      if (rid === 'H36') {
+        ctx.beginPath();
+        ctx.moveTo(x + w / 2, y + fW);
+        ctx.lineTo(x + w / 2, y + h - fW);
+        ctx.stroke();
+      }
+      ctx.fillStyle = 'rgba(186, 230, 253, 0.3)';
+      ctx.fillRect(x + fW*2, y + fW*2, w - fW * 4, h - fW * 4);
+    };
 
-    // 3. Draw sash division if applicable (e.g. Coulissant)
-    if (rangeId === 'H36') {
-      ctx.beginPath();
-      ctx.moveTo(offsetX + dW / 2, offsetY + frameW);
-      ctx.lineTo(offsetX + dW / 2, offsetY + dH - frameW);
-      ctx.stroke();
+    if (config.compoundType && config.compoundType !== 'none' && config.compoundConfig) {
+      const { position, part1Width, part1Height, part1Id, part2Id, unionId, traverseId } = config.compoundConfig;
+      const divRef = database.profiles.find(p => p.id === (unionId || traverseId));
+      const thick = (divRef?.thickness || 20) * scale;
+      let x1 = offsetX, y1 = offsetY, w1 = dW, h1 = dH, x2 = offsetX, y2 = offsetY, w2 = dW, h2 = dH;
+      if (position === 'left' || position === 'right') {
+        w1 = part1Width * scale; w2 = dW - w1 - thick;
+        if (position === 'right') { x2 = offsetX; x1 = offsetX + w2 + thick; }
+        else { x1 = offsetX; x2 = offsetX + w1 + thick; }
+      } else {
+        h1 = part1Height * scale; h2 = dH - h1 - thick;
+        if (position === 'bottom') { y2 = offsetY; y1 = offsetY + h2 + thick; }
+        else { y1 = offsetY; y2 = offsetY + h1 + thick; }
+      }
+      drawJoinery(x1, y1, w1, h1, part1Id);
+      drawJoinery(x2, y2, w2, h2, part2Id);
+      ctx.fillStyle = '#cbd5e1';
+      if (position === 'left' || position === 'right') ctx.fillRect(position === 'left' ? x1 + w1 : x2 + w2, offsetY, thick, dH);
+      else ctx.fillRect(offsetX, position === 'top' ? y1 + h1 : y2 + h2, dW, thick);
+    } else {
+      drawJoinery(offsetX, offsetY, dW, dH, compositionId);
     }
-
-    // 4. Draw glass effect
-    ctx.fillStyle = 'rgba(186, 230, 253, 0.3)'; // Sky 200 with opacity
-    ctx.fillRect(offsetX + frameW*2, offsetY + frameW*2, dW - frameW * 4, dH - frameW * 4);
 
     // 5. Draw dimensions
     ctx.fillStyle = '#64748b'; // Slate 500
