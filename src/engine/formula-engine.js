@@ -40,6 +40,7 @@ export class FormulaEngine {
    * Calculate BOM for a single component (used by global BOM or individual cells)
    */
   calculateComponentBOM(config, L, H, compositionId, glassId, optionalSides, totalH = null, originalL = null, originalH = null) {
+    const opt = optionalSides || { top: true, bottom: true, left: true, right: true };
     const composition = this.db.compositions.find(c => c.id === compositionId);
     if (!composition) return { profiles: [], accessories: [], glass: null, gasket: null };
 
@@ -82,11 +83,11 @@ export class FormulaEngine {
         const isGenericH = !hasHaut && !hasBas;
         
         if (isGenericH) {
-          if (optionalSides.top) expandedElements.push({ ...el, label: baseLabel + ' (Haut)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint });
-          if (optionalSides.bottom) expandedElements.push({ ...el, label: baseLabel + ' (Bas)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint });
+          if (opt.top) expandedElements.push({ ...el, label: baseLabel + ' (Haut)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint });
+          if (opt.bottom) expandedElements.push({ ...el, label: baseLabel + ' (Bas)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint });
         } else {
-          if (hasHaut && optionalSides.top) expandedElements.push({ ...el, isCouvreJoint: isActuallyCouvreJoint });
-          if (hasBas && optionalSides.bottom) expandedElements.push({ ...el, isCouvreJoint: isActuallyCouvreJoint });
+          if (hasHaut && opt.top) expandedElements.push({ ...el, isCouvreJoint: isActuallyCouvreJoint });
+          if (hasBas && opt.bottom) expandedElements.push({ ...el, isCouvreJoint: isActuallyCouvreJoint });
         }
       } else if (isVertical) {
         const hasGauche = searchStr.includes('gauche');
@@ -94,19 +95,19 @@ export class FormulaEngine {
         const isGenericV = !hasGauche && !hasDroite;
 
         if (isGenericV) {
-          if (optionalSides.left) expandedElements.push({ ...el, label: baseLabel + ' (Gauche)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint });
-          if (optionalSides.right) expandedElements.push({ ...el, label: baseLabel + ' (Droite)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint });
+          if (opt.left) expandedElements.push({ ...el, label: baseLabel + ' (Gauche)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint });
+          if (opt.right) expandedElements.push({ ...el, label: baseLabel + ' (Droite)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint });
         } else {
-          if (hasGauche && optionalSides.left) expandedElements.push({ ...el, isCouvreJoint: isActuallyCouvreJoint });
-          if (hasDroite && optionalSides.right) expandedElements.push({ ...el, isCouvreJoint: isActuallyCouvreJoint });
+          if (hasGauche && opt.left) expandedElements.push({ ...el, isCouvreJoint: isActuallyCouvreJoint });
+          if (hasDroite && opt.right) expandedElements.push({ ...el, isCouvreJoint: isActuallyCouvreJoint });
         }
       } else {
         // Generic 4-sided (like a dormant defined as 4qty but one formula)
         const vFormula = (el.formula === 'L' || !el.formula) ? 'H' : el.formula;
-        if (optionalSides.top) expandedElements.push({ ...el, label: baseLabel + ' (Haut)', qty: el.qty / 4, isCouvreJoint: isActuallyCouvreJoint });
-        if (optionalSides.bottom) expandedElements.push({ ...el, label: baseLabel + ' (Bas)', qty: el.qty / 4, isCouvreJoint: isActuallyCouvreJoint });
-        if (optionalSides.left) expandedElements.push({ ...el, formula: vFormula, label: baseLabel + ' (Gauche)', qty: el.qty / 4, isCouvreJoint: isActuallyCouvreJoint });
-        if (optionalSides.right) expandedElements.push({ ...el, formula: vFormula, label: baseLabel + ' (Droite)', qty: el.qty / 4, isCouvreJoint: isActuallyCouvreJoint });
+        if (opt.top) expandedElements.push({ ...el, label: baseLabel + ' (Haut)', qty: el.qty / 4, isCouvreJoint: isActuallyCouvreJoint });
+        if (opt.bottom) expandedElements.push({ ...el, label: baseLabel + ' (Bas)', qty: el.qty / 4, isCouvreJoint: isActuallyCouvreJoint });
+        if (opt.left) expandedElements.push({ ...el, formula: vFormula, label: baseLabel + ' (Gauche)', qty: el.qty / 4, isCouvreJoint: isActuallyCouvreJoint });
+        if (opt.right) expandedElements.push({ ...el, formula: vFormula, label: baseLabel + ' (Droite)', qty: el.qty / 4, isCouvreJoint: isActuallyCouvreJoint });
       }
     });
 
