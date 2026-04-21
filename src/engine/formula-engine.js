@@ -439,14 +439,15 @@ export class FormulaEngine {
     }
 
     let finalCost = 0;
-    const unitRaw = (item.priceUnit || 'Unité').toUpperCase();
+    const unitRaw = (item.priceUnit || 'Unité').toUpperCase().trim();
     
     if (unitRaw === 'BARRE') {
       finalCost = (qty / barLength) * itemPrice;
+    } else if (unitRaw === 'ML' || unitRaw === 'M' || unitRaw === 'JOINT') {
+      // If result is large (e.g. > 50), it's likely mm being used with an ML price
+      const effectiveQty = qty > 50 ? qty / 1000 : qty;
+      finalCost = effectiveQty * itemPrice;
     } else {
-      // For ML, M2, Unité, we assume qty reflects the correct unit.
-      // E.g., if ML, qty should be formatted via formula to be linear meters (L/1000).
-      // However, historically if unit was ML and barLength was 1, it was qty/1 * price = qty * price.
       finalCost = qty * itemPrice;
     }
 
