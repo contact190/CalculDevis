@@ -275,17 +275,21 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
 
                            <div>
                               <label style={{ fontSize: '0.7rem', color: '#64748b', display: 'block', marginBottom: '0.3rem' }}>Configuration</label>
-                              {part.type === 'opening' ? (
+                              {(part.type === 'opening' || part.type === 'fixe') ? (
                                  <select className="input" style={{ fontSize: '0.8rem', padding: '0.3rem' }} value={part.compositionId || ''} onChange={e => {
                                     const newList = [...config.compoundConfig.parts];
                                     newList[idx].compositionId = e.target.value;
                                     setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, parts: newList } }));
                                  }}>
                                     <option value="">-- Composition --</option>
-                                    {database.compositions.filter(c => 
-                                       (config.compoundType === 'fix_coulissant' && c.openingType === 'Coulissant') ||
-                                       (config.compoundType === 'fix_ouvrant' && c.openingType !== 'Coulissant' && c.openingType !== 'Fixe')
-                                    ).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                    {database.compositions.filter(c => {
+                                       if (part.type === 'opening') {
+                                          return (config.compoundType === 'fix_coulissant' && c.openingType === 'Coulissant') ||
+                                                 (config.compoundType === 'fix_ouvrant' && c.openingType !== 'Coulissant' && c.openingType !== 'Fixe');
+                                       } else {
+                                          return c.openingType === 'Fixe' || c.openingType === 'Fixe Vitré';
+                                       }
+                                    }).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                  </select>
                               ) : part.type === 'group' ? (
                                  <div style={{ fontSize: '0.8rem', color: '#7c3aed', fontWeight: 700 }}>Divisé {config.compoundConfig.orientation === 'horizontal' ? 'H' : 'V'}</div>
@@ -359,13 +363,20 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                                           setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, parts: newList } }));
                                        }} />
                                     </div>
-                                    <select className="input" style={{ fontSize: '0.75rem', padding: '0.2rem' }} disabled={sub.type !== 'opening'} value={sub.compositionId || ''} onChange={e => {
+                                    <select className="input" style={{ fontSize: '0.75rem', padding: '0.2rem' }} value={sub.compositionId || ''} onChange={e => {
                                        const newList = [...config.compoundConfig.parts];
                                        newList[idx].subParts[sidx].compositionId = e.target.value;
                                        setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, parts: newList } }));
                                     }}>
                                        <option value="">-- Composition --</option>
-                                       {database.compositions.filter(c => (config.compoundType === 'fix_coulissant' && c.openingType === 'Coulissant') || (config.compoundType === 'fix_ouvrant' && c.openingType !== 'Coulissant' && c.openingType !== 'Fixe')).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                       {database.compositions.filter(c => {
+                                          if (sub.type === 'opening') {
+                                             return (config.compoundType === 'fix_coulissant' && c.openingType === 'Coulissant') ||
+                                                    (config.compoundType === 'fix_ouvrant' && c.openingType !== 'Coulissant' && c.openingType !== 'Fixe');
+                                          } else {
+                                             return c.openingType === 'Fixe' || c.openingType === 'Fixe Vitré';
+                                          }
+                                       }).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                     </select>
                                     <select className="input" style={{ fontSize: '0.75rem', padding: '0.2rem' }} value={sub.glassId || ''} onChange={e => {
                                        const newList = [...config.compoundConfig.parts];
