@@ -268,15 +268,9 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
               };
               if (sThreshold > 0 && remaining <= sThreshold) {
                 scraps.push(chute);
-              } else if (sThreshold > 0) {
-                reusable.push(chute);
               } else {
-                // If no threshold, everything is scrap by default or we pick a sane default?
-                // User said "si il reste plus sera considirer comme chutte reutilisable"
-                // This implies threshold 0 means everything is reusable?
-                // Let's assume threshold defaults to something small like 300mm if not set? 
-                // No, let's stick to what user said. If remaining <= threshold -> scrap.
-                scraps.push(chute);
+                // Default to reusable if no threshold or if remaining > threshold
+                reusable.push(chute);
               }
             }
           });
