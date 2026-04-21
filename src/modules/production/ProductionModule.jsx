@@ -526,6 +526,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         {[
           { id: 'debit', label: 'Liste de Débit', icon: Scissors },
           { id: 'achat', label: 'Liste d\'Achat', icon: ShoppingCart },
+          { id: 'chutes', label: 'Gestion des Chutes', icon: Trash2 },
           { id: 'logistique', label: 'Logistique Atelier', icon: Layers },
           { id: 'measure', label: 'Prise de Mesures', icon: Ruler },
         ].map(tab => (
@@ -704,8 +705,9 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                     // Bin Packing Algorithm (1D Nesting / Next Fit Decreasing)
                     const pieces = p.pieces ? [...p.pieces].sort((a,b) => b - a) : [];
                     let bars = 0;
+                    const unitClean = (p.priceUnit || '').toUpperCase().trim();
                     
-                    if (pieces.length > 0) {
+                    if (unitClean === 'BARRE' && pieces.length > 0) {
                       let currentBars = [];
                       for (let i = 0; i < pieces.length; i++) {
                         const piece = pieces[i];
@@ -725,6 +727,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                         }
                       }
                     } else {
+                      // No optimization for ML or other units, just straight division
                       bars = Math.ceil(ml / bLength);
                     }
   
@@ -856,76 +859,121 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
               </table>
             </div>
           </div>
+        </div>
+      )}
 
-
-
-          {/* Section: Gestion des Chutes & Déchets */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-            {/* Liste des Chutes Réutilisables */}
-            <div className="glass shadow-md" style={{ borderLeft: '4px solid #14b8a6' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1rem' }}>
-                <CheckCircle size={20} color="#14b8a6" />
-                <h2 style={{ fontSize: '1.125rem', fontWeight: 600, flex: 1, margin: 0 }}>Chutes Réutilisables ({chutesData.reusable.length})</h2>
-                <button onClick={() => exportChutesCSV('reusable')} className="btn btn-secondary" style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                   <Download size={14} /> CSV
+      {activeTab === 'chutes' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', animation: 'slideUp 0.4s ease-out' }}>
+          <div className="flex-header">
+             <div>
+                <h2 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#1e293b' }}>Analyse des Chutes de Débit</h2>
+                <p style={{ color: '#64748b' }}>Basé sur l'optimisation des profilés configurés en unité "Barre".</p>
+             </div>
+             <div style={{ display: 'flex', gap: '1rem' }}>
+                <button onClick={() => exportChutesCSV('reusable')} className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'white' }}>
+                   <Download size={18} color="#14b8a6" /> CSV Chutes Réutilisables
                 </button>
+                <button onClick={() => exportChutesCSV('scraps')} className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'white' }}>
+                   <Trash2 size={18} color="#ef4444" /> CSV Déchets
+                </button>
+             </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+            {/* Liste des Chutes Réutilisables */}
+            <div className="glass shadow-lg" style={{ borderTop: '6px solid #14b8a6', padding: '1.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.5rem' }}>
+                <div style={{ background: '#f0fdfa', padding: '0.6rem', borderRadius: '12px' }}>
+                  <CheckCircle size={24} color="#14b8a6" />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>Chutes Réutilisables</h3>
+                  <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Pièces > Seuil de chute</span>
+                </div>
+                <div style={{ marginLeft: 'auto', background: '#14b8a6', color: 'white', padding: '0.2rem 0.8rem', borderRadius: '20px', fontWeight: 700 }}>
+                  {chutesData.reusable.length}
+                </div>
               </div>
-              <div className="table-responsive" style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                <table className="data-table" style={{ fontSize: '0.85rem' }}>
-                  <thead style={{ position: 'sticky', top: 0, background: 'white', zIndex: 1 }}>
+              
+              <div className="table-responsive" style={{ maxHeight: '500px', overflowY: 'auto', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                <table className="data-table">
+                  <thead style={{ position: 'sticky', top: 0, background: '#f8fafc', zIndex: 10 }}>
                     <tr>
-                      <th>Profilé</th>
+                      <th>Désignation Profilé</th>
                       <th>Coloris</th>
-                      <th>Longueur</th>
+                      <th style={{ textAlign: 'right' }}>Longueur</th>
                     </tr>
                   </thead>
                   <tbody>
                     {chutesData.reusable.map((c, i) => (
                       <tr key={`reu-${i}`}>
-                        <td>{c.name}</td>
-                        <td>{c.color}</td>
-                        <td style={{ fontWeight: 700, color: '#0d9488' }}>{c.length} mm</td>
+                        <td style={{ fontWeight: 600 }}>{c.name}</td>
+                        <td><span style={{ fontSize: '0.75rem', background: '#f1f5f9', padding: '0.2rem 0.6rem', borderRadius: '4px' }}>{c.color}</span></td>
+                        <td style={{ fontWeight: 800, color: '#0d9488', textAlign: 'right' }}>{c.length} mm</td>
                       </tr>
                     ))}
-                    {chutesData.reusable.length === 0 && <tr><td colSpan="3" style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>Aucune chute réutilisable.</td></tr>}
+                    {chutesData.reusable.length === 0 && (
+                      <tr>
+                        <td colSpan="3" style={{ textAlign: 'center', padding: '3rem' }}>
+                          <div style={{ color: '#94a3b8' }}>
+                            <Layers size={40} style={{ margin: '0 auto 1rem', opacity: 0.3 }} />
+                            <p>Aucune chute réutilisable détectée.</p>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
             </div>
 
-            {/* Liste des Déchets (Chutes non-réutilisables) */}
-            <div className="glass shadow-md" style={{ borderLeft: '4px solid #ef4444' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1rem' }}>
-                <Trash2 size={20} color="#ef4444" />
-                <h2 style={{ fontSize: '1.125rem', fontWeight: 600, flex: 1, margin: 0 }}>Déchets / Chutes (A jeter) ({chutesData.scraps.length})</h2>
-                <button onClick={() => exportChutesCSV('scraps')} className="btn btn-secondary" style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                   <Download size={14} /> CSV
-                </button>
+            {/* Liste des Déchets */}
+            <div className="glass shadow-lg" style={{ borderTop: '6px solid #ef4444', padding: '1.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.5rem' }}>
+                <div style={{ background: '#fef2f2', padding: '0.6rem', borderRadius: '12px' }}>
+                  <Trash2 size={24} color="#ef4444" />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>Déchets / Chutes Perdues</h3>
+                  <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Pièces ≤ Seuil de chute</span>
+                </div>
+                <div style={{ marginLeft: 'auto', background: '#ef4444', color: 'white', padding: '0.2rem 0.8rem', borderRadius: '20px', fontWeight: 700 }}>
+                  {chutesData.scraps.length}
+                </div>
               </div>
-              <div className="table-responsive" style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                <table className="data-table" style={{ fontSize: '0.85rem' }}>
-                  <thead style={{ position: 'sticky', top: 0, background: 'white', zIndex: 1 }}>
+
+              <div className="table-responsive" style={{ maxHeight: '500px', overflowY: 'auto', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                <table className="data-table">
+                  <thead style={{ position: 'sticky', top: 0, background: '#f8fafc', zIndex: 10 }}>
                     <tr>
-                      <th>Profilé</th>
+                      <th>Désignation Profilé</th>
                       <th>Coloris</th>
-                      <th>Longueur</th>
+                      <th style={{ textAlign: 'right' }}>Longueur</th>
                     </tr>
                   </thead>
                   <tbody>
                     {chutesData.scraps.map((c, i) => (
                       <tr key={`scr-${i}`}>
-                        <td>{c.name}</td>
-                        <td>{c.color}</td>
-                        <td style={{ fontWeight: 600, color: '#ef4444' }}>{c.length} mm</td>
+                        <td style={{ fontWeight: 600 }}>{c.name}</td>
+                        <td><span style={{ fontSize: '0.75rem', background: '#f1f5f9', padding: '0.2rem 0.6rem', borderRadius: '4px' }}>{c.color}</span></td>
+                        <td style={{ fontWeight: 800, color: '#b91c1c', textAlign: 'right' }}>{c.length} mm</td>
                       </tr>
                     ))}
-                    {chutesData.scraps.length === 0 && <tr><td colSpan="3" style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>Aucun déchet.</td></tr>}
+                    {chutesData.scraps.length === 0 && (
+                      <tr>
+                        <td colSpan="3" style={{ textAlign: 'center', padding: '3rem' }}>
+                          <div style={{ color: '#94a3b8' }}>
+                            <Package size={40} style={{ margin: '0 auto 1rem', opacity: 0.3 }} />
+                            <p>Aucun déchet majeur à répertorier.</p>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
             </div>
           </div>
-
         </div>
       )}
 
