@@ -575,7 +575,7 @@ export class FormulaEngine {
        // The Dormant profiles now stay visible even if these are false, only covers follow these toggles.
        const globalOpt = config.optionalSides || { top: true, bottom: true, left: true, right: true };
        
-       const frameRes = this.calculateComponentBOM(config, L, H, frameCompId, config.glassId, globalOpt, H, L, H);
+       const frameRes = this.calculateComponentBOM(config, L, H, frameCompId, config.glassId, globalOpt, H, config.L, config.H);
        
        const isFrameProfile = p => !!p.isFrame || /dormant|cadre|chassis|batit|couvre/i.test((p.label + ' ' + p.name).toLowerCase());
        

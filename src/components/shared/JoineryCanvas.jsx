@@ -26,15 +26,41 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
     
     const scale = Math.min(drawAreaW / L, drawAreaH / H);
     
+    // Calculate Caisson height
+    let caissonH = 0;
+    if (config.hasShutter && config.shutterConfig?.caissonId && database.shutterComponents) {
+      const cRef = database.shutterComponents.caissons.find(c => c.id === config.shutterConfig.caissonId);
+      caissonH = parseFloat(cRef?.height) || 0;
+    }
+
     const dW = L * scale;
-    const dH = H * scale;
+    const dH_total = H * scale; // Total visual height
+    const dCaissonH = caissonH * scale;
+    const dWindowH = (H - caissonH) * scale;
+    
     const offsetX = (width - dW) / 2;
-    const offsetY = (height - dH) / 2;
+    const offsetY = (height - dH_total) / 2;
 
     // Drawing Styles
     ctx.strokeStyle = '#334155'; // Slate 700
     ctx.lineWidth = 2;
     ctx.lineJoin = 'round';
+
+    // 0. Draw Caisson (Shutter Box)
+    if (caissonH > 0) {
+      ctx.fillStyle = '#e2e8f0'; // Slate 200
+      ctx.fillRect(offsetX, offsetY, dW, dCaissonH);
+      ctx.strokeRect(offsetX, offsetY, dW, dCaissonH);
+      
+      // Add a small circle or line to indicate shutter roll
+      ctx.beginPath();
+      ctx.arc(offsetX + dW - dCaissonH/2, offsetY + dCaissonH/2, dCaissonH/3, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    
+    // Update offsetY for window part
+    const winOffsetY = offsetY + dCaissonH;
+    const dH = dWindowH; // For compatibility with rest of code
     
     // 0. Draw Architraves (Couvre-joints optionnels)
     const cjW = 40 * scale; // 40mm
@@ -43,20 +69,20 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
     ctx.strokeStyle = '#cbd5e1';
     
     if (optionalSides.top) {
-      ctx.fillRect(offsetX - cjW, offsetY - cjW, dW + cjW * 2, cjW);
-      ctx.strokeRect(offsetX - cjW, offsetY - cjW, dW + cjW * 2, cjW);
+      ctx.fillRect(offsetX - cjW, winOffsetY - cjW, dW + cjW * 2, cjW);
+      ctx.strokeRect(offsetX - cjW, winOffsetY - cjW, dW + cjW * 2, cjW);
     }
     if (optionalSides.bottom) {
-      ctx.fillRect(offsetX - cjW, offsetY + dH, dW + cjW * 2, cjW);
-      ctx.strokeRect(offsetX - cjW, offsetY + dH, dW + cjW * 2, cjW);
+      ctx.fillRect(offsetX - cjW, winOffsetY + dH, dW + cjW * 2, cjW);
+      ctx.strokeRect(offsetX - cjW, winOffsetY + dH, dW + cjW * 2, cjW);
     }
     if (optionalSides.left) {
-      ctx.fillRect(offsetX - cjW, offsetY, cjW, dH);
-      ctx.strokeRect(offsetX - cjW, offsetY, cjW, dH);
+      ctx.fillRect(offsetX - cjW, winOffsetY, cjW, dH);
+      ctx.strokeRect(offsetX - cjW, winOffsetY, cjW, dH);
     }
     if (optionalSides.right) {
-      ctx.fillRect(offsetX + dW, offsetY, cjW, dH);
-      ctx.strokeRect(offsetX + dW, offsetY, cjW, dH);
+      ctx.fillRect(offsetX + dW, winOffsetY, cjW, dH);
+      ctx.strokeRect(offsetX + dW, winOffsetY, cjW, dH);
     }
 
     ctx.strokeStyle = oldStroke;
@@ -115,9 +141,9 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
         });
       };
 
-      drawPartList(parts, offsetX, offsetY, dW, dH, orientation);
+      drawPartList(parts, offsetX, winOffsetY, dW, dH, orientation);
     } else {
-      drawJoinery(offsetX, offsetY, dW, dH, compositionId);
+      drawJoinery(offsetX, winOffsetY, dW, dH, compositionId);
     }
 
     // 5. Draw dimensions
@@ -126,10 +152,10 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
     ctx.textAlign = 'center';
     
     // L dimension
-    ctx.fillText(`${L} mm`, offsetX + dW / 2, offsetY + dH + 20);
+    ctx.fillText(`${L} mm`, offsetX + dW / 2, winOffsetY + dH + 25);
     // H dimension
     ctx.save();
-    ctx.translate(offsetX - 25, offsetY + dH / 2);
+    ctx.translate(offsetX - 25, offsetY + dH_total / 2);
     ctx.rotate(-Math.PI / 2);
     ctx.fillText(`${H} mm`, 0, 0);
     ctx.restore();
