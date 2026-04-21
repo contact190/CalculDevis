@@ -575,12 +575,6 @@ export class FormulaEngine {
                 p.label?.toLowerCase().includes('couvre') || p.name?.toLowerCase().includes('couvre')
              ).map(p => ({ ...p, source: 'Cadre Global' }));
              results.profiles.push(...frameOnly);
-             
-             const frameAccs = frameRes.accessories.filter(a => 
-                a.label?.toLowerCase().includes('dormant') || a.name?.toLowerCase().includes('dormant') ||
-                a.label?.toLowerCase().includes('cadre') || a.name?.toLowerCase().includes('cadre')
-             ).map(a => ({ ...a, source: 'Cadre Global' }));
-             results.accessories.push(...frameAccs);
           }
 
           const compId = part.compositionId || config.compositionId || parts.find(p=>p.type==='opening')?.compositionId;
