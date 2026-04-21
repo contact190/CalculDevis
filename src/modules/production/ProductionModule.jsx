@@ -888,7 +888,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                 </div>
                 <div>
                   <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>Chutes Réutilisables</h3>
-                  <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Pièces > Seuil de chute</span>
+                  <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Pièces {'>'} Seuil de chute</span>
                 </div>
                 <div style={{ marginLeft: 'auto', background: '#14b8a6', color: 'white', padding: '0.2rem 0.8rem', borderRadius: '20px', fontWeight: 700 }}>
                   {chutesData.reusable.length}
@@ -935,7 +935,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                 </div>
                 <div>
                   <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>Déchets / Chutes Perdues</h3>
-                  <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Pièces ≤ Seuil de chute</span>
+                  <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Pièces {'<='} Seuil de chute</span>
                 </div>
                 <div style={{ marginLeft: 'auto', background: '#ef4444', color: 'white', padding: '0.2rem 0.8rem', borderRadius: '20px', fontWeight: 700 }}>
                   {chutesData.scraps.length}
