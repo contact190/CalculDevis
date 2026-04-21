@@ -659,17 +659,18 @@ export class FormulaEngine {
         // If still no compId for a fixe, it's a "Direct Glazing" (no internal profiles)
         if (!compId && part.type === 'fixe') {
            if (pGlassId) {
-              const glassRes = this.calculateComponentBOM(config, pW, pH, null, pGlassId, isMultiChassis ? config.optionalSides : { top: false, bottom: false, left: false, right: false, isSubPart: true }, pH, pW, pH);
+              const glassRes = this.calculateComponentBOM(config, pW, pH, null, pGlassId, isMultiChassis ? config.optionalSides : { top: false, bottom: false, left: false, right: false, isSubPart: true }, pH, L, totalH);
               if (glassRes.glass) results.glasses.push({ ...glassRes.glass, source: sourceLabel });
            }
            return;
         }
 
         const subPartOpt = isMultiChassis ? config.optionalSides : { top: false, bottom: false, left: false, right: false, isSubPart: true };
-        const res = this.calculateComponentBOM(config, pW, pH, compId, pGlassId, subPartOpt, pH, pW, pH);
+        const res = this.calculateComponentBOM(config, pW, pH, compId, pGlassId, subPartOpt, pH, L, totalH);
         
         const filterFn = (item) => {
            // Skip everything that belongs to the global frame perimeter (only in single chassis mode)
+           if (item.isCouvreJoint) return false;
            if (!isMultiChassis && item.isFrame) return false;
            
            const s = ((item.label || '') + ' ' + (item.name || '')).toLowerCase();
