@@ -77,25 +77,37 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
       ctx.fillRect(x + fW*2, y + fW*2, w - fW * 4, h - fW * 4);
     };
 
-    if (config.compoundType && config.compoundType !== 'none' && config.compoundConfig) {
-      const { position, part1Width, part1Height, part1Id, part2Id, unionId, traverseId } = config.compoundConfig;
-      const divRef = database.profiles.find(p => p.id === (unionId || traverseId));
+    if (config.compoundType && config.compoundType !== 'none' && config.compoundConfig?.parts) {
+      const { parts, orientation, unionId, traverseId } = config.compoundConfig;
+      const isHorizontal = orientation !== 'vertical';
+      const divRef = database.profiles.find(p => p.id === (config.compoundType === 'fix_coulissant' ? unionId : traverseId));
       const thick = (divRef?.thickness || 20) * scale;
-      let x1 = offsetX, y1 = offsetY, w1 = dW, h1 = dH, x2 = offsetX, y2 = offsetY, w2 = dW, h2 = dH;
-      if (position === 'left' || position === 'right') {
-        w1 = part1Width * scale; w2 = dW - w1 - thick;
-        if (position === 'right') { x2 = offsetX; x1 = offsetX + w2 + thick; }
-        else { x1 = offsetX; x2 = offsetX + w1 + thick; }
-      } else {
-        h1 = part1Height * scale; h2 = dH - h1 - thick;
-        if (position === 'bottom') { y2 = offsetY; y1 = offsetY + h2 + thick; }
-        else { y1 = offsetY; y2 = offsetY + h1 + thick; }
-      }
-      drawJoinery(x1, y1, w1, h1, part1Id);
-      drawJoinery(x2, y2, w2, h2, part2Id);
-      ctx.fillStyle = '#cbd5e1';
-      if (position === 'left' || position === 'right') ctx.fillRect(position === 'left' ? x1 + w1 : x2 + w2, offsetY, thick, dH);
-      else ctx.fillRect(offsetX, position === 'top' ? y1 + h1 : y2 + h2, dW, thick);
+      
+      let currentX = offsetX;
+      let currentY = offsetY;
+
+      parts.forEach((part, idx) => {
+        const pW = isHorizontal ? (part.width * scale) : dW;
+        const pH = isHorizontal ? dH : (part.height * scale);
+        
+        drawJoinery(currentX, currentY, pW, pH, part.compositionId || compositionId);
+        
+        if (isHorizontal) {
+           currentX += pW;
+           if (idx < parts.length - 1) {
+              ctx.fillStyle = '#cbd5e1';
+              ctx.fillRect(currentX, offsetY, thick, dH);
+              currentX += thick;
+           }
+        } else {
+           currentY += pH;
+           if (idx < parts.length - 1) {
+              ctx.fillStyle = '#cbd5e1';
+              ctx.fillRect(offsetX, currentY, dW, thick);
+              currentY += thick;
+           }
+        }
+      });
     } else {
       drawJoinery(offsetX, offsetY, dW, dH, compositionId);
     }

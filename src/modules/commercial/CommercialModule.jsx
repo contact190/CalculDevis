@@ -15,16 +15,16 @@ const EMPTY_CONFIG = {
   margin: 2.2,
   useCustomLayout: false,
   customLayout: null,
-  compoundType: 'none', // none, fix_coulissant, fix_ouvrant, fix_porte
+  compoundType: 'none',
   compoundConfig: {
-    part1Id: '', // Usually the Fix
-    part2Id: '', // Usually the Opening
-    unionId: '', // For fix_coulissant
-    traverseId: '', // For fix_ouvrant
-    position: 'right', // relative to opening
-    part1Width: 600,
-    part1Height: 600,
-    shutterMode: 'total', // total or opening_only
+    parts: [
+      { id: 'main', type: 'opening', compositionId: '', glassId: '', width: 800, height: 1500 },
+      { id: 'fix1', type: 'fixe', glassId: '', width: 400, height: 1500 }
+    ],
+    orientation: 'horizontal', // horizontal (side-by-side) or vertical (stacked)
+    unionId: '', 
+    traverseId: '',
+    shutterMode: 'total',
   }
 };
 
@@ -175,100 +175,125 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
           )}
 
           {config.compoundType !== 'none' && (
-            <div style={{ background: '#f0f9ff', padding: '1.5rem', borderRadius: '12px', border: '1px solid #bae6fd', marginBottom: '1.5rem', animation: 'slideIn 0.3s ease' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.2rem' }}>
-                   <div style={{ background: '#3b82f6', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'grid', placeItems: 'center', fontWeight: 800 }}>🧩</div>
-                   <div>
-                      <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0369a1' }}>Modèle Composé : {config.compoundType.replace('_',' + ').toUpperCase()}</h3>
-                      <p style={{ margin: 0, fontSize: '0.75rem', color: '#0ea5e9' }}>Assemblage automatique de menuiseries complémentaires.</p>
+            <div style={{ background: '#f8fafc', padding: '1.5rem', borderRadius: '15px', border: '1px solid #e2e8f0', marginBottom: '1.5rem', animation: 'slideUp 0.3s ease' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.5rem' }}>
+                   <div style={{ background: '#3b82f6', color: 'white', width: '36px', height: '36px', borderRadius: '10px', display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: '1.2rem' }}>🧩</div>
+                   <div style={{ flex: 1 }}>
+                      <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#1e293b' }}>Composition par Assemblage</h3>
+                      <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>Configurez vos châssis complexes bloc par bloc.</p>
                    </div>
                 </div>
 
-                <div className="form-group">
-                  <label className="label">Choix du Modèle</label>
-                  <select className="input" value={config.compoundType} onChange={e => setConfig(prev => ({ ...prev, compoundType: e.target.value }))}>
-                    <option value="fix_coulissant">Fixe + Coulissant (Assemblage par Union)</option>
-                    <option value="fix_ouvrant">Fixe + Ouvrant (Cadre unique divisé)</option>
-                    <option value="fix_porte">Fixe + Porte (Cadre unique divisé)</option>
-                  </select>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
-                  <div className="form-group">
-                    <label className="label">1. Partie FIXE</label>
-                    <select className="input" value={config.compoundConfig?.part1Id} onChange={e => setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, part1Id: e.target.value } }))}>
-                      <option value="">-- Choisir une composition fixe --</option>
-                      {database.compositions.filter(c => c.openingType === 'Fixe').map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label className="label">2. Partie OUVRANTE</label>
-                    <select className="input" value={config.compoundConfig?.part2Id} onChange={e => setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, part2Id: e.target.value } }))}>
-                      <option value="">-- Choisir une composition ouvrante --</option>
-                      {database.compositions.filter(c => 
-                         (config.compoundType === 'fix_coulissant' && c.openingType === 'Coulissant') ||
-                         (config.compoundType === 'fix_ouvrant' && c.openingType !== 'Coulissant' && c.openingType !== 'Fixe') ||
-                         (config.compoundType === 'fix_porte' && c.openingType === 'Porte')
-                      ).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
-                  </div>
-                </div>
-
-                {config.compoundType === 'fix_coulissant' && (
-                  <div className="form-group" style={{ marginTop: '1rem' }}>
-                    <label className="label">Profilé d'UNION (Jonction)</label>
-                    <select className="input" value={config.compoundConfig?.unionId} onChange={e => setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, unionId: e.target.value } }))}>
-                      <option value="">-- Sélectionner l'union --</option>
-                      {database.profiles.filter(p => !!p.isUnion).map(p => <option key={p.id} value={p.id}>{p.name} ({p.thickness}mm)</option>)}
-                    </select>
-                  </div>
-                )}
-
-                {(config.compoundType === 'fix_ouvrant' || config.compoundType === 'fix_porte') && (
-                  <div className="form-group" style={{ marginTop: '1rem' }}>
-                    <label className="label">Profilé de DIVISION (Traverse)</label>
-                    <select className="input" value={config.compoundConfig?.traverseId} onChange={e => setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, traverseId: e.target.value } }))}>
-                      <option value="">-- Sélectionner la traverse --</option>
-                      {database.profiles.filter(p => p.name.toLowerCase().includes('traverse') || p.name.toLowerCase().includes('union')).map(p => <option key={p.id} value={p.id}>{p.name} ({p.thickness}mm)</option>)}
-                    </select>
-                  </div>
-                )}
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1.5rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
                    <div className="form-group">
-                      <label className="label">Position du FIXE</label>
-                      <select className="input" value={config.compoundConfig?.position} onChange={e => setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, position: e.target.value } }))}>
-                        <option value="left">À Gauche</option>
-                        <option value="right">À Droite</option>
-                        <option value="top">En Haut</option>
-                        <option value="bottom">En Bas</option>
+                      <label className="label">Modèle Structurel</label>
+                      <select className="input" value={config.compoundType} onChange={e => setConfig(prev => ({ ...prev, compoundType: e.target.value }))}>
+                        <option value="fix_coulissant">Multi-Châssis (Fixe + Coulissant + ...) avec Unions</option>
+                        <option value="fix_ouvrant">Châssis Unique Divisé (Fixe + Ouvrant + ...) avec Traverses</option>
                       </select>
                    </div>
                    <div className="form-group">
-                      <label className="label">Dimension du FIXE (mm)</label>
-                      <input type="number" className="input" 
-                        value={(config.compoundConfig?.position === 'left' || config.compoundConfig?.position === 'right') ? config.compoundConfig?.part1Width : config.compoundConfig?.part1Height} 
-                        onChange={e => {
-                          const val = parseInt(e.target.value) || 0;
-                          const isHorizontal = config.compoundConfig?.position === 'left' || config.compoundConfig?.position === 'right';
-                          setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, [isHorizontal ? 'part1Width' : 'part1Height']: val } }));
-                        }} 
-                      />
+                      <label className="label">Orientation</label>
+                      <select className="input" value={config.compoundConfig?.orientation} onChange={e => setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, orientation: e.target.value } }))}>
+                        <option value="horizontal">Côte à côte (Horizontal)</option>
+                        <option value="vertical">Superposé (Vertical)</option>
+                      </select>
                    </div>
                 </div>
 
-                <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'white', borderRadius: '8px', border: '1px dashed #cbd5e1' }}>
-                  <h4 style={{ margin: '0 0 0.8rem 0', fontSize: '0.85rem', fontWeight: 700, color: '#475569' }}>⚙️ Paramètres du VOLET</h4>
-                  <div style={{ display: 'flex', gap: '1rem' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.85rem' }}>
-                      <input type="radio" checked={config.compoundConfig?.shutterMode === 'total'} onChange={() => setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, shutterMode: 'total' } }))} />
-                      Volet sur TOUTE la largeur
-                    </label>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.85rem' }}>
-                      <input type="radio" checked={config.compoundConfig?.shutterMode === 'opening_only'} onChange={() => setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, shutterMode: 'opening_only' } }))} />
-                      Volet sur OUVERTURE uniquement
-                    </label>
-                  </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1.5rem' }}>
+                   <label className="label">Séquence des blocs (G à D / Haut en Bas)</label>
+                   {config.compoundConfig?.parts?.map((part, idx) => (
+                     <div key={part.id} className="glass shadow-sm" style={{ padding: '1rem', display: 'grid', gridTemplateColumns: 'auto 1fr 1fr 1fr 40px', gap: '1rem', alignItems: 'center', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontWeight: 800, color: '#94a3b8' }}>#{idx+1}</div>
+                        
+                        <div>
+                           <label style={{ fontSize: '0.7rem', color: '#64748b', display: 'block', marginBottom: '0.3rem' }}>Type & Dimension</label>
+                           <div style={{ display: 'flex', gap: '0.4rem' }}>
+                              <select className="input" style={{ width: '100px', fontSize: '0.8rem', padding: '0.3rem' }} value={part.type} onChange={e => {
+                                 const newList = [...config.compoundConfig.parts];
+                                 newList[idx].type = e.target.value;
+                                 setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, parts: newList } }));
+                              }}>
+                                 <option value="opening">Ouverture</option>
+                                 <option value="fixe">Fixe</option>
+                              </select>
+                              <input type="number" className="input" style={{ width: '70px', fontSize: '0.8rem', padding: '0.3rem' }} value={config.compoundConfig.orientation === 'horizontal' ? part.width : part.height} onChange={e => {
+                                 const newList = [...config.compoundConfig.parts];
+                                 const val = parseInt(e.target.value) || 0;
+                                 if (config.compoundConfig.orientation === 'horizontal') newList[idx].width = val;
+                                 else newList[idx].height = val;
+                                 setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, parts: newList } }));
+                              }} />
+                           </div>
+                        </div>
+
+                        <div>
+                           <label style={{ fontSize: '0.7rem', color: '#64748b', display: 'block', marginBottom: '0.3rem' }}>Configuration</label>
+                           {part.type === 'opening' ? (
+                              <select className="input" style={{ fontSize: '0.8rem', padding: '0.3rem' }} value={part.compositionId || ''} onChange={e => {
+                                 const newList = [...config.compoundConfig.parts];
+                                 newList[idx].compositionId = e.target.value;
+                                 setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, parts: newList } }));
+                              }}>
+                                 <option value="">-- Composition --</option>
+                                 {database.compositions.filter(c => 
+                                    (config.compoundType === 'fix_coulissant' && c.openingType === 'Coulissant') ||
+                                    (config.compoundType === 'fix_ouvrant' && c.openingType !== 'Coulissant' && c.openingType !== 'Fixe')
+                                 ).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                              </select>
+                           ) : (
+                              <div style={{ fontSize: '0.8rem', color: '#0ea5e9', fontWeight: 600, padding: '0.3rem' }}>Vitrage direct {config.compoundType === 'fix_ouvrant' && '(Traverse)'}</div>
+                           )}
+                        </div>
+
+                        <div>
+                           <label style={{ fontSize: '0.7rem', color: '#64748b', display: 'block', marginBottom: '0.3rem' }}>Vitrage</label>
+                           <select className="input" style={{ fontSize: '0.8rem', padding: '0.3rem' }} value={part.glassId || ''} onChange={e => {
+                              const newList = [...config.compoundConfig.parts];
+                              newList[idx].glassId = e.target.value;
+                              setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, parts: newList } }));
+                           }}>
+                              <option value="">(Vitrage global)</option>
+                              {database.glass?.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                           </select>
+                        </div>
+
+                        <button className="btn" style={{ color: '#ef4444', padding: '0.3rem', border: 'none' }} onClick={() => {
+                           if (config.compoundConfig.parts.length <= 1) return;
+                           const newList = config.compoundConfig.parts.filter((_, i) => i !== idx);
+                           setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, parts: newList } }));
+                        }}>
+                           <Trash2 size={16} />
+                        </button>
+                     </div>
+                   ))}
+                   <button className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'white', alignSelf: 'flex-start' }} onClick={() => {
+                      const newPart = { id: `part-${Date.now()}`, type: 'fixe', glassId: '', width: 500, height: 1500 };
+                      setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, parts: [...prev.compoundConfig.parts, newPart] } }));
+                   }}>
+                      <Plus size={16} /> Ajouter une partie Fixe
+                   </button>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem', background: '#f1f5f9', padding: '1rem', borderRadius: '8px' }}>
+                   <div className="form-group">
+                      <label className="label">{config.compoundType === 'fix_coulissant' ? 'Profilé d\'UNION' : 'Profilé TRAVERSE (Division)'}</label>
+                      <select className="input" value={config.compoundType === 'fix_coulissant' ? config.compoundConfig?.unionId : config.compoundConfig?.traverseId} onChange={e => {
+                         const key = config.compoundType === 'fix_coulissant' ? 'unionId' : 'traverseId';
+                         setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, [key]: e.target.value } }));
+                      }}>
+                         <option value="">-- Sélectionner l'union/traverse --</option>
+                         {database.profiles.filter(p => !!p.isUnion || (config.compoundType === 'fix_ouvrant' && p.name.toLowerCase().includes('traverse'))).map(p => <option key={p.id} value={p.id}>{p.name} ({p.thickness}mm)</option>)}
+                      </select>
+                   </div>
+                   <div className="form-group">
+                      <label className="label">Mode du Volet</label>
+                      <select className="input" value={config.compoundConfig?.shutterMode} onChange={e => setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, shutterMode: e.target.value } }))}>
+                         <option value="total">Volet sur TOUTE la largeur</option>
+                         <option value="opening_only">Volet sur OUVERTURE uniquement</option>
+                      </select>
+                   </div>
                 </div>
             </div>
           )}

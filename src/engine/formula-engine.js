@@ -521,94 +521,66 @@ export class FormulaEngine {
 
   calculateCompoundBOM(config, L, H) {
     const { compoundType, compoundConfig } = config;
-    if (!compoundConfig) return { profiles: [], accessories: [], glasses: [] };
-    const { part1Id, part2Id, unionId, traverseId, position, part1Width, part1Height, shutterMode } = compoundConfig;
+    if (!compoundConfig || !compoundConfig.parts) return { profiles: [], accessories: [], glasses: [] };
+    const { parts, unionId, traverseId, orientation, shutterMode } = compoundConfig;
 
     const results = { profiles: [], accessories: [], glasses: [] };
+    const isHorizontal = orientation !== 'vertical';
     
-    // Determine dimensions
-    let l1 = L, h1 = H, l2 = L, h2 = H;
-    let dividerThick = 0;
-    const isHorizontal = position === 'left' || position === 'right';
+    // 1. Divider calculation
+    const divProfile = this.db.profiles.find(p => p.id === (compoundType === 'fix_coulissant' ? unionId : traverseId));
+    const divThick = divProfile?.thickness || 0;
+    const divQty = parts.length - 1;
 
-    if (compoundType === 'fix_coulissant') {
-      const unionRef = this.db.profiles.find(p => p.id === unionId);
-      dividerThick = unionRef?.thickness || 0;
-      if (isHorizontal) {
-        l1 = part1Width;
-        l2 = L - l1 - dividerThick;
-      } else {
-        h1 = part1Height;
-        h2 = H - h1 - dividerThick;
-      }
-
-      // 1. Calculate Part 1 (Fix)
-      const res1 = this.calculateComponentBOM(config, l1, h1, part1Id, config.glassId, config.optionalSides, H, config.L, config.H);
-      // 2. Calculate Part 2 (Sliding)
-      const res2 = this.calculateComponentBOM(config, l2, h2, part2Id, config.glassId, config.optionalSides, H, config.L, config.H);
-
-      // Merge
-      results.profiles.push(...res1.profiles, ...res2.profiles);
-      results.accessories.push(...res1.accessories, ...res2.accessories);
-      if (res1.gasket) results.accessories.push(res1.gasket);
-      if (res2.gasket) results.accessories.push(res2.gasket);
-      if (res1.glass) results.glasses.push(res1.glass);
-      if (res2.glass) results.glasses.push(res2.glass);
-
-      // 3. Add Union Profile
-      if (unionRef) {
-        const len = isHorizontal ? H : L;
-        const uCost = unionRef.pricePerBar ? (len / unionRef.barLength * unionRef.pricePerBar) : ((len/1000) * unionRef.weightPerM * unionRef.pricePerKg);
-        results.profiles.push({
-          ...unionRef,
-          label: 'Profilé d\'Union (Jonction)',
-          qty: 1, length: len, cost: uCost || 0
-        });
-      }
-    } else {
-      // fix_ouvrant or fix_porte (Single Frame divided by Transom)
-      const divRef = this.db.profiles.find(p => p.id === traverseId);
-      dividerThick = divRef?.thickness || 0;
-      
-      if (isHorizontal) {
-        l1 = part1Width;
-        l2 = L - l1 - dividerThick;
-      } else {
-        h1 = part1Height;
-        h2 = H - h1 - dividerThick;
-      }
-
-      // 1. External Frame: use Part 2 (Opening) logic but we just need the Frame
-      // We simulate by calculating part 2 on TOTAL dimensions but filter only frame
-      const fullFrameRes = this.calculateComponentBOM(config, L, H, part2Id, config.glassId, config.optionalSides, H, config.L, config.H);
-      const frameProfiles = fullFrameRes.profiles.filter(p => p.label?.toLowerCase().includes('dormant') || p.name?.toLowerCase().includes('dormant'));
-      results.profiles.push(...frameProfiles);
-
-      // 2. Division Profile (Traverse)
-      if (divRef) {
-        const len = isHorizontal ? H : L;
-        const dCost = divRef.pricePerBar ? (len / divRef.barLength * divRef.pricePerBar) : ((len/1000) * divRef.weightPerM * divRef.pricePerKg);
-        results.profiles.push({
-          ...divRef,
-          label: 'Traverse de Division',
-          qty: 1, length: len, cost: dCost || 0
-        });
-      }
-
-      // 3. Fixed Part Internals (Glass + Beads)
-      const fixRes = this.calculateComponentBOM(config, l1, h1, part1Id, config.glassId, { top: false, bottom: false, left: false, right: false }, H, config.L, config.H);
-      // Remove dormant from fix part
-      results.profiles.push(...fixRes.profiles.filter(p => !p.label?.toLowerCase().includes('dormant') && !p.name?.toLowerCase().includes('dormant')));
-      results.accessories.push(...fixRes.accessories.filter(a => !a.label?.toLowerCase().includes('dormant') && !a.name?.toLowerCase().includes('dormant')));
-      if (fixRes.glass) results.glasses.push(fixRes.glass);
-
-      // 4. Opening Part Internals (Sash + Glass + Hardware)
-      const openRes = this.calculateComponentBOM(config, l2, h2, part2Id, config.glassId, { top: false, bottom: false, left: false, right: false }, H, config.L, config.H);
-       // Remove dormant from opening part
-      results.profiles.push(...openRes.profiles.filter(p => !p.label?.toLowerCase().includes('dormant') && !p.name?.toLowerCase().includes('dormant')));
-      results.accessories.push(...openRes.accessories.filter(a => !a.label?.toLowerCase().includes('dormant') && !a.name?.toLowerCase().includes('dormant')));
-      if (openRes.glass) results.glasses.push(openRes.glass);
+    // 2. Add Divider Profiles to BOM
+    if (divProfile && divQty > 0) {
+      const len = isHorizontal ? H : L;
+      const dCost = divProfile.pricePerBar ? (len / divProfile.barLength * divProfile.pricePerBar) : ((len/1000) * divProfile.weightPerM * divProfile.pricePerKg);
+      results.profiles.push({
+        ...divProfile,
+        label: compoundType === 'fix_coulissant' ? 'Profilé d\'Union (Jonction)' : 'Traverse de Division',
+        qty: divQty, length: len, cost: dCost * divQty
+      });
     }
+
+    // 3. Process each part
+    parts.forEach((part, idx) => {
+       let pW = isHorizontal ? (part.width || 500) : L;
+       let pH = isHorizontal ? H : (part.height || 500);
+       const pGlassId = part.glassId || config.glassId;
+
+       if (compoundType === 'fix_coulissant') {
+         // Full Assemblage
+         const res = this.calculateComponentBOM(config, pW, pH, part.compositionId || config.compositionId, pGlassId, config.optionalSides, H, config.L, config.H);
+         results.profiles.push(...res.profiles);
+         results.accessories.push(...res.accessories);
+         if (res.gasket) results.accessories.push(res.gasket);
+         if (res.glass) results.glasses.push(res.glass);
+       } else {
+         // Châssis Unique Divisé
+         if (idx === 0) {
+            // First part calculate the main frame for total dimensions
+            // Search for an opening part to get the range/composition for the frame
+            const mainOp = parts.find(p => p.type === 'opening') || parts[0];
+            const frameRes = this.calculateComponentBOM(config, L, H, mainOp.compositionId || config.compositionId, config.glassId, config.optionalSides, H, config.L, config.H);
+            results.profiles.push(...frameRes.profiles.filter(p => p.label?.toLowerCase().includes('dormant') || p.name?.toLowerCase().includes('dormant')));
+         }
+
+         if (part.type === 'opening') {
+            const openRes = this.calculateComponentBOM(config, pW, pH, part.compositionId || config.compositionId, pGlassId, { top: false, bottom: false, left: false, right: false }, H, config.L, config.H);
+            results.profiles.push(...openRes.profiles.filter(p => !p.label?.toLowerCase().includes('dormant') && !p.name?.toLowerCase().includes('dormant')));
+            results.accessories.push(...openRes.accessories.filter(a => !a.label?.toLowerCase().includes('dormant') && !a.name?.toLowerCase().includes('dormant')));
+            if (openRes.glass) results.glasses.push(openRes.glass);
+         } else {
+            // Fixed part in divided frame: Glass + beads from a generic Fix or logic
+            // We use the current compositionId as template but force 'Fixe' logic
+            const fixRes = this.calculateComponentBOM(config, pW, pH, part.compositionId || config.compositionId || parts.find(p=>p.type==='opening')?.compositionId, pGlassId, { top: false, bottom: false, left: false, right: false }, H, config.L, config.H);
+            results.profiles.push(...fixRes.profiles.filter(p => !p.label?.toLowerCase().includes('dormant') && !p.name?.toLowerCase().includes('dormant')));
+            results.accessories.push(...fixRes.accessories.filter(a => !a.label?.toLowerCase().includes('dormant') && !a.name?.toLowerCase().includes('dormant')));
+            if (fixRes.glass) results.glasses.push(fixRes.glass);
+         }
+       }
+    });
 
     return results;
   }
@@ -718,14 +690,13 @@ export class FormulaEngine {
     let shutterH_val = windowH;
     
     if (config.compoundType && config.compoundType !== 'none' && config.compoundConfig?.shutterMode === 'opening_only') {
-       const { position, part1Width, part1Height, unionId, traverseId } = config.compoundConfig;
-       const divRef = this.db.profiles.find(p => p.id === (unionId || traverseId));
-       const thick = divRef?.thickness || 0;
-       
-       if (position === 'left' || position === 'right') {
-          shutterL = L - (part1Width || 0) - thick;
-       } else {
-          shutterH_val = windowH - (part1Height || 0) - thick;
+       const opPart = config.compoundConfig.parts?.find(p => p.type === 'opening');
+       if (opPart) {
+          if (config.compoundConfig.orientation !== 'vertical') {
+             shutterL = opPart.width;
+          } else {
+             shutterH_val = opPart.height;
+          }
        }
     }
 
