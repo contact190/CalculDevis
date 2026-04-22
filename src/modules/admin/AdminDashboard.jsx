@@ -1380,8 +1380,8 @@ const AdminDashboard = ({ data, setData }) => {
               {(data.ranges || []).concat([{ id: 'unassigned', name: 'Non assignés / Tous' }]).map(range => {
                 const rangeGaskets = (data.gasketCompatibility || []).filter(gc => 
                   range.id === 'unassigned' 
-                    ? (!gc.rangeId || !data.ranges.find(r => r.id === gc.rangeId)) 
-                    : gc.rangeId === range.id
+                    ? (gc._isNew || !gc.rangeId || !data.ranges.find(r => r.id === gc.rangeId)) 
+                    : (!gc._isNew && gc.rangeId === range.id)
                 );
                 if (rangeGaskets.length === 0) return null;
 
@@ -1473,8 +1473,8 @@ const AdminDashboard = ({ data, setData }) => {
               {(data.ranges || []).concat([{ id: 'unassigned', name: 'Non assignés / Tous' }]).map(range => {
                 const rangeGPS = (data.glassProfileCompatibility || []).filter(gp => 
                   range.id === 'unassigned' 
-                    ? (!gp.rangeId || !data.ranges.find(r => r.id === gp.rangeId)) 
-                    : gp.rangeId === range.id
+                    ? (gp._isNew || !gp.rangeId || !data.ranges.find(r => r.id === gp.rangeId)) 
+                    : (!gp._isNew && gp.rangeId === range.id)
                 );
                 if (rangeGPS.length === 0) return null;
 
