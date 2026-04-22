@@ -938,11 +938,18 @@ const AdminDashboard = ({ data, setData }) => {
                        <table className="data-table">
                          <thead>
                            <tr>
-                             <th>ID</th>
+                             <th>Code / ID</th>
                              <th>Aperçu</th>
                              <th>Dessin</th>
                              <th>Désignation</th>
-                             <th>Gammes</th>
+                             <th>Poids (kg/m)</th>
+                             <th>Prix (DZD/Kg)</th>
+                             <th>Épaisseur (mm)</th>
+                             <th>Lg Barre (mm)</th>
+                             <th>Usage</th>
+                             <th>Union?</th>
+                             <th>Seuil Chute</th>
+                             <th>Couleurs</th>
                              <th>Actions</th>
                            </tr>
                          </thead>
@@ -951,11 +958,18 @@ const AdminDashboard = ({ data, setData }) => {
                              const idx = data.profiles.indexOf(p);
                              return (
                                <tr key={p.id} style={p._isNew ? { background: '#dcfce7', transition: 'background 1s' } : {}}>
-                                 <td><input className="input" value={p.id} onChange={e => handleUpdateItem('profiles', p.id, 'id', e.target.value, idx)} style={{ width: '100px', fontWeight: 700 }} /></td>
+                                 <td><input className="input" value={p.id} onChange={e => handleUpdateItem('profiles', p.id, 'id', e.target.value, idx)} style={{ width: '80px', fontWeight: 700 }} /></td>
                                  <td><div style={{ width: '30px', height: '30px', background: 'white', borderRadius: '4px' }}>{p.image && <img src={p.image} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />}</div></td>
                                  <td>{p.technicalDrawing ? '✅' : '❌'}</td>
-                                 <td><input className="input" value={p.name} onChange={e => handleUpdateItem('profiles', p.id, 'name', e.target.value, idx)} style={{ width: '100%' }} /></td>
-                                 <td><MultiSelectRange selectedIds={p.rangeIds || []} allRanges={data.ranges} onChange={newR => handleUpdateItem('profiles', p.id, 'rangeIds', newR, idx)} /></td>
+                                 <td><input className="input" value={p.name} onChange={e => handleUpdateItem('profiles', p.id, 'name', e.target.value, idx)} style={{ width: '120px' }} /></td>
+                                 <td><input type="number" step="0.001" className="input" value={p.weightPerM} onChange={e => handleUpdateItem('profiles', p.id, 'weightPerM', e.target.value, idx)} style={{ width: '60px' }} /></td>
+                                 <td><input type="number" step="0.01" className="input" value={p.pricePerKg} onChange={e => handleUpdateItem('profiles', p.id, 'pricePerKg', e.target.value, idx)} style={{ width: '60px' }} /></td>
+                                 <td><input type="number" className="input" value={p.thickness || 0} onChange={e => handleUpdateItem('profiles', p.id, 'thickness', e.target.value, idx)} style={{ width: '50px' }} /></td>
+                                 <td><input type="number" className="input" value={p.barLength || 6000} onChange={e => handleUpdateItem('profiles', p.id, 'barLength', e.target.value, idx)} style={{ width: '60px' }} /></td>
+                                 <td><input className="input" value={p.usage || ''} onChange={e => handleUpdateItem('profiles', p.id, 'usage', e.target.value, idx)} style={{ width: '80px' }} /></td>
+                                 <td><input type="checkbox" checked={!!p.isUnion} onChange={e => handleUpdateItem('profiles', p.id, 'isUnion', e.target.checked, idx)} /></td>
+                                 <td><input type="number" className="input" value={p.scrapThreshold || 0} onChange={e => handleUpdateItem('profiles', p.id, 'scrapThreshold', e.target.value, idx)} style={{ width: '60px' }} /></td>
+                                 <td><MultiSelectColor selectedColors={p.colors || []} allColors={data.colors} onChange={newC => handleUpdateItem('profiles', p.id, 'colors', newC, idx)} /></td>
                                  <td style={{ display: 'flex', gap: '0.2rem' }}>
                                    <button className="btn" onClick={() => handleDuplicateItem('profiles', p)}><Copy size={14} /></button>
                                    <button className="btn" onClick={() => handleDeleteItem('profiles', p.id, idx)}><Trash2 size={14} /></button>
@@ -987,7 +1001,8 @@ const AdminDashboard = ({ data, setData }) => {
                             <th>Poids (kg/m)</th>
                             <th>Prix (DZD/Kg)</th>
                             <th>Épaisseur (mm)</th>
-                            <th>Lg Barre</th>
+                            <th>Lg Barre (mm)</th>
+                            <th>Usage (Technique)</th>
                             <th>Union?</th>
                             <th>Seuil Chute</th>
                             <th>Couleurs</th>
@@ -1000,7 +1015,7 @@ const AdminDashboard = ({ data, setData }) => {
                             return (
                               <tr key={p.id} style={p._isNew ? { background: '#dcfce7', transition: 'background 1s' } : {}}>
                                 <td style={{ fontWeight: 600 }}>
-                                  <input className="input" value={p.id} onChange={e => handleUpdateItem('profiles', p.id, 'id', e.target.value, idx)} style={{ width: '100px', fontWeight: 600 }} />
+                                  <input className="input" value={p.id} onChange={e => handleUpdateItem('profiles', p.id, 'id', e.target.value, idx)} style={{ width: '80px', fontWeight: 600 }} />
                                 </td>
                                 <td>
                                   <div style={{ 
@@ -1060,15 +1075,18 @@ const AdminDashboard = ({ data, setData }) => {
                                     />
                                   </div>
                                 </td>
-                                <td><input className="input" value={p.name} onChange={e => handleUpdateItem('profiles', p.id, 'name', e.target.value, idx)} style={{ width: '100%' }} /></td>
-                                <td><input type="number" step="0.001" className="input" value={p.weightPerM} onChange={e => handleUpdateItem('profiles', p.id, 'weightPerM', e.target.value, idx)} style={{ width: '80px' }} /></td>
-                                <td><input type="number" step="0.01" className="input" value={p.pricePerKg} onChange={e => handleUpdateItem('profiles', p.id, 'pricePerKg', e.target.value, idx)} style={{ width: '80px' }} /></td>
-                                <td><input type="number" className="input" value={p.barLength || 6000} onChange={e => handleUpdateItem('profiles', p.id, 'barLength', e.target.value, idx)} style={{ width: '80px' }} /></td>
-                                <td><input type="number" className="input" value={p.scrapThreshold || 0} onChange={e => handleUpdateItem('profiles', p.id, 'scrapThreshold', e.target.value, idx)} style={{ width: '80px' }} placeholder="Ex: 500" /></td>
+                                <td><input className="input" value={p.name} onChange={e => handleUpdateItem('profiles', p.id, 'name', e.target.value, idx)} style={{ width: '150px' }} /></td>
+                                <td><input type="number" step="0.001" className="input" value={p.weightPerM} onChange={e => handleUpdateItem('profiles', p.id, 'weightPerM', e.target.value, idx)} style={{ width: '70px' }} /></td>
+                                <td><input type="number" step="0.01" className="input" value={p.pricePerKg} onChange={e => handleUpdateItem('profiles', p.id, 'pricePerKg', e.target.value, idx)} style={{ width: '70px' }} /></td>
+                                <td><input type="number" className="input" value={p.thickness || 0} onChange={e => handleUpdateItem('profiles', p.id, 'thickness', e.target.value, idx)} style={{ width: '60px' }} /></td>
+                                <td><input type="number" className="input" value={p.barLength || 6000} onChange={e => handleUpdateItem('profiles', p.id, 'barLength', e.target.value, idx)} style={{ width: '70px' }} /></td>
+                                <td><input className="input" value={p.usage || ''} onChange={e => handleUpdateItem('profiles', p.id, 'usage', e.target.value, idx)} style={{ width: '100px' }} placeholder="ex: union_h" /></td>
+                                <td style={{ textAlign: 'center' }}><input type="checkbox" checked={!!p.isUnion} onChange={e => handleUpdateItem('profiles', p.id, 'isUnion', e.target.checked, idx)} /></td>
+                                <td><input type="number" className="input" value={p.scrapThreshold || 0} onChange={e => handleUpdateItem('profiles', p.id, 'scrapThreshold', e.target.value, idx)} style={{ width: '70px' }} placeholder="Ex: 500" /></td>
                                 <td><MultiSelectColor selectedColors={p.colors || []} allColors={data.colors} onChange={newC => handleUpdateItem('profiles', p.id, 'colors', newC, idx)} /></td>
                                 <td style={{ display: 'flex', gap: '0.3rem' }}>
-                                  <button className="btn" onClick={() => handleDuplicateItem('profiles', p)} style={{ padding: '0.4rem', color: '#6366f1' }}><Copy size={16} /></button>
-                                  <button className="btn" onClick={() => handleDeleteItem('profiles', p.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
+                                  <button className="btn" onClick={() => handleDuplicateItem('profiles', p)} style={{ padding: '0.4rem', color: '#6366f1' }} title="Dupliquer"><Copy size={16} /></button>
+                                  <button className="btn" onClick={() => handleDeleteItem('profiles', p.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }} title="Supprimer"><Trash2 size={16} /></button>
                                 </td>
                               </tr>
                             );
