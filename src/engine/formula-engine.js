@@ -609,19 +609,22 @@ export class FormulaEngine {
        }
     }
 
-    // Auto-resolve Union/Traverse profile if set to AUTO
+    // Auto-resolve Union/Traverse profile if set to AUTO using the new mapping table
     let effectiveUnionId = unionId;
     let effectiveTraverseId = traverseId;
 
+    const currentRangeId = config.rangeId;
+
     if (effectiveUnionId === 'AUTO') {
-      const targetUsage = isHorizontal ? 'union_h' : 'union_l';
-      const autoProfile = this.db.profiles.find(p => p.usage === targetUsage);
-      if (autoProfile) effectiveUnionId = autoProfile.id;
+      const targetRole = isHorizontal ? 'union_h' : 'union_l';
+      const dividerEntry = (this.db.traverses || []).find(t => t.role === targetRole && (t.rangeIds || []).includes(currentRangeId));
+      if (dividerEntry) effectiveUnionId = dividerEntry.profileId;
     }
+    
     if (effectiveTraverseId === 'AUTO') {
-      const targetUsage = isHorizontal ? 'traverse_h' : 'traverse_l';
-      const autoProfile = this.db.profiles.find(p => p.usage === targetUsage);
-      if (autoProfile) effectiveTraverseId = autoProfile.id;
+      const targetRole = isHorizontal ? 'traverse_h' : 'traverse_l';
+      const dividerEntry = (this.db.traverses || []).find(t => t.role === targetRole && (t.rangeIds || []).includes(currentRangeId));
+      if (dividerEntry) effectiveTraverseId = dividerEntry.profileId;
     }
 
     const divProfileId = (compoundType === 'fix_coulissant' ? effectiveUnionId : effectiveTraverseId);

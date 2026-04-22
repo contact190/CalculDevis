@@ -444,7 +444,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                       }}>
                          <option value="AUTO">AUTO (Calcul automatique)</option>
                          <option value="">-- Sélectionner manuellement --</option>
-                         {database.profiles.filter(p => !!p.usage || !!p.isUnion || (config.compoundType === 'fix_ouvrant' && p.name.toLowerCase().includes('traverse'))).map(p => <option key={p.id} value={p.id}>{p.name} ({p.thickness}mm)</option>)}
+                         {(database.traverses || []).filter(t => (t.rangeIds || []).includes(config.rangeId)).map(t => { const p = database.profiles.find(px => px.id === t.profileId); if (!p) return null; return <option key={t.id} value={p.id}>{t.name} ({p.thickness}mm)</option>; }).filter(Boolean)}
                       </select>
                    </div>
                    <div className="form-group">

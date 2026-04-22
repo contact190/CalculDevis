@@ -642,7 +642,7 @@ const AdminDashboard = ({ data, setData }) => {
             { id: 'compositions', label: 'Compositions (Modèles)' },
             { id: 'options', label: 'Options & Variantes' },
             { id: 'volets', label: 'Volets Roulants' },
-            { id: 'traverses', label: 'Traverses' }
+            { id: 'traverses', label: 'Traverses & Unions' }
           ].map(tab => (
             <button
               key={tab.id}
@@ -1002,8 +1002,6 @@ const AdminDashboard = ({ data, setData }) => {
                             <th>Prix (DZD/Kg)</th>
                             <th>Épaisseur (mm)</th>
                             <th>Lg Barre (mm)</th>
-                            <th>Usage (Technique)</th>
-                            <th>Union?</th>
                             <th>Seuil Chute</th>
                             <th>Couleurs</th>
                             <th>Actions</th>
@@ -1080,8 +1078,6 @@ const AdminDashboard = ({ data, setData }) => {
                                 <td><input type="number" step="0.01" className="input" value={p.pricePerKg} onChange={e => handleUpdateItem('profiles', p.id, 'pricePerKg', e.target.value, idx)} style={{ width: '70px' }} /></td>
                                 <td><input type="number" className="input" value={p.thickness || 0} onChange={e => handleUpdateItem('profiles', p.id, 'thickness', e.target.value, idx)} style={{ width: '60px' }} /></td>
                                 <td><input type="number" className="input" value={p.barLength || 6000} onChange={e => handleUpdateItem('profiles', p.id, 'barLength', e.target.value, idx)} style={{ width: '70px' }} /></td>
-                                <td><input className="input" value={p.usage || ''} onChange={e => handleUpdateItem('profiles', p.id, 'usage', e.target.value, idx)} style={{ width: '100px' }} placeholder="ex: union_h" /></td>
-                                <td style={{ textAlign: 'center' }}><input type="checkbox" checked={!!p.isUnion} onChange={e => handleUpdateItem('profiles', p.id, 'isUnion', e.target.checked, idx)} /></td>
                                 <td><input type="number" className="input" value={p.scrapThreshold || 0} onChange={e => handleUpdateItem('profiles', p.id, 'scrapThreshold', e.target.value, idx)} style={{ width: '70px' }} placeholder="Ex: 500" /></td>
                                 <td><MultiSelectColor selectedColors={p.colors || []} allColors={data.colors} onChange={newC => handleUpdateItem('profiles', p.id, 'colors', newC, idx)} /></td>
                                 <td style={{ display: 'flex', gap: '0.3rem' }}>
@@ -2217,47 +2213,45 @@ const AdminDashboard = ({ data, setData }) => {
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Désignation</th>
-                    <th>Type</th>
-                    <th>Usage</th>
-                    <th>Profilé Associé</th>
-                    <th>Formule Qté</th>
+                    <th>Désignation (Commercial)</th>
+                    <th>Rôle Technique (AUTO)</th>
+                    <th>Profilé à utiliser</th>
+                    <th>Gammes Compatibles</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {(data.traverses || []).map((trv, idx) => (
                     <tr key={`${trv.id}-${idx}`} style={trv._isNew ? { background: '#dcfce7', transition: 'background 1s' } : {}}>
-                      <td><input className="input" value={trv.name} onChange={e => handleUpdateItem('traverses', trv.id, 'name', e.target.value, idx)} style={{ width: '190px' }} /></td>
+                      <td><input className="input" value={trv.name} onChange={e => handleUpdateItem('traverses', trv.id, 'name', e.target.value, idx)} style={{ width: '220px' }} placeholder="Ex: Traverse renforcée H" /></td>
                       <td>
-                        <select className="input" value={trv.type} onChange={e => handleUpdateItem('traverses', trv.id, 'type', e.target.value, idx)} style={{ width: '120px' }}>
-                          <option value="horizontale">Horizontale</option>
-                          <option value="verticale">Verticale</option>
+                        <select className="input" value={trv.role} onChange={e => handleUpdateItem('traverses', trv.id, 'role', e.target.value, idx)} style={{ width: '160px' }}>
+                          <option value="traverse_h">Traverse Horizontale (Division H)</option>
+                          <option value="traverse_l">Traverse Verticale (Division L)</option>
+                          <option value="union_h">Union Horizontale (Assemblage H)</option>
+                          <option value="union_l">Union Verticale (Assemblage L)</option>
                         </select>
                       </td>
                       <td>
-                        <select className="input" value={trv.usage} onChange={e => handleUpdateItem('traverses', trv.id, 'usage', e.target.value, idx)} style={{ width: '140px' }}>
-                          <option value="fenetre">Fenêtre</option>
-                          <option value="porte">Porte</option>
-                          <option value="pf">Porte-Fenêtre</option>
-                          <option value="coulissant">Coulissant</option>
-                          <option value="universal">Universel</option>
+                        <select className="input" value={trv.profileId || ''} onChange={e => handleUpdateItem('traverses', trv.id, 'profileId', e.target.value, idx)} style={{ width: '250px' }}>
+                          <option value="">-- Choisir un profilé --</option>
+                          {data.profiles.map(p => <option key={p.id} value={p.id}>{p.id} - {p.name}</option>)}
                         </select>
                       </td>
                       <td>
-                        <select className="input" value={trv.profileId || ''} onChange={e => handleUpdateItem('traverses', trv.id, 'profileId', e.target.value, idx)} style={{ width: '200px' }}>
-                          <option value="">(Aucun profil)</option>
-                          {data.profiles.map(p => <option key={p.id} value={p.id}>{p.name} ({p.id})</option>)}
-                        </select>
+                        <MultiSelectRange 
+                          selectedIds={trv.rangeIds || []} 
+                          allRanges={data.ranges} 
+                          onChange={newIds => handleUpdateItem('traverses', trv.id, 'rangeIds', newIds, idx)} 
+                        />
                       </td>
-                      <td><input className="input" value={trv.formula || 'L'} onChange={e => handleUpdateItem('traverses', trv.id, 'formula', e.target.value, idx)} style={{ width: '100px' }} /></td>
                       <td><button className="btn" onClick={() => handleDeleteItem('traverses', trv.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button></td>
                     </tr>
                   ))}
                   <tr>
-                    <td colSpan="6">
+                    <td colSpan="5">
                       <button className="btn btn-secondary" onClick={() => handleAddItem('traverses')} style={{ width: '100%', marginTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-                        <Plus size={16} /> Ajouter une Traverse
+                        <Plus size={16} /> Ajouter une Traverse/Union au catalogue
                       </button>
                     </td>
                   </tr>
