@@ -1237,7 +1237,7 @@ const AdminDashboard = ({ data, setData }) => {
             <div>
               {/* Orphans Accessories */}
               {(() => {
-                const unassigned = (data.accessories || []).filter(a => !(a.rangeIds || []).some(rid => data.ranges.some(r => r.id === rid)));
+                const unassigned = (data.accessories || []).filter(a => a._isNew || !(a.rangeIds || []).some(rid => data.ranges.some(r => r.id === rid)));
                 if (unassigned.length === 0) return null;
                 return (
                   <CollapsibleGroup title="Accessoires Non Assignés" count={unassigned.length} defaultOpen={true}>
