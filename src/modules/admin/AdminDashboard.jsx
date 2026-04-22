@@ -1235,6 +1235,72 @@ const AdminDashboard = ({ data, setData }) => {
 
           {activeTab === 'accessories' && (
             <div>
+              {/* Orphans Accessories */}
+              {(() => {
+                const unassigned = (data.accessories || []).filter(a => !(a.rangeIds || []).some(rid => data.ranges.some(r => r.id === rid)));
+                if (unassigned.length === 0) return null;
+                return (
+                  <CollapsibleGroup title="Accessoires Non Assignés" count={unassigned.length} defaultOpen={true}>
+                    <div style={{ overflowX: 'auto', border: '2px dashed #f59e0b', borderRadius: '8px', padding: '0.5rem', marginBottom: '1.5rem' }}>
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th>ID</th>
+                            <th>Photo</th>
+                            <th>Dessin</th>
+                            <th>Désignation</th>
+                            <th>Unité</th>
+                            <th>Prix (DZD)</th>
+                            <th>Gammes</th>
+                            <th>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {unassigned.map((acc) => {
+                             const idx = data.accessories.indexOf(acc);
+                             return (
+                               <tr key={acc.id}>
+                                 <td><input className="input" value={acc.id} onChange={e => handleUpdateItem('accessories', acc.id, 'id', e.target.value, idx)} style={{ width: '80px' }} /></td>
+                                 <td>
+                                   <div style={{ width: '35px', height: '35px', position: 'relative' }}>
+                                     {acc.image && <img src={acc.image} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />}
+                                     <input type="file" style={{ position: 'absolute', inset: 0, opacity: 0 }} onChange={(e) => {
+                                       const f = e.target.files[0]; if(!f) return;
+                                       const reader = new FileReader();
+                                       reader.onload = (re) => handleUpdateItem('accessories', acc.id, 'image', re.target.result, idx);
+                                       reader.readAsDataURL(f);
+                                     }} />
+                                   </div>
+                                 </td>
+                                 <td>
+                                   <div style={{ width: '35px', height: '35px', position: 'relative' }}>
+                                     {acc.technicalDrawing ? 'OK' : '...'}
+                                     <input type="file" style={{ position: 'absolute', inset: 0, opacity: 0 }} onChange={(e) => {
+                                       const f = e.target.files[0]; if(!f) return;
+                                       const reader = new FileReader();
+                                       reader.onload = (re) => handleUpdateItem('accessories', acc.id, 'technicalDrawing', re.target.result, idx);
+                                       reader.readAsDataURL(f);
+                                     }} />
+                                   </div>
+                                 </td>
+                                 <td><input className="input" value={acc.name} onChange={e => handleUpdateItem('accessories', acc.id, 'name', e.target.value, idx)} style={{ width: '150px' }} /></td>
+                                 <td><input className="input" value={acc.unit} onChange={e => handleUpdateItem('accessories', acc.id, 'unit', e.target.value, idx)} style={{ width: '80px' }} /></td>
+                                 <td><input type="number" className="input" value={acc.price} onChange={e => handleUpdateItem('accessories', acc.id, 'price', e.target.value, idx)} style={{ width: '80px' }} /></td>
+                                 <td><MultiSelectRange selectedIds={acc.rangeIds || []} allRanges={data.ranges} onChange={newR => handleUpdateItem('accessories', acc.id, 'rangeIds', newR, idx)} /></td>
+                                 <td style={{ display: 'flex', gap: '0.2rem' }}>
+                                   <button className="btn" onClick={() => setEditingAddonItem({ item: acc, family: 'accessories', idx })} title="Add-ons"><Layers size={16} /></button>
+                                   <button className="btn" onClick={() => handleDeleteItem('accessories', acc.id, idx)} style={{ color: '#ef4444' }}><Trash2 size={16} /></button>
+                                 </td>
+                               </tr>
+                             )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CollapsibleGroup>
+                )
+              })()}
+
               {(data.ranges || []).map(range => {
                 const rangeAccs = data.accessories.filter(a => (a.rangeIds || []).includes(range.id));
                 if (rangeAccs.length === 0) return null;
@@ -1246,12 +1312,12 @@ const AdminDashboard = ({ data, setData }) => {
                         <thead>
                           <tr>
                             <th>ID</th>
-                            <th>Aperçu</th>
-                            <th>Coupe SVG</th>
+                            <th>Photo</th>
+                            <th>Dessin</th>
                             <th>Désignation</th>
                             <th>Unité</th>
                             <th>Prix (DZD)</th>
-                            <th>Add-ons (JSON)</th>
+                            <th>Gammes</th>
                             <th>Actions</th>
                           </tr>
                         </thead>
@@ -1261,64 +1327,38 @@ const AdminDashboard = ({ data, setData }) => {
                             return (
                               <tr key={acc.id} style={acc._isNew ? { background: '#dcfce7', transition: 'background 1s' } : {}}>
                                 <td data-label="ID" style={{ fontWeight: 600 }}>
-                                  <input className="input" value={acc.id} onChange={e => handleUpdateItem('accessories', acc.id, 'id', e.target.value, idx)} style={{ width: '100px', fontWeight: 600 }} />
+                                  <input className="input" value={acc.id} onChange={e => handleUpdateItem('accessories', acc.id, 'id', e.target.value, idx)} style={{ width: '80px', fontWeight: 600 }} />
                                 </td>
-                                <td data-label="Aperçu">
-                                  <div style={{ 
-                                    width: '35px', height: '35px', borderRadius: '4px', background: '#f8fafc', 
-                                    overflow: 'hidden', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    position: 'relative'
-                                  }}>
-                                    {acc.image ? <img src={acc.image} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <ImageIcon size={12} style={{ color: '#94a3b8' }} />}
-                                    <input 
-                                      type="file" accept="image/*" 
-                                      style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
-                                      onChange={(e) => {
-                                        const f = e.target.files[0];
-                                        if(!f) return;
-                                        const reader = new FileReader();
-                                        reader.onload = (re) => handleUpdateItem('accessories', acc.id, 'image', re.target.result, idx);
-                                        reader.readAsDataURL(f);
-                                      }}
-                                    />
+                                <td>
+                                  <div style={{ width: '35px', height: '35px', position: 'relative' }}>
+                                    {acc.image && <img src={acc.image} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />}
+                                    <input type="file" style={{ position: 'absolute', inset: 0, opacity: 0 }} onChange={(e) => {
+                                      const f = e.target.files[0]; if(!f) return;
+                                      const reader = new FileReader();
+                                      reader.onload = (re) => handleUpdateItem('accessories', acc.id, 'image', re.target.result, idx);
+                                      reader.readAsDataURL(f);
+                                    }} />
                                   </div>
                                 </td>
-                                <td data-label="SVG">
-                                  <div style={{ 
-                                    width: '35px', height: '35px', borderRadius: '4px', background: '#f1f5f9', 
-                                    overflow: 'hidden', border: '1px solid #cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    position: 'relative', cursor: 'pointer'
-                                  }}>
-                                    {acc.technicalDrawing ? <div style={{ fontSize: '9px', fontWeight: 700, color: '#3b82f6' }}>SVG</div> : <Layers size={12} style={{ color: '#64748b' }} />}
-                                    <input 
-                                      type="file" accept=".svg,image/*" 
-                                      style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
-                                      onChange={(e) => {
-                                        const f = e.target.files[0];
-                                        if(!f) return;
-                                        const reader = new FileReader();
-                                        reader.onload = (re) => handleUpdateItem('accessories', acc.id, 'technicalDrawing', re.target.result, idx);
-                                        reader.readAsDataURL(f);
-                                      }}
-                                    />
+                                <td>
+                                  <div style={{ width: '35px', height: '35px', position: 'relative' }}>
+                                    {acc.technicalDrawing ? 'OK' : '...'}
+                                    <input type="file" style={{ position: 'absolute', inset: 0, opacity: 0 }} onChange={(e) => {
+                                      const f = e.target.files[0]; if(!f) return;
+                                      const reader = new FileReader();
+                                      reader.onload = (re) => handleUpdateItem('accessories', acc.id, 'technicalDrawing', re.target.result, idx);
+                                      reader.readAsDataURL(f);
+                                    }} />
                                   </div>
                                 </td>
-                                <td data-label="Nom"><input className="input" value={acc.name} onChange={e => handleUpdateItem('accessories', acc.id, 'name', e.target.value, idx)} style={{ width: '100%' }} /></td>
-                                <td data-label="Unité">
-                                  <select className="input" value={acc.unit} onChange={e => handleUpdateItem('accessories', acc.id, 'unit', e.target.value, idx)}>
-                                    <option>Unité</option><option>Kit</option><option>Joint</option><option>ML</option><option>M2</option><option>Kg</option>
-                                  </select>
-                                </td>
-                                <td data-label="Prix"><input type="number" step="0.01" className="input" value={acc.price} onChange={e => handleUpdateItem('accessories', acc.id, 'price', e.target.value, idx)} style={{ width: '100px' }} /></td>
-                                <td data-label="Add-ons">
-                                  <button className="base-btn btn-secondary" onClick={() => setEditingAddonItem({ family: 'accessories', idx, item: acc, isShutter: false })} style={{ fontSize: '0.75rem', padding: '0.4rem 0.6rem' }}>
-                                    🔧 Options ({acc.addOns?.length || 0})
-                                  </button>
-                                </td>
-
-                                <td data-label="Actions" style={{ display: 'flex', gap: '0.3rem', justifyContent: 'flex-end' }}>
-                                  <button className="btn" onClick={() => handleDuplicateItem('accessories', acc)} style={{ padding: '0.4rem', color: '#6366f1' }}><Copy size={16} /></button>
-                                  <button className="btn" onClick={() => handleDeleteItem('accessories', acc.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
+                                <td><input className="input" value={acc.name} onChange={e => handleUpdateItem('accessories', acc.id, 'name', e.target.value, idx)} style={{ width: '150px' }} /></td>
+                                <td><input className="input" value={acc.unit} onChange={e => handleUpdateItem('accessories', acc.id, 'unit', e.target.value, idx)} style={{ width: '60px' }} /></td>
+                                <td><input type="number" className="input" value={acc.price} onChange={e => handleUpdateItem('accessories', acc.id, 'price', e.target.value, idx)} style={{ width: '70px' }} /></td>
+                                <td><MultiSelectRange selectedIds={acc.rangeIds || []} allRanges={data.ranges} onChange={newR => handleUpdateItem('accessories', acc.id, 'rangeIds', newR, idx)} /></td>
+                                <td style={{ display: 'flex', gap: '0.3rem' }}>
+                                  <button className="btn" onClick={() => setEditingAddonItem({ item: acc, family: 'accessories', idx })} title="Add-ons" style={{ color: '#6366f1' }}><Layers size={16} /></button>
+                                  <button className="btn" onClick={() => handleDuplicateItem('accessories', acc)} style={{ color: '#6366f1' }}><Copy size={16} /></button>
+                                  <button className="btn" onClick={() => handleDeleteItem('accessories', acc.id, idx)} style={{ color: '#ef4444' }}><Trash2 size={16} /></button>
                                 </td>
                               </tr>
                             );
