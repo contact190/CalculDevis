@@ -1289,6 +1289,7 @@ const AdminDashboard = ({ data, setData }) => {
                                  <td><MultiSelectRange selectedIds={acc.rangeIds || []} allRanges={data.ranges} onChange={newR => handleUpdateItem('accessories', acc.id, 'rangeIds', newR, idx)} /></td>
                                  <td style={{ display: 'flex', gap: '0.2rem' }}>
                                    <button className="btn" onClick={() => setEditingAddonItem({ item: acc, family: 'accessories', idx })} title="Add-ons"><Layers size={16} /></button>
+                                   <button className="btn" onClick={() => handleDuplicateItem('accessories', acc)} style={{ color: '#6366f1' }}><Copy size={16} /></button>
                                    <button className="btn" onClick={() => handleDeleteItem('accessories', acc.id, idx)} style={{ color: '#ef4444' }}><Trash2 size={16} /></button>
                                  </td>
                                </tr>
@@ -1593,7 +1594,8 @@ const AdminDashboard = ({ data, setData }) => {
                                   }} 
                                   style={{ width: '80px' }} 
                                 /></td>
-                                <td data-label="Actions" style={{ textAlign: 'right' }}>
+                                <td data-label="Actions" style={{ display: 'flex', gap: '0.3rem', justifyContent: 'flex-end' }}>
+                                  <button className="btn" onClick={() => handleDuplicateItem('glassProfileCompatibility', gc)} style={{ padding: '0.4rem', color: '#6366f1' }} title="Dupliquer"><Copy size={16} /></button>
                                   <button className="btn" onClick={() => handleDeleteGlassProfileCompatibility(i)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
                                 </td>
                               </tr>
