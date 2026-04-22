@@ -938,18 +938,12 @@ const AdminDashboard = ({ data, setData }) => {
                        <table className="data-table">
                          <thead>
                            <tr>
-                             <th>Code / ID</th>
+                             <th>ID</th>
                              <th>Aperçu</th>
                              <th>Dessin</th>
                              <th>Désignation</th>
-                             <th>Poids (kg/m)</th>
-                             <th>Prix (DZD/Kg)</th>
-                             <th>Épaisseur (mm)</th>
-                             <th>Lg Barre (mm)</th>
-                             <th>Usage</th>
-                             <th>Union?</th>
-                             <th>Seuil Chute</th>
-                             <th>Couleurs</th>
+                             <th>Type</th>
+                             <th>Gammes</th>
                              <th>Actions</th>
                            </tr>
                          </thead>
@@ -958,18 +952,17 @@ const AdminDashboard = ({ data, setData }) => {
                              const idx = data.profiles.indexOf(p);
                              return (
                                <tr key={p.id} style={p._isNew ? { background: '#dcfce7', transition: 'background 1s' } : {}}>
-                                 <td><input className="input" value={p.id} onChange={e => handleUpdateItem('profiles', p.id, 'id', e.target.value, idx)} style={{ width: '80px', fontWeight: 700 }} /></td>
-                                 <td><div style={{ width: '30px', height: '30px', background: 'white', borderRadius: '4px' }}>{p.image && <img src={p.image} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />}</div></td>
-                                 <td>{p.technicalDrawing ? '✅' : '❌'}</td>
-                                 <td><input className="input" value={p.name} onChange={e => handleUpdateItem('profiles', p.id, 'name', e.target.value, idx)} style={{ width: '120px' }} /></td>
-                                 <td><input type="number" step="0.001" className="input" value={p.weightPerM} onChange={e => handleUpdateItem('profiles', p.id, 'weightPerM', e.target.value, idx)} style={{ width: '60px' }} /></td>
-                                 <td><input type="number" step="0.01" className="input" value={p.pricePerKg} onChange={e => handleUpdateItem('profiles', p.id, 'pricePerKg', e.target.value, idx)} style={{ width: '60px' }} /></td>
-                                 <td><input type="number" className="input" value={p.thickness || 0} onChange={e => handleUpdateItem('profiles', p.id, 'thickness', e.target.value, idx)} style={{ width: '50px' }} /></td>
-                                 <td><input type="number" className="input" value={p.barLength || 6000} onChange={e => handleUpdateItem('profiles', p.id, 'barLength', e.target.value, idx)} style={{ width: '60px' }} /></td>
-                                 <td><input className="input" value={p.usage || ''} onChange={e => handleUpdateItem('profiles', p.id, 'usage', e.target.value, idx)} style={{ width: '80px' }} /></td>
-                                 <td><input type="checkbox" checked={!!p.isUnion} onChange={e => handleUpdateItem('profiles', p.id, 'isUnion', e.target.checked, idx)} /></td>
-                                 <td><input type="number" className="input" value={p.scrapThreshold || 0} onChange={e => handleUpdateItem('profiles', p.id, 'scrapThreshold', e.target.value, idx)} style={{ width: '60px' }} /></td>
-                                 <td><MultiSelectColor selectedColors={p.colors || []} allColors={data.colors} onChange={newC => handleUpdateItem('profiles', p.id, 'colors', newC, idx)} /></td>
+                                  <td><input className="input" value={p.id} onChange={e => handleUpdateItem('profiles', p.id, 'id', e.target.value, idx)} style={{ width: '80px', fontWeight: 700 }} /></td>
+                                  <td><div style={{ width: '30px', height: '30px', background: 'white', borderRadius: '4px' }}>{p.image && <img src={p.image} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />}</div></td>
+                                  <td>{p.technicalDrawing ? '✅' : '❌'}</td>
+                                  <td><input className="input" value={p.name} onChange={e => handleUpdateItem('profiles', p.id, 'name', e.target.value, idx)} style={{ width: '120px' }} /></td>
+                                  <td>
+                                    <select className="input" value={p.category || 'standard'} onChange={e => handleUpdateItem('profiles', p.id, 'category', e.target.value, idx)} style={{ width: '90px', fontSize: '0.75rem' }}>
+                                      <option value="standard">Standard</option>
+                                      <option value="divider">Jonction</option>
+                                    </select>
+                                  </td>
+                                  <td><MultiSelectRange selectedIds={p.rangeIds || []} allRanges={data.ranges} onChange={newR => handleUpdateItem('profiles', p.id, 'rangeIds', newR, idx)} /></td>
                                  <td style={{ display: 'flex', gap: '0.2rem' }}>
                                    <button className="btn" onClick={() => handleDuplicateItem('profiles', p)}><Copy size={14} /></button>
                                    <button className="btn" onClick={() => handleDeleteItem('profiles', p.id, idx)}><Trash2 size={14} /></button>
@@ -985,7 +978,7 @@ const AdminDashboard = ({ data, setData }) => {
                })()}
 
                {(data.ranges || []).map(range => {
-                const rangeProfiles = data.profiles.filter(p => (p.rangeIds || (p.rangeId ? [p.rangeId] : [])).includes(range.id));
+                const rangeProfiles = data.profiles.filter(p => (p.category !== 'divider') && (p.rangeIds || (p.rangeId ? [p.rangeId] : [])).includes(range.id));
                 if (rangeProfiles.length === 0) return null;
                 
                 return (
@@ -994,15 +987,16 @@ const AdminDashboard = ({ data, setData }) => {
                       <table className="data-table">
                         <thead>
                           <tr>
-                            <th>Code / ID</th>
-                            <th>Aperçu (PHOTO)</th>
-                            <th>Coupe Technique (SVG)</th>
+                            <th>ID</th>
+                            <th>Photo</th>
+                            <th>Dessin</th>
                             <th>Désignation</th>
+                            <th>Type</th>
                             <th>Poids (kg/m)</th>
                             <th>Prix (DZD/Kg)</th>
-                            <th>Épaisseur (mm)</th>
-                            <th>Lg Barre (mm)</th>
-                            <th>Seuil Chute</th>
+                            <th>Épaisseur</th>
+                            <th>Lg Barre</th>
+                            <th>Seuil</th>
                             <th>Couleurs</th>
                             <th>Actions</th>
                           </tr>
@@ -1016,69 +1010,39 @@ const AdminDashboard = ({ data, setData }) => {
                                   <input className="input" value={p.id} onChange={e => handleUpdateItem('profiles', p.id, 'id', e.target.value, idx)} style={{ width: '80px', fontWeight: 600 }} />
                                 </td>
                                 <td>
-                                  <div style={{ 
-                                    width: '40px', height: '40px', borderRadius: '4px', background: '#f8fafc', 
-                                    overflow: 'hidden', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    position: 'relative', cursor: 'pointer'
-                                  }}>
-                                    {p.image ? <img src={p.image} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <ImageIcon size={14} style={{ color: '#94a3b8' }} />}
-                                    <input 
-                                      type="file" accept="image/*" 
-                                      style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
-                                      onChange={(e) => {
-                                        const f = e.target.files[0];
-                                        if(!f) return;
-                                        const reader = new FileReader();
-                                        reader.onload = (re) => {
-                                          const img = new Image();
-                                          img.onload = () => {
-                                            const canvas = document.createElement('canvas');
-                                            const MAX_WIDTH = 400; const MAX_HEIGHT = 400;
-                                            let width = img.width; let height = img.height;
-                                            if (width > height) { if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } }
-                                            else { if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; } }
-                                            canvas.width = width; canvas.height = height;
-                                            const ctx = canvas.getContext('2d');
-                                            ctx.drawImage(img, 0, 0, width, height);
-                                            handleUpdateItem('profiles', p.id, 'image', canvas.toDataURL('image/jpeg', 0.8), idx);
-                                          };
-                                          img.src = re.target.result;
-                                        };
-                                        reader.readAsDataURL(f);
-                                      }}
-                                    />
+                                  <div style={{ width: '35px', height: '35px', position: 'relative' }}>
+                                    {p.image && <img src={p.image} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />}
+                                    <input type="file" style={{ position: 'absolute', inset: 0, opacity: 0 }} onChange={(e) => {
+                                      const f = e.target.files[0]; if(!f) return;
+                                      const reader = new FileReader();
+                                      reader.onload = (re) => handleUpdateItem('profiles', p.id, 'image', re.target.result, idx);
+                                      reader.readAsDataURL(f);
+                                    }} />
                                   </div>
                                 </td>
-                                 <td>
-                                  <div style={{ 
-                                    width: '40px', height: '40px', borderRadius: '4px', background: '#f1f5f9', 
-                                    overflow: 'hidden', border: '1px solid #cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    position: 'relative', cursor: 'pointer'
-                                  }} title="Uploader SVG/PNG (AutoCAD export)">
-                                    {p.technicalDrawing ? <div style={{ fontSize: '10px', fontWeight: 700, color: '#10b981' }}>OK</div> : <Layers size={14} style={{ color: '#64748b' }} />}
-                                    <input 
-                                      type="file" accept=".svg,image/*" 
-                                      style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
-                                      onChange={(e) => {
-                                        const f = e.target.files[0];
-                                        if(!f) return;
-                                        if (f.name.toLowerCase().endsWith('.dwg') || f.name.toLowerCase().endsWith('.dxf')) {
-                                          alert("Attention : Les fichiers .dwg ou .dxf ne sont pas lisibles par les navigateurs. Veuillez exporter votre coupe AutoCAD en format SVG ou PNG.");
-                                          return;
-                                        }
-                                        const reader = new FileReader();
-                                        reader.onload = (re) => handleUpdateItem('profiles', p.id, 'technicalDrawing', re.target.result, idx);
-                                        reader.readAsDataURL(f);
-                                      }}
-                                    />
+                                <td>
+                                  <div style={{ width: '35px', height: '35px', position: 'relative' }}>
+                                    {p.technicalDrawing ? 'OK' : '...'}
+                                    <input type="file" style={{ position: 'absolute', inset: 0, opacity: 0 }} onChange={(e) => {
+                                      const f = e.target.files[0]; if(!f) return;
+                                      const reader = new FileReader();
+                                      reader.onload = (re) => handleUpdateItem('profiles', p.id, 'technicalDrawing', re.target.result, idx);
+                                      reader.readAsDataURL(f);
+                                    }} />
                                   </div>
                                 </td>
-                                <td><input className="input" value={p.name} onChange={e => handleUpdateItem('profiles', p.id, 'name', e.target.value, idx)} style={{ width: '150px' }} /></td>
-                                <td><input type="number" step="0.001" className="input" value={p.weightPerM} onChange={e => handleUpdateItem('profiles', p.id, 'weightPerM', e.target.value, idx)} style={{ width: '70px' }} /></td>
-                                <td><input type="number" step="0.01" className="input" value={p.pricePerKg} onChange={e => handleUpdateItem('profiles', p.id, 'pricePerKg', e.target.value, idx)} style={{ width: '70px' }} /></td>
-                                <td><input type="number" className="input" value={p.thickness || 0} onChange={e => handleUpdateItem('profiles', p.id, 'thickness', e.target.value, idx)} style={{ width: '60px' }} /></td>
-                                <td><input type="number" className="input" value={p.barLength || 6000} onChange={e => handleUpdateItem('profiles', p.id, 'barLength', e.target.value, idx)} style={{ width: '70px' }} /></td>
-                                <td><input type="number" className="input" value={p.scrapThreshold || 0} onChange={e => handleUpdateItem('profiles', p.id, 'scrapThreshold', e.target.value, idx)} style={{ width: '70px' }} placeholder="Ex: 500" /></td>
+                                <td><input className="input" value={p.name} onChange={e => handleUpdateItem('profiles', p.id, 'name', e.target.value, idx)} style={{ width: '130px' }} /></td>
+                                <td>
+                                  <select className="input" value={p.category || 'standard'} onChange={e => handleUpdateItem('profiles', p.id, 'category', e.target.value, idx)} style={{ width: '80px', fontSize: '0.7rem' }}>
+                                    <option value="standard">Std</option>
+                                    <option value="divider">Jonct</option>
+                                  </select>
+                                </td>
+                                <td><input type="number" step="0.001" className="input" value={p.weightPerM} onChange={e => handleUpdateItem('profiles', p.id, 'weightPerM', e.target.value, idx)} style={{ width: '60px' }} /></td>
+                                <td><input type="number" step="0.01" className="input" value={p.pricePerKg} onChange={e => handleUpdateItem('profiles', p.id, 'pricePerKg', e.target.value, idx)} style={{ width: '60px' }} /></td>
+                                <td><input type="number" className="input" value={p.thickness || 0} onChange={e => handleUpdateItem('profiles', p.id, 'thickness', e.target.value, idx)} style={{ width: '50px' }} /></td>
+                                <td><input type="number" className="input" value={p.barLength || 6000} onChange={e => handleUpdateItem('profiles', p.id, 'barLength', e.target.value, idx)} style={{ width: '60px' }} /></td>
+                                <td><input type="number" className="input" value={p.scrapThreshold || 0} onChange={e => handleUpdateItem('profiles', p.id, 'scrapThreshold', e.target.value, idx)} style={{ width: '55px' }} /></td>
                                 <td><MultiSelectColor selectedColors={p.colors || []} allColors={data.colors} onChange={newC => handleUpdateItem('profiles', p.id, 'colors', newC, idx)} /></td>
                                 <td style={{ display: 'flex', gap: '0.3rem' }}>
                                   <button className="btn" onClick={() => handleDuplicateItem('profiles', p)} style={{ padding: '0.4rem', color: '#6366f1' }} title="Dupliquer"><Copy size={16} /></button>
@@ -1093,6 +1057,59 @@ const AdminDashboard = ({ data, setData }) => {
                   </CollapsibleGroup>
                 );
               })}
+
+              {/* SECTION CATALOGUE DES JONCTIONS */}
+              {(() => {
+                const dividerProfiles = data.profiles.filter(p => p.category === 'divider');
+                if (dividerProfiles.length === 0) return null;
+                return (
+                  <CollapsibleGroup title="📦 Catalogue des Jonctions (Traverses & Unions)" count={dividerProfiles.length} defaultOpen={true}>
+                    <div style={{ overflowX: 'auto', border: '2px solid #6366f1', borderRadius: '8px', padding: '0.5rem' }}>
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th>Code / ID</th>
+                            <th>Dessin</th>
+                            <th>Désignation</th>
+                            <th>Type</th>
+                            <th>Poids</th>
+                            <th>Prix</th>
+                            <th>Épaisseur</th>
+                            <th>Gammes Compatibles</th>
+                            <th>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {dividerProfiles.map(p => {
+                            const idx = data.profiles.indexOf(p);
+                            return (
+                              <tr key={p.id}>
+                                <td><input className="input" value={p.id} onChange={e => handleUpdateItem('profiles', p.id, 'id', e.target.value, idx)} style={{ width: '80px', fontWeight: 700 }} /></td>
+                                <td>{p.technicalDrawing ? '✅' : '...'}</td>
+                                <td><input className="input" value={p.name} onChange={e => handleUpdateItem('profiles', p.id, 'name', e.target.value, idx)} style={{ width: '150px' }} /></td>
+                                <td>
+                                  <select className="input" value={p.category || 'standard'} onChange={e => handleUpdateItem('profiles', p.id, 'category', e.target.value, idx)} style={{ width: '80px' }}>
+                                    <option value="standard">Std</option>
+                                    <option value="divider">Jonct</option>
+                                  </select>
+                                </td>
+                                <td><input type="number" className="input" value={p.weightPerM} onChange={e => handleUpdateItem('profiles', p.id, 'weightPerM', e.target.value, idx)} style={{ width: '60px' }} /></td>
+                                <td><input type="number" className="input" value={p.pricePerKg} onChange={e => handleUpdateItem('profiles', p.id, 'pricePerKg', e.target.value, idx)} style={{ width: '60px' }} /></td>
+                                <td><input type="number" className="input" value={p.thickness || 0} onChange={e => handleUpdateItem('profiles', p.id, 'thickness', e.target.value, idx)} style={{ width: '50px' }} /></td>
+                                <td><MultiSelectRange selectedIds={p.rangeIds || []} allRanges={data.ranges} onChange={newR => handleUpdateItem('profiles', p.id, 'rangeIds', newR, idx)} /></td>
+                                <td style={{ display: 'flex', gap: '0.2rem' }}>
+                                  <button className="btn" onClick={() => handleDuplicateItem('profiles', p)} style={{ color: '#6366f1' }} title="Dupliquer"><Copy size={16} /></button>
+                                  <button className="btn" onClick={() => handleDeleteItem('profiles', p.id, idx)} style={{ color: '#ef4444' }} title="Supprimer"><Trash2 size={16} /></button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CollapsibleGroup>
+                );
+              })()}
               <button className="btn btn-secondary" onClick={() => handleAddItem('profiles')} style={{ width: '100%', marginTop: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
                 <Plus size={16} /> Ajouter un Profilé
               </button>
@@ -1174,7 +1191,7 @@ const AdminDashboard = ({ data, setData }) => {
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Code / ID</th>
+                    <th>ID</th>
                     <th>Nom (Ex: RAL9016)</th>
                     <th>Code Couleur</th>
                     <th>Facteur Multiplicateur</th>
@@ -1226,7 +1243,7 @@ const AdminDashboard = ({ data, setData }) => {
                       <table className="data-table">
                         <thead>
                           <tr>
-                            <th>Code / ID</th>
+                            <th>ID</th>
                             <th>Aperçu</th>
                             <th>Coupe SVG</th>
                             <th>Désignation</th>
@@ -2234,8 +2251,8 @@ const AdminDashboard = ({ data, setData }) => {
                       </td>
                       <td>
                         <select className="input" value={trv.profileId || ''} onChange={e => handleUpdateItem('traverses', trv.id, 'profileId', e.target.value, idx)} style={{ width: '250px' }}>
-                          <option value="">-- Choisir un profilé --</option>
-                          {data.profiles.map(p => <option key={p.id} value={p.id}>{p.id} - {p.name}</option>)}
+                          <option value="">-- Choisir un profilé de JONCTION --</option>
+                          {data.profiles.filter(p => p.category === 'divider').map(p => <option key={p.id} value={p.id}>{p.id} - {p.name}</option>)}
                         </select>
                       </td>
                       <td>
