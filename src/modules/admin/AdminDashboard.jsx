@@ -985,22 +985,23 @@ const AdminDashboard = ({ data, setData }) => {
                   <CollapsibleGroup key={range.id} title={range.name || range.id} count={rangeProfiles.length}>
                     <div style={{ overflowX: 'auto' }}>
                       <table className="data-table">
-                        <thead>
-                          <tr>
-                            <th>ID</th>
-                            <th>Photo</th>
-                            <th>Dessin</th>
-                            <th>Désignation</th>
-                            <th>Type</th>
-                            <th>Poids (kg/m)</th>
-                            <th>Prix (DZD/Kg)</th>
-                            <th>Épaisseur</th>
-                            <th>Lg Barre</th>
-                            <th>Seuil</th>
-                            <th>Couleurs</th>
-                            <th>Actions</th>
-                          </tr>
-                        </thead>
+                         <thead>
+                           <tr>
+                             <th>ID</th>
+                             <th>Photo</th>
+                             <th>Dessin</th>
+                             <th>Désignation</th>
+                             <th>Type</th>
+                             <th>Poids</th>
+                             <th>Prix</th>
+                             <th>Épas.</th>
+                             <th>Lg Barre</th>
+                             <th>Seuil</th>
+                             <th>Gammes</th>
+                             <th>Couleurs</th>
+                             <th>Actions</th>
+                           </tr>
+                         </thead>
                         <tbody>
                           {rangeProfiles.map((p) => {
                             const idx = data.profiles.indexOf(p);
@@ -1043,6 +1044,7 @@ const AdminDashboard = ({ data, setData }) => {
                                 <td><input type="number" className="input" value={p.thickness || 0} onChange={e => handleUpdateItem('profiles', p.id, 'thickness', e.target.value, idx)} style={{ width: '50px' }} /></td>
                                 <td><input type="number" className="input" value={p.barLength || 6000} onChange={e => handleUpdateItem('profiles', p.id, 'barLength', e.target.value, idx)} style={{ width: '60px' }} /></td>
                                 <td><input type="number" className="input" value={p.scrapThreshold || 0} onChange={e => handleUpdateItem('profiles', p.id, 'scrapThreshold', e.target.value, idx)} style={{ width: '55px' }} /></td>
+                                <td><MultiSelectRange selectedIds={p.rangeIds || []} allRanges={data.ranges} onChange={newR => handleUpdateItem('profiles', p.id, 'rangeIds', newR, idx)} /></td>
                                 <td><MultiSelectColor selectedColors={p.colors || []} allColors={data.colors} onChange={newC => handleUpdateItem('profiles', p.id, 'colors', newC, idx)} /></td>
                                 <td style={{ display: 'flex', gap: '0.3rem' }}>
                                   <button className="btn" onClick={() => handleDuplicateItem('profiles', p)} style={{ padding: '0.4rem', color: '#6366f1' }} title="Dupliquer"><Copy size={16} /></button>
