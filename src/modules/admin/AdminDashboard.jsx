@@ -455,6 +455,14 @@ const AdminDashboard = ({ data, setData }) => {
     setData(prev => ({ ...prev, gasketCompatibility: updated }));
   };
 
+  const handleUpdateGlassProfileCompatibility = (index, field, value) => {
+    const updated = [...(data.glassProfileCompatibility || [])];
+    const item = { ...updated[index], [field]: (field === 'glassThickness' || field === 'qtyH' || field === 'qtyV') ? parseFloat(value) || 0 : value };
+    delete item._isNew;
+    updated[index] = item;
+    setData(prev => ({ ...prev, glassProfileCompatibility: updated }));
+  };
+
   const handleUpdateComposition = (updated) => {
     const cleanUpdated = { ...updated };
     delete cleanUpdated._isNew;
@@ -1505,11 +1513,7 @@ const AdminDashboard = ({ data, setData }) => {
                                 <td data-label="Gamme">
                                   <select 
                                     className="input" value={gc.rangeId || ''} 
-                                    onChange={e => {
-                                      const updated = [...(data.glassProfileCompatibility || [])];
-                                      updated[i].rangeId = e.target.value;
-                                      setData(prev => ({ ...prev, glassProfileCompatibility: updated }));
-                                    }}
+                                    onChange={e => handleUpdateGlassProfileCompatibility(i, 'rangeId', e.target.value)}
                                     style={{ width: '110px' }}>
                                     <option value="">Sélectionner...</option>
                                     {(data.ranges || []).map(r => <option key={r.id} value={r.id}>{r.name || r.id}</option>)}
@@ -1518,22 +1522,14 @@ const AdminDashboard = ({ data, setData }) => {
                                 <td data-label="Vitrage">
                                   <input 
                                     className="input" type="number" value={gc.glassThickness || 0} 
-                                    onChange={e => {
-                                      const updated = [...(data.glassProfileCompatibility || [])];
-                                      updated[i].glassThickness = parseFloat(e.target.value) || 0;
-                                      setData(prev => ({ ...prev, glassProfileCompatibility: updated }));
-                                    }} 
+                                    onChange={e => handleUpdateGlassProfileCompatibility(i, 'glassThickness', e.target.value)} 
                                     style={{ width: '50px' }} 
                                   />
                                 </td>
                                 <td data-label="Parclose H">
                                   <select 
                                     className="input" value={gc.profileHId || ''} 
-                                    onChange={e => {
-                                      const updated = [...(data.glassProfileCompatibility || [])];
-                                      updated[i].profileHId = e.target.value;
-                                      setData(prev => ({ ...prev, glassProfileCompatibility: updated }));
-                                    }}
+                                    onChange={e => handleUpdateGlassProfileCompatibility(i, 'profileHId', e.target.value)}
                                     style={{ width: '140px' }}>
                                     <option value="">Sélectionner...</option>
                                     {(data?.profiles || [])
@@ -1544,30 +1540,18 @@ const AdminDashboard = ({ data, setData }) => {
                                 </td>
                                 <td data-label="Qté H">
                                   <input className="input" type="number" value={gc.qtyH || 0} 
-                                    onChange={e => {
-                                      const updated = [...(data.glassProfileCompatibility || [])];
-                                      updated[i].qtyH = parseFloat(e.target.value) || 0;
-                                      setData(prev => ({ ...prev, glassProfileCompatibility: updated }));
-                                    }} 
+                                    onChange={e => handleUpdateGlassProfileCompatibility(i, 'qtyH', e.target.value)} 
                                     style={{ width: '50px' }} 
                                   />
                                 </td>
                                 <td data-label="Formule H"><input className="input" value={gc.formulaH || ''} 
-                                  onChange={e => {
-                                    const updated = [...(data.glassProfileCompatibility || [])];
-                                    updated[i].formulaH = e.target.value;
-                                    setData(prev => ({ ...prev, glassProfileCompatibility: updated }));
-                                  }} 
+                                  onChange={e => handleUpdateGlassProfileCompatibility(i, 'formulaH', e.target.value)} 
                                   style={{ width: '80px' }} 
                                 /></td>
                                 <td data-label="Parcase V">
                                   <select 
                                     className="input" value={gc.profileVId || ''} 
-                                    onChange={e => {
-                                      const updated = [...(data.glassProfileCompatibility || [])];
-                                      updated[i].profileVId = e.target.value;
-                                      setData(prev => ({ ...prev, glassProfileCompatibility: updated }));
-                                    }}
+                                    onChange={e => handleUpdateGlassProfileCompatibility(i, 'profileVId', e.target.value)}
                                     style={{ width: '140px' }}>
                                     <option value="">Sélectionner...</option>
                                     {(data?.profiles || [])
@@ -1578,20 +1562,12 @@ const AdminDashboard = ({ data, setData }) => {
                                 </td>
                                 <td data-label="Qté V">
                                   <input className="input" type="number" value={gc.qtyV || 0} 
-                                    onChange={e => {
-                                      const updated = [...(data.glassProfileCompatibility || [])];
-                                      updated[i].qtyV = parseFloat(e.target.value) || 0;
-                                      setData(prev => ({ ...prev, glassProfileCompatibility: updated }));
-                                    }} 
+                                    onChange={e => handleUpdateGlassProfileCompatibility(i, 'qtyV', e.target.value)} 
                                     style={{ width: '50px' }} 
                                   />
                                 </td>
                                 <td data-label="Formule V"><input className="input" value={gc.formulaV || ''} 
-                                  onChange={e => {
-                                    const updated = [...(data.glassProfileCompatibility || [])];
-                                    updated[i].formulaV = e.target.value;
-                                    setData(prev => ({ ...prev, glassProfileCompatibility: updated }));
-                                  }} 
+                                  onChange={e => handleUpdateGlassProfileCompatibility(i, 'formulaV', e.target.value)} 
                                   style={{ width: '80px' }} 
                                 /></td>
                                 <td data-label="Actions" style={{ display: 'flex', gap: '0.3rem', justifyContent: 'flex-end' }}>
