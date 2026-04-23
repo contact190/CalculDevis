@@ -786,15 +786,15 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                       <td data-label="Prix Total" style={{ textAlign: 'right', fontWeight: 600 }}>{(s.cost || 0).toFixed(2)} DZD</td>
                     </tr>
                   ))}
-                  {priceData && (
-                    <tr>
-                      <td data-label="Composant" style={{ fontWeight: 600 }}>Vitrage</td>
-                      <td data-label="Source"><span style={{ fontSize: '0.6rem', padding: '0.1rem 0.4rem', background: '#f1f5f9', borderRadius: '1rem', color: '#64748b', whiteSpace: 'nowrap' }}>{priceData.bom.glass.source || 'Interne'}</span></td>
-                      <td data-label="Formule">-</td><td data-label="Calcul">-</td><td data-label="Nbre">{priceData.bom.glass.qty}u</td>
-                      <td data-label="Mesure Totale">{priceData.bom.glass.area.toFixed(2)} m²</td><td data-label="Prix Unit.">{priceData.bom.glass.pricePerM2?.toFixed(2)}</td>
-                      <td data-label="Prix Total" style={{ textAlign: 'right', fontWeight: 600 }}>{priceData.bom.glass.cost.toFixed(2)} DZD</td>
+                  {(priceData?.bom.glassDetails || (priceData?.bom.glass ? [priceData.bom.glass] : [])).map((g, gi) => (
+                    <tr key={`glass-${gi}`}>
+                      <td data-label="Composant" style={{ fontWeight: 600 }}>Vitrage {g.name && g.name !== 'Vitrage' ? `(${g.name})` : ''}</td>
+                      <td data-label="Source"><span style={{ fontSize: '0.6rem', padding: '0.1rem 0.4rem', background: '#f1f5f9', borderRadius: '1rem', color: '#64748b', whiteSpace: 'nowrap' }}>{g.source || 'Interne'}</span></td>
+                      <td data-label="Formule">{g.width} x {g.height} mm</td><td data-label="Calcul">-</td><td data-label="Nbre">{g.qty}u</td>
+                      <td data-label="Mesure Totale">{g.area.toFixed(2)} m²</td><td data-label="Prix Unit.">{(g.pricePerM2 || g.unitPrice)?.toFixed(2)}</td>
+                      <td data-label="Prix Total" style={{ textAlign: 'right', fontWeight: 600 }}>{g.cost.toFixed(2)} DZD</td>
                     </tr>
-                  )}
+                  ))}
                   <tr style={{ background: '#f1f5f9', fontWeight: 700, fontSize: '0.85rem' }}>
                     <td colSpan="7" style={{ textAlign: 'right' }}>COÛT TOTAL DE REVIENT</td>
                     <td data-label="Prix Total" style={{ textAlign: 'right', color: '#1e293b' }}>{priceData ? priceData.cost.toFixed(2) : '0.00'} DZD</td>
