@@ -245,7 +245,8 @@ export class FormulaEngine {
              parseFloat(c.glassThickness) === parseFloat(glass.thickness)
       );
       
-      if (!compatibility) {
+      // Fallback: only if no rangeId is explicitly defined (headless or manual composition)
+      if (!compatibility && !composition.rangeId) {
         compatibility = allGasketEntries.find(
           c => parseFloat(c.glassThickness) === parseFloat(glass.thickness)
         );
@@ -292,8 +293,9 @@ export class FormulaEngine {
              parseFloat(c.glassThickness) === parseFloat(glass.thickness)
       );
 
-      // Fallback: If no exact range match, try matching by thickness ONLY
-      if (glassProfiles.length === 0) {
+      // Fallback: If no exact range match AND no rangeId is defined on the composition,
+      // try matching by thickness ONLY (supports generic/manual compositions)
+      if (glassProfiles.length === 0 && !composition.rangeId) {
         glassProfiles = (this.db.glassProfileCompatibility || []).filter(
           c => parseFloat(c.glassThickness) === parseFloat(glass.thickness)
         );
