@@ -1031,14 +1031,19 @@ export class FormulaEngine {
           const fields = [...keyFields];
           if (item.source) fields.push('source');
           
-          const key = fields.map(f => item[f]).join('|');
+          const key = fields.map(f => {
+              const val = item[f];
+              if (f === 'length' && typeof val === 'number') return Math.round(val);
+              return val;
+          }).join('|');
+          
           if (map.has(key)) {
              const existing = map.get(key);
              existing.qty = (existing.qty || 0) + (item.qty || 0);
              existing.cost = (existing.cost || 0) + (item.cost || 0);
-             if (existing.area !== undefined) existing.area += (item.area || 0);
-             if (existing.weight !== undefined) existing.weight += (item.weight || 0);
-             if (existing.totalMeasure !== undefined) existing.totalMeasure += (item.totalMeasure || 0);
+             if (existing.area !== undefined) existing.area = (existing.area || 0) + (item.area || 0);
+             if (existing.weight !== undefined) existing.weight = (existing.weight || 0) + (item.weight || 0);
+             if (existing.totalMeasure !== undefined) existing.totalMeasure = (existing.totalMeasure || 0) + (item.totalMeasure || 0);
              
              // Merge sources (fallback if not in key)
              if (!fields.includes('source')) {
