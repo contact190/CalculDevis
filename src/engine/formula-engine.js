@@ -225,24 +225,14 @@ export class FormulaEngine {
     const glass = this.db.glass.find(g => g.id === glassId);
     let gasket = null;
     
-    if (glass && composition.hasGasket) {
+    // Compute gasket for any composition whose range+glassThickness has a compatibility entry.
+    // The gasketCompatibility table itself acts as the gate — no separate hasGasket flag needed.
+    if (glass) {
       const compatibility = (this.db.gasketCompatibility || []).find(
         c => c.rangeId === composition.rangeId &&
              parseFloat(c.glassThickness) === parseFloat(glass.thickness)
       );
 
-      // 🔍 DEBUG — ouvrez la console du navigateur (F12) pour voir ces logs
-      console.group(`[JointVitrage] Composition: ${composition.id} (${composition.name})`);
-      console.log('  composition.rangeId :', composition.rangeId);
-      console.log('  glass.thickness     :', glass.thickness, typeof glass.thickness);
-      console.log('  gasketCompatibility entries:');
-      (this.db.gasketCompatibility || []).forEach((c, i) => {
-        const rangeMatch = c.rangeId === composition.rangeId;
-        const thickMatch = parseFloat(c.glassThickness) === parseFloat(glass.thickness);
-        console.log(`    [${i}] rangeId=${c.rangeId} thickness=${c.glassThickness} gasketId=${c.gasketId} | rangeMatch=${rangeMatch} thickMatch=${thickMatch}`);
-      });
-      console.log('  → compatibility trouvée:', compatibility ? `OUI (gasketId=${compatibility.gasketId})` : 'NON ❌');
-      console.groupEnd();
       
       if (compatibility) {
         const gRef = this.db.accessories.find(a => a.id === compatibility.gasketId);
@@ -619,9 +609,9 @@ export class FormulaEngine {
        
        results.accessories.push(...frameAccs);
 
-       if (!isMultiChassis && frameRes.gasket) {
-          results.accessories.push({ ...frameRes.gasket, source: 'Cadre Global' });
-       }
+       // NOTE: gasket is NOT taken from the global frame — each sub-part computes
+       // its own gasket based on its own glass panel dimensions (see processPartList).
+       // This avoids double-counting and gives the correct per-panel perimeter.
     }
 
     // Auto-resolve Union/Traverse profile if set to AUTO using the new mapping table
