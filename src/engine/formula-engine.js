@@ -907,57 +907,27 @@ export class FormulaEngine {
       }
     }
 
-    // --- GROUPING & AGGREGATION ---
+    // --- AGGREGATION PRE-PASS (for UI summaries) ---
     
-    // Group profiles by (Id + Label + Length)
-    const groupedProfilesMap = {};
-    profiles.forEach(p => {
-      const key = `${p.id}-${p.label}-${p.length}`;
-      if (!groupedProfilesMap[key]) {
-        groupedProfilesMap[key] = { ...p };
-      } else {
-        groupedProfilesMap[key].qty += p.qty;
-        groupedProfilesMap[key].cost += p.cost;
-      }
-    });
-
-    // Group accessories by (Id + Label)
-    const groupedAccessoriesMap = {};
+    // Aggregated Gasket (Singular field for UI)
     let finalGasket = null;
-    
-    // In compound mode, we prefer showing gaskets as individual lines in the accessories table 
-    // to clearly see which part (Ouvrant vs Fixe) they belong to.
     const isCompound = config.compoundType && config.compoundType !== 'none';
-
-    activeAccessories.forEach(a => {
-      // Pull out gasket for simple mode aggregation (backward compatibility for UI singular row)
-      if (a.isGlassGasket && !isCompound) {
-        if (!finalGasket) {
-          finalGasket = { ...a };
-        } else {
-          finalGasket.qty += a.qty;
-          finalGasket.totalMeasure += (a.totalMeasure || 0);
-          finalGasket.cost += a.cost;
+    if (!isCompound) {
+      activeAccessories.forEach(a => {
+        if (a.isGlassGasket) {
+          if (!finalGasket) {
+            finalGasket = { ...a };
+          } else {
+            finalGasket.qty += (a.qty || 0);
+            finalGasket.totalMeasure = (finalGasket.totalMeasure || 0) + (a.totalMeasure || 0);
+            finalGasket.cost += (a.cost || 0);
+          }
         }
-        return;
-      }
+      });
+    }
 
-      // Normal grouping (including gaskets in compound mode)
-      // We include source in the key for compound mode to keep them separate
-      const key = isCompound ? `${a.id}-${a.label}-${a.source || ''}` : `${a.id}-${a.label}`;
-      if (!groupedAccessoriesMap[key]) {
-        groupedAccessoriesMap[key] = { ...a };
-      } else {
-        groupedAccessoriesMap[key].qty += a.qty;
-        groupedAccessoriesMap[key].cost += a.cost;
-        if (a.totalMeasure) {
-          groupedAccessoriesMap[key].totalMeasure = (groupedAccessoriesMap[key].totalMeasure || 0) + a.totalMeasure;
-        }
-      }
-    });
-
-    // Finalize glass aggregation
-    let finalGlass = { name: 'Vitrage', area: 0, weight: 0, cost: 0 };
+    // Aggregated Glass (Singular field for UI)
+    let finalGlass = { name: 'Vitrage', area: 0, weight: 0, cost: 0, qty: 0 };
     if (glasses.length > 0) {
       finalGlass = {
         ...glasses[0],
@@ -970,11 +940,11 @@ export class FormulaEngine {
     }
 
     const bom = {
-      profiles: Object.values(groupedProfilesMap),
+      profiles,
       glass: finalGlass,
       glassDetails: glasses,
       gasket: finalGasket,
-      accessories: Object.values(groupedAccessoriesMap),
+      accessories: activeAccessories,
       shutters: shutterPack
     };
 
