@@ -265,6 +265,8 @@ export class FormulaEngine {
             isGlassGasket: true,
             label: 'Joint de Vitrage',
             qty: qtyMl,
+            multiplier: 1,
+            unit: 'Joint',
             formula: formula,
             resolvedFormula: this.resolveFormula(formula, scope),
             error: isError ? "Formule Invalide" : null,
@@ -923,8 +925,13 @@ export class FormulaEngine {
     const groupedAccessoriesMap = {};
     let finalGasket = null;
     
+    // In compound mode, we prefer showing gaskets as individual lines in the accessories table 
+    // to clearly see which part (Ouvrant vs Fixe) they belong to.
+    const isCompound = config.compoundType && config.compoundType !== 'none';
+
     activeAccessories.forEach(a => {
-      if (a.isGlassGasket) {
+      // Pull out gasket for simple mode aggregation (backward compatibility for UI singular row)
+      if (a.isGlassGasket && !isCompound) {
         if (!finalGasket) {
           finalGasket = { ...a };
         } else {
@@ -935,12 +942,17 @@ export class FormulaEngine {
         return;
       }
 
-      const key = `${a.id}-${a.label}`;
+      // Normal grouping (including gaskets in compound mode)
+      // We include source in the key for compound mode to keep them separate
+      const key = isCompound ? `${a.id}-${a.label}-${a.source || ''}` : `${a.id}-${a.label}`;
       if (!groupedAccessoriesMap[key]) {
         groupedAccessoriesMap[key] = { ...a };
       } else {
         groupedAccessoriesMap[key].qty += a.qty;
         groupedAccessoriesMap[key].cost += a.cost;
+        if (a.totalMeasure) {
+          groupedAccessoriesMap[key].totalMeasure = (groupedAccessoriesMap[key].totalMeasure || 0) + a.totalMeasure;
+        }
       }
     });
 
