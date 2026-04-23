@@ -700,7 +700,30 @@ export class FormulaEngine {
         }
 
         const subPartOpt = isMultiChassis ? config.optionalSides : { top: false, bottom: false, left: false, right: false, isSubPart: true };
-        const res = this.calculateComponentBOM(config, pW, pH, compId, pGlassId, subPartOpt, pH, L, totalH);
+        
+        // --- H-INFLATION / W-INFLATION LOGIC (Shared Frame) ---
+        // If we are in single-chassis mode (shared perimeter), the standard recipes
+        // in the Admin will subtract full dormant thicknesses.
+        // To compensate for shared dividers (traverses/unions), we inflate the input 
+        // dimension by half the divider thickness for each side that is a divider.
+        let calcW = pW;
+        let calcH = pH;
+        
+        if (!isMultiChassis && divProfile && divQty > 0) {
+           const offset = divThick / 2;
+           // If horizontal split (traverses), it's the HEIGHT that is affected
+           if (isHorizontal) {
+              // Part 1 (top) has 1 divider (bottom). Part N (bottom) has 1 divider (top). Middle has 2.
+              const dividerSides = (idx === 0 || idx === partList.length - 1) ? 1 : 2;
+              calcH += (offset * dividerSides);
+           } else {
+              // Vertical split (unions), it's the WIDTH that is affected
+              const dividerSides = (idx === 0 || idx === partList.length - 1) ? 1 : 2;
+              calcW += (offset * dividerSides);
+           }
+        }
+
+        const res = this.calculateComponentBOM(config, calcW, calcH, compId, pGlassId, subPartOpt, calcH, L, totalH);
         
         const filterFn = (item) => {
            // Skip everything that belongs to the global frame perimeter (only in single chassis mode)
