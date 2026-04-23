@@ -49,7 +49,21 @@ export class FormulaEngine {
 
     const profiles = [];
     const accessories = [];
-    const scope = { L, H, HC };
+    
+    // 1. Calculate glass dimensions and quantity first to have them in scope
+    const tempScope = { L, H, HC, totalH: totalH || H, originalL: originalL || L, totalOriginalH: originalH || H };
+    const glassL = this.evaluate(composition.glassFormulaL || 'L', tempScope, 'Largeur Vitre');
+    const glassH = this.evaluate(composition.glassFormulaH || 'H', tempScope, 'Hauteur Vitre');
+    const glassQtyRaw = this.evaluate(composition.glassFormulaQty || '1', tempScope, 'Quantité Vitre');
+    const glassQty = isNaN(glassQtyRaw) ? 0 : glassQtyRaw;
+
+    // 2. Build the final enriched scope for all subsequent calculations
+    const scope = { 
+      ...tempScope,
+      glassQty,
+      qty: glassQty // alias
+    };
+    
     const originalScope = { L: originalL || L, H: originalH || H, HC };
 
     const expandedElements = [];
@@ -81,6 +95,7 @@ export class FormulaEngine {
       const isActuallyCouvreJoint = isCouvreJoint;
 
       // SUB-PARTS never get expanded frame elements (they only get their own internal opening profiles)
+      // This ensures the main frame doesn't double-count profiles inside sub-parts for multi-chassis
       if (opt.isSubPart && (isDormant || isCouvreJoint)) {
         return;
       }
@@ -133,7 +148,7 @@ export class FormulaEngine {
           if (hasDroite && allowRight) expandedElements.push({ ...el, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
         }
       } else {
-        // Generic 4-sided (like a dormant defined as 4qty but one formula)
+        // Generic 4-sided
         const allowTop = isActuallyCouvreJoint ? opt.top : true;
         const allowBottom = isActuallyCouvreJoint ? opt.bottom : true;
         const allowLeft = isActuallyCouvreJoint ? opt.left : true;
@@ -153,8 +168,8 @@ export class FormulaEngine {
       const formulaRaw = el.formula != null ? String(el.formula) : '';
       const formulaStr = (formulaRaw.trim() !== '') ? formulaRaw : (isAccessory ? '1' : '');
       
-      // Use totalH for Couvre Joint if available. Use originalScope for Couvre-Joint profiles.
-      let currentScope = (el.isCouvreJoint && totalH !== null) ? { L, H: totalH, HC: totalH - H } : scope;
+      // Use totalH for Couvre Joint if available.
+      let currentScope = (el.isCouvreJoint && totalH !== null) ? { ...scope, H: totalH, HC: totalH - H } : scope;
       if (el.isCouvreJoint) {
         currentScope = { ...currentScope, ...originalScope };
       }
@@ -175,7 +190,6 @@ export class FormulaEngine {
             cost = (qty / (pRef.barLength || 6000)) * unitPrice;
           } else if (pRef.pricePerKg) {
             unitPrice = pRef.pricePerKg;
-            // (Length in m) * (kg/m) * (price/kg)
             cost = (qty / 1000) * (pRef.weightPerM || 1) * unitPrice;
           }
 
@@ -189,8 +203,6 @@ export class FormulaEngine {
             isFrame: el.isFrame,
             isCouvreJoint: el.isCouvreJoint,
             length: safeValue,
-            formula: el.formula,
-            resolvedFormula: this.resolveFormula(el.formula, scope),
             error: isError ? "Formule Invalide" : null,
             unitPrice: unitPrice,
             totalMeasure: safeValue * elQty,
@@ -215,7 +227,7 @@ export class FormulaEngine {
             resolvedFormula: this.resolveFormula(el.formula || '1', scope),
             error: isError ? "Formule Invalide" : null,
             unitPrice: aRef.price || 0,
-            totalMeasure: qty, // Total in mm or units
+            totalMeasure: qty, 
             cost: (finalQty || 0) * (aRef.price || 0)
           });
         }
@@ -225,19 +237,14 @@ export class FormulaEngine {
     const glass = this.db.glass.find(g => g.id === glassId);
     let gasket = null;
     
-    // Compute gasket for any composition whose range+glassThickness has a compatibility entry.
-    // The gasketCompatibility table itself acts as the gate — no separate hasGasket flag needed.
     if (glass) {
       const allGasketEntries = this.db.gasketCompatibility || [];
       
-      // 1st pass: exact match on rangeId + thickness (preferred)
       let compatibility = allGasketEntries.find(
         c => c.rangeId === composition.rangeId &&
              parseFloat(c.glassThickness) === parseFloat(glass.thickness)
       );
       
-      // 2nd pass: fallback — match on thickness only, when composition has no/wrong rangeId.
-      // This ensures old compositions without a properly set rangeId still get their gasket.
       if (!compatibility) {
         compatibility = allGasketEntries.find(
           c => parseFloat(c.glassThickness) === parseFloat(glass.thickness)
@@ -269,9 +276,6 @@ export class FormulaEngine {
       }
     }
 
-    const glassL = this.evaluate(composition.glassFormulaL || 'L', scope, 'Largeur Vitre');
-    const glassH = this.evaluate(composition.glassFormulaH || 'H', scope, 'Hauteur Vitre');
-    const glassQty = this.evaluate(composition.glassFormulaQty || '1', scope, 'Quantité Vitre');
     const glassArea = (((isNaN(glassL)?0:glassL) * (isNaN(glassH)?0:glassH)) / 1000000) * (isNaN(glassQty)?0:glassQty);
     const glassWeight = glass ? (glassArea * glass.weightPerM2) : 0;
     const glassCost = glass ? (glassArea * glass.pricePerM2) : 0;
