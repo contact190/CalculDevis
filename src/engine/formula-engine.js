@@ -991,15 +991,21 @@ export class FormulaEngine {
     
     // Subtotals (Raw material costs)
     const profilesRaw = bom.profiles.reduce((sum, p) => sum + p.cost, 0);
-    const accessoriesTotal = bom.accessories.reduce((sum, a) => sum + (a.cost || 0), 0);
+    
+    // Separate gaskets from other accessories for clear subtotal reporting
+    const gasketsOnly = bom.accessories.filter(a => a.isGlassGasket);
+    const accessoriesOnly = bom.accessories.filter(a => !a.isGlassGasket);
+    
+    const accessoriesTotal = accessoriesOnly.reduce((sum, a) => sum + (a.cost || 0), 0);
+    const gasketTotal = (bom.gasket ? bom.gasket.cost : 0) + gasketsOnly.reduce((sum, g) => sum + (g.cost || 0), 0);
+    
     const glassTotal = bom.glass ? bom.glass.cost : 0;
-    const gasketTotal = bom.gasket ? bom.gasket.cost : 0;
     const shutterTotal = (bom.shutters || []).reduce((sum, s) => sum + (s.cost || 0), 0);
 
     // Apply color factor ONLY to profiles
     const profilesTotal = profilesRaw * (color ? color.factor : 1.0);
     
-    // Total cost of goods (Revient)
+    // Total cost (Revient)
     const totalRevient = profilesTotal + accessoriesTotal + glassTotal + gasketTotal + shutterTotal;
     
     const margin = config.margin || (this.db.margins?.default || 2.2);
