@@ -228,11 +228,21 @@ export class FormulaEngine {
     // Compute gasket for any composition whose range+glassThickness has a compatibility entry.
     // The gasketCompatibility table itself acts as the gate — no separate hasGasket flag needed.
     if (glass) {
-      const compatibility = (this.db.gasketCompatibility || []).find(
+      const allGasketEntries = this.db.gasketCompatibility || [];
+      
+      // 1st pass: exact match on rangeId + thickness (preferred)
+      let compatibility = allGasketEntries.find(
         c => c.rangeId === composition.rangeId &&
              parseFloat(c.glassThickness) === parseFloat(glass.thickness)
       );
-
+      
+      // 2nd pass: fallback — match on thickness only, when composition has no/wrong rangeId.
+      // This ensures old compositions without a properly set rangeId still get their gasket.
+      if (!compatibility) {
+        compatibility = allGasketEntries.find(
+          c => parseFloat(c.glassThickness) === parseFloat(glass.thickness)
+        );
+      }
       
       if (compatibility) {
         const gRef = this.db.accessories.find(a => a.id === compatibility.gasketId);
