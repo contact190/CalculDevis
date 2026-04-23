@@ -226,8 +226,8 @@ export class FormulaEngine {
     let gasket = null;
     
     if (glass && composition.hasGasket) {
-      const compatibility = this.db.gasketCompatibility.find(
-        c => c.rangeId === composition.rangeId && c.glassThickness === glass.thickness
+      const compatibility = (this.db.gasketCompatibility || []).find(
+        c => (c.rangeId === config.rangeId || c.rangeId === composition.rangeId) && parseFloat(c.glassThickness) === parseFloat(glass.thickness)
       );
       
       if (compatibility) {
@@ -268,7 +268,7 @@ export class FormulaEngine {
       const hasManualParcloseV = profiles.some(p => p.label?.toLowerCase() === 'parclosev');
       
       const glassProfiles = this.db.glassProfileCompatibility?.filter(
-        c => c.rangeId === composition.rangeId && c.glassThickness === glass.thickness
+        c => (c.rangeId === config.rangeId || c.rangeId === composition.rangeId) && parseFloat(c.glassThickness) === parseFloat(glass.thickness)
       ) || [];
 
       glassProfiles.forEach(gp => {
