@@ -921,28 +921,8 @@ export class FormulaEngine {
 
     // --- AGGREGATION PRE-PASS (for UI summaries) ---
     
-    // Aggregated Gasket (Singular field for UI)
+    // Aggregated Gasket (Singular field for compatibility if needed, but we don't pull it out of accessories anymore)
     let finalGasket = null;
-    const isCompound = config.compoundType && config.compoundType !== 'none';
-    
-    // If not compound, we pull the gasket out of accessories to display it in the special UI row
-    if (!isCompound) {
-      const otherAccessories = [];
-      activeAccessories.forEach(a => {
-        if (a.isGlassGasket) {
-          if (!finalGasket) {
-            finalGasket = { ...a };
-          } else {
-            finalGasket.qty = (finalGasket.qty || 0) + (a.qty || 0);
-            finalGasket.totalMeasure = (finalGasket.totalMeasure || 0) + (a.totalMeasure || 0);
-            finalGasket.cost = (finalGasket.cost || 0) + (a.cost || 0);
-          }
-        } else {
-          otherAccessories.push(a);
-        }
-      });
-      activeAccessories = otherAccessories;
-    }
 
     // Aggregated Glass (Singular field for UI)
     let finalGlass = { name: 'Vitrage', area: 0, weight: 0, cost: 0, qty: 0 };

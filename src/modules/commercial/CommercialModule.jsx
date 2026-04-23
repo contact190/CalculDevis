@@ -760,16 +760,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                       <td data-label="Prix Unit.">{acc.unitPrice?.toFixed(2)}</td><td data-label="Prix Total" style={{ textAlign: 'right', fontWeight: 600 }}>{acc.cost.toFixed(2)} DZD</td>
                     </tr>
                   ))}
-                  {priceData?.bom.gasket && (
-                    <tr>
-                      <td data-label="Composant" style={{ fontWeight: 600 }}>Joint de vitrage</td>
-                      <td data-label="Source"><span style={{ fontSize: '0.6rem', padding: '0.1rem 0.4rem', background: '#f1f5f9', borderRadius: '1rem', color: '#64748b', whiteSpace: 'nowrap' }}>{priceData.bom.gasket.source || 'Cadre'}</span></td>
-                      <td data-label="Formule" style={{ color: '#64748b', fontSize: '0.65rem' }}>{priceData.bom.gasket.formula}</td>
-                      <td data-label="Calcul" style={{ color: '#3b82f6', fontSize: '0.65rem' }}>{priceData.bom.gasket.resolvedFormula}</td><td data-label="Nbre">1u</td>
-                      <td data-label="Mesure Totale">{priceData.bom.gasket.totalMeasure.toFixed(2)} mm</td><td data-label="Prix Unit.">{priceData.bom.gasket.unitPrice?.toFixed(2)}</td>
-                      <td data-label="Prix Total" style={{ textAlign: 'right', fontWeight: 600 }}>{priceData.bom.gasket.cost.toFixed(2)} DZD</td>
-                    </tr>
-                  )}
+
                   {priceData?.bom.shutters && priceData.bom.shutters.map((s, i) => (
                     <tr key={`shutter-${i}`}>
                       <td data-label="Composant" style={{ fontWeight: 600 }}>[Volet] {s.name}</td>
