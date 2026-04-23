@@ -658,19 +658,10 @@ export class FormulaEngine {
            return;
         }
 
-        // Resolve composition ID: Don't fallback to opening recipes for a Fixe part unless explicitly set
+        // Resolve composition ID: Fall back to main composition to inherit gaskets and parcloses
         let compId = part.compositionId;
-        if (!compId && part.type === 'opening') {
+        if (!compId) {
            compId = config.compositionId || parts.find(p=>p.type==='opening')?.compositionId;
-        }
-        
-        // If still no compId for a fixe, it's a "Direct Glazing" (no internal profiles)
-        if (!compId && part.type === 'fixe') {
-           if (pGlassId) {
-              const glassRes = this.calculateComponentBOM(config, pW, pH, null, pGlassId, isMultiChassis ? config.optionalSides : { top: false, bottom: false, left: false, right: false, isSubPart: true }, pH, L, totalH);
-              if (glassRes.glass) results.glasses.push({ ...glassRes.glass, source: sourceLabel });
-           }
-           return;
         }
 
         const subPartOpt = isMultiChassis ? config.optionalSides : { top: false, bottom: false, left: false, right: false, isSubPart: true };
