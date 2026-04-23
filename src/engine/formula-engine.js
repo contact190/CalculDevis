@@ -287,10 +287,17 @@ export class FormulaEngine {
       const hasManualParcloseH = profiles.some(p => p.label?.toLowerCase() === 'parcloseh');
       const hasManualParcloseV = profiles.some(p => p.label?.toLowerCase() === 'parclosev');
       
-      const glassProfiles = (this.db.glassProfileCompatibility || []).filter(
+      let glassProfiles = (this.db.glassProfileCompatibility || []).filter(
         c => c.rangeId === composition.rangeId &&
              parseFloat(c.glassThickness) === parseFloat(glass.thickness)
       );
+
+      // Fallback: If no exact range match, try matching by thickness ONLY
+      if (glassProfiles.length === 0) {
+        glassProfiles = (this.db.glassProfileCompatibility || []).filter(
+          c => parseFloat(c.glassThickness) === parseFloat(glass.thickness)
+        );
+      }
 
       glassProfiles.forEach(gp => {
         // Handle Parclose Horizontal
