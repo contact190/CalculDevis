@@ -699,6 +699,20 @@ export class FormulaEngine {
 
         results.profiles.push(...res.profiles.filter(filterFn).map(p => ({ ...p, source: sourceLabel })));
         results.accessories.push(...res.accessories.filter(filterFn).map(a => ({ ...a, source: sourceLabel })));
+
+        // 🔍 DEBUG COMPOUND GASKET
+        console.group(`[CompoundGasket] Part ${idx + 1} (type=${part.type})`);
+        console.log('  compId   :', compId);
+        console.log('  pGlassId :', pGlassId, '→ glass found:', !!this.db.glass.find(g => g.id === pGlassId));
+        console.log('  res.gasket:', res.gasket ? `OUI (${res.gasket.name}, qty=${res.gasket.qty?.toFixed(3)})` : 'NULL ❌');
+        if (!res.gasket) {
+          const comp = this.db.compositions.find(c => c.id === compId);
+          const gl = this.db.glass.find(g => g.id === pGlassId);
+          console.log('  composition.rangeId:', comp?.rangeId, '| glass.thickness:', gl?.thickness);
+          console.log('  gasketCompatibility entries:', (this.db.gasketCompatibility || []).map(c => `rangeId=${c.rangeId} thick=${c.glassThickness}`));
+        }
+        console.groupEnd();
+
         if (res.gasket) results.accessories.push({ ...res.gasket, source: sourceLabel });
         if (res.glass) results.glasses.push({ ...res.glass, source: sourceLabel });
       });
