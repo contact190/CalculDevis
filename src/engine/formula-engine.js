@@ -230,6 +230,19 @@ export class FormulaEngine {
         c => c.rangeId === composition.rangeId &&
              parseFloat(c.glassThickness) === parseFloat(glass.thickness)
       );
+
+      // 🔍 DEBUG — ouvrez la console du navigateur (F12) pour voir ces logs
+      console.group(`[JointVitrage] Composition: ${composition.id} (${composition.name})`);
+      console.log('  composition.rangeId :', composition.rangeId);
+      console.log('  glass.thickness     :', glass.thickness, typeof glass.thickness);
+      console.log('  gasketCompatibility entries:');
+      (this.db.gasketCompatibility || []).forEach((c, i) => {
+        const rangeMatch = c.rangeId === composition.rangeId;
+        const thickMatch = parseFloat(c.glassThickness) === parseFloat(glass.thickness);
+        console.log(`    [${i}] rangeId=${c.rangeId} thickness=${c.glassThickness} gasketId=${c.gasketId} | rangeMatch=${rangeMatch} thickMatch=${thickMatch}`);
+      });
+      console.log('  → compatibility trouvée:', compatibility ? `OUI (gasketId=${compatibility.gasketId})` : 'NON ❌');
+      console.groupEnd();
       
       if (compatibility) {
         const gRef = this.db.accessories.find(a => a.id === compatibility.gasketId);
