@@ -1059,20 +1059,27 @@ export class FormulaEngine {
     const merge = (list, keyFields) => {
        const map = new Map();
        list.forEach(item => {
-          const key = keyFields.map(f => item[f]).join('|');
+          // Include source in key to keep parts separate if they have different sources
+          const fields = [...keyFields];
+          if (item.source) fields.push('source');
+          
+          const key = fields.map(f => item[f]).join('|');
           if (map.has(key)) {
              const existing = map.get(key);
              existing.qty = (existing.qty || 0) + (item.qty || 0);
              existing.cost = (existing.cost || 0) + (item.cost || 0);
              if (existing.area !== undefined) existing.area += (item.area || 0);
              if (existing.weight !== undefined) existing.weight += (item.weight || 0);
+             if (existing.totalMeasure !== undefined) existing.totalMeasure += (item.totalMeasure || 0);
              
-             // Merge sources
-             if (item.source && existing.source) {
-                const sources = new Set([...existing.source.split(', '), item.source]);
-                existing.source = Array.from(sources).join(', ');
-             } else if (item.source) {
-                existing.source = item.source;
+             // Merge sources (fallback if not in key)
+             if (!fields.includes('source')) {
+                if (item.source && existing.source) {
+                   const sources = new Set([...existing.source.split(', '), item.source]);
+                   existing.source = Array.from(sources).join(', ');
+                } else if (item.source) {
+                   existing.source = item.source;
+                }
              }
           } else {
              map.set(key, { ...item });
