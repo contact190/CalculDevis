@@ -66,7 +66,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         const b = engine.calculateBOM(cfg);
         // Standard profiles
         b.profiles.forEach(p => {
-          const mapKey = `${p.id}|${colorName}`;
+          const mapKey = `${p.id}|${p.label || ''}|${colorName}`;
           const displayName = p.name ? `${p.name} ${p.label ? `[${p.label}]` : ''}` : (p.label || '');
           const measure = p.length * p.qty * cfgQty;
           const newPieces = Array(p.qty * cfgQty).fill(p.length);
