@@ -452,7 +452,13 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                               return <option key={t.id} value={p.id} style={{ fontWeight: 'bold' }}>{t.name} (Mapping Admin)</option>; 
                            }).filter(Boolean)}
                            <option disabled>── PROFILÉS JONCTION ──</option>
-                           {database.profiles.filter(p => p.category === 'divider' && (p.rangeIds || []).includes(config.rangeId)).map(p => (
+                           {database.profiles.filter(p => {
+                              const normalize = (s) => (s || '').replace(/[-\s]+/g, '').substring(0, 3).toLowerCase(); // 'h40'
+                              const currentPrefix = normalize(config.rangeId);
+                              const pCategoryMatch = p.category === 'divider';
+                              const pRangeMatch = (p.rangeIds || []).some(rid => normalize(rid) === currentPrefix);
+                              return pCategoryMatch && pRangeMatch;
+                           }).map(p => (
                               <option key={p.id} value={p.id}>{p.name} ({p.thickness}mm)</option>
                            ))}
                       </select>
