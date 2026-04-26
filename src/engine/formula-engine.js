@@ -700,9 +700,17 @@ export class FormulaEngine {
 
     const divProfile = this.db.profiles.find(p => p.id === effectiveDivId);
     let divThick = divProfile?.thickness;
+
     if (!divThick) {
-       const match = (divProfile?.name || '').match(/h(\d+)/i);
-       divThick = match ? parseInt(match[1]) : 40;
+        // Fallback 1: Regex on name (e.g., "Traverse 25" -> 25)
+        const nameMatch = (divProfile?.name || '').match(/(\d+)/);
+        if (nameMatch) {
+            divThick = parseInt(nameMatch[0]);
+        } else {
+            // Fallback 2: Check standard traverses for a match
+            const trvEntry = (this.db.traverses || []).find(t => t.id === effectiveDivId || t.profileId === effectiveDivId);
+            divThick = trvEntry?.thickness || 25; // Default to 25 (user standard)
+        }
     }
 
     // --- 3. RECURSIVE PROCESSING ---
