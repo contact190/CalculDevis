@@ -33,10 +33,11 @@ export class FormulaEngine {
     if (scope.L !== undefined) resolved = resolved.replace(/L/g, Math.round(scope.L));
     if (scope.HC !== undefined) resolved = resolved.replace(/HC/g, Math.round(scope.HC));
     if (scope.H !== undefined) resolved = resolved.replace(/H/g, Math.round(scope.H));
+    if (scope.EPt !== undefined) resolved = resolved.replace(/EPt/g, Math.round(scope.EPt));
     return resolved;
   }
 
-  calculateComponentBOM(config, L, H, compositionId, glassId, optionalSides, totalH = null, originalL = null, originalH = null) {
+  calculateComponentBOM(config, L, H, compositionId, glassId, optionalSides, totalH = null, originalL = null, originalH = null, EPt = 0) {
     const opt = optionalSides || { top: true, bottom: true, left: true, right: true };
     const composition = this.db.compositions.find(c => c.id === compositionId);
     if (!composition) return { profiles: [], accessories: [], glass: null, gasket: null };
@@ -51,7 +52,7 @@ export class FormulaEngine {
     const accessories = [];
     
     // 1. Calculate glass dimensions and quantity first to have them in scope
-    const tempScope = { L, H, HC, totalH: totalH || H, originalL: originalL || L, totalOriginalH: originalH || H };
+    const tempScope = { L, H, HC, totalH: totalH || H, originalL: originalL || L, totalOriginalH: originalH || H, EPt };
     const glassL = this.evaluate(composition.glassFormulaL || 'L', tempScope, 'Largeur Vitre');
     const glassH = this.evaluate(composition.glassFormulaH || 'H', tempScope, 'Hauteur Vitre');
     const glassQtyRaw = this.evaluate(composition.glassFormulaQty || '1', tempScope, 'Quantité Vitre');
@@ -716,7 +717,7 @@ export class FormulaEngine {
         }
 
         const compId = part.compositionId || frameCompId;
-        const res = this.calculateComponentBOM(config, calcL, calcH, compId, part.glassId || config.glassId, myOptionalSides, totalH, calcL, totalH);
+        const res = this.calculateComponentBOM(config, calcL, calcH, compId, part.glassId || config.glassId, myOptionalSides, totalH, calcL, totalH, divThick);
         const sourceLabel = `Partie ${idx + 1} (${part.type})`;
 
         const filterFn = (item) => {
