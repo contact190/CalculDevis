@@ -740,19 +740,16 @@ export class FormulaEngine {
            
            // ALWAYS allow parcloses and joints
            if (searchStr.includes('parclose') || searchStr.includes('joint')) {
-              console.log(`[BOM-Filter] ALLOWED (Parclose/Joint): "${searchStr}"`);
               return true;
            }
 
            // Skip couvre-joints (always handled by global frame)
            if (item.isCouvreJoint) {
-              console.log(`[BOM-Filter] REJECTED (CouvreJoint): "${searchStr}"`);
               return false;
            }
 
            // In single chassis mode, skip standard frame profiles from sub-parts
            if (!isMultiChassis && item.isFrame) {
-              console.log(`[BOM-Filter] REJECTED (Frame-SubPart): "${searchStr}"`);
               return false;
            }
            
@@ -760,30 +757,14 @@ export class FormulaEngine {
            if (part.type === 'fixe') {
               const opTerms = ['ouvrant', 'vantail', 'chicane', 'panneau', 'reducteur', 'poignee', 'cremone', 'paumelle', 'galet', 'serrure'];
               if (opTerms.some(t => searchStr.includes(t))) {
-                 console.log(`[BOM-Filter] REJECTED (OpeningTerm in Fixe): "${searchStr}"`);
                  return false;
               }
            }
-
-           console.log(`[BOM-Filter] ALLOWED (Standard): "${searchStr}"`);
            return true;
         };
 
         results.profiles.push(...res.profiles.filter(filterFn).map(p => ({ ...p, source: sourceLabel })));
         results.accessories.push(...res.accessories.filter(filterFn).map(a => ({ ...a, source: sourceLabel })));
-
-        // 🔍 DEBUG COMPOUND GASKET
-        console.group(`[CompoundGasket] Part ${idx + 1} (type=${part.type})`);
-        console.log('  compId   :', compId);
-        console.log('  pGlassId :', pGlassId, '→ glass found:', !!this.db.glass.find(g => g.id === pGlassId));
-        console.log('  res.gasket:', res.gasket ? `OUI (${res.gasket.name}, qty=${res.gasket.qty?.toFixed(3)})` : 'NULL ❌');
-        if (!res.gasket) {
-          const comp = this.db.compositions.find(c => c.id === compId);
-          const gl = this.db.glass.find(g => g.id === pGlassId);
-          console.log('  composition.rangeId:', comp?.rangeId, '| glass.thickness:', gl?.thickness);
-          console.log('  gasketCompatibility entries:', (this.db.gasketCompatibility || []).map(c => `rangeId=${c.rangeId} thick=${c.glassThickness}`));
-        }
-        console.groupEnd();
 
         if (res.gasket) results.accessories.push({ ...res.gasket, source: sourceLabel });
         if (res.glass) results.glasses.push({ ...res.glass, source: sourceLabel });
