@@ -602,20 +602,17 @@ export class FormulaEngine {
       });
     }
 
-    // Baguette
-    if (key === 'glissiereId' && config.shutterConfig?.enableBaguette) {
+    // Baguette (Now linked to the Slat)
+    if (key === 'lameId' && config.shutterConfig?.enableBaguette) {
       const baguettePrice = item.baguettePrice || 0;
       
-      // We want the same quantity as slats (lameId)
-      const lameEntry = (shutterPack || []).find(s => s.itemKey === 'lameId');
-      const effectiveQty = lameEntry ? lameEntry.qty : qty;
-      
-      const bCost = effectiveQty * (baguettePrice / 1000); // Assuming baguettePrice is per ML
+      // Since we are inside 'lameId' processing, 'qty' is already the slat quantity.
+      const bCost = qty * (baguettePrice / 1000); 
       shutterPack.push({
         id: `${item.id}-baguette`,
         itemKey: 'baguetteId',
         name: `Baguette pour ${item.name}`,
-        qty: effectiveQty,
+        qty: qty,
         barLength: barLength,
         priceUnit: 'ML',
         price: baguettePrice,

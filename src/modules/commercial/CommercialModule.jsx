@@ -665,15 +665,17 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                           </label>
                         </div>
                       )}
+                      {key === 'lameId' && (
+                        <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, color: '#0369a1', background: '#f0f9ff', padding: '0.4rem 0.75rem', borderRadius: '0.4rem', border: '1px solid #bae6fd', width: '100%' }}>
+                            <input type="checkbox" checked={config.shutterConfig?.enableBaguette || false}
+                              onChange={e => setConfig(prev => ({ ...prev, shutterConfig: { ...(prev.shutterConfig || {}), enableBaguette: e.target.checked } }))} />
+                            Ajouter Baguette (Calculée sur Lames)
+                          </label>
+                        </div>
+                      )}
                       {key === 'glissiereId' && (
                         <>
-                          <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, color: '#0369a1', background: '#f0f9ff', padding: '0.4rem 0.75rem', borderRadius: '0.4rem', border: '1px solid #bae6fd', width: '100%' }}>
-                              <input type="checkbox" checked={config.shutterConfig?.enableBaguette || false}
-                                onChange={e => setConfig(prev => ({ ...prev, shutterConfig: { ...(prev.shutterConfig || {}), enableBaguette: e.target.checked } }))} />
-                              Ajouter Baguette (Calculée sur Lames)
-                            </label>
-                          </div>
                           {effectiveItem?.opt1Label && (
                             <div className="form-group">
                               <label className="label" style={{ fontSize: '0.8rem' }}>{effectiveItem.opt1Label}</label>
