@@ -659,19 +659,24 @@ export class FormulaEngine {
     const normalize = (s) => (s || '').replace(/[-\s]+/g, '').toLowerCase();
     const currentNormRangeId = normalize(config.rangeId);
 
+    // DETERMINING ROLES:
+    // orientation 'horizontal' -> side-by-side -> Divider is VERTICAL (V)
+    // orientation 'vertical' -> stacked -> Divider is HORIZONTAL (H)
+    const isVerticalSplit = orientation === 'horizontal';
+
     if (effectiveUnionId === 'AUTO') {
-      const targetRole = isHorizontal ? 'union_h' : 'union_l';
+      const targetRole = isVerticalSplit ? 'traverse_v' : 'traverse_h';
       const dividerEntry = (this.db.traverses || []).find(t => 
-        t.role === targetRole && 
+        (t.role === targetRole || t.type === targetRole) && 
         (t.rangeIds || []).some(rid => normalize(rid) === currentNormRangeId)
       );
       if (dividerEntry) effectiveUnionId = dividerEntry.profileId;
     }
     
     if (effectiveTraverseId === 'AUTO') {
-      const targetRole = isHorizontal ? 'traverse_h' : 'traverse_l';
+      const targetRole = isVerticalSplit ? 'traverse_v' : 'traverse_h';
       const dividerEntry = (this.db.traverses || []).find(t => 
-        t.role === targetRole && 
+        (t.role === targetRole || t.type === targetRole) && 
         (t.rangeIds || []).some(rid => normalize(rid) === currentNormRangeId)
       );
       if (dividerEntry) effectiveTraverseId = dividerEntry.profileId;
@@ -682,20 +687,21 @@ export class FormulaEngine {
     const divThick = divProfile?.thickness || 0;
 
     const processPartList = (partList, boxL, boxH, direction) => {
-      const isH = direction !== 'vertical';
+      const isH = direction !== 'vertical'; // Split is horizontal (parts stacked vertically)
       const divQty = partList.length - 1;
 
       // Add Dividers for this level
       if (divProfile && divQty > 0) {
-        const len = (isH ? boxH : boxL);
-        const dCost = divProfile.pricePerBar ? (len / divProfile.barLength * divProfile.pricePerBar) : ((len/1000) * divProfile.weightPerM * divProfile.pricePerKg);
+        const len = (isH ? boxL : boxH); // Length of divider matches box side
+        const dCost = divProfile.pricePerBar ? (len / divProfile.barLength * divProfile.pricePerBar) : ((len/1000) * (divProfile.weightPerM||0) * (divProfile.pricePerKg||0));
+        
         results.profiles.push({
           ...divProfile,
-          label: compoundType === 'fix_coulissant' ? 'Profilé d\'Union' : 'Traverse',
+          label: compoundType === 'fix_coulissant' ? 'Profilé d\'Union' : `Traverse ${isH ? 'Horiz.' : 'Vert.'}`,
           source: 'Jonction',
-          formula: isH ? 'H' : 'L',
+          formula: isH ? 'L' : 'H',
           resolvedFormula: `${len} mm`,
-          unitPrice: divProfile.pricePerBar ? (divProfile.pricePerBar / divProfile.barLength) : (divProfile.weightPerM * divProfile.pricePerKg / 1000),
+          unitPrice: divProfile.pricePerBar ? (divProfile.pricePerBar / divProfile.barLength) : ((divProfile.weightPerM||0) * (divProfile.pricePerKg||0) / 1000),
           qty: divQty, 
           length: len, 
           totalMeasure: len * divQty,
