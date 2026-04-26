@@ -50,6 +50,7 @@ export class FormulaEngine {
     }
 
     const profiles = [];
+    const accessories = [];
     // --- Epd DETECTION (Dormant Thickness) ---
     let Epd = 40; 
     const isDormantFn = (l, n) => /dormant|cadre|chassis|batit|dorme/i.test(((l || '') + ' ' + (n || '')).toLowerCase());
