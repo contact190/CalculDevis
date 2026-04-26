@@ -824,8 +824,7 @@ export class FormulaEngine {
     }
 
     // VOLET SEUL LOGIC (V3.2)
-    const composition = this.db.compositions.find(c => c.id === config.compositionId);
-    const isOnlyShutter = composition?.openingType === 'VoletSeul';
+    const isOnlyShutter = config.isOnlyShutter || false;
 
     // The Joinery (Window) height is config.H
     // If it's only a shutter, window height is effectively 0 for profile calculations

@@ -504,7 +504,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
             </div>
           </div>
 
-          {currentComp?.openingType !== 'VoletSeul' && (
+          {currentComp?.openingType !== 'VoletSeul' && !config.isOnlyShutter && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
               <div className="form-group">
                 <label className="label">Finition / Couleur</label>
@@ -526,7 +526,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
             </div>
           )}
 
-          {hasCouvreJoint && currentComp?.openingType !== 'VoletSeul' && (
+          {hasCouvreJoint && !config.isOnlyShutter && (
             <div className="form-group" style={{ marginTop: '1.5rem', padding: '1rem', background: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
               <label className="label" style={{ marginBottom: '0.75rem' }}>Couvres-Joints Optionnels</label>
               <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
@@ -545,7 +545,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
             </div>
           )}
 
-          {availableOptions.length > 0 && currentComp?.openingType !== 'VoletSeul' && (
+          {availableOptions.length > 0 && !config.isOnlyShutter && (
             <div className="form-group" style={{ marginTop: '1.5rem', padding: '1rem', background: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
               <label className="label" style={{ marginBottom: '0.75rem' }}>Options & Variantes</label>
               <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', flexDirection: 'column' }}>
@@ -562,7 +562,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
           )}
 
           {/* Precadre Option */}
-          {currentComp?.openingType !== 'VoletSeul' && (
+          {!config.isOnlyShutter && (
             <div style={{ marginTop: '1rem', padding: '0.75rem 1rem', background: config.hasPrecadre ? '#f0fdf4' : '#f8fafc', borderRadius: '0.75rem', border: `1px solid ${config.hasPrecadre ? '#86efac' : '#e2e8f0'}`, transition: 'all 0.2s' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', fontWeight: 600, color: config.hasPrecadre ? '#166534' : '#1e293b', fontSize: '0.9rem' }}>
                 <input type="checkbox" checked={config.hasPrecadre || false}
@@ -578,15 +578,20 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', fontWeight: 600, color: '#1e293b', fontSize: '0.95rem' }}>
             <input type="checkbox" 
-              disabled={currentComp?.openingType === 'VoletSeul'}
-              checked={config.hasShutter || currentComp?.openingType === 'VoletSeul'} 
+              checked={config.hasShutter || config.isOnlyShutter || false} 
+              disabled={config.isOnlyShutter}
               onChange={e => setConfig(prev => ({ ...prev, hasShutter: e.target.checked }))} 
               style={{ width: '1.2rem', height: '1.2rem' }} />
-            {currentComp?.openingType === 'VoletSeul' ? 'Produit : Volet Rénovation Selectionné' : 'Ajouter un Volet Roulant'}
+            {config.isOnlyShutter ? 'Produit : Volet Rénovation Selectionné' : 'Ajouter un Volet Roulant'}
           </label>
           
           {config.hasShutter && (
-             <div style={{ display: 'flex', gap: '0.5rem' }}>
+             <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', color: '#1e40af', cursor: 'pointer', border: '1px solid #bfdbfe', background: '#eff6ff', padding: '0.2rem 0.5rem', borderRadius: '0.4rem' }}>
+                  <input type="checkbox" checked={config.isOnlyShutter || false} 
+                    onChange={e => setConfig(prev => ({ ...prev, isOnlyShutter: e.target.checked, hasShutter: e.target.checked ? true : prev.hasShutter }))} />
+                  Volet Seul
+                </label>
                 <button 
                   onClick={() => setConfig(prev => ({ ...prev, shutterConfig: { ...prev.shutterConfig, isStandalone: !prev.shutterConfig?.isStandalone } }))}
                   style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem', borderRadius: '0.4rem', border: '1px solid #cbd5e1', background: config.shutterConfig?.isStandalone ? '#eff6ff' : 'white', color: config.shutterConfig?.isStandalone ? '#3b82f6' : '#64748b', cursor: 'pointer' }}
