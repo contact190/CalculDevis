@@ -2187,7 +2187,7 @@ const AdminDashboard = ({ data, setData }) => {
                                 <td>
                                   <select className="input" value={item.rangeId || ''} onChange={e => updateShutterItem(key, i, 'rangeId', e.target.value)} style={{ width: '90px' }}>
                                     <option value="">Toutes</option>
-                                    {database.ranges.map(r => <option key={r.id} value={r.id}>{r.id}</option>)}
+                                    {data.ranges.map(r => <option key={r.id} value={r.id}>{r.id}</option>)}
                                   </select> 
                                 </td>
                                 <td>
