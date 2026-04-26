@@ -34,6 +34,7 @@ export class FormulaEngine {
     if (scope.HC !== undefined) resolved = resolved.replace(/HC/g, Math.round(scope.HC));
     if (scope.H !== undefined) resolved = resolved.replace(/H/g, Math.round(scope.H));
     if (scope.EPt !== undefined) resolved = resolved.replace(/EPt/g, Math.round(scope.EPt));
+    if (scope.Epd !== undefined) resolved = resolved.replace(/Epd/g, Math.round(scope.Epd));
     return resolved;
   }
 
@@ -49,10 +50,21 @@ export class FormulaEngine {
     }
 
     const profiles = [];
-    const accessories = [];
-    
+    // --- Epd DETECTION (Dormant Thickness) ---
+    let Epd = 40; 
+    const isDormantFn = (l, n) => /dormant|cadre|chassis|batit|dorme/i.test(((l || '') + ' ' + (n || '')).toLowerCase());
+    const dormantId = composition.elements.find(el => {
+       if (el.type !== 'profile') return false;
+       const pDef = this.db.profiles.find(x => x.id === el.id);
+       return pDef && isDormantFn(el.label, pDef.name);
+    })?.id;
+    if (dormantId) {
+       const pDef = this.db.profiles.find(x => x.id === dormantId);
+       Epd = pDef.thickness || (parseInt((pDef.name || '').match(/\d+/)?.[0]) || 40);
+    }
+
     // 1. Calculate glass dimensions and quantity first to have them in scope
-    const tempScope = { L, H, HC, totalH: totalH || H, originalL: originalL || L, totalOriginalH: originalH || H, EPt };
+    const tempScope = { L, H, HC, totalH: totalH || H, originalL: originalL || L, totalOriginalH: originalH || H, EPt, Epd };
     const glassL = this.evaluate(composition.glassFormulaL || 'L', tempScope, 'Largeur Vitre');
     const glassH = this.evaluate(composition.glassFormulaH || 'H', tempScope, 'Hauteur Vitre');
     const glassQtyRaw = this.evaluate(composition.glassFormulaQty || '1', tempScope, 'Quantité Vitre');
