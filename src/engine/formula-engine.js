@@ -693,7 +693,13 @@ export class FormulaEngine {
           ...divProfile,
           label: compoundType === 'fix_coulissant' ? 'Profilé d\'Union' : 'Traverse',
           source: 'Jonction',
-          qty: divQty, length: len, cost: dCost * divQty
+          formula: isH ? 'H' : 'L',
+          resolvedFormula: `${len} mm`,
+          unitPrice: divProfile.pricePerBar ? (divProfile.pricePerBar / divProfile.barLength) : (divProfile.weightPerM * divProfile.pricePerKg / 1000),
+          qty: divQty, 
+          length: len, 
+          totalMeasure: len * divQty,
+          cost: dCost * divQty
         });
       }
 
