@@ -858,7 +858,9 @@ export class FormulaEngine {
     let accessories = [];
     let glasses = [];
 
-    if (config.compoundType && config.compoundType !== 'none') {
+    const hasCompoundParts = config.compoundConfig?.parts && config.compoundConfig.parts.length > 1;
+
+    if ((config.compoundType && config.compoundType !== 'none') || hasCompoundParts) {
       const compRes = this.calculateCompoundBOM(config, L, windowH, totalH);
       profiles = compRes.profiles;
       accessories = compRes.accessories;
