@@ -628,15 +628,12 @@ export class FormulaEngine {
     const { parts, unionId, traverseId, orientation } = compoundConfig;
 
     const results = { profiles: [], accessories: [], glasses: [] };
-    const isHorizontal = orientation !== 'vertical';
-    const isMultiChassis = compoundType === 'fix_coulissant';
-    
+    const isVerticalSplit = orientation === 'horizontal'; // Côte à côte = séparation verticale
+
     // --- 1. GLOBAL FRAME ---
-    // In complex assemblies, the global dormant frame is calculated once from the main composition
-    const mainOp = parts?.find(p => p.type === 'opening' && p.compositionId) || 
-                   parts?.find(p => p.compositionId) || 
-                   parts?.[0];
-    
+    const mainOp = (parts || []).find(p => p.type === 'opening' && p.compositionId) || 
+                   (parts || []).find(p => p.compositionId) || 
+                   (parts || [])[0];
     const frameCompId = (mainOp && mainOp.compositionId) ? mainOp.compositionId : config.compositionId;
     
     if (frameCompId) {
@@ -651,112 +648,87 @@ export class FormulaEngine {
        results.accessories.push(...frameRes.accessories.filter(a => isDormantFn(a) || isCouvreJointFn(a)).map(a => ({ ...a, source: 'Cadre Global' })));
     }
 
-    // --- 2. SETUP DIVIDER ---
+    // --- 2. DIVIDER SETUP ---
     const normalize = (s) => (s || '').replace(/[-\s]+/g, '').toLowerCase();
     const currentNormRangeId = normalize(config.rangeId);
-    const isVerticalSplit = orientation === 'horizontal';
-
-    let effectiveUnionId = unionId;
-    let effectiveTraverseId = traverseId;
-
-    if (effectiveUnionId === 'AUTO') {
-      const targetRole = isVerticalSplit ? 'traverse_v' : 'traverse_h';
-      const dividerEntry = (this.db.traverses || []).find(t => 
-        (t.role === targetRole || t.type === targetRole) && 
-        (t.rangeIds || []).some(rid => normalize(rid) === currentNormRangeId)
-      );
-      if (dividerEntry) effectiveUnionId = dividerEntry.profileId;
-    }
-    if (effectiveTraverseId === 'AUTO') {
-      const targetRole = isVerticalSplit ? 'traverse_v' : 'traverse_h';
-      const dividerEntry = (this.db.traverses || []).find(t => 
-        (t.role === targetRole || t.type === targetRole) && 
-        (t.rangeIds || []).some(rid => normalize(rid) === currentNormRangeId)
-      );
-      if (dividerEntry) effectiveTraverseId = dividerEntry.profileId;
-    }
-
-    const divProfileId = (compoundType === 'fix_coulissant' ? effectiveUnionId : effectiveTraverseId);
-    const divProfile = this.db.profiles.find(p => p.id === divProfileId);
     
-    // Detect thickness from profile property or name fallback (e.g. "h40" -> 40)
-    let divThick = divProfile?.thickness;
-    if (divThick === undefined || divThick === 0) {
-       const nameMatch = (divProfile?.name || '').match(/h(\d+)/i);
-       divThick = nameMatch ? parseInt(nameMatch[1]) : 40; // Default 40 if not found
+    let effectiveDivId = (compoundType === 'fix_coulissant') ? unionId : traverseId;
+    if (effectiveDivId === 'AUTO') {
+      const targetRole = isVerticalSplit ? 'traverse_v' : 'traverse_h';
+      const dividerEntry = (this.db.traverses || []).find(t => 
+        (t.role === targetRole || t.type === targetRole) && 
+        (t.rangeIds || []).some(rid => normalize(rid) === currentNormRangeId)
+      );
+      if (dividerEntry) effectiveDivId = dividerEntry.profileId;
     }
 
-    // --- 3. RECURSIVE PART PROCESSING ---
+    const divProfile = this.db.profiles.find(p => p.id === effectiveDivId);
+    let divThick = divProfile?.thickness;
+    if (!divThick) {
+       const match = (divProfile?.name || '').match(/h(\d+)/i);
+       divThick = match ? parseInt(match[1]) : 40;
+    }
+
+    // --- 3. RECURSIVE PROCESSING ---
     const processPartList = (partList, boxL, boxH, direction) => {
       const isDividerHorizontal = direction === 'vertical';
       const divQty = (partList || []).length - 1;
 
-      // Add Dividers
       if (divQty > 0) {
-        const len = (isDividerHorizontal ? boxL : boxH);
-        let profileToUse = divProfile || { id: divProfileId || 'TRAVERSE-TMP', name: 'Traverse à définir', pricePerBar: 0, weightPerM: 0 };
-        let dCost = profileToUse.pricePerBar ? (len / profileToUse.barLength * profileToUse.pricePerBar) : ((len/1000) * (profileToUse.weightPerM||0) * (profileToUse.pricePerKg||0));
+        const len = isDividerHorizontal ? boxL : boxH;
+        let prof = divProfile || { id: 'TRAVERSE-TMP', name: 'Traverse à définir', pricePerBar: 0, weightPerM: 0 };
+        let cost = prof.pricePerBar ? (len / prof.barLength * prof.pricePerBar) : ((len/1000) * (prof.weightPerM||0) * (prof.pricePerKg||0));
         
         results.profiles.push({
-          ...profileToUse,
+          ...prof,
           label: compoundType === 'fix_coulissant' ? 'Profilé d\'Union' : `Traverse ${isDividerHorizontal ? 'Horiz.' : 'Vert.'}`,
           source: 'Jonction',
           formula: isDividerHorizontal ? 'L' : 'H',
           resolvedFormula: `${len} mm`,
-          unitPrice: profileToUse.pricePerBar ? (profileToUse.pricePerBar / profileToUse.barLength) : ((profileToUse.weightPerM||0) * (profileToUse.pricePerKg||0) / 1000),
-          qty: divQty, length: len, totalMeasure: len * divQty, cost: dCost * divQty
+          unitPrice: prof.pricePerBar ? (prof.pricePerBar / (prof.barLength || 6000)) : ((prof.weightPerM||0) * (prof.pricePerKg||0) / 1000),
+          qty: divQty, length: len, totalMeasure: len * divQty, cost: cost * divQty
         });
       }
 
-      partList.forEach((part, idx) => {
-        // Simple Method: Use part dimensions directly. Traverse is treated as a dormant by the sub-calculation.
+      (partList || []).forEach((part, idx) => {
         const isFirst = idx === 0;
         const isLast = idx === partList.length - 1;
-        
-        const myOptionalSides = { top: false, bottom: false, left: false, right: false, isSubPart: true };
+        const halfDiv = divThick / 2;
+
         let calcL = (direction === 'horizontal') ? (part.width || (boxL / partList.length)) : boxL;
         let calcH = (direction === 'vertical') ? (part.height || (boxH / partList.length)) : boxH;
 
-        // Junction suppression (BOM only)
+        // VIRTUAL INFLATION LOGIC: 
+        // Part 1 (Leader) = Nominal (No inflation).
+        // Part 2+ (Followers) = Nominal + halfDiv (to compensate central deduction).
         if (direction === 'horizontal') {
-           if (!isFirst) { myOptionalSides.left = false; }
-           if (!isLast) { myOptionalSides.right = false; }
+           if (!isFirst) { calcL += halfDiv; } // Follower for its LEFT junction
         } else {
-           if (!isFirst) { myOptionalSides.top = false; }
-           if (!isLast) { myOptionalSides.bottom = false; }
+           if (!isFirst) { calcH += halfDiv; } // Follower for its TOP junction
         }
 
         if (part.type === 'group' && part.subParts) {
-          processPartList(part.subParts, calcL, calcH, direction === 'horizontal' ? 'vertical' : 'horizontal');
-          return;
+           processPartList(part.subParts, calcL, calcH, direction === 'horizontal' ? 'vertical' : 'horizontal');
+           return;
         }
 
         const compId = part.compositionId || frameCompId;
         const subPartOpt = { top: false, bottom: false, left: false, right: false, isSubPart: true };
         
-        // --- H-INFLATION / W-INFLATION LOGIC (Shared Frame) ---
-        let calcW = calcL;
-        let calcH_final = calcH;
-        
-        const res = this.calculateComponentBOM(config, calcW, calcH_final, compId, part.glassId || config.glassId, subPartOpt, calcH_final, L, totalH, divThick);
+        const res = this.calculateComponentBOM(config, calcL, calcH, compId, part.glassId || config.glassId, subPartOpt, calcH, L, totalH, divThick);
         const sourceLabel = `Partie ${idx + 1} (${part.type})`;
 
-        const filterFn = (item) => {
-           const search = ((item.label || '') + ' ' + (item.name || '')).toLowerCase();
-           if (search.includes('parclose') || search.includes('joint')) return true;
-           if (item.isCouvreJoint) return false;
-           // Redundant dormant profiles are suppressed at the sub-part level
-           const frameTerms = ['dormant', 'cadre', 'batit', 'dorme'];
-           if (frameTerms.some(t => search.includes(t))) return false;
-           if (part.type === 'fixe') {
-              const opTerms = ['ouvrant', 'vantail', 'chicane', 'panneau', 'reducteur', 'poignee', 'cremone', 'paumelle', 'galet', 'serrure'];
-              if (opTerms.some(t => search.includes(t))) return false;
-           }
+        const filterFn = (i) => {
+           const s = ((i.label || '') + ' ' + (i.name || '')).toLowerCase();
+           if (s.includes('parclose') || s.includes('joint')) return true;
+           if (i.isCouvreJoint) return false;
+           if (['dormant', 'cadre', 'batit', 'dorme'].some(t => s.includes(t))) return false;
+           if (part.type === 'fixe' && ['ouvrant', 'vantail', 'chicane', 'panneau', 'reducteur', 'poignee', 'cremone', 'paumelle', 'galet', 'serrure'].some(t => s.includes(t))) return false;
            return true;
         };
 
-        results.profiles.push(...res.profiles.filter(filterFn).map(p => ({ ...p, source: sourceLabel })));
-        results.accessories.push(...res.accessories.filter(filterFn).map(a => ({ ...a, source: sourceLabel })));
+        results.profiles.push(...(res.profiles || []).filter(filterFn).map(p => ({ ...p, source: sourceLabel })));
+        results.accessories.push(...(res.accessories || []).filter(filterFn).map(a => ({ ...a, source: sourceLabel })));
         if (res.gasket) results.accessories.push({ ...res.gasket, source: sourceLabel });
         if (res.glass) results.glasses.push({ ...res.glass, source: sourceLabel });
       });
