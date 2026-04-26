@@ -693,22 +693,21 @@ export class FormulaEngine {
       }
 
       partList.forEach((part, idx) => {
-        const halfDiv = divThick / 2;
+        // Simple Method: Use part dimensions directly. Traverse is treated as a dormant by the sub-calculation.
         const isFirst = idx === 0;
         const isLast = idx === partList.length - 1;
         
         const myOptionalSides = { top: false, bottom: false, left: false, right: false, isSubPart: true };
-        let calcL = (direction === 'horizontal') ? part.width : boxL;
-        let calcH = (direction === 'vertical') ? part.height : boxH;
+        let calcL = (direction === 'horizontal') ? (part.width || (boxL / partList.length)) : boxL;
+        let calcH = (direction === 'vertical') ? (part.height || (boxH / partList.length)) : boxH;
 
-        // AXIS LOGIC: 
-        // If axis is at 300, the actual chassis width on that side ends at 300 - 20 (half-traverse)
+        // Junction suppression (BOM only)
         if (direction === 'horizontal') {
-           if (!isFirst) { myOptionalSides.left = false; calcL -= halfDiv; }
-           if (!isLast) { myOptionalSides.right = false; calcL -= halfDiv; }
+           if (!isFirst) { myOptionalSides.left = false; }
+           if (!isLast) { myOptionalSides.right = false; }
         } else {
-           if (!isFirst) { myOptionalSides.top = false; calcH -= halfDiv; }
-           if (!isLast) { myOptionalSides.bottom = false; calcH -= halfDiv; }
+           if (!isFirst) { myOptionalSides.top = false; }
+           if (!isLast) { myOptionalSides.bottom = false; }
         }
 
         if (part.type === 'group' && part.subParts) {
