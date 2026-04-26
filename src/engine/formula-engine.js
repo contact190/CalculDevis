@@ -235,13 +235,17 @@ export class FormulaEngine {
     });
 
     const glass = this.db.glass.find(g => g.id === glassId);
+    // Normalize rangeId: strip hyphens and spaces for flexible matching
+    const normalizeRangeId = (id) => (id || '').replace(/[-\s]+/g, '').toLowerCase();
+    const compNormRangeId = normalizeRangeId(composition.rangeId);
+
     let gasket = null;
     
     if (glass) {
       const allGasketEntries = this.db.gasketCompatibility || [];
       
       let compatibility = allGasketEntries.find(
-        c => c.rangeId === composition.rangeId &&
+        c => normalizeRangeId(c.rangeId) === compNormRangeId &&
              parseFloat(c.glassThickness) === parseFloat(glass.thickness)
       );
       
@@ -289,7 +293,7 @@ export class FormulaEngine {
       const hasManualParcloseV = profiles.some(p => p.label?.toLowerCase() === 'parclosev');
       
       let glassProfiles = (this.db.glassProfileCompatibility || []).filter(
-        c => c.rangeId === composition.rangeId &&
+        c => normalizeRangeId(c.rangeId) === compNormRangeId &&
              parseFloat(c.glassThickness) === parseFloat(glass.thickness)
       );
 
