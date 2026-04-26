@@ -504,27 +504,29 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
-            <div className="form-group">
-              <label className="label">Finition / Couleur</label>
-              <select name="colorId" value={config.colorId} onChange={handleChange} className="input">
-                {database.colors.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </div>
-            <div className="form-group" style={{ position: 'relative' }}>
-              <label className="label">Vitrage</label>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <select name="glassId" value={config.glassId} onChange={handleChange} className="input" style={{ flex: 1 }}>
-                  {database.glass.map(g => <option key={g.id} value={g.id}>{g.name} {g.composition ? `(${g.composition})` : ''}</option>)}
+          {currentComp?.openingType !== 'VoletSeul' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
+              <div className="form-group">
+                <label className="label">Finition / Couleur</label>
+                <select name="colorId" value={config.colorId} onChange={handleChange} className="input">
+                  {database.colors.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
-                <button onClick={() => setCompareModalOpen(true)} className="btn btn-secondary" style={{ padding: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Comparer les vitrages">
-                  <GitCompare size={18} />
-                </button>
+              </div>
+              <div className="form-group" style={{ position: 'relative' }}>
+                <label className="label">Vitrage</label>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <select name="glassId" value={config.glassId} onChange={handleChange} className="input" style={{ flex: 1 }}>
+                    {database.glass.map(g => <option key={g.id} value={g.id}>{g.name} {g.composition ? `(${g.composition})` : ''}</option>)}
+                  </select>
+                  <button onClick={() => setCompareModalOpen(true)} className="btn btn-secondary" style={{ padding: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Comparer les vitrages">
+                    <GitCompare size={18} />
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
-          {hasCouvreJoint && (
+          {hasCouvreJoint && currentComp?.openingType !== 'VoletSeul' && (
             <div className="form-group" style={{ marginTop: '1.5rem', padding: '1rem', background: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
               <label className="label" style={{ marginBottom: '0.75rem' }}>Couvres-Joints Optionnels</label>
               <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
@@ -543,7 +545,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
             </div>
           )}
 
-          {availableOptions.length > 0 && (
+          {availableOptions.length > 0 && currentComp?.openingType !== 'VoletSeul' && (
             <div className="form-group" style={{ marginTop: '1.5rem', padding: '1rem', background: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
               <label className="label" style={{ marginBottom: '0.75rem' }}>Options & Variantes</label>
               <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', flexDirection: 'column' }}>
@@ -560,21 +562,27 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
           )}
 
           {/* Precadre Option */}
-          <div style={{ marginTop: '1rem', padding: '0.75rem 1rem', background: config.hasPrecadre ? '#f0fdf4' : '#f8fafc', borderRadius: '0.75rem', border: `1px solid ${config.hasPrecadre ? '#86efac' : '#e2e8f0'}`, transition: 'all 0.2s' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', fontWeight: 600, color: config.hasPrecadre ? '#166534' : '#1e293b', fontSize: '0.9rem' }}>
-              <input type="checkbox" checked={config.hasPrecadre || false}
-                onChange={e => setConfig(prev => ({ ...prev, hasPrecadre: e.target.checked }))}
-                style={{ width: '1.2rem', height: '1.2rem' }} />
-              🔲 Pose sur Précadre
-              {config.hasPrecadre && <span style={{ fontSize: '0.75rem', fontWeight: 400, color: '#15803d', marginLeft: '0.5rem' }}>→ Chevilles supprimées automatiquement</span>}
-            </label>
-          </div>
+          {currentComp?.openingType !== 'VoletSeul' && (
+            <div style={{ marginTop: '1rem', padding: '0.75rem 1rem', background: config.hasPrecadre ? '#f0fdf4' : '#f8fafc', borderRadius: '0.75rem', border: `1px solid ${config.hasPrecadre ? '#86efac' : '#e2e8f0'}`, transition: 'all 0.2s' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', fontWeight: 600, color: config.hasPrecadre ? '#166534' : '#1e293b', fontSize: '0.9rem' }}>
+                <input type="checkbox" checked={config.hasPrecadre || false}
+                  onChange={e => setConfig(prev => ({ ...prev, hasPrecadre: e.target.checked }))}
+                  style={{ width: '1.2rem', height: '1.2rem' }} />
+                🔲 Pose sur Précadre
+                {config.hasPrecadre && <span style={{ fontSize: '0.75rem', fontWeight: 400, color: '#15803d', marginLeft: '0.5rem' }}>→ Chevilles supprimées automatiquement</span>}
+              </label>
+            </div>
+          )}
 
       <div style={{ marginTop: '1.5rem', padding: '1rem', background: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', fontWeight: 600, color: '#1e293b', fontSize: '0.95rem' }}>
-            <input type="checkbox" checked={config.hasShutter || false} onChange={e => setConfig(prev => ({ ...prev, hasShutter: e.target.checked }))} style={{ width: '1.2rem', height: '1.2rem' }} />
-            Ajouter un Volet Roulant
+            <input type="checkbox" 
+              disabled={currentComp?.openingType === 'VoletSeul'}
+              checked={config.hasShutter || currentComp?.openingType === 'VoletSeul'} 
+              onChange={e => setConfig(prev => ({ ...prev, hasShutter: e.target.checked }))} 
+              style={{ width: '1.2rem', height: '1.2rem' }} />
+            {currentComp?.openingType === 'VoletSeul' ? 'Produit : Volet Rénovation Selectionné' : 'Ajouter un Volet Roulant'}
           </label>
           
           {config.hasShutter && (

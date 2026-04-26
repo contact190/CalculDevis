@@ -320,6 +320,17 @@ export const DEFAULT_DATA = {
         { type: 'profile', id: '2CF36-31200', label: 'Pare-tempête (H)', formula: 'H-149', qty: 6 },
         { type: 'accessory', id: 'ROULETTE', label: 'Roulettes', formula: '6', qty: 1 }
       ]
+    },
+    {
+      id: 'VOLET-SEUL',
+      name: 'Volet Rénovation (Seul)',
+      rangeId: 'H36-2V',
+      categoryId: 'CAT-F',
+      openingType: 'VoletSeul',
+      hasGasket: false,
+      glassFormulaL: '0',
+      glassFormulaH: '0',
+      elements: []
     }
   ],
   quotes: [

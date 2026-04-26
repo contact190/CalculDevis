@@ -824,11 +824,15 @@ export class FormulaEngine {
       const caisson = this.db.shutterComponents.caissons.find(c => c.id === config.shutterConfig.caissonId);
       shutterHeight = parseFloat(caisson?.height) || 0;
     }
-    
+
+    // VOLET SEUL LOGIC (V3.2)
+    const composition = this.db.compositions.find(c => c.id === config.compositionId);
+    const isOnlyShutter = composition?.openingType === 'VoletSeul';
+
     // The Joinery (Window) height is config.H
-    // The Total height (for covers) is H + shutterHeight
-    const windowH = H;
-    const totalH = H + shutterHeight;
+    // If it's only a shutter, window height is effectively 0 for profile calculations
+    const windowH = isOnlyShutter ? 0 : H;
+    const totalH = isOnlyShutter ? H : (H + shutterHeight);
 
     let profiles = [];
     let accessories = [];
@@ -894,9 +898,9 @@ export class FormulaEngine {
 
     // 6. Volet Roulant
     let shutterL = L;
-    let shutterH_val = windowH;
+    let shutterH_val = isOnlyShutter ? H : windowH;
     
-    if (config.compoundType && config.compoundType !== 'none' && config.compoundConfig?.shutterMode === 'opening_only') {
+    if (!isOnlyShutter && config.compoundType && config.compoundType !== 'none' && config.compoundConfig?.shutterMode === 'opening_only') {
        const opPart = config.compoundConfig.parts?.find(p => p.type === 'opening');
        if (opPart) {
           if (config.compoundConfig.orientation !== 'vertical') {
