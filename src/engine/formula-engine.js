@@ -742,13 +742,20 @@ export class FormulaEngine {
         let calcL = (direction === 'horizontal') ? (part.width || (boxL / partList.length)) : boxL;
         let calcH = (direction === 'vertical') ? (part.height || (boxH / partList.length)) : boxH;
 
-        // VIRTUAL INFLATION LOGIC: 
-        // Part 1 (Leader) = Nominal (No inflation).
-        // Part 2+ (Followers) = Nominal + halfDiv (to compensate central deduction).
+        let inflation = (!isFirst) ? (divThick / 2) : 0;
+
+        // --- NOUVELLE RÈGLE ---
+        // Si l'assemblage contient une partie fixe, on alloue la totalité de l'épaisseur
+        // de la traverse à cette partie fixe au lieu de faire moit-moit.
+        const hasFixe = partList.some(p => p.type === 'fixe');
+        if (hasFixe) {
+            inflation = (part.type === 'fixe') ? divThick : 0;
+        }
+
         if (direction === 'horizontal') {
-           if (!isFirst) { calcL += halfDiv; } // Follower for its LEFT junction
+           calcL += inflation;
         } else {
-           if (!isFirst) { calcH += halfDiv; } // Follower for its TOP junction
+           calcH += inflation;
         }
 
         if (part.type === 'group' && part.subParts) {
