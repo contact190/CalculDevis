@@ -207,7 +207,7 @@ const AdminDashboard = ({ data, setData }) => {
       formula: '1', 
       barLength: 6400,
       ...(family === 'caissons' ? { height: 185, jointPrice: 0, jointFormula: 'L/1000' } : {}),
-      ...(family === 'glissieres' ? { hasBaguette: false, baguettePrice: 0 } : {}),
+      ...(family === 'lames' ? { baguettePrice: 0 } : {}),
       _isNew: true
     };
     setData(prev => {
@@ -2134,12 +2134,15 @@ const AdminDashboard = ({ data, setData }) => {
                               <th>Formule Joint</th>
                             </>
                           )}
+                          {key === 'lames' && (
+                            <>
+                              <th>Prix Baguette (ML)</th>
+                            </>
+                          )}
                           {key === 'glissieres' && (
                             <>
                               <th>Gamme</th>
                               <th>Type (Auto)</th>
-                              <th>Baguette (Oui)</th>
-                              <th>Prix Baguette</th>
                             </>
                           )}
                           {key === 'glissieres' ? (
@@ -2174,13 +2177,18 @@ const AdminDashboard = ({ data, setData }) => {
                                 <td><input className="input" value={item.jointFormula || 'L/1000'} onChange={e => updateShutterItem(key, i, 'jointFormula', e.target.value)} style={{ width: '100px' }} /></td>
                               </>
                             )}
+                            {key === 'lames' && (
+                              <>
+                                <td><input className="input" type="number" step="0.01" value={item.baguettePrice || 0} onChange={e => updateShutterItem(key, i, 'baguettePrice', e.target.value)} style={{ width: '90px' }} /></td>
+                              </>
+                            )}
                             {key === 'glissieres' && (
                               <>
                                 <td>
                                   <select className="input" value={item.rangeId || ''} onChange={e => updateShutterItem(key, i, 'rangeId', e.target.value)} style={{ width: '90px' }}>
                                     <option value="">Toutes</option>
-                                    {data.ranges.map(r => <option key={r.id} value={r.id}>{r.id}</option>)}
-                                  </select>
+                                    {database.ranges.map(r => <option key={r.id} value={r.id}>{r.id}</option>)}
+                                  </select> 
                                 </td>
                                 <td>
                                   <select className="input" value={item.shutterType || 'OTHER'} onChange={e => updateShutterItem(key, i, 'shutterType', e.target.value)} style={{ width: '90px' }}>
@@ -2189,10 +2197,6 @@ const AdminDashboard = ({ data, setData }) => {
                                     <option value="OTHER">Autre</option>
                                   </select>
                                 </td>
-                                <td style={{ textAlign: 'center' }}>
-                                  <input type="checkbox" checked={item.hasBaguette || false} onChange={e => updateShutterItem(key, i, 'hasBaguette', e.target.checked)} />
-                                </td>
-                                <td><input className="input" type="number" step="0.01" value={item.baguettePrice || 0} onChange={e => updateShutterItem(key, i, 'baguettePrice', e.target.value)} style={{ width: '80px' }} /></td>
                               </>
                             )}
                             {key === 'glissieres' ? (
