@@ -554,21 +554,55 @@ export class FormulaEngine {
       finalCost = qty * itemPrice;
     }
 
+    // Standalone / Manual Selection Logic (V3.2)
+    const includedParts = config.shutterConfig?.includedParts || { caisson: true, tablier: true, axe: true, glissieres: true, accessories: true };
+    const isExistant = config.shutterConfig?.isExistant || false; // For Caisson Tunnel/Existing
+
+    // Map family keys to our logic categories
+    const categoryMap = {
+      'caissonId': 'caisson',
+      'lameId': 'tablier',
+      'lameFinaleId': 'tablier',
+      'axeId': 'axe',
+      'glissiereId': 'glissieres',
+      'kitId': 'accessories',
+      'baguetteId': 'tablier'
+    };
+    
+    const category = categoryMap[key] || 'accessories';
+    const isIncluded = includedParts[category];
+
+    // Calculate but filter from BOM/Cost if not included
+    if (!isIncluded) return;
+
+    // Special case: Caisson Tunnel (Existing)
+    // Price and Cost become 0, but item is technically processed
+    let effectivePrice = itemPrice;
+    let effectiveCost = finalCost;
+    let nameSuffix = '';
+
+    if (key === 'caissonId' && isExistant) {
+      effectivePrice = 0;
+      effectiveCost = 0;
+      nameSuffix = ' (Existant - Tunnel)';
+    }
+
     shutterPack.push({
       ...item,
       itemKey: key,
-      name: displayName,
+      name: displayName + nameSuffix,
       qty: qty,
       barLength: barLength,
-      price: itemPrice,
+      price: effectivePrice,
       priceUnit: item.priceUnit,
       resolvedFormula: this.resolveFormula(item.formula || '1', { L: itemScopeL, H, HC }),
-      cost: finalCost
+      cost: effectiveCost
     });
 
-    // Process Add-ons
+    // Process Add-ons (Only if main part is included)
     if (item.addOns && Array.isArray(item.addOns)) {
       item.addOns.forEach(addon => {
+        // ... (rest of the addon logic remains the same, but using effective values for cost if needed)
         const addonQty = this.evaluate(addon.formula || '1', { L: itemScopeL, H, HC });
         if (addonQty > 0) {
           const addonPrice = addon.price || 0;

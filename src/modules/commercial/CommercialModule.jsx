@@ -570,13 +570,62 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
             </label>
           </div>
 
-          {/* Volet Roulant */}
-          <div style={{ marginTop: '1.5rem', padding: '1rem', background: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', fontWeight: 600, color: '#1e293b', fontSize: '0.95rem' }}>
-              <input type="checkbox" checked={config.hasShutter || false} onChange={e => setConfig(prev => ({ ...prev, hasShutter: e.target.checked }))} style={{ width: '1.2rem', height: '1.2rem' }} />
-              Ajouter un Volet Roulant
+      <div style={{ marginTop: '1.5rem', padding: '1rem', background: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', fontWeight: 600, color: '#1e293b', fontSize: '0.95rem' }}>
+            <input type="checkbox" checked={config.hasShutter || false} onChange={e => setConfig(prev => ({ ...prev, hasShutter: e.target.checked }))} style={{ width: '1.2rem', height: '1.2rem' }} />
+            Ajouter un Volet Roulant
+          </label>
+          
+          {config.hasShutter && (
+             <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button 
+                  onClick={() => setConfig(prev => ({ ...prev, shutterConfig: { ...prev.shutterConfig, isStandalone: !prev.shutterConfig?.isStandalone } }))}
+                  style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem', borderRadius: '0.4rem', border: '1px solid #cbd5e1', background: config.shutterConfig?.isStandalone ? '#eff6ff' : 'white', color: config.shutterConfig?.isStandalone ? '#3b82f6' : '#64748b', cursor: 'pointer' }}
+                >
+                  {config.shutterConfig?.isStandalone ? '⚙️ Mode Détail' : '📦 Mode Pack'}
+                </button>
+             </div>
+          )}
+        </div>
+
+        {config.hasShutter && (
+          <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: '#f1f5f9', borderRadius: '0.5rem', border: '1px solid #e2e8f0', display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 600, color: '#1e40af' }}>
+              <input type="checkbox" checked={config.shutterConfig?.isExistant || false}
+                onChange={e => setConfig(prev => ({ ...prev, shutterConfig: { ...(prev.shutterConfig || {}), isExistant: e.target.checked } }))} />
+              Caisson Tunnel (Existant)
             </label>
-            {config.hasShutter && database.shutterComponents && (
+            
+            {config.shutterConfig?.isStandalone && (
+              <div style={{ display: 'flex', gap: '0.75rem', borderLeft: '2px solid #cbd5e1', paddingLeft: '0.75rem', flexWrap: 'wrap' }}>
+                {[
+                  { id: 'caisson', label: 'Caisson' },
+                  { id: 'tablier', label: 'Tablier' },
+                  { id: 'axe', label: 'Axe/Mot.' },
+                  { id: 'glissieres', label: 'Glissières' }
+                ].map(part => {
+                  const includedParts = config.shutterConfig?.includedParts || { caisson: true, tablier: true, axe: true, glissieres: true, accessories: true };
+                  return (
+                    <label key={part.id} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.7rem', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={includedParts[part.id]} 
+                        onChange={e => setConfig(prev => ({ 
+                          ...prev, 
+                          shutterConfig: { 
+                            ...prev.shutterConfig, 
+                            includedParts: { ...(prev.shutterConfig?.includedParts || { caisson: true, tablier: true, axe: true, glissieres: true, accessories: true }), [part.id]: e.target.checked }
+                          } 
+                        }))} />
+                      {part.label}
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {config.hasShutter && database.shutterComponents && (
               <div style={{ marginTop: '1rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                 {[
                   { key: 'caissonId', label: 'Caisson', items: database.shutterComponents.caissons },
