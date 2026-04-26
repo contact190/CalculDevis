@@ -687,16 +687,18 @@ export class FormulaEngine {
     const divThick = divProfile?.thickness || 0;
 
     const processPartList = (partList, boxL, boxH, direction) => {
-      const isH = direction !== 'vertical'; // Split is horizontal (parts stacked vertically)
+      // Logic clarified:
+      // orientation 'horizontal' (side-by-side) -> Divider is VERTICAL -> Length = boxH
+      // orientation 'vertical' (stacked) -> Divider is HORIZONTAL -> Length = boxL
+      const isDividerHorizontal = direction === 'vertical'; 
       const divQty = (partList || []).length - 1;
 
       // Add Dividers for this level
       if (divQty > 0) {
-        const len = (isH ? boxL : boxH);
+        const len = (isDividerHorizontal ? boxL : boxH);
         
         let profileToUse = divProfile;
         if (!profileToUse) {
-           // LAST RESORT FALLBACK: If no profile found, use a placeholder so the line appears
            profileToUse = { id: divProfileId || 'TRAVERSE-TMP', name: 'Traverse à définir', pricePerBar: 0, weightPerM: 0 };
         }
 
@@ -705,9 +707,9 @@ export class FormulaEngine {
 
         results.profiles.push({
           ...profileToUse,
-          label: compoundType === 'fix_coulissant' ? 'Profilé d\'Union' : `Traverse ${isH ? 'Horiz.' : 'Vert.'}`,
+          label: compoundType === 'fix_coulissant' ? 'Profilé d\'Union' : `Traverse ${isDividerHorizontal ? 'Horiz.' : 'Vert.'}`,
           source: 'Jonction',
-          formula: isH ? 'L' : 'H',
+          formula: isDividerHorizontal ? 'L' : 'H',
           resolvedFormula: `${len} mm`,
           unitPrice: profileToUse.pricePerBar ? (profileToUse.pricePerBar / profileToUse.barLength) : ((profileToUse.weightPerM||0) * (profileToUse.pricePerKg||0) / 1000),
           qty: divQty, 
