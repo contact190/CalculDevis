@@ -617,11 +617,11 @@ export class FormulaEngine {
     const isHorizontal = orientation !== 'vertical';
     const isMultiChassis = compoundType === 'fix_coulissant';
     
-    // 1. Calculate Global Frame once at the very start (ONLY for fix_ouvrant / Single Chassi)
-    const mainOp = parts.find(p => p.type === 'opening' && p.compositionId) || 
-                   parts.find(p => p.compositionId) || 
-                   parts.find(p => p.type === 'opening') || 
-                   parts[0];
+    // --- 1. GLOBAL FRAME ---
+    // In complex assemblies, the global dormant frame is calculated once from the main composition
+    const mainOp = parts?.find(p => p.type === 'opening' && p.compositionId) || 
+                   parts?.find(p => p.compositionId) || 
+                   parts?.[0];
     
     const frameCompId = (mainOp && mainOp.compositionId) ? mainOp.compositionId : config.compositionId;
     
@@ -632,37 +632,18 @@ export class FormulaEngine {
        const isCouvreJointFn = p => /couvres?[- ]?joints?|cj[vh]?/i.test(((p.label || '') + ' ' + (p.name || '')).toLowerCase());
        const isDormantFn = p => /dormant|cadre|chassis|batit|dorme/i.test(((p.label || '') + ' ' + (p.name || '')).toLowerCase());
 
-       // In Multi-Chassis: ONLY keep covers. In Single-Chassis: keep both dormant and covers.
-       const frameProfiles = frameRes.profiles.filter(p => {
-          if (isMultiChassis) return isCouvreJointFn(p);
-          return isDormantFn(p) || isCouvreJointFn(p);
-       }).map(p => ({ ...p, source: 'Cadre Global' }));
-       
+       const frameProfiles = frameRes.profiles.filter(p => isDormantFn(p) || isCouvreJointFn(p)).map(p => ({ ...p, source: 'Cadre Global' }));
        results.profiles.push(...frameProfiles);
-
-       const frameAccs = frameRes.accessories.filter(a => {
-          if (isMultiChassis) return isCouvreJointFn(a);
-          return isDormantFn(a) || isCouvreJointFn(a);
-       }).map(a => ({ ...a, source: 'Cadre Global' }));
-       
-       results.accessories.push(...frameAccs);
-
-       // NOTE: gasket is NOT taken from the global frame — each sub-part computes
-       // its own gasket based on its own glass panel dimensions (see processPartList).
-       // This avoids double-counting and gives the correct per-panel perimeter.
+       results.accessories.push(...frameRes.accessories.filter(a => isDormantFn(a) || isCouvreJointFn(a)).map(a => ({ ...a, source: 'Cadre Global' })));
     }
 
-    // Auto-resolve Union/Traverse profile if set to AUTO using the new mapping table
-    let effectiveUnionId = unionId;
-    let effectiveTraverseId = traverseId;
-
+    // --- 2. SETUP DIVIDER ---
     const normalize = (s) => (s || '').replace(/[-\s]+/g, '').toLowerCase();
     const currentNormRangeId = normalize(config.rangeId);
-
-    // DETERMINING ROLES:
-    // orientation 'horizontal' -> side-by-side -> Divider is VERTICAL (V)
-    // orientation 'vertical' -> stacked -> Divider is HORIZONTAL (H)
     const isVerticalSplit = orientation === 'horizontal';
+
+    let effectiveUnionId = unionId;
+    let effectiveTraverseId = traverseId;
 
     if (effectiveUnionId === 'AUTO') {
       const targetRole = isVerticalSplit ? 'traverse_v' : 'traverse_h';
@@ -672,7 +653,6 @@ export class FormulaEngine {
       );
       if (dividerEntry) effectiveUnionId = dividerEntry.profileId;
     }
-    
     if (effectiveTraverseId === 'AUTO') {
       const targetRole = isVerticalSplit ? 'traverse_v' : 'traverse_h';
       const dividerEntry = (this.db.traverses || []).find(t => 
@@ -686,25 +666,17 @@ export class FormulaEngine {
     const divProfile = this.db.profiles.find(p => p.id === divProfileId);
     const divThick = divProfile?.thickness || 0;
 
+    // --- 3. RECURSIVE PART PROCESSING ---
     const processPartList = (partList, boxL, boxH, direction) => {
-      // Logic clarified:
-      // orientation 'horizontal' (side-by-side) -> Divider is VERTICAL -> Length = boxH
-      // orientation 'vertical' (stacked) -> Divider is HORIZONTAL -> Length = boxL
-      const isDividerHorizontal = direction === 'vertical'; 
+      const isDividerHorizontal = direction === 'vertical';
       const divQty = (partList || []).length - 1;
 
-      // Add Dividers for this level
+      // Add Dividers
       if (divQty > 0) {
         const len = (isDividerHorizontal ? boxL : boxH);
-        
-        let profileToUse = divProfile;
-        if (!profileToUse) {
-           profileToUse = { id: divProfileId || 'TRAVERSE-TMP', name: 'Traverse à définir', pricePerBar: 0, weightPerM: 0 };
-        }
-
+        let profileToUse = divProfile || { id: divProfileId || 'TRAVERSE-TMP', name: 'Traverse à définir', pricePerBar: 0, weightPerM: 0 };
         let dCost = profileToUse.pricePerBar ? (len / profileToUse.barLength * profileToUse.pricePerBar) : ((len/1000) * (profileToUse.weightPerM||0) * (profileToUse.pricePerKg||0));
-        const finalCost = (dCost * divQty) || 0;
-
+        
         results.profiles.push({
           ...profileToUse,
           label: compoundType === 'fix_coulissant' ? 'Profilé d\'Union' : `Traverse ${isDividerHorizontal ? 'Horiz.' : 'Vert.'}`,
@@ -712,89 +684,54 @@ export class FormulaEngine {
           formula: isDividerHorizontal ? 'L' : 'H',
           resolvedFormula: `${len} mm`,
           unitPrice: profileToUse.pricePerBar ? (profileToUse.pricePerBar / profileToUse.barLength) : ((profileToUse.weightPerM||0) * (profileToUse.pricePerKg||0) / 1000),
-          qty: divQty, 
-          length: len, 
-          totalMeasure: len * divQty,
-          cost: finalCost
+          qty: divQty, length: len, totalMeasure: len * divQty, cost: dCost * divQty
         });
       }
 
       partList.forEach((part, idx) => {
-        let pW = isH ? (part.width || (boxL / partList.length)) : boxL;
-        let pH = isH ? boxH : (part.height || (boxH / partList.length));
-        const pGlassId = part.glassId || config.glassId;
-        const sourceLabel = `Partie ${idx + 1}`;
+        const stdDormant = 40; 
+        const halfDiv = divThick / 2;
+        const isFirst = idx === 0;
+        const isLast = idx === partList.length - 1;
+        
+        const myOptionalSides = { top: false, bottom: false, left: false, right: false, isSubPart: true };
+        let calcL = (direction === 'horizontal') ? part.width : boxL;
+        let calcH = (direction === 'vertical') ? part.height : boxH;
+
+        // AXIS LOGIC: If side is a junction, subtract half traverse instead of full dormant
+        if (direction === 'horizontal') {
+           if (!isFirst) { myOptionalSides.left = false; calcL += (stdDormant - halfDiv); }
+           if (!isLast) { myOptionalSides.right = false; calcL += (stdDormant - halfDiv); }
+        } else {
+           if (!isFirst) { myOptionalSides.top = false; calcH += (stdDormant - halfDiv); }
+           if (!isLast) { myOptionalSides.bottom = false; calcH += (stdDormant - halfDiv); }
+        }
 
         if (part.type === 'group' && part.subParts) {
-           processPartList(part.subParts, pW, pH, isH ? 'vertical' : 'horizontal');
-           return;
+          processPartList(part.subParts, calcL, calcH, direction === 'horizontal' ? 'vertical' : 'horizontal');
+          return;
         }
 
-        // Resolve composition ID: Fall back to main composition to inherit gaskets and parcloses
-        let compId = part.compositionId;
-        if (!compId) {
-           compId = config.compositionId || parts.find(p=>p.type==='opening')?.compositionId;
-        }
+        const compId = part.compositionId || frameCompId;
+        const res = this.calculateComponentBOM(config, calcL, calcH, compId, part.glassId || config.glassId, myOptionalSides, totalH, calcL, totalH);
+        const sourceLabel = `Partie ${idx + 1} (${part.type})`;
 
-        const subPartOpt = isMultiChassis ? config.optionalSides : { top: false, bottom: false, left: false, right: false, isSubPart: true };
-        
-        // --- H-INFLATION / W-INFLATION LOGIC (Shared Frame) ---
-        // If we are in single-chassis mode (shared perimeter), the standard recipes
-        // in the Admin will subtract full dormant thicknesses.
-        // To compensate for shared dividers (traverses/unions), we inflate the input 
-        // dimension by half the divider thickness for each side that is a divider.
-        let calcW = pW;
-        let calcH = pH;
-        
-        if (!isMultiChassis && divProfile && divQty > 0) {
-           const offset = divThick / 2;
-           // If horizontal split (traverses), it's the HEIGHT that is affected
-           if (isHorizontal) {
-              // Part 1 (top) has 1 divider (bottom). Part N (bottom) has 1 divider (top). Middle has 2.
-              const dividerSides = (idx === 0 || idx === partList.length - 1) ? 1 : 2;
-              calcH += (offset * dividerSides);
-           } else {
-              // Vertical split (unions), it's the WIDTH that is affected
-              const dividerSides = (idx === 0 || idx === partList.length - 1) ? 1 : 2;
-              calcW += (offset * dividerSides);
-           }
-        }
-
-        const res = this.calculateComponentBOM(config, calcW, calcH, compId, pGlassId, subPartOpt, calcH, L, totalH);
-        
         const filterFn = (item) => {
-           const labelLower = (item.label || '').toLowerCase();
-           const nameLower = (item.name || '').toLowerCase();
-           const searchStr = (labelLower + ' ' + nameLower).trim();
-           
-           // ALWAYS allow parcloses and joints
-           if (searchStr.includes('parclose') || searchStr.includes('joint')) {
-              return true;
-           }
-
-           // Skip couvre-joints (always handled by global frame)
-           if (item.isCouvreJoint) {
-              return false;
-           }
-
-           // In single chassis mode, skip standard frame profiles from sub-parts
-           if (!isMultiChassis && item.isFrame) {
-              return false;
-           }
-           
-           // If it's a FIXE part, remove opening-only components
+           const search = ((item.label || '') + ' ' + (item.name || '')).toLowerCase();
+           if (search.includes('parclose') || search.includes('joint')) return true;
+           if (item.isCouvreJoint) return false;
+           // Redundant dormant profiles are suppressed at the sub-part level
+           const frameTerms = ['dormant', 'cadre', 'batit', 'dorme'];
+           if (frameTerms.some(t => search.includes(t))) return false;
            if (part.type === 'fixe') {
               const opTerms = ['ouvrant', 'vantail', 'chicane', 'panneau', 'reducteur', 'poignee', 'cremone', 'paumelle', 'galet', 'serrure'];
-              if (opTerms.some(t => searchStr.includes(t))) {
-                 return false;
-              }
+              if (opTerms.some(t => search.includes(t))) return false;
            }
            return true;
         };
 
         results.profiles.push(...res.profiles.filter(filterFn).map(p => ({ ...p, source: sourceLabel })));
         results.accessories.push(...res.accessories.filter(filterFn).map(a => ({ ...a, source: sourceLabel })));
-
         if (res.gasket) results.accessories.push({ ...res.gasket, source: sourceLabel });
         if (res.glass) results.glasses.push({ ...res.glass, source: sourceLabel });
       });
