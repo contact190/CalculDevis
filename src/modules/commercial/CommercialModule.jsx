@@ -442,13 +442,19 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                          const key = config.compoundType === 'fix_coulissant' ? 'unionId' : 'traverseId';
                          setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, [key]: e.target.value } }));
                       }}>
-                         <option value="AUTO">AUTO (Calcul automatique)</option>
-                         <option value="">-- Sélectionner manuellement --</option>
-                         {(database.traverses || []).filter(t => {
-                             const normalize = (s) => (s || '').replace(/[-\s]+/g, '').toLowerCase();
-                             const currentNorm = normalize(config.rangeId);
-                             return (t.rangeIds || []).some(rid => normalize(rid) === currentNorm);
-                          }).map(t => { const p = database.profiles.find(px => px.id === t.profileId); if (!p) return null; return <option key={t.id} value={p.id}>{t.name} ({p.thickness}mm)</option>; }).filter(Boolean)}
+                           {(database.traverses || []).filter(t => {
+                              const normalize = (s) => (s || '').replace(/[-\s]+/g, '').toLowerCase();
+                              const currentNorm = normalize(config.rangeId);
+                              return (t.rangeIds || []).some(rid => normalize(rid) === currentNorm);
+                           }).map(t => { 
+                              const p = database.profiles.find(px => px.id === t.profileId); 
+                              if (!p) return null; 
+                              return <option key={t.id} value={p.id} style={{ fontWeight: 'bold' }}>{t.name} (Mapping Admin)</option>; 
+                           }).filter(Boolean)}
+                           <option disabled>── PROFILÉS JONCTION ──</option>
+                           {database.profiles.filter(p => p.category === 'divider' && (p.rangeIds || []).includes(config.rangeId)).map(p => (
+                              <option key={p.id} value={p.id}>{p.name} ({p.thickness}mm)</option>
+                           ))}
                       </select>
                    </div>
                    <div className="form-group">
