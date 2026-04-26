@@ -730,7 +730,13 @@ export class FormulaEngine {
         }
 
         const compId = part.compositionId || frameCompId;
-        const res = this.calculateComponentBOM(config, calcL, calcH, compId, part.glassId || config.glassId, myOptionalSides, totalH, calcL, totalH, divThick);
+        const subPartOpt = { top: false, bottom: false, left: false, right: false, isSubPart: true };
+        
+        // --- H-INFLATION / W-INFLATION LOGIC (Shared Frame) ---
+        let calcW = calcL;
+        let calcH_final = calcH;
+        
+        const res = this.calculateComponentBOM(config, calcW, calcH_final, compId, part.glassId || config.glassId, subPartOpt, calcH_final, L, totalH, divThick);
         const sourceLabel = `Partie ${idx + 1} (${part.type})`;
 
         const filterFn = (item) => {
