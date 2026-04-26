@@ -663,8 +663,12 @@ export class FormulaEngine {
     }
 
     const divProfileId = (compoundType === 'fix_coulissant' ? effectiveUnionId : effectiveTraverseId);
-    const divProfile = this.db.profiles.find(p => p.id === divProfileId);
-    const divThick = divProfile?.thickness || 0;
+    // Detect thickness from profile property or name fallback (e.g. "h40" -> 40)
+    let divThick = divProfile?.thickness;
+    if (divThick === undefined || divThick === 0) {
+       const nameMatch = (divProfile?.name || '').match(/h(\d+)/i);
+       divThick = nameMatch ? parseInt(nameMatch[1]) : 40; // Default 40 if not found
+    }
 
     // --- 3. RECURSIVE PART PROCESSING ---
     const processPartList = (partList, boxL, boxH, direction) => {
@@ -689,7 +693,6 @@ export class FormulaEngine {
       }
 
       partList.forEach((part, idx) => {
-        const stdDormant = 40; 
         const halfDiv = divThick / 2;
         const isFirst = idx === 0;
         const isLast = idx === partList.length - 1;
@@ -698,13 +701,14 @@ export class FormulaEngine {
         let calcL = (direction === 'horizontal') ? part.width : boxL;
         let calcH = (direction === 'vertical') ? part.height : boxH;
 
-        // AXIS LOGIC: If side is a junction, subtract half traverse instead of full dormant
+        // AXIS LOGIC: 
+        // If axis is at 300, the actual chassis width on that side ends at 300 - 20 (half-traverse)
         if (direction === 'horizontal') {
-           if (!isFirst) { myOptionalSides.left = false; calcL += (stdDormant - halfDiv); }
-           if (!isLast) { myOptionalSides.right = false; calcL += (stdDormant - halfDiv); }
+           if (!isFirst) { myOptionalSides.left = false; calcL -= halfDiv; }
+           if (!isLast) { myOptionalSides.right = false; calcL -= halfDiv; }
         } else {
-           if (!isFirst) { myOptionalSides.top = false; calcH += (stdDormant - halfDiv); }
-           if (!isLast) { myOptionalSides.bottom = false; calcH += (stdDormant - halfDiv); }
+           if (!isFirst) { myOptionalSides.top = false; calcH -= halfDiv; }
+           if (!isLast) { myOptionalSides.bottom = false; calcH -= halfDiv; }
         }
 
         if (part.type === 'group' && part.subParts) {
