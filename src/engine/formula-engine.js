@@ -392,6 +392,7 @@ export class FormulaEngine {
         area: glassArea,
         weight: glassWeight,
         cost: glassCost,
+        calculation: `L: ${this.resolveFormula(composition.glassFormulaL || 'L', scope)} = ${Math.round(glassL)} | H: ${this.resolveFormula(composition.glassFormulaH || 'H', scope)} = ${Math.round(glassH)}`,
         error: (isNaN(glassL) || isNaN(glassH) || isNaN(glassQty)) ? "Formule Invalide" : null
       } : { name: 'Vitrage Manquant', width: 0, height: 0, qty: 0, area: 0, weight: 0, cost: 0 },
       gasket

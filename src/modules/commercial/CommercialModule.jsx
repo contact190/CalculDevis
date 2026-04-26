@@ -853,7 +853,9 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                     <tr key={`glass-${gi}`}>
                       <td data-label="Composant" style={{ fontWeight: 600 }}>Vitrage {g.name && g.name !== 'Vitrage' ? `(${g.name})` : ''}</td>
                       <td data-label="Source"><span style={{ fontSize: '0.6rem', padding: '0.1rem 0.4rem', background: '#f1f5f9', borderRadius: '1rem', color: '#64748b', whiteSpace: 'nowrap' }}>{g.source || 'Interne'}</span></td>
-                      <td data-label="Formule">{g.width} x {g.height} mm</td><td data-label="Calcul">-</td><td data-label="Nbre">{g.qty}u</td>
+                      <td data-label="Formule">{Math.round(g.width)} x {Math.round(g.height)} mm</td>
+                      <td data-label="Calcul" style={{ color: '#3b82f6', fontSize: '0.65rem' }}>{g.calculation || '-'}</td>
+                      <td data-label="Nbre">{g.qty}u</td>
                       <td data-label="Mesure Totale">{g.area.toFixed(2)} m²</td><td data-label="Prix Unit.">{(g.pricePerM2 || g.unitPrice)?.toFixed(2)}</td>
                       <td data-label="Prix Total" style={{ textAlign: 'right', fontWeight: 600 }}>{g.cost.toFixed(2)} DZD</td>
                     </tr>
