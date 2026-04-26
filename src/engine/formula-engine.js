@@ -677,6 +677,8 @@ export class FormulaEngine {
     }
 
     const divProfileId = (compoundType === 'fix_coulissant' ? effectiveUnionId : effectiveTraverseId);
+    const divProfile = this.db.profiles.find(p => p.id === divProfileId);
+    
     // Detect thickness from profile property or name fallback (e.g. "h40" -> 40)
     let divThick = divProfile?.thickness;
     if (divThick === undefined || divThick === 0) {
