@@ -656,17 +656,24 @@ export class FormulaEngine {
     let effectiveUnionId = unionId;
     let effectiveTraverseId = traverseId;
 
-    const currentRangeId = config.rangeId;
+    const normalize = (s) => (s || '').replace(/[-\s]+/g, '').toLowerCase();
+    const currentNormRangeId = normalize(config.rangeId);
 
     if (effectiveUnionId === 'AUTO') {
       const targetRole = isHorizontal ? 'union_h' : 'union_l';
-      const dividerEntry = (this.db.traverses || []).find(t => t.role === targetRole && (t.rangeIds || []).includes(currentRangeId));
+      const dividerEntry = (this.db.traverses || []).find(t => 
+        t.role === targetRole && 
+        (t.rangeIds || []).some(rid => normalize(rid) === currentNormRangeId)
+      );
       if (dividerEntry) effectiveUnionId = dividerEntry.profileId;
     }
     
     if (effectiveTraverseId === 'AUTO') {
       const targetRole = isHorizontal ? 'traverse_h' : 'traverse_l';
-      const dividerEntry = (this.db.traverses || []).find(t => t.role === targetRole && (t.rangeIds || []).includes(currentRangeId));
+      const dividerEntry = (this.db.traverses || []).find(t => 
+        t.role === targetRole && 
+        (t.rangeIds || []).some(rid => normalize(rid) === currentNormRangeId)
+      );
       if (dividerEntry) effectiveTraverseId = dividerEntry.profileId;
     }
 

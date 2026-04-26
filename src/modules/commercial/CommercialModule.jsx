@@ -444,7 +444,11 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                       }}>
                          <option value="AUTO">AUTO (Calcul automatique)</option>
                          <option value="">-- Sélectionner manuellement --</option>
-                         {(database.traverses || []).filter(t => (t.rangeIds || []).includes(config.rangeId)).map(t => { const p = database.profiles.find(px => px.id === t.profileId); if (!p) return null; return <option key={t.id} value={p.id}>{t.name} ({p.thickness}mm)</option>; }).filter(Boolean)}
+                         {(database.traverses || []).filter(t => {
+                             const normalize = (s) => (s || '').replace(/[-\s]+/g, '').toLowerCase();
+                             const currentNorm = normalize(config.rangeId);
+                             return (t.rangeIds || []).some(rid => normalize(rid) === currentNorm);
+                          }).map(t => { const p = database.profiles.find(px => px.id === t.profileId); if (!p) return null; return <option key={t.id} value={p.id}>{t.name} ({p.thickness}mm)</option>; }).filter(Boolean)}
                       </select>
                    </div>
                    <div className="form-group">
