@@ -2144,6 +2144,7 @@ const AdminDashboard = ({ data, setData }) => {
                             <>
                               <th>Gamme</th>
                               <th>Type (Auto)</th>
+                              <th>Épaisseur L (mm)</th>
                             </>
                           )}
                           {key === 'glissieres' ? (
@@ -2196,11 +2197,12 @@ const AdminDashboard = ({ data, setData }) => {
                                 </td>
                                 <td>
                                   <select className="input" value={item.shutterType || 'OTHER'} onChange={e => updateShutterItem(key, i, 'shutterType', e.target.value)} style={{ width: '90px' }}>
-                                    <option value="MONO">Mono (Sangle)</option>
-                                    <option value="PALA">Pala (Moteur)</option>
-                                    <option value="OTHER">Autre</option>
-                                  </select>
+                                  <option value="MONO">Mono (Sangle)</option>
+                                  <option value="PALA">Pala (Moteur)</option>
+                                  <option value="OTHER">Autre</option>
+                                </select>
                                 </td>
+                                <td><input className="input" type="number" step="1" value={item.thickness || 0} onChange={e => updateShutterItem(key, i, 'thickness', e.target.value)} style={{ width: '80px' }} /></td>
                               </>
                             )}
                             {key === 'glissieres' ? (

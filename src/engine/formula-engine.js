@@ -776,31 +776,27 @@ export class FormulaEngine {
   calculateBOM(config) {
     let { L, H, glassId } = config;
     
-    // --- GLOBAL TECHNICAL REDUCTION (Mono Glissiere) ---
-    // If Mono glissiere is selected, the whole window (L) is reduced by 90mm
+    // --- GLOBAL TECHNICAL REDUCTION (Dynamic Glissiere Thickness) ---
+    // Rule: We subtract the 'thickness' defined in Admin for the selected glissiere
     // V3.2.1: SKIP this reduction if we are in 'Volet Seul' mode (user enters final L)
-    const composition = this.db.compositions.find(c => c.id === config.compositionId);
     const isOnlyShutter = config.isOnlyShutter || false;
+    let widthReduction = 0;
 
-    let isGlissiereMono = false;
     if (!isOnlyShutter && config.hasShutter && config.shutterConfig) {
       const sc = this.db.shutterComponents;
       let gid = config.shutterConfig.glissiereId;
+
+      // Logic to find the effective ID (handle AUTO)
       if (gid === 'AUTO') {
         const kitId = config.shutterConfig.kitId;
         const type = kitId === 'KIT-SANG' ? 'MONO' : (kitId === 'KIT-MOTE' ? 'PALA' : 'OTHER');
+        let compForRange = this.db.compositions.find(c => c.id === config.compositionId);
         
-        // Find composition for range detection
-        let compForRange = composition;
         if (!compForRange && config.compoundConfig?.parts) {
           const parts = config.compoundConfig.parts;
           const mainOp = parts.find(p => p.type === 'opening' && p.compositionId) || 
-                         parts.find(p => p.compositionId) || 
-                         parts.find(p => p.type === 'opening') || 
-                         parts[0];
-          if (mainOp?.compositionId) {
-            compForRange = this.db.compositions.find(c => c.id === mainOp.compositionId);
-          }
+                         parts.find(p => p.compositionId) || parts[0];
+          if (mainOp?.compositionId) compForRange = this.db.compositions.find(c => c.id === mainOp.compositionId);
         }
 
         if (compForRange) {
@@ -808,14 +804,18 @@ export class FormulaEngine {
           if (autoG) gid = autoG.id;
         }
       }
+
       const gDef = (sc.glissieres || []).find(x => x.id === gid);
-      if (gDef && gDef.shutterType === 'MONO') {
-        isGlissiereMono = true;
+      if (gDef && gDef.thickness) {
+        widthReduction = parseFloat(gDef.thickness) || 0;
+      } else if (gDef && gDef.shutterType === 'MONO') {
+        // Fallback for legacy data if thickness not set yet
+        widthReduction = 90;
       }
     }
 
-    if (isGlissiereMono) {
-      L -= 90;
+    if (widthReduction > 0) {
+      L -= widthReduction;
     }
     
     // Rule 1: Couvre Joint (-12mm) -> ONLY FOR CAISSON, but let's handle it inside the shutter loop.
