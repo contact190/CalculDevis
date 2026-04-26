@@ -778,8 +778,12 @@ export class FormulaEngine {
     
     // --- GLOBAL TECHNICAL REDUCTION (Mono Glissiere) ---
     // If Mono glissiere is selected, the whole window (L) is reduced by 90mm
+    // V3.2.1: SKIP this reduction if we are in 'Volet Seul' mode (user enters final L)
+    const composition = this.db.compositions.find(c => c.id === config.compositionId);
+    const isOnlyShutter = config.isOnlyShutter || false;
+
     let isGlissiereMono = false;
-    if (config.hasShutter && config.shutterConfig) {
+    if (!isOnlyShutter && config.hasShutter && config.shutterConfig) {
       const sc = this.db.shutterComponents;
       let gid = config.shutterConfig.glissiereId;
       if (gid === 'AUTO') {
@@ -787,20 +791,20 @@ export class FormulaEngine {
         const type = kitId === 'KIT-SANG' ? 'MONO' : (kitId === 'KIT-MOTE' ? 'PALA' : 'OTHER');
         
         // Find composition for range detection
-        let composition = this.db.compositions.find(c => c.id === config.compositionId);
-        if (!composition && config.compoundConfig?.parts) {
+        let compForRange = composition;
+        if (!compForRange && config.compoundConfig?.parts) {
           const parts = config.compoundConfig.parts;
           const mainOp = parts.find(p => p.type === 'opening' && p.compositionId) || 
                          parts.find(p => p.compositionId) || 
                          parts.find(p => p.type === 'opening') || 
                          parts[0];
           if (mainOp?.compositionId) {
-            composition = this.db.compositions.find(c => c.id === mainOp.compositionId);
+            compForRange = this.db.compositions.find(c => c.id === mainOp.compositionId);
           }
         }
 
-        if (composition) {
-          const autoG = (sc.glissieres || []).find(g => (!g.rangeId || g.rangeId === composition.rangeId) && g.shutterType === type);
+        if (compForRange) {
+          const autoG = (sc.glissieres || []).find(g => (!g.rangeId || g.rangeId === compForRange.rangeId) && g.shutterType === type);
           if (autoG) gid = autoG.id;
         }
       }
