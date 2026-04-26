@@ -776,27 +776,26 @@ export class FormulaEngine {
   calculateBOM(config) {
     let { L, H, glassId } = config;
     
-    // --- GLOBAL TECHNICAL REDUCTION (Dynamic Glissiere Thickness) ---
-    // Rule: We subtract the 'thickness' defined in Admin for the selected glissiere
-    // V3.2.1: SKIP this reduction if we are in 'Volet Seul' mode (user enters final L)
-    const isOnlyShutter = config.isOnlyShutter || false;
+    const isOnlyShutter = !!config.isOnlyShutter;
     let widthReduction = 0;
 
     if (!isOnlyShutter && config.hasShutter && config.shutterConfig) {
       const sc = this.db.shutterComponents;
       let gid = config.shutterConfig.glissiereId;
 
-      // Logic to find the effective ID (handle AUTO)
       if (gid === 'AUTO') {
         const kitId = config.shutterConfig.kitId;
         const type = kitId === 'KIT-SANG' ? 'MONO' : (kitId === 'KIT-MOTE' ? 'PALA' : 'OTHER');
-        let compForRange = this.db.compositions.find(c => c.id === config.compositionId);
         
-        if (!compForRange && config.compoundConfig?.parts) {
+        let compForRange = this.db.compositions.find(c => c.id === config.compositionId);
+        if (!compForRange && config.compoundConfig?.parts?.length > 0) {
           const parts = config.compoundConfig.parts;
           const mainOp = parts.find(p => p.type === 'opening' && p.compositionId) || 
-                         parts.find(p => p.compositionId) || parts[0];
-          if (mainOp?.compositionId) compForRange = this.db.compositions.find(c => c.id === mainOp.compositionId);
+                         parts.find(p => p.compositionId) || 
+                         parts[0];
+          if (mainOp?.compositionId) {
+            compForRange = this.db.compositions.find(c => c.id === mainOp.compositionId);
+          }
         }
 
         if (compForRange) {
@@ -806,11 +805,12 @@ export class FormulaEngine {
       }
 
       const gDef = (sc.glissieres || []).find(x => x.id === gid);
-      if (gDef && gDef.thickness) {
-        widthReduction = parseFloat(gDef.thickness) || 0;
-      } else if (gDef && gDef.shutterType === 'MONO') {
-        // Fallback for legacy data if thickness not set yet
-        widthReduction = 90;
+      if (gDef) {
+        if (gDef.thickness != null && gDef.thickness !== '') {
+          widthReduction = parseFloat(gDef.thickness) || 0;
+        } else if (gDef.shutterType === 'MONO') {
+          widthReduction = 90;
+        }
       }
     }
 
@@ -818,19 +818,13 @@ export class FormulaEngine {
       L -= widthReduction;
     }
     
-    // Rule 1: Couvre Joint (-12mm) -> ONLY FOR CAISSON, but let's handle it inside the shutter loop.
-    
-    // Determine shutter box height if applicable
+    // --- 4. PREPARE DIMENSIONS ---
     let shutterHeight = 0;
     if (config.hasShutter && config.shutterConfig?.caissonId) {
       const caisson = this.db.shutterComponents.caissons.find(c => c.id === config.shutterConfig.caissonId);
       shutterHeight = parseFloat(caisson?.height) || 0;
     }
 
-    // VOLET SEUL LOGIC (V3.2)
-
-    // The Joinery (Window) height is config.H
-    // If it's only a shutter, window height is effectively 0 for profile calculations
     const windowH = isOnlyShutter ? 0 : H;
     const totalH = isOnlyShutter ? H : (H + shutterHeight);
 
