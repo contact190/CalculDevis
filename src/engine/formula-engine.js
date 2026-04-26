@@ -556,6 +556,7 @@ export class FormulaEngine {
 
     shutterPack.push({
       ...item,
+      itemKey: key,
       name: displayName,
       qty: qty,
       barLength: barLength,
@@ -602,14 +603,19 @@ export class FormulaEngine {
     }
 
     // Baguette
-    if (key === 'glissiereId' && item.hasBaguette && config.shutterConfig?.enableBaguette) {
+    if (key === 'glissiereId' && config.shutterConfig?.enableBaguette) {
       const baguettePrice = item.baguettePrice || 0;
-      // Baguette is explicitly set to ML, so cost is simply qty * price
-      const bCost = qty * baguettePrice;
+      
+      // We want the same quantity as slats (lameId)
+      const lameEntry = (shutterPack || []).find(s => s.itemKey === 'lameId');
+      const effectiveQty = lameEntry ? lameEntry.qty : qty;
+      
+      const bCost = effectiveQty * (baguettePrice / 1000); // Assuming baguettePrice is per ML
       shutterPack.push({
         id: `${item.id}-baguette`,
+        itemKey: 'baguetteId',
         name: `Baguette pour ${item.name}`,
-        qty: qty,
+        qty: effectiveQty,
         barLength: barLength,
         priceUnit: 'ML',
         price: baguettePrice,
