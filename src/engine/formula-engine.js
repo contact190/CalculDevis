@@ -730,17 +730,38 @@ export class FormulaEngine {
         const res = this.calculateComponentBOM(config, calcW, calcH, compId, pGlassId, subPartOpt, calcH, L, totalH);
         
         const filterFn = (item) => {
-           // Skip everything that belongs to the global frame perimeter (only in single chassis mode)
-           if (item.isCouvreJoint) return false;
-           if (!isMultiChassis && item.isFrame) return false;
+           const labelLower = (item.label || '').toLowerCase();
+           const nameLower = (item.name || '').toLowerCase();
+           const searchStr = (labelLower + ' ' + nameLower).trim();
            
-           const s = ((item.label || '') + ' ' + (item.name || '')).toLowerCase();
+           // ALWAYS allow parcloses and joints
+           if (searchStr.includes('parclose') || searchStr.includes('joint')) {
+              console.log(`[BOM-Filter] ALLOWED (Parclose/Joint): "${searchStr}"`);
+              return true;
+           }
+
+           // Skip couvre-joints (always handled by global frame)
+           if (item.isCouvreJoint) {
+              console.log(`[BOM-Filter] REJECTED (CouvreJoint): "${searchStr}"`);
+              return false;
+           }
+
+           // In single chassis mode, skip standard frame profiles from sub-parts
+           if (!isMultiChassis && item.isFrame) {
+              console.log(`[BOM-Filter] REJECTED (Frame-SubPart): "${searchStr}"`);
+              return false;
+           }
            
-           // If it's a FIXE part, also remove OPENING specific components
+           // If it's a FIXE part, remove opening-only components
            if (part.type === 'fixe') {
               const opTerms = ['ouvrant', 'vantail', 'chicane', 'panneau', 'reducteur', 'poignee', 'cremone', 'paumelle', 'galet', 'serrure'];
-              if (opTerms.some(t => s.includes(t))) return false;
+              if (opTerms.some(t => searchStr.includes(t))) {
+                 console.log(`[BOM-Filter] REJECTED (OpeningTerm in Fixe): "${searchStr}"`);
+                 return false;
+              }
            }
+
+           console.log(`[BOM-Filter] ALLOWED (Standard): "${searchStr}"`);
            return true;
         };
 
