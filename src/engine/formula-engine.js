@@ -686,27 +686,30 @@ export class FormulaEngine {
     const divProfile = this.db.profiles.find(p => p.id === divProfileId);
     const divThick = divProfile?.thickness || 0;
 
-    // DEBUG: console.log('DEBUG COMP:', { divProfileId, found: !!divProfile, type: compoundType });
-
     const processPartList = (partList, boxL, boxH, direction) => {
       const isH = direction !== 'vertical'; // Split is horizontal (parts stacked vertically)
       const divQty = (partList || []).length - 1;
 
       // Add Dividers for this level
-      if (divProfile && divQty > 0) {
+      if (divQty > 0) {
         const len = (isH ? boxL : boxH);
-        let dCost = divProfile.pricePerBar ? (len / divProfile.barLength * divProfile.pricePerBar) : ((len/1000) * (divProfile.weightPerM||0) * (divProfile.pricePerKg||0));
         
-        // Safety: If cost is 0 because of missing data, at least show the line
-        const finalCost = (dCost * divQty) || 0.0001; 
+        let profileToUse = divProfile;
+        if (!profileToUse) {
+           // LAST RESORT FALLBACK: If no profile found, use a placeholder so the line appears
+           profileToUse = { id: divProfileId || 'TRAVERSE-TMP', name: 'Traverse à définir', pricePerBar: 0, weightPerM: 0 };
+        }
+
+        let dCost = profileToUse.pricePerBar ? (len / profileToUse.barLength * profileToUse.pricePerBar) : ((len/1000) * (profileToUse.weightPerM||0) * (profileToUse.pricePerKg||0));
+        const finalCost = (dCost * divQty) || 0;
 
         results.profiles.push({
-          ...divProfile,
+          ...profileToUse,
           label: compoundType === 'fix_coulissant' ? 'Profilé d\'Union' : `Traverse ${isH ? 'Horiz.' : 'Vert.'}`,
           source: 'Jonction',
           formula: isH ? 'L' : 'H',
           resolvedFormula: `${len} mm`,
-          unitPrice: divProfile.pricePerBar ? (divProfile.pricePerBar / divProfile.barLength) : ((divProfile.weightPerM||0) * (divProfile.pricePerKg||0) / 1000),
+          unitPrice: profileToUse.pricePerBar ? (profileToUse.pricePerBar / profileToUse.barLength) : ((profileToUse.weightPerM||0) * (profileToUse.pricePerKg||0) / 1000),
           qty: divQty, 
           length: len, 
           totalMeasure: len * divQty,
