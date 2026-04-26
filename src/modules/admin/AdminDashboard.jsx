@@ -207,7 +207,7 @@ const AdminDashboard = ({ data, setData }) => {
       formula: '1', 
       barLength: 6400,
       ...(family === 'caissons' ? { height: 185, jointPrice: 0, jointFormula: 'L/1000' } : {}),
-      ...(family === 'lames' ? { baguettePrice: 0 } : {}),
+      ...(family === 'lames' ? { hasBaguette: false, baguettePrice: 0 } : {}),
       _isNew: true
     };
     setData(prev => {
@@ -2136,6 +2136,7 @@ const AdminDashboard = ({ data, setData }) => {
                           )}
                           {key === 'lames' && (
                             <>
+                              <th>Baguette (Oui)</th>
                               <th>Prix Baguette (ML)</th>
                             </>
                           )}
@@ -2179,6 +2180,9 @@ const AdminDashboard = ({ data, setData }) => {
                             )}
                             {key === 'lames' && (
                               <>
+                                <td style={{ textAlign: 'center' }}>
+                                  <input type="checkbox" checked={item.hasBaguette || false} onChange={e => updateShutterItem(key, i, 'hasBaguette', e.target.checked)} />
+                                </td>
                                 <td><input className="input" type="number" step="0.01" value={item.baguettePrice || 0} onChange={e => updateShutterItem(key, i, 'baguettePrice', e.target.value)} style={{ width: '90px' }} /></td>
                               </>
                             )}
