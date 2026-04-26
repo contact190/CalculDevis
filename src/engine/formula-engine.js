@@ -320,6 +320,8 @@ export class FormulaEngine {
           profiles.push({
             ...pHRef,
             label: 'ParcloseH',
+            isFrame: false,
+            isCouvreJoint: false,
             qty: hQty,
             length: safeHValue,
             formula: formulaH,
@@ -344,6 +346,8 @@ export class FormulaEngine {
           profiles.push({
             ...pVRef,
             label: 'ParcloseV',
+            isFrame: false,
+            isCouvreJoint: false,
             qty: vQty,
             length: safeVValue,
             formula: formulaV,
