@@ -602,7 +602,6 @@ export class FormulaEngine {
     // Process Add-ons (Only if main part is included)
     if (item.addOns && Array.isArray(item.addOns)) {
       item.addOns.forEach(addon => {
-        // ... (rest of the addon logic remains the same, but using effective values for cost if needed)
         const addonQty = this.evaluate(addon.formula || '1', { L: itemScopeL, H, HC });
         if (addonQty > 0) {
           const addonPrice = addon.price || 0;
@@ -610,7 +609,6 @@ export class FormulaEngine {
           
           let addonCost = 0;
           if (addonUnit === 'BARRE') {
-            // Find linked bar length or default
             let addBarLen = 6400;
             if (addon.linkedId) {
               const linkedArt = this.db.profiles.find(p => p.id === addon.linkedId) || 
