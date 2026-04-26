@@ -828,7 +828,6 @@ export class FormulaEngine {
     }
 
     // VOLET SEUL LOGIC (V3.2)
-    const isOnlyShutter = config.isOnlyShutter || false;
 
     // The Joinery (Window) height is config.H
     // If it's only a shutter, window height is effectively 0 for profile calculations
