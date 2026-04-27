@@ -25,6 +25,9 @@ const EMPTY_CONFIG = {
     unionId: 'AUTO', 
     traverseId: 'AUTO',
     shutterMode: 'total',
+  },
+  doorConfig: {
+    type: 'seuil', // 'seuil', 'complement', 'plainte'
   }
 };
 
@@ -94,6 +97,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
   });
 
   const availableOptions = database.options?.filter(o => (o.rangeIds || []).includes(currentComp?.rangeId)) || [];
+  const isPorte = activeCat === 'porte' || activeCat === 'CAT-P' || currentComp?.name?.toLowerCase().includes('porte');
 
   return (
     <div className="animate-fade-in">

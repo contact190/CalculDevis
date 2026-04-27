@@ -40,13 +40,17 @@ export class FormulaEngine {
 
   calculateComponentBOM(config, L, H, compositionId, glassId, optionalSides, totalH = null, originalL = null, originalH = null, EPt = 0) {
     const opt = optionalSides || { top: true, bottom: true, left: true, right: true };
-    const composition = this.db.compositions.find(c => c.id === compositionId);
+    const composition = (this.db.compositions || []).find(c => c.id === compositionId);
     if (!composition) return { profiles: [], accessories: [], glass: null, gasket: null };
 
     let HC = 0;
-    if (config.hasShutter && config.shutterConfig?.caissonId && this.db.shutterComponents) {
-      const cRef = this.db.shutterComponents.caissons.find(c => c.id === config.shutterConfig.caissonId);
-      HC = parseFloat(cRef?.height) || 0;
+    if (config.hasShutter) {
+      if (config.shutterOverrides?.customHC) {
+        HC = config.shutterOverrides.customHC;
+      } else if (config.shutterConfig?.caissonId && this.db.shutterComponents) {
+        const cRef = (this.db.shutterComponents?.caissons || []).find(c => c.id === config.shutterConfig.caissonId);
+        HC = parseFloat(cRef?.height) || 0;
+      }
     }
 
     const profiles = [];
@@ -56,11 +60,11 @@ export class FormulaEngine {
     const isDormantFn = (l, n) => /dormant|cadre|chassis|batit|dorme/i.test(((l || '') + ' ' + (n || '')).toLowerCase());
     const dormantId = composition.elements.find(el => {
        if (el.type !== 'profile') return false;
-       const pDef = this.db.profiles.find(x => x.id === el.id);
+       const pDef = (this.db.profiles || []).find(x => x.id === el.id);
        return pDef && isDormantFn(el.label, pDef.name);
     })?.id;
     if (dormantId) {
-       const pDef = this.db.profiles.find(x => x.id === dormantId);
+       const pDef = (this.db.profiles || []).find(x => x.id === dormantId);
        Epd = pDef.thickness || (parseInt((pDef.name || '').match(/\d+/)?.[0]) || 40);
     }
 
@@ -87,10 +91,10 @@ export class FormulaEngine {
       let itemName = '';
       
       if (el.type === 'profile') {
-        const p = this.db.profiles.find(x => x.id === el.id);
+        const p = (this.db.profiles || []).find(x => x.id === el.id);
         if (p) itemName = p.name || '';
       } else if (el.type === 'accessory') {
-        const a = this.db.accessories.find(x => x.id === el.id);
+        const a = (this.db.accessories || []).find(x => x.id === el.id);
         if (a) itemName = a.name || '';
       }
 
@@ -194,7 +198,7 @@ export class FormulaEngine {
       const qty = safeValue * elQty;
 
       if (el.type === 'profile') {
-        const pRef = this.db.profiles.find(p => p.id === el.id);
+        const pRef = (this.db.profiles || []).find(p => p.id === el.id);
         if (pRef) {
           let unitPrice = 0;
           let cost = 0;
@@ -224,7 +228,7 @@ export class FormulaEngine {
           });
         }
       } else if (el.type === 'accessory') {
-        const aRef = this.db.accessories.find(a => a.id === el.id);
+        const aRef = (this.db.accessories || []).find(a => a.id === el.id);
         if (aRef) {
           const unitUpper = (aRef.unit || '').toUpperCase();
           const isLinear = ['M', 'ML', 'JOINT'].includes(unitUpper);
@@ -248,7 +252,7 @@ export class FormulaEngine {
       }
     });
 
-    const glass = this.db.glass.find(g => g.id === glassId);
+    const glass = (this.db.glass || []).find(g => g.id === glassId);
     // Normalize rangeId: strip hyphens and spaces for flexible matching
     const normalizeRangeId = (id) => (id || '').replace(/[-\s]+/g, '').toLowerCase();
     const compNormRangeId = normalizeRangeId(composition.rangeId);
@@ -271,7 +275,7 @@ export class FormulaEngine {
       }
       
       if (compatibility) {
-        const gRef = this.db.accessories.find(a => a.id === compatibility.gasketId);
+        const gRef = (this.db.accessories || []).find(a => a.id === compatibility.gasketId);
         if (gRef) {
           const formula = compatibility.formula || '(L+H)*2';
           const lenMm = this.evaluate(formula, scope, 'Joint Vitrage');
@@ -326,7 +330,7 @@ export class FormulaEngine {
       glassProfiles.forEach(gp => {
         console.log(`[Parclose] Match found: H=${gp.profileHId} V=${gp.profileVId}`);
         // Handle Parclose Horizontal
-        const pHRef = this.db.profiles.find(p => p.id === gp.profileHId);
+        const pHRef = (this.db.profiles || []).find(p => p.id === gp.profileHId);
         if (pHRef && !hasManualParcloseH) {
           const unitPrice = (pHRef.pricePerBar || pHRef.pricePerKg || 0);
           const formulaH = gp.formulaH || composition.glassFormulaL || 'L';
@@ -352,7 +356,7 @@ export class FormulaEngine {
         }
 
         // Handle Parclose Vertical
-        const pVRef = this.db.profiles.find(p => p.id === gp.profileVId);
+        const pVRef = (this.db.profiles || []).find(p => p.id === gp.profileVId);
         if (pVRef && !hasManualParcloseV) {
           const unitPrice = (pVRef.pricePerBar || pVRef.pricePerKg || 0);
           const formulaV = gp.formulaV || composition.glassFormulaH || 'H';
@@ -447,7 +451,7 @@ export class FormulaEngine {
       cols.slice(0, -1).forEach((_, ci) => {
         const trv = this.db.traverses?.find(t => t.type === 'verticale') || this.db.traverses?.[0];
         if (trv && trv.profileId) {
-          const pRef = this.db.profiles.find(p => p.id === trv.profileId);
+          const pRef = (this.db.profiles || []).find(p => p.id === trv.profileId);
           if (pRef) {
             const len = H; // Spans height of CURRENT grid
             const pPrice = pRef.pricePerBar 
@@ -472,7 +476,7 @@ export class FormulaEngine {
       rows.slice(0, -1).forEach((_, ri) => {
         const trv = this.db.traverses?.find(t => t.type === 'horizontale') || this.db.traverses?.[0];
         if (trv && trv.profileId) {
-          const pRef = this.db.profiles.find(p => p.id === trv.profileId);
+          const pRef = (this.db.profiles || []).find(p => p.id === trv.profileId);
           if (pRef) {
             const len = L; // Spans width of CURRENT grid
             const pPrice = pRef.pricePerBar 
@@ -612,9 +616,9 @@ export class FormulaEngine {
           if (addonUnit === 'BARRE') {
             let addBarLen = 6400;
             if (addon.linkedId) {
-              const linkedArt = this.db.profiles.find(p => p.id === addon.linkedId) || 
-                               (this.db.shutterComponents.lames || []).find(l => l.id === addon.linkedId) ||
-                               (this.db.shutterComponents.glissieres || []).find(g => g.id === addon.linkedId);
+              const linkedArt = (this.db.profiles || []).find(p => p.id === addon.linkedId) || 
+                               ((this.db.shutterComponents?.lames || []) || []).find(l => l.id === addon.linkedId) ||
+                               ((this.db.shutterComponents?.glissieres || []) || []).find(g => g.id === addon.linkedId);
               if (linkedArt && linkedArt.barLength) addBarLen = parseFloat(linkedArt.barLength);
             }
             addonCost = (addonQty / addBarLen) * addonPrice;
@@ -698,7 +702,7 @@ export class FormulaEngine {
       if (dividerEntry) effectiveDivId = dividerEntry.profileId;
     }
 
-    const divProfile = this.db.profiles.find(p => p.id === effectiveDivId);
+    const divProfile = (this.db.profiles || []).find(p => p.id === effectiveDivId);
     let divThick = divProfile?.thickness;
 
     if (!divThick) {
@@ -739,8 +743,12 @@ export class FormulaEngine {
         const isLast = idx === partList.length - 1;
         const halfDiv = divThick / 2;
 
-        let calcL = (direction === 'horizontal') ? (part.width || (boxL / partList.length)) : boxL;
-        let calcH = (direction === 'vertical') ? (part.height || (boxH / partList.length)) : boxH;
+        // Use partOverrides if available (Site Measurements)
+        const overrideW = config.partOverrides?.[part.id]?.width;
+        const overrideH = config.partOverrides?.[part.id]?.height;
+
+        let calcL = (direction === 'horizontal') ? (overrideW || part.width || (boxL / partList.length)) : boxL;
+        let calcH = (direction === 'vertical') ? (overrideH || part.height || (boxH / partList.length)) : boxH;
 
         let inflation = (!isFirst) ? (divThick / 2) : 0;
 
@@ -790,6 +798,7 @@ export class FormulaEngine {
   }
 
   calculateBOM(config) {
+    if (!this.db || !config) return { profiles: [], accessories: [], glasses: [], shutters: [] };
     let { L, H, glassId } = config;
     
     const isOnlyShutter = !!config.isOnlyShutter;
@@ -803,14 +812,14 @@ export class FormulaEngine {
         const kitId = config.shutterConfig.kitId;
         const type = kitId === 'KIT-SANG' ? 'MONO' : (kitId === 'KIT-MOTE' ? 'PALA' : 'OTHER');
         
-        let compForRange = this.db.compositions.find(c => c.id === config.compositionId);
+        let compForRange = (this.db.compositions || []).find(c => c.id === config.compositionId);
         if (!compForRange && config.compoundConfig?.parts?.length > 0) {
           const parts = config.compoundConfig.parts;
           const mainOp = parts.find(p => p.type === 'opening' && p.compositionId) || 
                          parts.find(p => p.compositionId) || 
                          parts[0];
           if (mainOp?.compositionId) {
-            compForRange = this.db.compositions.find(c => c.id === mainOp.compositionId);
+            compForRange = (this.db.compositions || []).find(c => c.id === mainOp.compositionId);
           }
         }
 
@@ -836,21 +845,25 @@ export class FormulaEngine {
     
     // --- 4. PREPARE DIMENSIONS ---
     let shutterHeight = 0;
-    if (config.hasShutter && config.shutterConfig?.caissonId) {
-      const caisson = this.db.shutterComponents.caissons.find(c => c.id === config.shutterConfig.caissonId);
-      shutterHeight = parseFloat(caisson?.height) || 0;
+    if (config.hasShutter) {
+      const shutterConfig = config.shutterConfig || {};
+      if (config.shutterOverrides?.customHC) {
+        shutterHeight = config.shutterOverrides.customHC;
+      } else {
+        const caisson = (this.db.shutterComponents?.caissons || []).find(c => c.id === shutterConfig.caissonId);
+        shutterHeight = parseFloat(caisson?.height) || 0;
+      }
     }
 
-    const windowH = isOnlyShutter ? 0 : H;
-    const totalH = isOnlyShutter ? H : (H + shutterHeight);
+    const totalH = H;
+    const windowH = isOnlyShutter ? 0 : Math.max(0, H - shutterHeight);
 
     let profiles = [];
     let accessories = [];
     let glasses = [];
 
-    const hasCompoundParts = config.compoundConfig?.parts && config.compoundConfig.parts.length > 1;
-
-    if ((config.compoundType && config.compoundType !== 'none') || hasCompoundParts) {
+    // FIX: Only enter compound mode if explicitly enabled by compoundType
+    if (config.compoundType && config.compoundType !== 'none') {
       const compRes = this.calculateCompoundBOM(config, L, windowH, totalH);
       profiles = compRes.profiles;
       accessories = compRes.accessories;
@@ -890,7 +903,7 @@ export class FormulaEngine {
           }
           // Add the option accessory
           if (option.addAccessoryId) {
-            const addRef = this.db.accessories.find(a => a.id === option.addAccessoryId);
+            const addRef = (this.db.accessories || []).find(a => a.id === option.addAccessoryId);
             if (addRef) {
               const qty = this.evaluate(option.formula || '1', { L, H });
               activeAccessories.push({
@@ -949,7 +962,7 @@ export class FormulaEngine {
              compositionId = (parts.find(p => p.type === 'opening' && p.compositionId) || parts.find(p => p.compositionId))?.compositionId;
           }
 
-          const composition = this.db.compositions.find(c => c.id === compositionId);
+          const composition = (this.db.compositions || []).find(c => c.id === compositionId);
           if (composition) {
             const autoG = (source || []).find(g => (!g.rangeId || g.rangeId === composition.rangeId) && g.shutterType === type);
             if (autoG) selectedId = autoG.id;
@@ -1005,8 +1018,9 @@ export class FormulaEngine {
    * Calculate final pricing
    */
   calculatePrice(config) {
+    if (!this.db || !config) return { cost: 0, priceHT: 0, priceTTC: 0, subtotals: {}, bom: { profiles: [], accessories: [], glass: {}, shutters: [] } };
     const bom = this.calculateBOM(config);
-    const color = this.db.colors.find(c => c.id === config.colorId);
+    const color = (this.db.colors || []).find(c => c.id === config.colorId);
     
     // Subtotals (Raw material costs)
     const profilesRaw = bom.profiles.reduce((sum, p) => sum + p.cost, 0);
@@ -1051,16 +1065,16 @@ export class FormulaEngine {
   validate(config) {
     if (config.useCustomLayout) return { valid: true }; // Custom layouts skip basic range checks for now
 
-    const composition = this.db.compositions.find(c => c.id === config.compositionId);
+    const composition = (this.db.compositions || []).find(c => c.id === config.compositionId);
     if (!composition) return { valid: false, message: 'Composition inexistante' };
 
     const range = this.db.ranges.find(r => r.id === composition.rangeId);
     if (!range) return { valid: false, message: 'Gamme inexistante' };
 
-    const glass = this.db.glass.find(g => g.id === config.glassId);
+    const glass = (this.db.glass || []).find(g => g.id === config.glassId);
     if (!glass) return { valid: false, message: 'Vitrage selectionné inexistant' };
 
-    const color = this.db.colors.find(c => c.id === config.colorId);
+    const color = (this.db.colors || []).find(c => c.id === config.colorId);
     if (!color) return { valid: false, message: 'Couleur selectionnée inexistante' };
 
     const { L, H } = config;

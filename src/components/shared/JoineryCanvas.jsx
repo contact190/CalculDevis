@@ -28,13 +28,13 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
       caissonH = parseFloat(cRef?.height) || 0;
     }
 
-    const totalH_val = H + caissonH;
+    const totalH_val = H;
     const scale = Math.min(drawAreaW / L, drawAreaH / totalH_val);
     
     const dW = L * scale;
-    const dH_window = H * scale;
     const dCaissonH = caissonH * scale;
-    const dH_total = (H + caissonH) * scale;
+    const dH_total = H * scale;
+    const dH_window = Math.max(0, H - caissonH) * scale;
     
     const offsetX = (width - dW) / 2;
     const offsetY = (height - dH_total) / 2;

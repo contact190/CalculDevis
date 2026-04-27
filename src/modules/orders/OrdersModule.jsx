@@ -12,6 +12,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
   const [listView, setListView] = useState('active'); // 'active' | 'history'
   const [orderToDelete, setOrderToDelete] = useState(null);
   const [confirmText, setConfirmText] = useState('');
+  const [editingShutterOverrides, setEditingShutterOverrides] = useState(null); // { itemIdx, mId, overrides: {} }
   
   // Jumelage (Couplage) states
   const [jumelageGroups, setJumelageGroups] = useState([]);
@@ -123,7 +124,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
     updatedItems[orderItemIndex] = {
       ...updatedItems[orderItemIndex],
       siteMeasurements: updatedItems[orderItemIndex].siteMeasurements.map(m => 
-        m.id === measureId ? { ...m, [field]: parseFloat(value) || 0 } : m
+        m.id === measureId ? { ...m, [field]: (field === 'partOverrides' ? value : (parseFloat(value) || 0)) } : m
       )
     };
     handleUpdateOrder({ ...selectedOrder, items: updatedItems });
@@ -198,7 +199,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
       (item.measurements || []).forEach(m => {
         if (m.qty <= 0) return;
         
-        const config = { ...item.config, L: m.L, H: m.H };
+        const config = { ...item.config, L: m.L, H: m.H, partOverrides: m.partOverrides, shutterOverrides: m.shutterOverrides };
         try {
           const bom = engine.calculateBOM(config);
           
@@ -539,19 +540,64 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                         <th>Largeur (mm)</th>
                         <th>Hauteur (mm)</th>
                         <th>Quantité</th>
+                        <th style={{ width: '80px' }}>Volet</th>
                         <th style={{ width: '50px' }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {(item.siteMeasurements || []).map((m, mIdx) => (
-                        <tr key={m.id}>
-                          <td>{mIdx + 1}</td>
-                          <td><input type="number" className="input" value={m.L} onChange={e => updateSiteMeasurement(idx, m.id, 'L', e.target.value)} style={{ minWidth: '100px' }} /></td>
-                          <td><input type="number" className="input" value={m.H} onChange={e => updateSiteMeasurement(idx, m.id, 'H', e.target.value)} style={{ minWidth: '100px' }} /></td>
-                          <td><input type="number" className="input" value={m.qty} onChange={e => updateSiteMeasurement(idx, m.id, 'qty', e.target.value)} style={{ minWidth: '80px' }} /></td>
-                          <td><button onClick={() => removeSiteMeasurement(idx, m.id)} style={{ color: '#ef4444', border: 'none', background: 'transparent', cursor: 'pointer' }}><Trash2 size={16} /></button></td>
-
-                        </tr>
+                        <React.Fragment key={m.id}>
+                          <tr>
+                            <td>{mIdx + 1}</td>
+                            <td><input type="number" className="input" value={m.L} onChange={e => updateSiteMeasurement(idx, m.id, 'L', e.target.value)} style={{ minWidth: '100px' }} /></td>
+                            <td><input type="number" className="input" value={m.H} onChange={e => updateSiteMeasurement(idx, m.id, 'H', e.target.value)} style={{ minWidth: '100px' }} /></td>
+                            <td><input type="number" className="input" value={m.qty} onChange={e => updateSiteMeasurement(idx, m.id, 'qty', e.target.value)} style={{ minWidth: '80px' }} /></td>
+                            <td style={{ textAlign: 'center' }}>
+                              {item.config.hasShutter && (
+                                <button 
+                                  onClick={() => setEditingShutterOverrides({ itemIdx: idx, mId: m.id, overrides: m.shutterOverrides || {} })}
+                                  style={{ 
+                                    border: 'none', background: (m.shutterOverrides?.customHC) ? '#fef3c7' : 'transparent', 
+                                    padding: '0.4rem', borderRadius: '0.4rem', cursor: 'pointer', color: (m.shutterOverrides?.customHC) ? '#d97706' : '#64748b' 
+                                  }}
+                                  title="Réglages Volet"
+                                >
+                                  <Settings size={18} />
+                                </button>
+                              )}
+                            </td>
+                            <td><button onClick={() => removeSiteMeasurement(idx, m.id)} style={{ color: '#ef4444', border: 'none', background: 'transparent', cursor: 'pointer' }}><Trash2 size={16} /></button></td>
+                          </tr>
+                          {item.config.compoundType && item.config.compoundType !== 'none' && (
+                            <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                              <td colSpan="5" style={{ padding: '0.5rem 1rem' }}>
+                                <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                                  <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Cotes des parties :</span>
+                                  {(item.config.compoundConfig?.parts || []).map((p) => (
+                                    <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                      <span style={{ fontSize: '0.8rem', color: '#1e293b' }}>{p.type === 'opening' ? 'Ouvrant' : 'Fixe'} :</span>
+                                      <input 
+                                        type="number" 
+                                        className="input" 
+                                        style={{ width: '90px', padding: '0.2rem 0.5rem', fontSize: '0.8rem', border: '1px solid #cbd5e1' }} 
+                                        placeholder={item.config.compoundConfig.orientation === 'horizontal' ? p.width : p.height}
+                                        value={m.partOverrides?.[p.id]?.[item.config.compoundConfig.orientation === 'horizontal' ? 'width' : 'height'] || ''} 
+                                        onChange={e => {
+                                          const val = parseFloat(e.target.value) || 0;
+                                          const field = item.config.compoundConfig.orientation === 'horizontal' ? 'width' : 'height';
+                                          const currentOverrides = m.partOverrides || {};
+                                          const partData = currentOverrides[p.id] || {};
+                                          updateSiteMeasurement(idx, m.id, 'partOverrides', { ...currentOverrides, [p.id]: { ...partData, [field]: val } });
+                                        }}
+                                      />
+                                      <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>mm</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
                       ))}
                       {(!item.siteMeasurements || item.siteMeasurements.length === 0) && (
                         <tr><td colSpan="5" style={{ textAlign: 'center', color: '#94a3b8', fontSize: '0.85rem' }}>Aucune cote réelle ajoutée.</td></tr>
@@ -955,6 +1001,49 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                 }}
               >
                 Confirmer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SHUTTER OVERRIDE MODAL */}
+      {editingShutterOverrides && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
+          <div className="glass shadow-2xl" style={{ background: 'white', padding: '2rem', borderRadius: '1rem', width: '400px' }}>
+            <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, marginBottom: '1.5rem' }}>Réglages Volet (Cote Réelle)</h3>
+            
+            <div className="form-group">
+              <label className="label">Hauteur Caisson (HC) Manuelle</label>
+              <input 
+                type="number" 
+                className="input" 
+                placeholder="Auto (via base de données)"
+                value={editingShutterOverrides.overrides.customHC || ''} 
+                onChange={e => setEditingShutterOverrides(prev => ({ ...prev, overrides: { ...prev.overrides, customHC: parseFloat(e.target.value) || undefined } }))}
+              />
+              <p style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.5rem' }}>
+                Si rempli, cette valeur sera déduite de la hauteur totale pour calculer la fenêtre.
+              </p>
+            </div>
+
+            <div style={{ marginTop: '2rem', display: 'flex', gap: '1rem' }}>
+              <button 
+                onClick={() => setEditingShutterOverrides(null)} 
+                className="btn btn-secondary" 
+                style={{ flex: 1 }}
+              >
+                Annuler
+              </button>
+              <button 
+                onClick={() => {
+                  updateSiteMeasurement(editingShutterOverrides.itemIdx, editingShutterOverrides.mId, 'shutterOverrides', editingShutterOverrides.overrides);
+                  setEditingShutterOverrides(null);
+                }} 
+                className="btn btn-primary" 
+                style={{ flex: 1 }}
+              >
+                Valider
               </button>
             </div>
           </div>
