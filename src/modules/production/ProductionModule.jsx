@@ -41,20 +41,40 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         
         batch.items.forEach(item => {
           (item.measurements || []).forEach(m => {
-            configs.push({
-              config: { 
-                ...item.config, 
-                L: m.L, 
-                H: m.H, 
-                partOverrides: m.partOverrides, 
-                shutterOverrides: m.shutterOverrides,
-                instanceLabel: m.label // Store the custom name (Salon, etc.)
-              },
-              qty: m.qty || 1,
-              label: m.label || item.label,
-              itemId: item.id,
-              measureId: m.id
-            });
+            const totalQty = m.qty || 1;
+            const shutters = m.shutterList || [];
+            
+            // If no custom shutters defined, treat as standard units
+            if (shutters.length === 0) {
+              for (let i = 0; i < totalQty; i++) {
+                configs.push({
+                  config: { ...item.config, L: m.L, H: m.H, partOverrides: m.partOverrides, instanceLabel: m.instanceNames?.[i] || `${item.label} ${i+1}` },
+                  qty: 1,
+                  label: m.instanceNames?.[i] || `${item.label} ${i+1}`,
+                  itemId: item.id,
+                  measureId: `${m.id}-${i}`
+                });
+              }
+            } else {
+              // Distribute shutters and names
+              let nameIdx = 0;
+              shutters.forEach((sh, shIdx) => {
+                for (let i = 0; i < sh.qty; i++) {
+                  configs.push({
+                    config: { 
+                      ...item.config, L: m.L, H: m.H, partOverrides: m.partOverrides,
+                      shutterOverrides: { ...sh.overrides, customLV: sh.customLV },
+                      instanceLabel: m.instanceNames?.[nameIdx] || `${item.label} ${nameIdx+1}`
+                    },
+                    qty: 1,
+                    label: m.instanceNames?.[nameIdx] || `${item.label} ${nameIdx+1}`,
+                    itemId: item.id,
+                    measureId: `${m.id}-sh${shIdx}-${i}`
+                  });
+                  nameIdx++;
+                }
+              });
+            }
           });
         });
       });
