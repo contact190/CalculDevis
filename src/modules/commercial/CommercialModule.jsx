@@ -1296,16 +1296,27 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
     if (setDatabase) {
       const finalQuote = { ...quote, totals };
       setDatabase(prev => {
-        // Find if we are updating an existing quote (by original ID if known, or by number)
-        const existsById = prev.quotes?.some(q => q.id === quote.id);
-        
-        let quotes;
-        if (existsById) {
-          quotes = prev.quotes.map(q => q.id === quote.id ? finalQuote : q);
-        } else {
-          quotes = [...(prev.quotes || []), finalQuote];
+        // Update quotes list
+        const existsInQuotes = (prev.quotes || []).some(q => q.id === finalQuote.id);
+        const quotes = existsInQuotes 
+          ? prev.quotes.map(q => q.id === finalQuote.id ? finalQuote : q)
+          : [...(prev.quotes || []), finalQuote];
+
+        // Update orders list if status is "Confirmé"
+        let orders = prev.orders || [];
+        if (finalQuote.status === 'Confirmé') {
+          const orderNum = finalQuote.number.split('-')[1] || finalQuote.id;
+          const orderId = `CMD-${orderNum}`;
+          const existsInOrders = orders.some(o => o.quoteId === finalQuote.id || o.id === orderId);
+          if (!existsInOrders) {
+            orders = [...orders, { ...finalQuote, id: orderId, quoteId: finalQuote.id, batches: [], createdAt: new Date().toISOString() }];
+          } else {
+            // Update order info but preserve existing batches and site measurements
+            orders = orders.map(o => (o.quoteId === finalQuote.id || o.id === orderId) ? { ...o, ...finalQuote, id: orderId, quoteId: finalQuote.id, batches: o.batches || [] } : o);
+          }
         }
-        return { ...prev, quotes };
+
+        return { ...prev, quotes, orders };
       });
       alert('Devis enregistré avec succès !');
     } else {

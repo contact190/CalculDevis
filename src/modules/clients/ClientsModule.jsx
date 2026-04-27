@@ -31,31 +31,47 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
   const handleConvertToOrder = (quote) => {
     if (!window.confirm(`Voulez-vous transformer le devis ${quote.number} en commande active ?`)) return;
     
+    const orderNum = quote.number.split('-')[1] || quote.id;
+    const orderId = `CMD-${orderNum}`;
+    
     const newOrder = {
-      id: `ORD-${quote.number.split('-')[1] || Date.now().toString().slice(-4)}`,
+      ...quote,
+      id: orderId,
       quoteId: quote.id,
       quoteNumber: quote.number,
-      clientId: quote.clientId,
       createdAt: new Date().toISOString(),
-      status: 'Métré à confirmer',
-      items: ((quote.items || quote.products) || []).map(item => ({
+      status: 'Confirmé',
+      batches: [],
+      items: (quote.items || []).map(item => ({
         ...item,
-        siteMeasurements: [] // This will store { L, H, qty } entered on site
+        siteMeasurements: []
       }))
     };
 
     setData(prev => {
-      // Check if order already exists
-      if (prev.orders?.some(o => o.quoteId === quote.id)) {
-        alert("Une commande existe déjà pour ce devis.");
-        return prev;
+      // 1. Update quote status to "Confirmé"
+      const quotes = (prev.quotes || []).map(q => q.id === quote.id ? { ...q, status: 'Confirmé' } : q);
+      
+      // 2. Add or Update Order
+      const orders = prev.orders || [];
+      const orderExists = orders.some(o => o.quoteId === quote.id || o.id === orderId);
+      
+      let finalOrders;
+      if (orderExists) {
+        finalOrders = orders.map(o => (o.quoteId === quote.id || o.id === orderId) 
+          ? { ...o, ...newOrder, batches: o.batches || [] } 
+          : o);
+      } else {
+        finalOrders = [...orders, newOrder];
       }
+      
       return {
         ...prev,
-        orders: [...(prev.orders || []), newOrder]
+        quotes,
+        orders: finalOrders
       };
     });
-    alert(`Commande créée avec succès ! Retrouvez-la dans l'onglet "Commandes".`);
+    alert(`Commande ${orderId} créée avec succès ! Retrouvez-la dans l'onglet "Commandes".`);
   };
 
   const handleDuplicateQuote = (quote) => {
@@ -185,11 +201,11 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
                       <td data-label="Statut">
                         <span style={{ 
                           padding: '0.2rem 0.5rem', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 600,
-                          background: q.status === 'Validé' ? '#dcfce3' : (q.status === 'Brouillon' || !q.status ? '#fef3c7' : '#e0f2fe'),
-                          color: q.status === 'Validé' ? '#16a34a' : (q.status === 'Brouillon' || !q.status ? '#d97706' : '#0369a1')
+                          background: (q.status === 'Validé' || q.status === 'Confirmé') ? '#dcfce3' : (q.status === 'Brouillon' || !q.status ? '#fef3c7' : '#e0f2fe'),
+                          color: (q.status === 'Validé' || q.status === 'Confirmé') ? '#16a34a' : (q.status === 'Brouillon' || !q.status ? '#d97706' : '#0369a1')
                         }}>
                           {q.status || 'Brouillon'}
-                          {q.status === 'Validé' && q.validatedAt && ` (${new Date(q.validatedAt).toLocaleDateString('fr-FR')})`}
+                          {(q.status === 'Validé' || q.status === 'Confirmé') && q.validatedAt && ` (${new Date(q.validatedAt).toLocaleDateString('fr-FR')})`}
                         </span>
                       </td>
                       <td data-label="Produits">{q.items?.length || 0}</td>
