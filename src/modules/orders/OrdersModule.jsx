@@ -93,18 +93,24 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
     if (!selectedOrder) return;
     const item = selectedOrder.items[orderItemIndex];
     
-    // Default to quote dimensions
-    const newMeasure = {
-      id: `MEAS-${Date.now()}`,
-      L: item.config.L,
-      H: item.config.H,
-      qty: 1
-    };
+    const qtyStr = window.prompt(`Combien de fenêtres pour cette cote ? (Saisir 2 pour créer 2 lignes nommables séparément)`, "1");
+    const qtyCount = Math.max(1, parseInt(qtyStr) || 1);
+    
+    const newMeasures = [];
+    for(let i=0; i<qtyCount; i++) {
+      newMeasures.push({
+        id: `MEAS-${Date.now()}-${i}-${Math.floor(Math.random()*1000)}`,
+        L: item.config.L,
+        H: item.config.H,
+        qty: 1,
+        label: qtyCount > 1 ? `${item.label} ${i+1}` : ''
+      });
+    }
     
     const updatedItems = [...selectedOrder.items];
     updatedItems[orderItemIndex] = {
       ...item,
-      siteMeasurements: [...(item.siteMeasurements || []), newMeasure]
+      siteMeasurements: [...(item.siteMeasurements || []), ...newMeasures]
     };
     
     handleUpdateOrder({ ...selectedOrder, items: updatedItems });
@@ -576,23 +582,19 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                             <td><input type="number" className="input" value={m.H} onChange={e => updateSiteMeasurement(idx, m.id, 'H', e.target.value)} style={{ minWidth: '100px' }} /></td>
                             <td><input type="number" className="input" value={m.qty} onChange={e => updateSiteMeasurement(idx, m.id, 'qty', e.target.value)} style={{ minWidth: '80px' }} /></td>
                             <td style={{ textAlign: 'center' }}>
-                              {item.config.hasShutter && (
-                                <button 
-                                  onClick={() => setEditingShutterOverrides({ itemIdx: idx, mId: m.id, overrides: m.shutterOverrides || {} })}
-                                  style={{ 
-                                    border: '1px solid #e2e8f0', 
-                                    background: (m.shutterOverrides && Object.keys(m.shutterOverrides).length > 0) ? '#fef3c7' : '#fff', 
-                                    padding: '0.5rem', borderRadius: '0.5rem', cursor: 'pointer', 
-                                    color: (m.shutterOverrides && Object.keys(m.shutterOverrides).length > 0) ? '#d97706' : '#64748b',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s'
-                                  }}
-                                  onMouseEnter={e => e.currentTarget.style.borderColor = '#3b82f6'}
-                                  onMouseLeave={e => e.currentTarget.style.borderColor = '#e2e8f0'}
-                                  title="Réglages Volet"
-                                >
-                                  <Settings size={20} />
-                                </button>
-                              )}
+                              <button 
+                                onClick={() => setEditingShutterOverrides({ itemIdx: idx, mId: m.id, overrides: m.shutterOverrides || {} })}
+                                style={{ 
+                                  border: '1px solid #e2e8f0', 
+                                  background: (m.shutterOverrides && Object.keys(m.shutterOverrides).length > 0) ? '#fef3c7' : '#fff', 
+                                  padding: '0.5rem', borderRadius: '0.5rem', cursor: 'pointer', 
+                                  color: (m.shutterOverrides && Object.keys(m.shutterOverrides).length > 0) ? '#d97706' : '#64748b',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                }}
+                                title="Réglages Volet"
+                              >
+                                <Settings size={20} />
+                              </button>
                             </td>
                              <td>
                                <div style={{ display: 'flex', gap: '0.3rem' }}>
