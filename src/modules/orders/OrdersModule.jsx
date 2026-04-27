@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { ShoppingBag, FileText, Ruler, Plus, Trash2, CheckCircle, Package, Scissors, Download, ExternalLink, ChevronRight, ChevronDown, ListOrdered, ShoppingCart, Layers, ArrowLeft, ClipboardList, Settings } from 'lucide-react';
+import { ShoppingBag, FileText, Ruler, Plus, Trash2, CheckCircle, Package, Scissors, Download, ExternalLink, ChevronRight, ChevronDown, ListOrdered, ShoppingCart, Layers, ArrowLeft, ClipboardList, Settings, Copy } from 'lucide-react';
 import { FormulaEngine } from '../../engine/formula-engine';
 import { QuoteSettingsPanel } from '../commercial/CommercialModule';
 import jsPDF from 'jspdf';
@@ -120,12 +120,33 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
   };
 
   const updateSiteMeasurement = (orderItemIndex, measureId, field, value) => {
+    if (!selectedOrder) return;
     const updatedItems = [...selectedOrder.items];
     updatedItems[orderItemIndex] = {
       ...updatedItems[orderItemIndex],
       siteMeasurements: updatedItems[orderItemIndex].siteMeasurements.map(m => 
-        m.id === measureId ? { ...m, [field]: (field === 'partOverrides' ? value : (parseFloat(value) || 0)) } : m
+        m.id === measureId ? { ...m, [field]: (['partOverrides', 'shutterOverrides', 'label'].includes(field) ? value : (parseFloat(value) || 0)) } : m
       )
+    };
+    handleUpdateOrder({ ...selectedOrder, items: updatedItems });
+  };
+
+  const duplicateSiteMeasurement = (orderItemIndex, measureId) => {
+    if (!selectedOrder) return;
+    const updatedItems = [...selectedOrder.items];
+    const sourceMeasure = updatedItems[orderItemIndex].siteMeasurements.find(m => m.id === measureId);
+    if (!sourceMeasure) return;
+
+    const newMeasure = {
+      ...sourceMeasure,
+      id: `MEAS-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+      label: `${sourceMeasure.label || ''} (copie)`.trim(),
+      qty: 1 // Force qty 1 for the new row
+    };
+
+    updatedItems[orderItemIndex] = {
+      ...updatedItems[orderItemIndex],
+      siteMeasurements: [...updatedItems[orderItemIndex].siteMeasurements, newMeasure]
     };
     handleUpdateOrder({ ...selectedOrder, items: updatedItems });
   };
@@ -537,6 +558,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                     <thead>
                       <tr>
                         <th>N°</th>
+                        <th style={{ width: '150px' }}>Nom / Emplacement</th>
                         <th>Largeur (mm)</th>
                         <th>Hauteur (mm)</th>
                         <th>Quantité</th>
@@ -549,6 +571,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                         <React.Fragment key={m.id}>
                           <tr>
                             <td>{mIdx + 1}</td>
+                            <td><input type="text" className="input" placeholder="Ex: Salon" value={m.label || ''} onChange={e => updateSiteMeasurement(idx, m.id, 'label', e.target.value)} style={{ minWidth: '120px' }} /></td>
                             <td><input type="number" className="input" value={m.L} onChange={e => updateSiteMeasurement(idx, m.id, 'L', e.target.value)} style={{ minWidth: '100px' }} /></td>
                             <td><input type="number" className="input" value={m.H} onChange={e => updateSiteMeasurement(idx, m.id, 'H', e.target.value)} style={{ minWidth: '100px' }} /></td>
                             <td><input type="number" className="input" value={m.qty} onChange={e => updateSiteMeasurement(idx, m.id, 'qty', e.target.value)} style={{ minWidth: '80px' }} /></td>
@@ -557,16 +580,26 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                 <button 
                                   onClick={() => setEditingShutterOverrides({ itemIdx: idx, mId: m.id, overrides: m.shutterOverrides || {} })}
                                   style={{ 
-                                    border: 'none', background: (m.shutterOverrides?.customHC) ? '#fef3c7' : 'transparent', 
-                                    padding: '0.4rem', borderRadius: '0.4rem', cursor: 'pointer', color: (m.shutterOverrides?.customHC) ? '#d97706' : '#64748b' 
+                                    border: '1px solid #e2e8f0', 
+                                    background: (m.shutterOverrides && Object.keys(m.shutterOverrides).length > 0) ? '#fef3c7' : '#fff', 
+                                    padding: '0.5rem', borderRadius: '0.5rem', cursor: 'pointer', 
+                                    color: (m.shutterOverrides && Object.keys(m.shutterOverrides).length > 0) ? '#d97706' : '#64748b',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s'
                                   }}
+                                  onMouseEnter={e => e.currentTarget.style.borderColor = '#3b82f6'}
+                                  onMouseLeave={e => e.currentTarget.style.borderColor = '#e2e8f0'}
                                   title="Réglages Volet"
                                 >
-                                  <Settings size={18} />
+                                  <Settings size={20} />
                                 </button>
                               )}
                             </td>
-                            <td><button onClick={() => removeSiteMeasurement(idx, m.id)} style={{ color: '#ef4444', border: 'none', background: 'transparent', cursor: 'pointer' }}><Trash2 size={16} /></button></td>
+                             <td>
+                               <div style={{ display: 'flex', gap: '0.3rem' }}>
+                                 <button onClick={() => duplicateSiteMeasurement(idx, m.id)} style={{ color: '#6366f1', border: 'none', background: 'transparent', cursor: 'pointer' }} title="Dupliquer la ligne"><Copy size={16} /></button>
+                                 <button onClick={() => removeSiteMeasurement(idx, m.id)} style={{ color: '#ef4444', border: 'none', background: 'transparent', cursor: 'pointer' }} title="Supprimer"><Trash2 size={16} /></button>
+                               </div>
+                             </td>
                           </tr>
                           {item.config.compoundType && item.config.compoundType !== 'none' && (
                             <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
@@ -1009,22 +1042,92 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
 
       {/* SHUTTER OVERRIDE MODAL */}
       {editingShutterOverrides && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
-          <div className="glass shadow-2xl" style={{ background: 'white', padding: '2rem', borderRadius: '1rem', width: '400px' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)' }}>
+          <div className="glass shadow-2xl" style={{ background: 'white', padding: '2rem', borderRadius: '1rem', width: '500px', border: '1px solid #e2e8f0' }}>
             <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, marginBottom: '1.5rem' }}>Réglages Volet (Cote Réelle)</h3>
             
-            <div className="form-group">
-              <label className="label">Hauteur Caisson (HC) Manuelle</label>
-              <input 
-                type="number" 
-                className="input" 
-                placeholder="Auto (via base de données)"
-                value={editingShutterOverrides.overrides.customHC || ''} 
-                onChange={e => setEditingShutterOverrides(prev => ({ ...prev, overrides: { ...prev.overrides, customHC: parseFloat(e.target.value) || undefined } }))}
-              />
-              <p style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.5rem' }}>
-                Si rempli, cette valeur sera déduite de la hauteur totale pour calculer la fenêtre.
-              </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', maxHeight: '60vh', overflowY: 'auto', paddingRight: '0.5rem' }}>
+              <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                <label className="label">Largeur Volet (LV) Manuelle</label>
+                <input 
+                  type="number" 
+                  className="input" 
+                  placeholder="Auto"
+                  value={editingShutterOverrides.overrides.customLV || ''} 
+                  onChange={e => setEditingShutterOverrides(prev => ({ ...prev, overrides: { ...prev.overrides, customLV: parseFloat(e.target.value) || undefined } }))}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="label">Hauteur Caisson (HC)</label>
+                <input 
+                  type="number" 
+                  className="input" 
+                  placeholder="Auto"
+                  value={editingShutterOverrides.overrides.customHC || ''} 
+                  onChange={e => setEditingShutterOverrides(prev => ({ ...prev, overrides: { ...prev.overrides, customHC: parseFloat(e.target.value) || undefined } }))}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="label">Modèle Caisson</label>
+                <select 
+                  className="input"
+                  value={editingShutterOverrides.overrides.caissonId || ''}
+                  onChange={e => setEditingShutterOverrides(prev => ({ ...prev, overrides: { ...prev.overrides, caissonId: e.target.value || undefined } }))}
+                >
+                  <option value="">(Config Devis)</option>
+                  {(data.shutterComponents?.caissons || []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="label">Type de Lame</label>
+                <select 
+                  className="input"
+                  value={editingShutterOverrides.overrides.lameId || ''}
+                  onChange={e => setEditingShutterOverrides(prev => ({ ...prev, overrides: { ...prev.overrides, lameId: e.target.value || undefined } }))}
+                >
+                  <option value="">(Config Devis)</option>
+                  {(data.shutterComponents?.lames || []).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="label">Modèle Glissière</label>
+                <select 
+                  className="input"
+                  value={editingShutterOverrides.overrides.glissiereId || ''}
+                  onChange={e => setEditingShutterOverrides(prev => ({ ...prev, overrides: { ...prev.overrides, glissiereId: e.target.value || undefined } }))}
+                >
+                  <option value="">(Config Devis)</option>
+                  {(data.shutterComponents?.glissieres || []).map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="label">Type d'Axe</label>
+                <select 
+                  className="input"
+                  value={editingShutterOverrides.overrides.axeId || ''}
+                  onChange={e => setEditingShutterOverrides(prev => ({ ...prev, overrides: { ...prev.overrides, axeId: e.target.value || undefined } }))}
+                >
+                  <option value="">(Config Devis)</option>
+                  {(data.shutterComponents?.axes || []).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="label">Kit Manoeuvre</label>
+                <select 
+                  className="input"
+                  value={editingShutterOverrides.overrides.kitId || ''}
+                  onChange={e => setEditingShutterOverrides(prev => ({ ...prev, overrides: { ...prev.overrides, kitId: e.target.value || undefined } }))}
+                >
+                  <option value="">(Config Devis)</option>
+                  {(data.shutterComponents?.kits || []).map(k => <option key={k.id} value={k.id}>{k.name}</option>)}
+                </select>
+              </div>
             </div>
 
             <div style={{ marginTop: '2rem', display: 'flex', gap: '1rem' }}>

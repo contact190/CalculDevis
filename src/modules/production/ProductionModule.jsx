@@ -33,14 +33,47 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
 
   // Determine which config(s) to aggregate
   const activeConfigs = useMemo(() => {
-    if (quoteItems.length === 0) {
-      // Fallback: single currentConfig
-      return currentConfig ? [{ config: currentConfig, qty: 1, label: 'Produit courant' }] : [];
+    // 1. If it's an order/batch system
+    if (activeQuote?.batches && activeQuote.batches.length > 0) {
+      let configs = [];
+      activeQuote.batches.forEach(batch => {
+        if (selectedBatchId !== 'ALL' && batch.id !== selectedBatchId) return;
+        
+        batch.items.forEach(item => {
+          (item.measurements || []).forEach(m => {
+            configs.push({
+              config: { 
+                ...item.config, 
+                L: m.L, 
+                H: m.H, 
+                partOverrides: m.partOverrides, 
+                shutterOverrides: m.shutterOverrides,
+                instanceLabel: m.label // Store the custom name (Salon, etc.)
+              },
+              qty: m.qty || 1,
+              label: m.label || item.label,
+              itemId: item.id,
+              measureId: m.id
+            });
+          });
+        });
+      });
+
+      if (productFilter === 'total') return configs;
+      // Filter by item type OR specific instance
+      return configs.filter(c => c.itemId === productFilter || c.measureId === productFilter);
     }
-    if (productFilter === 'total') return quoteItems.map(i => ({ config: i.config, qty: i.qty || 1, label: i.label }));
-    const found = quoteItems.find(i => i.id === productFilter);
-    return found ? [{ config: found.config, qty: found.qty || 1, label: found.label }] : [];
-  }, [quoteItems, productFilter, currentConfig]);
+
+    // 2. Fallback to standard quote items
+    if (quoteItems.length > 0) {
+      if (productFilter === 'total') return quoteItems.map(i => ({ config: i.config, qty: i.qty || 1, label: i.label, itemId: i.id }));
+      const found = quoteItems.find(i => i.id === productFilter);
+      return found ? [{ config: found.config, qty: found.qty || 1, label: found.label, itemId: found.id }] : [];
+    }
+
+    // 3. Fallback: single currentConfig
+    return currentConfig ? [{ config: currentConfig, qty: 1, label: 'Produit courant' }] : [];
+  }, [activeQuote, quoteItems, productFilter, currentConfig, selectedBatchId]);
 
   const bomResult = useMemo(() => {
     const cfg = activeConfigs[0]?.config || currentConfig;
@@ -64,12 +97,18 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
       const colorName = colorInfo?.name || cfg.colorId || 'Standard';
       try {
         const b = engine.calculateBOM(cfg);
+        // Add instance label to profiles for traceability
+        if (cfg.instanceLabel) {
+           b.profiles = b.profiles.map(p => ({ ...p, instanceLabel: cfg.instanceLabel }));
+        }
+        
         // Standard profiles
         b.profiles.forEach(p => {
           const mapKey = `${p.id}|${p.label || ''}|${colorName}`;
           const displayName = p.name ? `${p.name} ${p.label ? `[${p.label}]` : ''}` : (p.label || '');
           const measure = p.length * p.qty * cfgQty;
-          const newPieces = Array(p.qty * cfgQty).fill(p.length);
+          const newPieces = Array(p.qty * cfgQty).fill({ length: p.length, instanceLabel: cfg.instanceLabel });
+          
           if (!map[mapKey]) {
             map[mapKey] = { ...p, originalNames: new Set([displayName]), totalMeasure: measure, pieces: newPieces, colorName };
           } else {
@@ -237,11 +276,12 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
        const barKey = p._barKey || p.baseId || p.id;
        const bLength = barLengths[barKey] || p.barLength || 6400;
        const sThreshold = p.scrapThreshold || 0;
-       const pieces = p.pieces ? [...p.pieces].sort((a,b) => b - a) : [];
+       const pieces = p.pieces ? [...p.pieces].sort((a,b) => (b.length || b) - (a.length || a)) : [];
        
        if (pieces.length > 0) {
           const currentBars = [];
-          pieces.forEach(piece => {
+          pieces.forEach(pObj => {
+            const piece = pObj.length || pObj;
             let bestIdx = -1;
             let minLeft = Infinity;
             for (let j = 0; j < currentBars.length; j++) {
@@ -540,10 +580,16 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#64748b', whiteSpace: 'nowrap' }}>📋 Produit à afficher :</span>
             <select value={productFilter} onChange={e => setProductFilter(e.target.value)} className="input" style={{ width: 'auto', fontWeight: 600 }}>
-              <option value="total">🔢 Tous les produits (Achat uniquement)</option>
-              {quoteItems.map(item => (
-                <option key={item.id} value={item.id}>{item.label} — {item.config?.L}×{item.config?.H}mm (Qté: {item.qty})</option>
-              ))}
+              <option value="total">🔢 Tous les produits (Consolidé)</option>
+              {activeQuote?.batches && activeQuote.batches.length > 0 ? (
+                activeConfigs.map(c => (
+                  <option key={c.measureId} value={c.measureId}>📍 {c.label} — {c.config.L}×{c.config.H}mm</option>
+                ))
+              ) : (
+                quoteItems.map(item => (
+                  <option key={item.id} value={item.id}>{item.label} — {item.config?.L}×{item.config?.H}mm (Qté: {item.qty})</option>
+                ))
+              )}
             </select>
           </div>
           {activeTab === 'achat' && (

@@ -920,21 +920,21 @@ export class FormulaEngine {
     }
 
     // 6. Volet Roulant
-    let shutterL = L;
+    let shutterL = config.shutterOverrides?.customLV || L;
     let shutterH_val = isOnlyShutter ? H : windowH;
     
     if (!isOnlyShutter && config.compoundType && config.compoundType !== 'none' && config.compoundConfig?.shutterMode === 'opening_only') {
        const opPart = config.compoundConfig.parts?.find(p => p.type === 'opening');
        if (opPart) {
           if (config.compoundConfig.orientation !== 'vertical') {
-             shutterL = opPart.width;
+             shutterL = config.shutterOverrides?.customLV || opPart.width;
           } else {
              shutterH_val = opPart.height;
           }
        }
     }
 
-    const vars = { L: shutterL, H: shutterH_val, HC: shutterHeight };
+    const vars = { L: shutterL, H: shutterH_val, HC: config.shutterOverrides?.customHC || shutterHeight };
     const shutterPack = [];
     if (config.hasShutter && config.shutterConfig && this.db.shutterComponents) {
       const sc = this.db.shutterComponents;
@@ -949,7 +949,7 @@ export class FormulaEngine {
       ];
 
       families.forEach(({ key, source }) => {
-        let selectedId = config.shutterConfig[key];
+        let selectedId = config.shutterOverrides?.[key] || config.shutterConfig[key];
         
         // Resolve AUTO glissière
         if (key === 'glissiereId' && selectedId === 'AUTO') {
