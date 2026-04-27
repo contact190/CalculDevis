@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Package, Scissors, Ruler, Download, CheckCircle, Barcode, ShoppingCart, Layers, Edit2, Link2, Link2Off, Plus, QrCode, Trash2, ArrowLeft } from 'lucide-react';
+import { Package, Scissors, Ruler, Download, CheckCircle, Barcode, ShoppingCart, Layers, Edit2, Link2, Link2Off, Plus, QrCode, Trash2, ArrowLeft, FileText, FileSpreadsheet } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { FormulaEngine } from '../../engine/formula-engine';
 import { DEFAULT_DATA } from '../../data/default-data';
@@ -23,6 +23,28 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
   const [selectedQuoteId, setSelectedQuoteId] = useState('');
   const [selectedGlobalQuoteId, setSelectedGlobalQuoteId] = useState(currentQuote?.id || '');
   const [selectedBatchId, setSelectedBatchId] = useState('ALL');
+  const [proformaSelection, setProformaSelection] = useState(new Set()); // Selected IDs for proforma
+  const [supplierName, setSupplierName] = useState('');
+  const [docHeader, setDocHeader] = useState('DEMANDE DE PROFORMA');
+  const [companyInfo, setCompanyInfo] = useState({
+    name: 'MA MENUISERIE ALU',
+    address: '123 Rue de l\'Atelier, Alger',
+    phone: '0550 11 22 33',
+    email: 'contact@menuiserie.dz',
+    rc: '',
+    nif: '',
+    nis: '',
+    ai: '',
+    logo: '' // URL or DataURI
+  });
+  
+  const toggleProformaSelection = (id) => {
+    setProformaSelection(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
 
   const activeQuote = useMemo(() => {
     const allSources = [...(database?.quotes || []), ...(database?.orders || [])];
@@ -124,8 +146,9 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         
         // Standard profiles
         b.profiles.forEach(p => {
-          const mapKey = `${p.id}|${p.label || ''}|${colorName}`;
-          const displayName = p.name ? `${p.name} ${p.label ? `[${p.label}]` : ''}` : (p.label || '');
+          // CONSOLIDATION FIX: Use only ID and Color for the key to avoid duplicates by label
+          const mapKey = `${p.id}|${colorName}`;
+          const displayName = p.name || p.label || 'Sans nom';
           const measure = p.length * p.qty * cfgQty;
           
           // Enrich each piece with metadata for sequencing
@@ -138,10 +161,10 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
           }));
           
           if (!map[mapKey]) {
-            map[mapKey] = { ...p, originalNames: new Set([displayName]), totalMeasure: measure, pieces: newPieces, colorName };
+            map[mapKey] = { ...p, originalNames: new Set([displayName]), totalMeasure: measure, pieces: newPieces, colorName, baseId: p.id };
           } else {
             map[mapKey].totalMeasure += measure;
-            map[mapKey].pieces.push(...newPieces);
+            map[mapKey].pieces = [...map[mapKey].pieces, ...newPieces];
             map[mapKey].originalNames.add(displayName);
           }
         });
@@ -800,36 +823,282 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
       {activeTab === 'achat' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
           
+          {/* Document Personalization Panel */}
+          <div className="glass shadow-md" style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '1.25rem', padding: '1.5rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem' }}>
+              {/* Left: My Company */}
+              <div style={{ borderRight: '1px solid #e2e8f0', paddingRight: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.2rem' }}>
+                  <Package size={20} color="#3b82f6" />
+                  <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0 }}>Mon Entreprise (Expéditeur)</h3>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
+                  <div style={{ gridColumn: 'span 2' }}>
+                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#64748b', marginBottom: '0.2rem' }}>Nom de la Société</label>
+                    <input type="text" className="input" value={companyInfo.name} onChange={e => setCompanyInfo({...companyInfo, name: e.target.value})} style={{ width: '100%', fontSize: '0.85rem' }} />
+                  </div>
+                  <div style={{ gridColumn: 'span 2' }}>
+                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#64748b', marginBottom: '0.2rem' }}>Adresse</label>
+                    <input type="text" className="input" value={companyInfo.address} onChange={e => setCompanyInfo({...companyInfo, address: e.target.value})} style={{ width: '100%', fontSize: '0.85rem' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#64748b', marginBottom: '0.2rem' }}>Téléphone</label>
+                    <input type="text" className="input" value={companyInfo.phone} onChange={e => setCompanyInfo({...companyInfo, phone: e.target.value})} style={{ width: '100%', fontSize: '0.85rem' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#64748b', marginBottom: '0.2rem' }}>Email</label>
+                    <input type="text" className="input" value={companyInfo.email} onChange={e => setCompanyInfo({...companyInfo, email: e.target.value})} style={{ width: '100%', fontSize: '0.85rem' }} />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', gridColumn: 'span 2' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: 700, color: '#94a3b8' }}>RC</label>
+                      <input type="text" className="input" value={companyInfo.rc} onChange={e => setCompanyInfo({...companyInfo, rc: e.target.value})} style={{ width: '100%', padding: '0.2rem 0.4rem', fontSize: '0.75rem' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: 700, color: '#94a3b8' }}>NIF</label>
+                      <input type="text" className="input" value={companyInfo.nif} onChange={e => setCompanyInfo({...companyInfo, nif: e.target.value})} style={{ width: '100%', padding: '0.2rem 0.4rem', fontSize: '0.75rem' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: 700, color: '#94a3b8' }}>NIS</label>
+                      <input type="text" className="input" value={companyInfo.nis} onChange={e => setCompanyInfo({...companyInfo, nis: e.target.value})} style={{ width: '100%', padding: '0.2rem 0.4rem', fontSize: '0.75rem' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: 700, color: '#94a3b8' }}>AI</label>
+                      <input type="text" className="input" value={companyInfo.ai} onChange={e => setCompanyInfo({...companyInfo, ai: e.target.value})} style={{ width: '100%', padding: '0.2rem 0.4rem', fontSize: '0.75rem' }} />
+                    </div>
+                  </div>
+                  <div style={{ gridColumn: 'span 2' }}>
+                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#64748b', marginBottom: '0.2rem' }}>URL Logo (Optionnel)</label>
+                    <input type="text" className="input" placeholder="https://..." value={companyInfo.logo} onChange={e => setCompanyInfo({...companyInfo, logo: e.target.value})} style={{ width: '100%', fontSize: '0.85rem' }} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Right: Supplier & Document Info */}
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.2rem' }}>
+                  <ShoppingCart size={20} color="#8b5cf6" />
+                  <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0 }}>Cible & Document</h3>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#64748b', marginBottom: '0.2rem' }}>Nom du Fournisseur (Destinataire)</label>
+                    <input type="text" className="input" placeholder="Ex: AluGlass France" value={supplierName} onChange={e => setSupplierName(e.target.value)} style={{ width: '100%' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#64748b', marginBottom: '0.2rem' }}>Titre du Document</label>
+                    <input type="text" className="input" value={docHeader} onChange={e => setDocHeader(e.target.value)} style={{ width: '100%' }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Table: Achats Profilés */}
           <div className="glass shadow-md" style={{ borderLeft: '4px solid #8b5cf6' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
-              <Layers size={20} color="#8b5cf6" />
-              <h2 style={{ fontSize: '1.125rem', fontWeight: 600, flex: 1 }}>Liste d'Achat : Profilés Aluminium</h2>
-              {!jumelageMode ? (
+              <ShoppingCart size={20} color="#8b5cf6" />
+              <h2 style={{ fontSize: '1.125rem', fontWeight: 600, flex: 1 }}>Besoins d'Achat (Consolidés par Référence)</h2>
+              <div style={{ display: 'flex', gap: '0.8rem' }}>
+                <button 
+                  onClick={() => {
+                    const doc = new jsPDF();
+                    
+                    // --- HEADER: Company Info & Logo ---
+                    if (companyInfo.logo) {
+                       try { doc.addImage(companyInfo.logo, 'PNG', 10, 10, 30, 30); } catch(e) {}
+                    }
+                    doc.setFontSize(14);
+                    doc.setTextColor(30, 41, 59);
+                    doc.text(companyInfo.name.toUpperCase(), 10, companyInfo.logo ? 45 : 20);
+                    doc.setFontSize(8);
+                    doc.setTextColor(100, 116, 139);
+                    doc.text(companyInfo.address, 10, companyInfo.logo ? 50 : 25);
+                    doc.text(`${companyInfo.phone} | ${companyInfo.email}`, 10, companyInfo.logo ? 54 : 29);
+                    
+                    if (companyInfo.rc || companyInfo.nif) {
+                       doc.setFontSize(7);
+                       doc.text(`RC: ${companyInfo.rc} | NIF: ${companyInfo.nif} | NIS: ${companyInfo.nis} | AI: ${companyInfo.ai}`, 10, companyInfo.logo ? 59 : 34);
+                    }
 
-                <button
-                  onClick={() => { setJumelageMode(true); setJumelageSelection(new Set()); }}
-                  style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.9rem', borderRadius: '0.5rem', border: '1.5px solid #8b5cf6', background: 'transparent', color: '#8b5cf6', cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem' }}
+                    // --- DOCUMENT TITLE ---
+                    doc.setFontSize(22);
+                    doc.setTextColor(30, 41, 59);
+                    doc.text(docHeader.toUpperCase(), 105, 75, { align: 'center' });
+                    
+                    doc.setDrawColor(226, 232, 240);
+                    doc.line(10, 80, 200, 80);
+
+                    // --- SUPPLIER INFO (Right side) ---
+                    doc.setFontSize(10);
+                    doc.setTextColor(100, 116, 139);
+                    doc.text("DESTINATAIRE / FOURNISSEUR :", 120, 45);
+                    doc.setFontSize(14);
+                    doc.setTextColor(30, 41, 59);
+                    doc.text(supplierName || "Non spécifié", 120, 52);
+
+                    // --- PROJECT INFO (Left side) ---
+                    doc.setFontSize(10);
+                    doc.setTextColor(100, 116, 139);
+                    doc.text(`Chantier: ${activeQuote?.number || 'Non spécifié'}`, 120, 60);
+                    doc.text(`Date: ${new Date().toLocaleDateString()}`, 120, 65);
+                    
+                    let y = 95;
+                    doc.setFontSize(11);
+                    doc.setFillColor(30, 41, 59);
+                    doc.rect(10, y-6, 190, 8, 'F');
+                    doc.setTextColor(255, 255, 255);
+                    doc.text("Référence", 15, y);
+                    doc.text("Désignation", 50, y);
+                    doc.text("Finition", 110, y);
+                    doc.text("Total ML / Qté", 150, y);
+                    doc.text("Unité", 185, y);
+                    
+                    y += 12;
+                    doc.setTextColor(30, 41, 59);
+                    const itemsToPrint = [
+                      ...displayProfiles.filter(p => proformaSelection.has(p.id)),
+                      ...purchasingAccessories.filter(a => proformaSelection.has(a.id))
+                    ];
+
+                    if (itemsToPrint.length === 0) {
+                      doc.text("Aucun article sélectionné.", 15, y);
+                    } else {
+                      itemsToPrint.forEach(p => {
+                        doc.text(p.id.split('|')[0], 15, y);
+                        doc.text((p.name || p.combinedName || '').slice(0, 25) || '—', 50, y);
+                        doc.text(p.colorName || '—', 110, y);
+                        
+                        const isProfile = !!p.pieces;
+                        const isMl = isProfile || ['M', 'ML', 'JOINT'].includes((p.unit || '').toUpperCase());
+                        const val = isMl ? (p.totalMeasure / 1000).toFixed(2) : p.totalQty;
+                        doc.text(val.toString(), 150, y);
+                        doc.text(isProfile ? 'ML' : (p.unit || 'U'), 185, y);
+                        
+                        y += 8;
+                        if (y > 270) { doc.addPage(); y = 20; }
+                      });
+                    }
+                    
+                    doc.save(`${docHeader}_${activeQuote?.number || 'Chantier'}.pdf`);
+                  }}
+                  className="btn"
+                  style={{ background: '#8b5cf6', color: 'white', fontWeight: 700, fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
                 >
-                  <Link2 size={15} /> Jumeler des profilés
+                  <FileText size={15} /> {docHeader} ({displayProfiles.filter(p=>proformaSelection.has(p.id)).length + purchasingAccessories.filter(a=>proformaSelection.has(a.id)).length})
                 </button>
-              ) : (
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
+
+                <button 
+                  onClick={() => {
+                    const doc = new jsPDF();
+                    // --- HEADER: Company Info & Logo ---
+                    if (companyInfo.logo) {
+                       try { doc.addImage(companyInfo.logo, 'PNG', 10, 10, 30, 30); } catch(e) {}
+                    }
+                    doc.setFontSize(14);
+                    doc.setTextColor(30, 41, 59);
+                    doc.text(companyInfo.name.toUpperCase(), 10, companyInfo.logo ? 45 : 20);
+                    doc.setFontSize(8);
+                    doc.setTextColor(100, 116, 139);
+                    doc.text(companyInfo.address, 10, companyInfo.logo ? 50 : 25);
+                    doc.text(`${companyInfo.phone} | ${companyInfo.email}`, 10, companyInfo.logo ? 54 : 29);
+                    
+                    if (companyInfo.rc || companyInfo.nif) {
+                       doc.setFontSize(7);
+                       doc.text(`RC: ${companyInfo.rc} | NIF: ${companyInfo.nif} | NIS: ${companyInfo.nis} | AI: ${companyInfo.ai}`, 10, companyInfo.logo ? 59 : 34);
+                    }
+
+                    doc.setFontSize(20);
+                    doc.text("BON DE COMMANDE VITRAGE", 105, 75, { align: 'center' });
+                    
+                    doc.setDrawColor(226, 232, 240);
+                    doc.line(10, 80, 200, 80);
+
+                    // --- INFO SIDEBAR ---
+                    doc.setFontSize(10);
+                    doc.setTextColor(100, 116, 139);
+                    doc.text(`Chantier: ${activeQuote?.number || 'Non spécifié'}`, 120, 50);
+                    doc.text(`Client Final: ${database.clients?.find(c => c.id === activeQuote?.clientId)?.nom || '—'}`, 120, 55);
+                    doc.text(`Date: ${new Date().toLocaleDateString()}`, 120, 60);
+                    
+                    let y = 95;
+                    doc.setFontSize(11);
+                    doc.setFillColor(30, 41, 59);
+                    doc.rect(10, y-6, 190, 7, 'F');
+                    doc.text("Désignation", 15, y);
+                    doc.text("Largeur", 80, y);
+                    doc.text("Hauteur", 110, y);
+                    doc.text("Qté", 140, y);
+                    doc.text("Surface (m2)", 160, y);
+                    
+                    y += 10;
+                    purchasingGlass.forEach(g => {
+                      doc.text(g.name || 'Vitrage', 15, y);
+                      doc.text(`${g.width} mm`, 80, y);
+                      doc.text(`${g.height} mm`, 110, y);
+                      doc.text(g.count.toString(), 140, y);
+                      doc.text((g.area || 0).toFixed(3), 160, y);
+                      y += 8;
+                      if (y > 270) { doc.addPage(); y = 20; }
+                    });
+                    
+                    doc.save(`Commande_Vitrage_${activeQuote?.number || 'Chantier'}.pdf`);
+                  }}
+                  className="btn"
+                  style={{ background: '#06b6d4', color: 'white', fontWeight: 700, fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                >
+                  <Layers size={15} /> Bon Vitrage
+                </button>
+
+                <button 
+                  onClick={() => {
+                    let csv = "Reference;Designation;Finition;Quantite;Unite\n";
+                    displayProfiles.forEach(p => {
+                      const bLength = barLengths[p._barKey || p.baseId || p.id] || 6400;
+                      const qty = Math.ceil(p.totalMeasure / bLength);
+                      csv += `${p.id.split('|')[0]};${p.name};${p.colorName};${qty};Barres\n`;
+                    });
+                    purchasingAccessories.forEach(a => {
+                      const isMl = ['M', 'ML', 'JOINT'].includes((a.unit || '').toUpperCase());
+                      const qty = isMl ? (a.totalMeasure/1000).toFixed(2) : a.totalQty;
+                      csv += `${a.id.split('|')[0]};${a.combinedName};${a.colorName};${qty};${a.unit || 'U'}\n`;
+                    });
+                    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                    const link = document.createElement("a");
+                    link.href = URL.createObjectURL(blob);
+                    link.setAttribute("download", `Achat_${activeQuote?.number || 'Chantier'}.csv`);
+                    link.click();
+                  }}
+                  className="btn"
+                  style={{ background: '#10b981', color: 'white', fontWeight: 700, fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                >
+                  <FileSpreadsheet size={15} /> Excel (CSV)
+                </button>
+                {!jumelageMode ? (
                   <button
-                    onClick={handleConfirmJumelage}
-                    disabled={jumelageSelection.size < 2}
-                    style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.9rem', borderRadius: '0.5rem', border: 'none', background: jumelageSelection.size >= 2 ? '#8b5cf6' : '#e2e8f0', color: jumelageSelection.size >= 2 ? 'white' : '#94a3b8', cursor: jumelageSelection.size >= 2 ? 'pointer' : 'not-allowed', fontWeight: 600, fontSize: '0.8rem' }}
+                    onClick={() => { setJumelageMode(true); setJumelageSelection(new Set()); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.9rem', borderRadius: '0.5rem', border: '1.5px solid #8b5cf6', background: 'transparent', color: '#8b5cf6', cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem' }}
                   >
-                    <Plus size={15} /> Confirmer le jumelage ({jumelageSelection.size} sélectionnés)
+                    <Link2 size={15} /> Jumeler des profilés
                   </button>
-                  <button
-                    onClick={() => { setJumelageMode(false); setJumelageSelection(new Set()); }}
-                    style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.9rem', borderRadius: '0.5rem', border: '1.5px solid #94a3b8', background: 'transparent', color: '#64748b', cursor: 'pointer', fontSize: '0.8rem' }}
-                  >
-                    Annuler
-                  </button>
-                </div>
-              )}
+                ) : (
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button
+                      onClick={handleConfirmJumelage}
+                      disabled={jumelageSelection.size < 2}
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.9rem', borderRadius: '0.5rem', border: 'none', background: jumelageSelection.size >= 2 ? '#8b5cf6' : '#e2e8f0', color: jumelageSelection.size >= 2 ? 'white' : '#94a3b8', cursor: jumelageSelection.size >= 2 ? 'pointer' : 'not-allowed', fontWeight: 600, fontSize: '0.8rem' }}
+                    >
+                      <Plus size={15} /> Confirmer ({jumelageSelection.size})
+                    </button>
+                    <button
+                      onClick={() => { setJumelageMode(false); setJumelageSelection(new Set()); }}
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.9rem', borderRadius: '0.5rem', border: '1.5px solid #94a3b8', background: 'transparent', color: '#64748b', cursor: 'pointer', fontSize: '0.8rem' }}
+                    >
+                      Annuler
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
             {jumelageMode && (
               <div style={{ background: '#faf5ff', border: '1px solid #ddd6fe', borderRadius: '0.5rem', padding: '0.6rem 1rem', marginBottom: '1rem', fontSize: '0.8rem', color: '#7c3aed' }}>
@@ -840,6 +1109,19 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
               <table className="data-table">
                 <thead>
                   <tr>
+                    <th style={{ width: '40px' }}>
+                       <input 
+                         type="checkbox" 
+                         onChange={(e) => {
+                           if (e.target.checked) {
+                             setProformaSelection(new Set([...displayProfiles.map(p=>p.id), ...purchasingAccessories.map(a=>a.id)]));
+                           } else {
+                             setProformaSelection(new Set());
+                           }
+                         }}
+                         checked={proformaSelection.size > 0}
+                       />
+                    </th>
                     {jumelageMode && <th style={{ width: '30px' }}></th>}
                     <th>Référence</th>
                     <th>Finition</th>
@@ -904,7 +1186,14 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                     const isSelected = jumelageSelection.has(p.id);
                     const rowBg = p._isGroup ? '#faf5ff' : isSelected ? '#ede9fe' : 'transparent';
                     return (
-                      <tr key={`pa-${i}`} style={{ background: rowBg }}>
+                      <tr key={`dp-${i}`} style={{ background: proformaSelection.has(p.id) ? '#f0f9ff' : 'transparent' }}>
+                        <td>
+                           <input 
+                             type="checkbox" 
+                             checked={proformaSelection.has(p.id)} 
+                             onChange={() => toggleProformaSelection(p.id)} 
+                           />
+                        </td>
                         {jumelageMode && !p._isGroup && (
                           <td data-label="Sélec.">
                             <input
@@ -922,14 +1211,9 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                         <td data-label="Finition" style={{ fontSize: '0.85rem' }}>{p._isGroup ? 'Multicolore / Varié' : p.colorName || 'Standard'}</td>
                         <td data-label="Nom" style={{ fontWeight: 600 }}>
                           {p._isGroup && <span style={{ fontSize: '0.7rem', background: '#8b5cf6', color: 'white', padding: '0.1rem 0.4rem', borderRadius: '999px', marginRight: '0.4rem' }}>Jumelé</span>}
-                          {p.combinedName}
-                          <div style={{ fontSize: '0.7rem', color: '#8b5cf6', marginTop: '0.2rem' }}>Total: {(ml / 1000).toFixed(2)} ML</div>
-                          <div style={{ display: 'flex', gap: '0.3rem', marginTop: '0.3rem', flexWrap: 'wrap' }}>
-                             {p.pieces.map((pc, pci) => (
-                               <span key={pci} style={{ fontSize: '0.65rem', background: '#f1f5f9', padding: '1px 4px', borderRadius: '3px' }}>
-                                 F{pc.windowIdx+1} ({pc.usage?.charAt(0)})
-                               </span>
-                             ))}
+                          {p.name || '—'}
+                          <div style={{ fontSize: '0.85rem', color: '#8b5cf6', marginTop: '0.2rem', fontWeight: 800 }}>
+                            Total Chantier: {(ml / 1000).toFixed(2)} ML
                           </div>
                         </td>
                         <td data-label="Lg. Barre">
@@ -976,6 +1260,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
               <table className="data-table">
                 <thead>
                   <tr>
+                    <th style={{ width: '40px' }}></th>
                     <th>Référence</th>
                     <th>Finition</th>
                     <th>Désignation</th>
@@ -987,7 +1272,14 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                   {purchasingAccessories.map((a, i) => {
                     const isMl = ['M', 'ML', 'JOINT'].includes((a.unit || '').toUpperCase());
                     return (
-                      <tr key={`aa-${i}`}>
+                      <tr key={`aa-${i}`} style={{ background: proformaSelection.has(a.id) ? '#fffbeb' : 'transparent' }}>
+                        <td>
+                           <input 
+                             type="checkbox" 
+                             checked={proformaSelection.has(a.id)} 
+                             onChange={() => toggleProformaSelection(a.id)} 
+                           />
+                        </td>
                         <td data-label="Réf." style={{ color: '#64748b', fontSize: '0.75rem', fontFamily: 'monospace' }}>{a.baseId || a.id.split('|')[0]}</td>
                         <td data-label="Finition" style={{ fontSize: '0.85rem' }}>{a.colorName || 'Standard'}</td>
                         <td data-label="Nom" style={{ fontWeight: 600 }}>{a.combinedName || 'Accessoire'}</td>
