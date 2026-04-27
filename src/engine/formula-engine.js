@@ -13,15 +13,20 @@ export class FormulaEngine {
   evaluate(formula, scope, errorContext = '') {
     if (!formula || typeof formula !== 'string' || formula.trim() === '') return 0;
     try {
-      // Support French style commas by replacing them with dots
       let cleanFormula = formula.replace(/,/g, '.');
-      // If trailing operators exist, mathjs fails, let's catch it
       return math.evaluate(cleanFormula, scope);
-    } catch (error) {
-      console.error(`Faute dans la formule (${errorContext}): "${formula}" \n ${error.message}`);
-      // Return NaN so it propagates and we can flag it
-      return NaN;
+    } catch (err) {
+      console.warn(`Formula Error [${errorContext}]: "${formula}"`, err);
+      return 0;
     }
+  }
+
+  getUsageCategory(label) {
+    const l = (label || '').toLowerCase();
+    if (l.includes('dormant') || l.includes('cadre') || l.includes('seuil') || l.includes('precadre')) return 'DORMANT';
+    if (l.includes('ouvrant') || l.includes('battement') || l.includes('inverseur') || l.includes('parclose')) return 'OUVRANT';
+    if (l.includes('lame') || l.includes('coulisse') || l.includes('caisson') || l.includes('axe') || l.includes('glissiere')) return 'VOLET';
+    return 'FINITION';
   }
 
   /**
@@ -221,6 +226,7 @@ export class FormulaEngine {
             isFrame: el.isFrame,
             isCouvreJoint: el.isCouvreJoint,
             length: safeValue,
+            usage: this.getUsageCategory((el.label || '') + ' ' + (pRef.name || '')),
             error: isError ? "Formule Invalide" : null,
             unitPrice: unitPrice,
             totalMeasure: safeValue * elQty,
@@ -464,6 +470,7 @@ export class FormulaEngine {
               qty: 1,
               length: len,
               formula: 'H',
+              usage: 'DORMANT',
               cost: pPrice
             });
           }
@@ -489,6 +496,7 @@ export class FormulaEngine {
               qty: 1,
               length: len,
               formula: 'L',
+              usage: 'DORMANT',
               cost: pPrice
             });
           }
@@ -601,6 +609,7 @@ export class FormulaEngine {
       price: effectivePrice,
       priceUnit: item.priceUnit,
       resolvedFormula: this.resolveFormula(item.formula || '1', { L: itemScopeL, H, HC }),
+      usage: 'VOLET',
       cost: effectiveCost
     });
 

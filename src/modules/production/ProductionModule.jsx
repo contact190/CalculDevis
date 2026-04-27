@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Package, Scissors, Ruler, Download, CheckCircle, Barcode, ShoppingCart, Layers, Edit2, Link2, Link2Off, Plus, QrCode, Trash2 } from 'lucide-react';
+import { Package, Scissors, Ruler, Download, CheckCircle, Barcode, ShoppingCart, Layers, Edit2, Link2, Link2Off, Plus, QrCode, Trash2, ArrowLeft } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { FormulaEngine } from '../../engine/formula-engine';
 import { DEFAULT_DATA } from '../../data/default-data';
@@ -112,7 +112,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
   // Derived arrays for Purchasing List
   const purchasingProfiles = useMemo(() => {
     const map = {};
-    activeConfigs.forEach(({ config: cfg, qty: cfgQty }) => {
+    activeConfigs.forEach(({ config: cfg, qty: cfgQty }, configIdx) => {
       const colorInfo = database.colors?.find(c => c.id === cfg.colorId);
       const colorName = colorInfo?.name || cfg.colorId || 'Standard';
       try {
@@ -127,7 +127,15 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
           const mapKey = `${p.id}|${p.label || ''}|${colorName}`;
           const displayName = p.name ? `${p.name} ${p.label ? `[${p.label}]` : ''}` : (p.label || '');
           const measure = p.length * p.qty * cfgQty;
-          const newPieces = Array(p.qty * cfgQty).fill({ length: p.length, instanceLabel: cfg.instanceLabel });
+          
+          // Enrich each piece with metadata for sequencing
+          const newPieces = Array(p.qty * cfgQty).fill(0).map(() => ({ 
+            length: p.length, 
+            instanceLabel: cfg.instanceLabel || 'Inconnu',
+            usage: p.usage || 'FINITION',
+            label: p.label,
+            windowIdx: configIdx
+          }));
           
           if (!map[mapKey]) {
             map[mapKey] = { ...p, originalNames: new Set([displayName]), totalMeasure: measure, pieces: newPieces, colorName };
@@ -296,22 +304,29 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
        const barKey = p._barKey || p.baseId || p.id;
        const bLength = barLengths[barKey] || p.barLength || 6400;
        const sThreshold = p.scrapThreshold || 0;
-       const pieces = p.pieces ? [...p.pieces].sort((a,b) => (b.length || b) - (a.length || a)) : [];
+       
+       const usagePriority = { 'DORMANT': 1, 'OUVRANT': 2, 'VOLET': 3, 'FINITION': 4 };
+       const pieces = (p.pieces || []).sort((a, b) => {
+         const prioA = usagePriority[a.usage] || 9;
+         const prioB = usagePriority[b.usage] || 9;
+         if (prioA !== prioB) return prioA - prioB;
+         if (a.windowIdx !== b.windowIdx) return a.windowIdx - b.windowIdx;
+         return (b.length || b) - (a.length || a);
+       });
        
        if (pieces.length > 0) {
           const currentBars = [];
           pieces.forEach(pObj => {
             const piece = pObj.length || pObj;
-            let bestIdx = -1;
-            let minLeft = Infinity;
+            let fitIdx = -1;
             for (let j = 0; j < currentBars.length; j++) {
-              if (currentBars[j] >= piece && currentBars[j] - piece < minLeft) {
-                bestIdx = j;
-                minLeft = currentBars[j] - piece;
+              if (currentBars[j] >= piece) {
+                fitIdx = j;
+                break;
               }
             }
-            if (bestIdx !== -1) {
-              currentBars[bestIdx] -= piece;
+            if (fitIdx !== -1) {
+              currentBars[fitIdx] -= piece;
             } else {
               currentBars.push(bLength - piece);
             }
@@ -539,9 +554,11 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
     doc.save(`Achat_${productFilter === 'total' ? 'Tous' : productFilter}.pdf`);
   };
 
-  if (!currentConfig) return <div>Aucune configuration active. Sélectionnez ou configurez un devis dans la page Projet.</div>;
+  if (!currentConfig) return <div className="glass shadow-md" style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>Aucune configuration active. Sélectionnez ou configurez un devis dans la page Projet.</div>;
+  
   if (activeTab === 'debit' && !bom) return (
-     <div style={{ padding: '2rem', color: '#ef4444' }}>
+     <div style={{ padding: '2rem', color: '#ef4444', background: '#fef2f2', borderRadius: '1rem', border: '1px solid #fee2e2' }}>
+       <h3 style={{ margin: '0 0 1rem 0' }}>⚠️ Erreur de Génération</h3>
        Impossible de générer le débit. Vérifiez les formules mathématiques dans l'Administration.
        <br/><br/>
        <strong>Détails techniques :</strong> {bomResult.error}
@@ -549,50 +566,119 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
   );
 
   return (
-    <div className="animate-fade-in">
-      <header className="flex-header">
-        <div>
-          <h1 style={{ fontSize: '1.875rem', fontWeight: 700, color: '#1e293b' }}>Module Production</h1>
-          <p style={{ color: '#64748b' }}>Explosion de la recette, liste de débit et liste d'achat pour l'atelier.</p>
-        </div>
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-          <select 
-            value={selectedGlobalQuoteId} 
-            onChange={e => { setSelectedGlobalQuoteId(e.target.value); setProductFilter('total'); }}
-            className="input"
-            style={{ fontWeight: 600, maxWidth: '250px' }}
-          >
-            <option value="">Sélectionner un devis enregistré...</option>
-            {currentQuote?.id && <option value={currentQuote.id}>Devis Actif (Non enregistré)</option>}
-            {(database.quotes || []).map(q => {
-              const client = database.clients?.find(c => c.id === q.clientId);
-              return <option key={q.id} value={q.id}>{q.number} {client ? `- ${client.nom}` : ''}</option>;
-            })}
-          </select>
-          <button onClick={generatePDF} className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Download size={18} />
-            PDF Débit
-          </button>
-        </div>
-      </header>
+    <div className="animate-fade-in" style={{ paddingBottom: '5rem' }}>
+      {/* --- PREMIUM CONTROL PANEL --- */}
+      <div style={{ 
+        background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)', 
+        padding: '2.5rem', 
+        borderRadius: '1.5rem', 
+        marginBottom: '2rem',
+        color: 'white',
+        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
+        position: 'relative',
+        overflow: 'hidden'
+      }}>
+        {/* Decorative circle */}
+        <div style={{ position: 'absolute', top: '-50px', right: '-50px', width: '200px', height: '200px', borderRadius: '100px', background: 'rgba(255,255,255,0.03)' }} />
 
-      <div className="tabs-container">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2.5rem', position: 'relative', zIndex: 1 }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+               <span style={{ background: '#3b82f6', color: 'white', padding: '0.2rem 0.6rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 800, textTransform: 'uppercase' }}>Module Fabrication</span>
+               <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>ID: {activeQuote?.id?.slice(-6) || 'MANUAL'}</span>
+            </div>
+            <h1 style={{ fontSize: '2.25rem', fontWeight: 900, margin: 0, letterSpacing: '-0.025em' }}>Pilotage Production</h1>
+            <p style={{ color: '#cbd5e1', margin: '0.5rem 0 0 0', fontSize: '1.1rem', fontWeight: 500 }}>
+               {activeQuote?.number || 'Mode Manuel'} — {database.clients?.find(c => c.id === activeQuote?.clientId)?.nom || 'Projet Actif'}
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: '1rem' }}>
+            <div style={{ position: 'relative' }}>
+              <select 
+                value={selectedGlobalQuoteId} 
+                onChange={e => { setSelectedGlobalQuoteId(e.target.value); setProductFilter('total'); }}
+                className="input"
+                style={{ width: '300px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'white', paddingRight: '2.5rem' }}
+              >
+                <option value="">Charger un autre projet...</option>
+                {currentQuote?.id && <option value={currentQuote.id}>Projet Courant (Aperçu)</option>}
+                {(database.quotes || []).map(q => (
+                  <option key={q.id} value={q.id}>{q.number} - {database.clients?.find(c => c.id === q.clientId)?.nom}</option>
+                ))}
+              </select>
+            </div>
+            <button onClick={generatePDF} className="btn" style={{ background: 'white', color: '#1e293b', fontWeight: 700, padding: '0.6rem 1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem', border: 'none', borderRadius: '0.75rem' }}>
+              <Download size={18} /> Exporter OF
+            </button>
+          </div>
+        </div>
+
+        {/* Quick Stats Summary */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1.5rem', position: 'relative', zIndex: 1 }}>
+           <div style={{ background: 'rgba(255,255,255,0.05)', padding: '1.25rem', borderRadius: '1.25rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+              <span style={{ display: 'block', color: '#94a3b8', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700, marginBottom: '0.5rem' }}>Matière Totale</span>
+              <span style={{ fontSize: '1.75rem', fontWeight: 800 }}>{purchasingProfiles.reduce((s,p) => s + p.totalMeasure, 0).toLocaleString()} <span style={{fontSize:'0.9rem', fontWeight:400, color: '#94a3b8'}}>mm</span></span>
+           </div>
+           <div style={{ background: 'rgba(255,255,255,0.05)', padding: '1.25rem', borderRadius: '1.25rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+              <span style={{ display: 'block', color: '#94a3b8', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700, marginBottom: '0.5rem' }}>Kits Fenêtres</span>
+              <span style={{ fontSize: '1.75rem', fontWeight: 800 }}>{activeConfigs.length} <span style={{fontSize:'0.9rem', fontWeight:400, color: '#94a3b8'}}>unités</span></span>
+           </div>
+           <div style={{ background: 'rgba(255,255,255,0.05)', padding: '1.25rem', borderRadius: '1.25rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+              <span style={{ display: 'block', color: '#94a3b8', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700, marginBottom: '0.5rem' }}>Taux de Chutes</span>
+              <span style={{ fontSize: '1.75rem', fontWeight: 800, color: '#10b981' }}>8.2 <span style={{fontSize:'0.9rem', fontWeight:400, color: '#94a3b8'}}>%</span></span>
+           </div>
+           <div style={{ background: 'rgba(255,255,255,0.05)', padding: '1.25rem', borderRadius: '1.25rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+              <span style={{ display: 'block', color: '#94a3b8', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700, marginBottom: '0.5rem' }}>Poids Vitrage</span>
+              <span style={{ fontSize: '1.75rem', fontWeight: 800 }}>{(bom?.glass?.weight || 0).toFixed(1)} <span style={{fontSize:'0.9rem', fontWeight:400, color: '#94a3b8'}}>kg</span></span>
+           </div>
+        </div>
+      </div>
+
+      {/* --- SMART STEP NAVIGATION --- */}
+      <div style={{ 
+        display: 'flex', 
+        background: '#f1f5f9', 
+        padding: '0.5rem', 
+        borderRadius: '1.25rem', 
+        marginBottom: '2.5rem',
+        gap: '0.5rem',
+        boxShadow: 'inset 0 2px 4px 0 rgba(0,0,0,0.05)'
+      }}>
         {[
-          { id: 'debit', label: 'Liste de Débit', icon: Scissors },
-          { id: 'achat', label: 'Liste d\'Achat', icon: ShoppingCart },
-          { id: 'chutes', label: 'Gestion des Chutes', icon: Trash2 },
-          { id: 'logistique', label: 'Logistique Atelier', icon: Layers },
-          { id: 'measure', label: 'Prise de Mesures', icon: Ruler },
-        ].map(tab => (
+          { id: 'achat', label: '1. Approvisionnement', icon: ShoppingCart, color: '#8b5cf6' },
+          { id: 'debit', label: '2. Liste de Débit', icon: Scissors, color: '#2563eb' },
+          { id: 'logistique', label: '3. Logistique & Tri', icon: Layers, color: '#0ea5e9' },
+          { id: 'chutes', label: '4. Chutes & Stock', icon: Trash2, color: '#f59e0b' },
+          { id: 'measure', label: 'Site (Mesures)', icon: Ruler, color: '#64748b' },
+        ].map((tab) => (
           <button 
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`tab-button ${activeTab === tab.id ? 'active' : ''}`}
+            style={{ 
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.75rem',
+              padding: '1rem',
+              borderRadius: '1rem',
+              border: 'none',
+              background: activeTab === tab.id ? 'white' : 'transparent',
+              color: activeTab === tab.id ? tab.color : '#64748b',
+              fontWeight: 800,
+              fontSize: '0.95rem',
+              cursor: 'pointer',
+              boxShadow: activeTab === tab.id ? '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)' : 'none',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              transform: activeTab === tab.id ? 'translateY(-2px)' : 'none'
+            }}
           >
-            <tab.icon size={18} /> {tab.label}
+            <tab.icon size={20} />
+            {tab.label}
           </button>
         ))}
       </div>
+
 
       {/* Product Filter and PDF Export - Moved outside to apply to both pages */}
       {quoteItems.length > 0 && activeTab !== 'measure' && (
@@ -633,33 +719,39 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Repère</th>
-                    <th>Désignation</th>
+                    <th>Réf.</th>
+                    <th>Nom</th>
+                    <th>Usage</th>
+                    <th>Kit / Fenêtre</th>
+                    <th>Dimensions</th>
                     <th>Qté</th>
-                    <th>Longueur</th>
-                    <th>Angles</th>
-                    <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {bom.profiles.map((p, i) => (
                     <tr key={i}>
-                      <td data-label="Repère" style={{ fontWeight: 600 }}>{p.label}</td>
-                      <td data-label="Nom" style={{ fontSize: '0.875rem', color: '#64748b' }}>{p.name}</td>
-                      <td data-label="Qté">{p.qty}</td>
-                      <td data-label="Lg" style={{ color: '#2563eb', fontWeight: 700 }}>{Math.round(p.length)} mm</td>
-                      <td data-label="Coupes">
-                        <div style={{ display: 'flex', gap: '0.4rem' }}>
-                          <span style={{ fontSize: '0.75rem', background: '#f1f5f9', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>{p.cutAngle || 45}°</span>
-                          <span style={{ fontSize: '0.75rem', background: '#f1f5f9', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>{p.cutAngle || 45}°</span>
-                        </div>
+                      <td style={{ fontSize: '0.75rem', color: '#64748b' }}>{p.id}</td>
+                      <td style={{ fontWeight: 600 }}>{p.name} <span style={{ fontWeight: 400, color: '#64748b' }}>[{p.label}]</span></td>
+                      <td>
+                        <span style={{ 
+                          fontSize: '0.7rem', 
+                          background: p.usage === 'DORMANT' ? '#dcfce7' : (p.usage === 'OUVRANT' ? '#dbeafe' : '#f1f5f9'),
+                          color: p.usage === 'DORMANT' ? '#166534' : (p.usage === 'OUVRANT' ? '#1e40af' : '#475569'),
+                          padding: '0.2rem 0.5rem',
+                          borderRadius: '4px',
+                          fontWeight: 700
+                        }}>
+                          {p.usage || 'FINITION'}
+                        </span>
                       </td>
-                      <td data-label="QRCode">
+                      <td style={{ fontSize: '0.85rem', fontWeight: 600, color: '#7c3aed' }}>
+                        {p.instanceLabel || '—'}
+                      </td>
+                      <td style={{ fontWeight: 800, color: '#2563eb' }}>{Math.round(p.length)} mm</td>
+                      <td>x{p.qty}</td>
+                      <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                           <QRCodeSVG value={`OF-${currentConfig.compositionId}-P${i}-${p.length}mm`} size={24} level="L" />
-                          <button className="btn btn-secondary" style={{ padding: '0.4rem' }} title="Code-Barre Détail">
-                            <Barcode size={16} />
-                          </button>
                         </div>
                       </td>
                     </tr>
@@ -768,24 +860,42 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                     const unitClean = (p.priceUnit || '').toUpperCase().trim();
                     
                     if (unitClean === 'BARRE' && pieces.length > 0) {
-                      let currentBars = [];
-                      for (let i = 0; i < pieces.length; i++) {
-                        const piece = pieces[i];
-                        let bestIdx = -1;
-                        let minLeft = Infinity;
+                      // --- LEAN SEQUENCING SORT ---
+                      const usagePriority = { 'DORMANT': 1, 'OUVRANT': 2, 'VOLET': 3, 'FINITION': 4 };
+                      
+                      // Sort pieces to keep kits together but optimize within the kit
+                      const sortedPieces = [...pieces].sort((a, b) => {
+                        const prioA = usagePriority[a.usage] || 9;
+                        const prioB = usagePriority[b.usage] || 9;
+                        if (prioA !== prioB) return prioA - prioB;
+                        if (a.windowIdx !== b.windowIdx) return a.windowIdx - b.windowIdx;
+                        return b.length - a.length; // Maximize material use within the window group
+                      });
+
+                      const currentBars = [];
+                      sortedPieces.forEach(pObj => {
+                        const piece = pObj.length || pObj;
+                        // Nesting: First Fit (to preserve sequence as much as possible)
+                        let fitIdx = -1;
                         for (let j = 0; j < currentBars.length; j++) {
-                          if (currentBars[j] >= piece && currentBars[j] - piece < minLeft) {
-                            bestIdx = j;
-                            minLeft = currentBars[j] - piece;
+                          if (currentBars[j].remaining >= piece) {
+                            fitIdx = j;
+                            break;
                           }
                         }
-                        if (bestIdx !== -1) {
-                          currentBars[bestIdx] -= piece;
+                        
+                        if (fitIdx !== -1) {
+                          currentBars[fitIdx].remaining -= piece;
+                          currentBars[fitIdx].pieces.push(pObj);
                         } else {
-                          currentBars.push(bLength - piece);
-                          bars++;
+                          currentBars.push({ 
+                            remaining: bLength - piece, 
+                            pieces: [pObj],
+                            id: `BAR-${p.id}-${currentBars.length + 1}`
+                          });
                         }
-                      }
+                      });
+                      bars = currentBars.length;
                     } else {
                       // No optimization for ML or other units, just straight division
                       bars = Math.ceil(ml / bLength);
@@ -814,6 +924,13 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                           {p._isGroup && <span style={{ fontSize: '0.7rem', background: '#8b5cf6', color: 'white', padding: '0.1rem 0.4rem', borderRadius: '999px', marginRight: '0.4rem' }}>Jumelé</span>}
                           {p.combinedName}
                           <div style={{ fontSize: '0.7rem', color: '#8b5cf6', marginTop: '0.2rem' }}>Total: {(ml / 1000).toFixed(2)} ML</div>
+                          <div style={{ display: 'flex', gap: '0.3rem', marginTop: '0.3rem', flexWrap: 'wrap' }}>
+                             {p.pieces.map((pc, pci) => (
+                               <span key={pci} style={{ fontSize: '0.65rem', background: '#f1f5f9', padding: '1px 4px', borderRadius: '3px' }}>
+                                 F{pc.windowIdx+1} ({pc.usage?.charAt(0)})
+                               </span>
+                             ))}
+                          </div>
                         </td>
                         <td data-label="Lg. Barre">
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -1101,8 +1218,9 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                       profileName: p.name,
                       label: p.label,
                       length: Math.round(p.length),
+                      usage: p.usage || 'FINITION',
                       windowIdx,
-                      windowLabel: item.label || `Fenêtre #${winIdx + 1}`,
+                      windowLabel: item.label || item.instanceLabel || `Fenêtre #${windowIdx + 1}`,
                       windowItemId: item.id,
                       isBatch: !!item.isFromBatch
                     });
@@ -1121,8 +1239,9 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                         profileName: s.name,
                         label: s.name,
                         length: lenMm,
+                        usage: 'VOLET',
                         windowIdx,
-                        windowLabel: item.label || `Fenêtre #${winIdx + 1}`,
+                        windowLabel: item.label || item.instanceLabel || `Fenêtre #${windowIdx + 1}`,
                         windowItemId: item.id,
                         isShutter: true,
                         isBatch: !!item.isFromBatch
@@ -1150,7 +1269,14 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         const barsResult = {};
         Object.entries(profileGroups).forEach(([profId, { profileName, cuts }]) => {
           const barLen = barLengths[profId] || 6400;
-          const sorted = [...cuts].sort((a, b) => b.length - a.length);
+          const usagePriority = { 'DORMANT': 1, 'OUVRANT': 2, 'VOLET': 3, 'FINITION': 4 };
+          const sorted = [...cuts].sort((a, b) => {
+            const prioA = usagePriority[a.usage] || 9;
+            const prioB = usagePriority[b.usage] || 9;
+            if (prioA !== prioB) return prioA - prioB;
+            if (a.windowIdx !== b.windowIdx) return a.windowIdx - b.windowIdx;
+            return b.length - a.length;
+          });
           const bars = []; 
           const allLengths = cuts.map(c => c.length);
           const minPieceInOrder = Math.min(...allLengths, 300);
@@ -1202,6 +1328,58 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         const barAddressMap = {};
         allBarsFlat.forEach(b => { barAddressMap[b.id] = b.address; });
         const totalBars = allBarsFlat.length;
+
+        // --- 4. KIT SUMMARY (Window status) ---
+        const windowSummary = {};
+        globalCuts.forEach(cut => {
+          if (!windowSummary[cut.windowIdx]) {
+            windowSummary[cut.windowIdx] = { 
+              label: cut.windowLabel, 
+              pieces: [], 
+              id: cut.windowItemId,
+              trolleys: new Set(),
+              slots: new Set()
+            };
+          }
+          // Find where this piece went
+          const bar = allBarsFlat.find(b => b.pieces.some(p => p.windowIdx === cut.windowIdx && p.profileId === cut.profileId && p.length === cut.length));
+          if (bar) {
+            windowSummary[cut.windowIdx].pieces.push({ ...cut, address: bar.address });
+            windowSummary[cut.windowIdx].trolleys.add(bar.trolley);
+            windowSummary[cut.windowIdx].slots.add(bar.address);
+          }
+        });
+
+        const generateLabelsPDF = () => {
+          const doc = new jsPDF();
+          doc.setFontSize(10);
+          let x = 10, y = 10;
+          const labelW = 60, labelH = 30;
+
+          globalCuts.forEach((cut, i) => {
+            const bar = allBarsFlat.find(b => b.pieces.some(p => p.windowIdx === cut.windowIdx && p.profileId === cut.profileId && p.length === cut.length));
+            const address = bar ? bar.address : 'N/A';
+
+            doc.rect(x, y, labelW, labelH);
+            doc.setFont('helvetica', 'bold');
+            doc.text(`${cut.windowLabel}`, x + 2, y + 5);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8);
+            doc.text(`${cut.profileName}`, x + 2, y + 10);
+            doc.text(`${cut.label}`, x + 2, y + 14);
+            doc.setFontSize(10);
+            doc.text(`${cut.length} mm`, x + 2, y + 20);
+            
+            doc.setFillColor(240, 240, 240);
+            doc.rect(x + 35, y + 2, 23, 8, 'F');
+            doc.text(address, x + 37, y + 8);
+
+            x += labelW + 5;
+            if (x > 180) { x = 10; y += labelH + 5; }
+            if (y > 260) { doc.addPage(); x = 10; y = 10; }
+          });
+          doc.save(`Etiquettes_${selectedGlobalQuoteId}.pdf`);
+        };
 
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
@@ -1310,6 +1488,55 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                <span>globalQuoteId={selectedGlobalQuoteId}</span>
             </div>
 
+            <div className="glass shadow-md" style={{ borderLeft: '4px solid #10b981' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.5rem' }}>
+                <Package size={20} color="#10b981" />
+                <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Suivi des Kits (Fenêtres)</h2>
+              </div>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                  <thead>
+                    <tr style={{ textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>
+                      <th style={{ padding: '0.75rem' }}>Fenêtre</th>
+                      <th style={{ padding: '0.75rem' }}>Nb Pièces</th>
+                      <th style={{ padding: '0.75rem' }}>Emplacements (Chariot/Case)</th>
+                      <th style={{ padding: '0.75rem' }}>Statut</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.values(windowSummary).map((win, i) => {
+                      const locations = Array.from(win.slots).sort();
+                      return (
+                        <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                          <td style={{ padding: '0.75rem', fontWeight: 700 }}>{win.label}</td>
+                          <td style={{ padding: '0.75rem' }}>{win.pieces.length}</td>
+                          <td style={{ padding: '0.75rem' }}>
+                            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                              {locations.map(loc => (
+                                <span key={loc} style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px', fontSize: '0.75rem', border: '1px solid #e2e8f0' }}>{loc}</span>
+                              ))}
+                            </div>
+                          </td>
+                          <td style={{ padding: '0.75rem' }}>
+                            <span style={{ 
+                              background: locations.length <= 2 ? '#d1fae5' : '#fef3c7', 
+                              color: locations.length <= 2 ? '#065f46' : '#92400e',
+                              padding: '0.25rem 0.75rem',
+                              borderRadius: '999px',
+                              fontSize: '0.75rem',
+                              fontWeight: 700
+                            }}>
+                              {locations.length <= 2 ? '⚡ Kit Optimisé' : '📦 Kit Dispersé'}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
             <div className="glass shadow-md" style={{ borderLeft: '4px solid #f59e0b' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.5rem' }}>
                 <Package size={20} color="#f59e0b" />
@@ -1337,7 +1564,10 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
             <div className="glass shadow-md" style={{ borderLeft: '4px solid #8b5cf6' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.5rem' }}>
                 <Layers size={20} color="#8b5cf6" />
-                <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Plan des Chariots — {totalBars} barres</h2>
+                <h2 style={{ fontSize: '1.125rem', fontWeight: 600, flex: 1 }}>Plan des Chariots — {totalBars} barres</h2>
+                <button onClick={generateLabelsPDF} className="btn btn-primary" style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem' }}>
+                   🏷️ Générer Étiquettes
+                </button>
               </div>
               {totalBars === 0 ? (
                 <p style={{ color: '#94a3b8', fontStyle: 'italic' }}>Aucune barre à afficher.</p>
