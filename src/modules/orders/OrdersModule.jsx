@@ -880,6 +880,134 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
               </table>
            </div>
         )}
+        {/* NAMING POPUP */}
+        {namingMeasure && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)' }}>
+            <div className="glass shadow-2xl" style={{ background: 'white', padding: '2rem', borderRadius: '1rem', width: '400px' }}>
+              <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, marginBottom: '1.5rem' }}>Noms des Fenêtres ({namingMeasure.qty})</h3>
+              <div style={{ maxHeight: '60vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {namingMeasure.names.map((name, i) => (
+                  <div key={i} className="form-group">
+                    <label className="label">Fenêtre {i + 1}</label>
+                    <input 
+                      className="input" 
+                      value={name} 
+                      onChange={e => {
+                        const newNames = [...namingMeasure.names];
+                        newNames[i] = e.target.value;
+                        setNamingMeasure({ ...namingMeasure, names: newNames });
+                      }} 
+                      placeholder={`Ex: Cuisine ${i+1}`}
+                    />
+                  </div>
+                ))}
+              </div>
+              <div style={{ marginTop: '2rem', display: 'flex', gap: '1rem' }}>
+                <button onClick={() => setNamingMeasure(null)} className="btn btn-secondary" style={{ flex: 1 }}>Annuler</button>
+                <button 
+                  onClick={() => {
+                    updateSiteMeasurement(namingMeasure.itemIdx, namingMeasure.mId, 'instanceNames', namingMeasure.names);
+                    setNamingMeasure(null);
+                  }} 
+                  className="btn btn-primary" 
+                  style={{ flex: 1 }}
+                >
+                  Enregistrer
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* SHUTTER LIST POPUP */}
+        {shutterMeasure && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)' }}>
+            <div className="glass shadow-2xl" style={{ background: 'white', padding: '2rem', borderRadius: '1.5rem', width: '900px', maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+                <h3 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 800 }}>Configuration des Volets</h3>
+                <button 
+                  onClick={() => {
+                    const newShutter = { id: Date.now(), qty: 1, customLV: 0, overrides: {} };
+                    setShutterMeasure({ ...shutterMeasure, shutters: [...shutterMeasure.shutters, newShutter] });
+                  }} 
+                  className="btn btn-primary"
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                >
+                  <Plus size={18} /> Ajouter une cote volet
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                {shutterMeasure.shutters.map((sh, sIdx) => (
+                  <div key={sh.id} style={{ padding: '1.5rem', background: '#f8fafc', borderRadius: '1rem', border: '1px solid #e2e8f0' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '1rem', marginBottom: '1.5rem', alignItems: 'flex-end' }}>
+                      <div className="form-group">
+                        <label className="label">Quantité</label>
+                        <input 
+                          type="number" className="input" value={sh.qty} 
+                          onChange={e => {
+                            const newList = [...shutterMeasure.shutters];
+                            newList[sIdx].qty = parseInt(e.target.value) || 1;
+                            setShutterMeasure({ ...shutterMeasure, shutters: newList });
+                          }}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="label">Largeur (LV) mm</label>
+                        <input 
+                          type="number" className="input" value={sh.customLV} 
+                          placeholder="Auto"
+                          onChange={e => {
+                            const newList = [...shutterMeasure.shutters];
+                            newList[sIdx].customLV = parseFloat(e.target.value) || 0;
+                            setShutterMeasure({ ...shutterMeasure, shutters: newList });
+                          }}
+                        />
+                      </div>
+                      {['caissonId', 'lameId', 'glissiereId', 'axeId', 'kitId'].map(field => (
+                        <div key={field} className="form-group">
+                          <label className="label" style={{ fontSize: '0.7rem' }}>{field.replace('Id', '')}</label>
+                          <select 
+                            className="input" style={{ fontSize: '0.8rem' }}
+                            value={sh.overrides?.[field] || ''}
+                            onChange={e => {
+                              const newList = [...shutterMeasure.shutters];
+                              newList[sIdx].overrides = { ...newList[sIdx].overrides, [field]: e.target.value || undefined };
+                              setShutterMeasure({ ...shutterMeasure, shutters: newList });
+                            }}
+                          >
+                            <option value="">Auto</option>
+                            {(data.shutterComponents?.[field.replace('Id', 's')] || []).map(opt => <option key={opt.id} value={opt.id}>{opt.name}</option>)}
+                          </select>
+                        </div>
+                      ))}
+                      <button 
+                        onClick={() => setShutterMeasure({ ...shutterMeasure, shutters: shutterMeasure.shutters.filter((_, i) => i !== sIdx) })}
+                        style={{ color: '#ef4444', border: 'none', background: 'transparent', padding: '0.5rem', cursor: 'pointer' }}
+                      >
+                        <Trash2 size={20} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ marginTop: '3rem', display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+                <button onClick={() => setShutterMeasure(null)} className="btn btn-secondary">Annuler</button>
+                <button 
+                  onClick={() => {
+                    updateSiteMeasurement(shutterMeasure.itemIdx, shutterMeasure.mId, 'shutterList', shutterMeasure.shutters);
+                    setShutterMeasure(null);
+                  }} 
+                  className="btn btn-primary"
+                  style={{ minWidth: '150px' }}
+                >
+                  Valider tout
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -1058,136 +1186,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
         </div>
       )}
 
-      {/* NAMING POPUP */}
-      {namingMeasure && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)' }}>
-          <div className="glass shadow-2xl" style={{ background: 'white', padding: '2rem', borderRadius: '1rem', width: '400px' }}>
-            <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, marginBottom: '1.5rem' }}>Noms des Fenêtres ({namingMeasure.qty})</h3>
-            <div style={{ maxHeight: '60vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              {namingMeasure.names.map((name, i) => (
-                <div key={i} className="form-group">
-                  <label className="label">Fenêtre {i + 1}</label>
-                  <input 
-                    className="input" 
-                    value={name} 
-                    onChange={e => {
-                      const newNames = [...namingMeasure.names];
-                      newNames[i] = e.target.value;
-                      setNamingMeasure({ ...namingMeasure, names: newNames });
-                    }} 
-                    placeholder={`Ex: Cuisine ${i+1}`}
-                  />
-                </div>
-              ))}
-            </div>
-            <div style={{ marginTop: '2rem', display: 'flex', gap: '1rem' }}>
-              <button onClick={() => setNamingMeasure(null)} className="btn btn-secondary" style={{ flex: 1 }}>Annuler</button>
-              <button 
-                onClick={() => {
-                  updateSiteMeasurement(namingMeasure.itemIdx, namingMeasure.mId, 'instanceNames', namingMeasure.names);
-                  setNamingMeasure(null);
-                }} 
-                className="btn btn-primary" 
-                style={{ flex: 1 }}
-              >
-                Enregistrer
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* SHUTTER LIST POPUP */}
-      {shutterMeasure && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)' }}>
-          <div className="glass shadow-2xl" style={{ background: 'white', padding: '2rem', borderRadius: '1.5rem', width: '900px', maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-              <h3 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 800 }}>Configuration des Volets</h3>
-              <button 
-                onClick={() => {
-                  const newShutter = { id: Date.now(), qty: 1, customLV: 0, overrides: {} };
-                  setShutterMeasure({ ...shutterMeasure, shutters: [...shutterMeasure.shutters, newShutter] });
-                }} 
-                className="btn btn-primary"
-                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-              >
-                <Plus size={18} /> Ajouter une cote volet
-              </button>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-              {shutterMeasure.shutters.map((sh, sIdx) => (
-                <div key={sh.id} style={{ padding: '1.5rem', background: '#f8fafc', borderRadius: '1rem', border: '1px solid #e2e8f0' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '1rem', marginBottom: '1.5rem', alignItems: 'flex-end' }}>
-                    <div className="form-group">
-                      <label className="label">Quantité</label>
-                      <input 
-                        type="number" className="input" value={sh.qty} 
-                        onChange={e => {
-                          const newList = [...shutterMeasure.shutters];
-                          newList[sIdx].qty = parseInt(e.target.value) || 1;
-                          setShutterMeasure({ ...shutterMeasure, shutters: newList });
-                        }}
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label className="label">Largeur (LV) mm</label>
-                      <input 
-                        type="number" className="input" value={sh.customLV} 
-                        placeholder="Auto"
-                        onChange={e => {
-                          const newList = [...shutterMeasure.shutters];
-                          newList[sIdx].customLV = parseFloat(e.target.value) || 0;
-                          setShutterMeasure({ ...shutterMeasure, shutters: newList });
-                        }}
-                      />
-                    </div>
-                    {/* Component Selectors (Simplified but functional) */}
-                    {['caissonId', 'lameId', 'glissiereId', 'axeId', 'kitId'].map(field => (
-                      <div key={field} className="form-group">
-                        <label className="label" style={{ fontSize: '0.7rem' }}>{field.replace('Id', '')}</label>
-                        <select 
-                          className="input" style={{ fontSize: '0.8rem' }}
-                          value={sh.overrides?.[field] || ''}
-                          onChange={e => {
-                            const newList = [...shutterMeasure.shutters];
-                            newList[sIdx].overrides = { ...newList[sIdx].overrides, [field]: e.target.value || undefined };
-                            setShutterMeasure({ ...shutterMeasure, shutters: newList });
-                          }}
-                        >
-                          <option value="">Auto</option>
-                          {(data.shutterComponents?.[field.replace('Id', 's')] || []).map(opt => <option key={opt.id} value={opt.id}>{opt.name}</option>)}
-                        </select>
-                      </div>
-                    ))}
-                    <button 
-                      onClick={() => setShutterMeasure({ ...shutterMeasure, shutters: shutterMeasure.shutters.filter((_, i) => i !== sIdx) })}
-                      style={{ color: '#ef4444', border: 'none', background: 'transparent', padding: '0.5rem', cursor: 'pointer' }}
-                    >
-                      <Trash2 size={20} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div style={{ marginTop: '3rem', display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
-              <button onClick={() => setShutterMeasure(null)} className="btn btn-secondary">Annuler</button>
-              <button 
-                onClick={() => {
-                  updateSiteMeasurement(shutterMeasure.itemIdx, shutterMeasure.mId, 'shutterList', shutterMeasure.shutters);
-                  setShutterMeasure(null);
-                }} 
-                className="btn btn-primary"
-                style={{ minWidth: '150px' }}
-              >
-                Valider tout
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+      </div>
   );
 };
 
