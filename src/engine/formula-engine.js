@@ -649,7 +649,6 @@ export class FormulaEngine {
       });
     }
   }
-  }
 
   /**
    * Calculate BOM (Bill of Materials) for a given configuration
