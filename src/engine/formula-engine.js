@@ -192,10 +192,10 @@ export class FormulaEngine {
       const formulaRaw = el.formula != null ? String(el.formula) : '';
       const formulaStr = (formulaRaw.trim() !== '') ? formulaRaw : (isAccessory ? '1' : '');
       
-      // Use totalH for Couvre Joint if available.
-      let currentScope = (el.isCouvreJoint && totalH !== null) ? { ...scope, H: totalH, HC: totalH - H } : scope;
+      // Use totalH and initialL for Couvre Joint if available.
+      let currentScope = (el.isCouvreJoint) ? { ...scope, H: totalH || scope.totalOriginalH || H, L: originalL || scope.originalL || L } : scope;
       if (el.isCouvreJoint) {
-        currentScope = { ...currentScope, ...originalScope };
+        currentScope = { ...currentScope, ...originalScope, H: totalH || scope.totalOriginalH || H, L: originalL || scope.originalL || L };
       }
       
       const value = this.evaluate(formulaStr, currentScope, el.label || itemName);
@@ -249,7 +249,7 @@ export class FormulaEngine {
             isCouvreJoint: el.isCouvreJoint,
             multiplier: el.qty || 1,
             formula: el.formula || '1',
-            resolvedFormula: this.resolveFormula(el.formula || '1', scope),
+            resolvedFormula: this.resolveFormula(el.formula || '1', currentScope),
             error: isError ? "Formule Invalide" : null,
             unitPrice: aRef.price || 0,
             totalMeasure: qty, 
@@ -508,9 +508,13 @@ export class FormulaEngine {
     return { profiles, accessories, glasses };
   }
   processShutterComponent(item, vars, shutterPack, key = '', config = {}) {
-    const { L, H, HC } = vars;
+    const { L, H, HC, HT } = vars;
     const barLength = parseFloat(item.barLength) || 6400;
     
+    // Detect if this shutter component is a couvre-joint
+    const isCJ = /couvres?[- ]?joints?|cj[vh]?/i.test((item.name || '').toLowerCase());
+    const effectiveH = isCJ ? (HT || (H + HC)) : H;
+
     // Rule: Couvre Joint reduction ONLY on the caisson length
     let itemScopeL = L;
     if (key === 'caissonId' && config.shutterConfig?.hasCouvreJoint) {
@@ -520,17 +524,17 @@ export class FormulaEngine {
     // 1. Calculate Piece Length (Dimension de coupe)
     let itemLength = 0;
     if (item.cuttingFormula) {
-      itemLength = this.evaluate(item.cuttingFormula, { L: itemScopeL, H, HC });
+      itemLength = this.evaluate(item.cuttingFormula, { L: itemScopeL, H: effectiveH, HC, HT: HT || (H + HC) });
     } else {
       if (key === 'caissonId' || key === 'axeId' || key === 'lameId' || key === 'lameFinaleId') {
         itemLength = itemScopeL;
       } else if (key === 'glissiereId') {
-        itemLength = H;
+        itemLength = effectiveH;
       }
     }
 
     // 2. Calculate Piece Count (Nombre de pièces)
-    const pieceCount = this.evaluate(item.formula || '1', { L: itemScopeL, H, HC });
+    const pieceCount = this.evaluate(item.formula || '1', { L: itemScopeL, H: effectiveH, HC, HT: HT || (H + HC) });
     if (pieceCount <= 0) return;
 
     // 3. Inclusion & Existing Checks (Standalone Logic V3.2)
@@ -654,7 +658,7 @@ export class FormulaEngine {
    * Calculate BOM (Bill of Materials) for a given configuration
    */
 
-  calculateCompoundBOM(config, L, H, totalH) {
+  calculateCompoundBOM(config, L, H, totalH, originalL = null) {
     const { compoundType, compoundConfig } = config;
     if (!compoundConfig || !compoundConfig.parts) return { profiles: [], accessories: [], glasses: [] };
     const { parts, unionId, traverseId, orientation } = compoundConfig;
@@ -670,7 +674,7 @@ export class FormulaEngine {
     
     if (frameCompId) {
        const globalOpt = config.optionalSides || { top: true, bottom: true, left: true, right: true };
-       const frameRes = this.calculateComponentBOM(config, L, H, frameCompId, config.glassId, globalOpt, totalH, L, totalH);
+       const frameRes = this.calculateComponentBOM(config, L, H, frameCompId, config.glassId, globalOpt, totalH, originalL || L, totalH);
        
        const isCouvreJointFn = p => /couvres?[- ]?joints?|cj[vh]?/i.test(((p.label || '') + ' ' + (p.name || '')).toLowerCase());
        const isDormantFn = p => /dormant|cadre|chassis|batit|dorme/i.test(((p.label || '') + ' ' + (p.name || '')).toLowerCase());
@@ -766,7 +770,7 @@ export class FormulaEngine {
         const compId = part.compositionId || frameCompId;
         const subPartOpt = { top: false, bottom: false, left: false, right: false, isSubPart: true };
         
-        const res = this.calculateComponentBOM(config, calcL, calcH, compId, part.glassId || config.glassId, subPartOpt, calcH, L, totalH, divThick);
+        const res = this.calculateComponentBOM(config, calcL, calcH, compId, part.glassId || config.glassId, subPartOpt, calcH, originalL || L, totalH, divThick);
         const sourceLabel = `Partie ${idx + 1} (${part.type})`;
 
         const filterFn = (i) => {
@@ -831,6 +835,8 @@ export class FormulaEngine {
       }
     }
 
+    const initialL = L;
+
     if (widthReduction > 0) {
       L -= widthReduction;
     }
@@ -856,19 +862,17 @@ export class FormulaEngine {
 
     // FIX: Only enter compound mode if explicitly enabled by compoundType
     if (config.compoundType && config.compoundType !== 'none') {
-      const compRes = this.calculateCompoundBOM(config, L, windowH, totalH);
+      const compRes = this.calculateCompoundBOM(config, L, windowH, totalH, initialL);
       profiles = compRes.profiles;
       accessories = compRes.accessories;
       glasses = compRes.glasses;
     } else if (config.useCustomLayout && config.customLayout && config.customLayout.cols) {
-      // For custom layouts, we'll pass totalH for covers
-      const gridResults = this.calculateGridBOM(config.customLayout, L, windowH, config, totalH, L, totalH);
+      const gridResults = this.calculateGridBOM(config.customLayout, L, windowH, config, totalH, initialL, totalH);
       profiles = gridResults.profiles;
       accessories = gridResults.accessories;
       glasses = gridResults.glasses;
     } else {
-      // Simple Mode (Classic) - Pass totalH as both totalH AND originalH for covers
-      const res = this.calculateComponentBOM(config, L, windowH, config.compositionId, glassId, config.optionalSides, totalH, L, totalH);
+      const res = this.calculateComponentBOM(config, L, windowH, config.compositionId, glassId, config.optionalSides, totalH, initialL, totalH);
       profiles = res.profiles;
       accessories = res.accessories;
       if (res.gasket) accessories.push(res.gasket);
@@ -926,7 +930,7 @@ export class FormulaEngine {
        }
     }
 
-    const vars = { L: shutterL, H: shutterH_val, HC: config.shutterOverrides?.customHC || shutterHeight };
+    const vars = { L: shutterL, H: shutterH_val, HC: config.shutterOverrides?.customHC || shutterHeight, HT: H };
     const shutterPack = [];
     if (config.hasShutter && config.shutterConfig && this.db.shutterComponents) {
       const sc = this.db.shutterComponents;

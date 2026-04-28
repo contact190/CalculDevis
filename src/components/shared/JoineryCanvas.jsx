@@ -61,7 +61,7 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
     const dH = dH_window; // For compatibility with rest of code
     
     // 0. Draw Architraves (Couvre-joints optionnels)
-    const cjW = 40 * scale; // 40mm
+    const cjW = 40 * scale; 
     ctx.fillStyle = '#f1f5f9';
     const oldStroke = ctx.strokeStyle;
     ctx.strokeStyle = '#cbd5e1';
@@ -86,19 +86,100 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
     ctx.strokeStyle = oldStroke;
 
     const drawJoinery = (x, y, w, h, compId) => {
-      const comp = database.compositions.find(c => c.id === compId);
-      const rid = comp?.rangeId;
+      const comp = database.compositions?.find(c => c.id === compId);
+      const openingType = comp?.openingType || 'Fixe';
+      const dir = config.openingDirection || 'gauche';
+      
+      // Frame
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 2;
       ctx.strokeRect(x, y, w, h);
-      const fW = 10 * scale; 
-      ctx.strokeRect(x + fW, y + fW, w - fW * 2, h - fW * 2);
-      if (rid === 'H36') {
+      
+      // Glass
+      ctx.fillStyle = 'rgba(186, 230, 253, 0.2)';
+      ctx.fillRect(x, y, w, h);
+
+      const fW = 12 * scale; // Sash frame width roughly
+
+      if (openingType.includes('Ouvrant') || openingType.includes('Battant') || openingType.includes('Porte')) {
+        const isDouble = openingType.includes('2') || openingType.includes('Double');
+        
+        if (isDouble) {
+          // Ventail 1
+          ctx.strokeRect(x + 2, y + 2, w/2 - 2, h - 4);
+          // Triangle V1
+          ctx.beginPath();
+          ctx.setLineDash([5, 5]);
+          ctx.strokeStyle = '#94a3b8';
+          ctx.moveTo(x + 2, y + 2);
+          ctx.lineTo(x + w/2 - 2, y + h/2);
+          ctx.lineTo(x + 2, y + h - 4);
+          ctx.stroke();
+          
+          // Ventail 2
+          ctx.setLineDash([]);
+          ctx.strokeStyle = '#334155';
+          ctx.strokeRect(x + w/2, y + 2, w/2 - 2, h - 4);
+          // Triangle V2
+          ctx.beginPath();
+          ctx.setLineDash([5, 5]);
+          ctx.strokeStyle = '#94a3b8';
+          ctx.moveTo(x + w - 2, y + 2);
+          ctx.lineTo(x + w/2 + 2, y + h/2);
+          ctx.lineTo(x + w - 2, y + h - 4);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        } else {
+          ctx.strokeRect(x + fW, y + fW, w - fW * 2, h - fW * 2);
+          // Opening Triangle
+          ctx.beginPath();
+          ctx.setLineDash([5, 5]);
+          ctx.strokeStyle = '#94a3b8';
+          if (dir === 'gauche') {
+            ctx.moveTo(x + fW, y + fW);
+            ctx.lineTo(x + w - fW, y + h/2);
+            ctx.lineTo(x + fW, y + h - fW);
+          } else {
+            ctx.moveTo(x + w - fW, y + fW);
+            ctx.lineTo(x + fW, y + h/2);
+            ctx.lineTo(x + w - fW, y + h - fW);
+          }
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+      } else if (openingType.includes('Coulissant')) {
+        const isDouble = openingType.includes('2') || openingType.includes('Double');
+        ctx.strokeRect(x + 2, y + 2, w/2 + 2, h - 4);
+        ctx.strokeRect(x + w/2 - 2, y + 2, w/2, h - 4);
+        
+        // Sliding Arrows
+        ctx.fillStyle = '#64748b';
+        const arrowY = y + h/2;
+        // Arrow 1
         ctx.beginPath();
-        ctx.moveTo(x + w / 2, y + fW);
-        ctx.lineTo(x + w / 2, y + h - fW);
+        ctx.moveTo(x + w/4 - 10, arrowY);
+        ctx.lineTo(x + w/4 + 10, arrowY);
+        ctx.lineTo(x + w/4 + 5, arrowY - 3);
+        ctx.moveTo(x + w/4 + 10, arrowY);
+        ctx.lineTo(x + w/4 + 5, arrowY + 3);
+        ctx.stroke();
+        // Arrow 2
+        ctx.beginPath();
+        ctx.moveTo(x + 3*w/4 + 10, arrowY + 10);
+        ctx.lineTo(x + 3*w/4 - 10, arrowY + 10);
+        ctx.lineTo(x + 3*w/4 - 5, arrowY + 7);
+        ctx.moveTo(x + 3*w/4 - 10, arrowY + 10);
+        ctx.lineTo(x + 3*w/4 - 5, arrowY + 13);
+        ctx.stroke();
+      } else {
+        // Fixe
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.beginPath();
+        ctx.moveTo(x, y); ctx.lineTo(x + w, y + h);
+        ctx.moveTo(x + w, y); ctx.lineTo(x, y + h);
         ctx.stroke();
       }
-      ctx.fillStyle = 'rgba(186, 230, 253, 0.3)';
-      ctx.fillRect(x + fW*2, y + fW*2, w - fW * 4, h - fW * 4);
     };
 
     if (config.compoundType && config.compoundType !== 'none' && config.compoundConfig?.parts) {
@@ -124,14 +205,14 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
           if (isH) {
              cx += pW;
              if (idx < list.length - 1) {
-                ctx.fillStyle = '#cbd5e1';
+                ctx.fillStyle = '#64748b';
                 ctx.fillRect(cx, by, thick, bh);
                 cx += thick;
              }
           } else {
              cy += pH;
              if (idx < list.length - 1) {
-                ctx.fillStyle = '#cbd5e1';
+                ctx.fillStyle = '#64748b';
                 ctx.fillRect(bx, cy, bw, thick);
                 cy += thick;
              }
@@ -144,21 +225,62 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
       drawJoinery(offsetX, winOffsetY, dW, dH, compositionId);
     }
 
-    // 5. Draw dimensions
-    ctx.fillStyle = '#64748b'; // Slate 500
-    ctx.font = '12px Inter, sans-serif';
+    // 4. Draw Caisson (Shutter Box) - Re-draw on top for better visibility
+    if (caissonH > 0) {
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#334155';
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(offsetX, offsetY, dW, dCaissonH);
+      ctx.strokeRect(offsetX, offsetY, dW, dCaissonH);
+      
+      // Write HC
+      ctx.fillStyle = '#475569';
+      ctx.font = 'bold 10px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(`H.C : ${caissonH} mm`, offsetX + dW/2, offsetY + dCaissonH/2 + 4);
+
+      // Manoeuvre side
+      const mSide = config.shutterConfig?.motorCablePosition || 'Droite';
+      ctx.fillStyle = '#ef4444';
+      ctx.beginPath();
+      const dotX = (mSide === 'Gauche') ? offsetX + 10 : offsetX + dW - 10;
+      ctx.arc(dotX, offsetY + dCaissonH/2, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 5. Draw dimensions with lines
+    ctx.fillStyle = '#1e293b';
+    ctx.strokeStyle = '#94a3b8';
+    ctx.lineWidth = 1;
+    ctx.font = 'bold 12px Inter, sans-serif';
     ctx.textAlign = 'center';
     
-    // L dimension
-    ctx.fillText(`${L} mm`, offsetX + dW / 2, winOffsetY + dH + 25);
-    // H dimension
+    // L dimension line
+    const dimY = winOffsetY + dH + 35;
+    ctx.beginPath();
+    ctx.moveTo(offsetX, dimY);
+    ctx.lineTo(offsetX + dW, dimY);
+    ctx.moveTo(offsetX, dimY - 5); ctx.lineTo(offsetX, dimY + 5);
+    ctx.moveTo(offsetX + dW, dimY - 5); ctx.lineTo(offsetX + dW, dimY + 5);
+    ctx.stroke();
+    ctx.fillText(`${L} mm`, offsetX + dW / 2, dimY - 5);
+
+    // H dimension line
+    const dimX = offsetX - 45;
+    ctx.beginPath();
+    ctx.moveTo(dimX, offsetY);
+    ctx.lineTo(dimX, offsetY + dH_total);
+    ctx.moveTo(dimX - 5, offsetY); ctx.lineTo(dimX + 5, offsetY);
+    ctx.moveTo(dimX - 5, offsetY + dH_total); ctx.lineTo(dimX + 5, offsetY + dH_total);
+    ctx.stroke();
+
     ctx.save();
-    ctx.translate(offsetX - 25, offsetY + dH_total / 2);
+    ctx.translate(dimX - 5, offsetY + dH_total / 2);
     ctx.rotate(-Math.PI / 2);
     ctx.fillText(`${H} mm`, 0, 0);
     ctx.restore();
 
-    // Notifications (Optionnel)
+    // Export
     if (onDrawComplete) {
       setTimeout(() => {
         try {
@@ -166,7 +288,7 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
         } catch (e) {
           console.error('Failed to export canvas', e);
         }
-      }, 50);
+      }, 100);
     }
 
   }, [config, width, height, database, onDrawComplete]);
