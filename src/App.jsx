@@ -97,14 +97,14 @@ function App() {
 
     // Specific field repairs for existing items
     if (repaired.compositions) {
-      repaired.compositions = repaired.compositions.map(c => ({
+      repaired.compositions = repaired.compositions.filter(Boolean).map(c => ({
         ...c,
         categoryId: c.categoryId || (repaired.categories?.[0]?.id || 'CAT-F'),
         openingType: c.openingType || 'Fixe'
       }));
     }
     if (repaired.accessories) {
-      repaired.accessories = repaired.accessories.map(a => {
+      repaired.accessories = repaired.accessories.filter(Boolean).map(a => {
         const item = { ...a };
         if (item.rangeId && !item.rangeIds) {
           item.rangeIds = [item.rangeId];
@@ -114,7 +114,7 @@ function App() {
       });
     }
     if (repaired.options) {
-      repaired.options = repaired.options.map(o => {
+      repaired.options = repaired.options.filter(Boolean).map(o => {
         const item = { ...o };
         if (item.rangeId && !item.rangeIds) {
           item.rangeIds = [item.rangeId];
@@ -125,7 +125,7 @@ function App() {
     }
 
     if (repaired.glassProfileCompatibility) {
-      repaired.glassProfileCompatibility = repaired.glassProfileCompatibility.map(gc => {
+      repaired.glassProfileCompatibility = repaired.glassProfileCompatibility.filter(Boolean).map(gc => {
         const item = { ...gc };
         if (item.profileId && !item.profileHId) {
           item.profileHId = item.profileId;

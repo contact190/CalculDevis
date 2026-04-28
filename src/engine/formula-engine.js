@@ -24,9 +24,14 @@ export class FormulaEngine {
   getUsageCategory(label) {
     const l = (label || '').toLowerCase();
     if (l.includes('dormant') || l.includes('cadre') || l.includes('seuil') || l.includes('precadre')) return 'DORMANT (CADRE)';
-    if (l.includes('fixe')) return 'FIXE';
-    if (l.includes('ouvrant') || l.includes('battement') || l.includes('inverseur') || l.includes('parclose')) return 'FENETRE (OUVRANT)';
+    if (l.includes('fixe') || l.includes('fix')) return 'FIXE';
+    if (l.includes('ouvrant') || l.includes('battement') || l.includes('inverseur')) return 'FENETRE (OUVRANT)';
+    if (l.includes('parclose')) {
+      // If parclose is mentioned with fix/fixe, it goes to FIXE, otherwise OUVRANT
+      return (l.includes('fixe') || l.includes('fix')) ? 'FIXE' : 'FENETRE (OUVRANT)';
+    }
     if (l.includes('lame') || l.includes('coulisse') || l.includes('caisson') || l.includes('axe') || l.includes('glissiere')) return 'VOLET ROULANT';
+    if (l.includes('traverse') || l.includes('montant')) return 'FIXE'; 
     return 'ACCESSOIRES / FINITION';
   }
 
@@ -46,7 +51,10 @@ export class FormulaEngine {
 
   calculateComponentBOM(config, L, H, compositionId, glassId, optionalSides, totalH = null, originalL = null, originalH = null, EPt = 0) {
     const opt = optionalSides || { top: true, bottom: true, left: true, right: true };
-    const composition = (this.db.compositions || []).find(c => c.id === compositionId);
+    let composition = (this.db.compositions || []).find(c => c.id === compositionId);
+    if (!composition) {
+      composition = (this.db.compositions || []).find(c => c.name === compositionId);
+    }
     if (!composition) return { profiles: [], accessories: [], glass: null, gasket: null };
 
     let HC = 0;
@@ -97,7 +105,10 @@ export class FormulaEngine {
       let itemName = '';
       
       if (el.type === 'profile') {
-        const p = (this.db.profiles || []).find(x => x.id === el.id);
+        let p = (this.db.profiles || []).find(x => x.id === el.id);
+        if (!p) {
+          p = (this.db.profiles || []).find(x => x.name === el.id); // Fallback if ID is actually a name
+        }
         if (p) itemName = p.name || '';
       } else if (el.type === 'accessory') {
         const a = (this.db.accessories || []).find(x => x.id === el.id);
@@ -204,7 +215,10 @@ export class FormulaEngine {
       const qty = safeValue * elQty;
 
       if (el.type === 'profile') {
-        const pRef = (this.db.profiles || []).find(p => p.id === el.id);
+        let pRef = (this.db.profiles || []).find(p => p.id === el.id);
+        if (!pRef) {
+          pRef = (this.db.profiles || []).find(p => p.name === el.id);
+        }
         if (pRef) {
           let unitPrice = 0;
           let cost = 0;
@@ -230,6 +244,8 @@ export class FormulaEngine {
             usage: this.getUsageCategory((el.label || '') + ' ' + (pRef.name || '')),
             error: isError ? "Formule Invalide" : null,
             unitPrice: unitPrice,
+            compositionId: composition.id,
+            compositionName: composition.name,
             totalMeasure: safeValue * elQty,
             cost: cost
           });
@@ -670,9 +686,11 @@ export class FormulaEngine {
     const mainOp = (parts || []).find(p => p.type === 'opening' && p.compositionId) || 
                    (parts || []).find(p => p.compositionId) || 
                    (parts || [])[0];
-    const frameCompId = (mainOp && mainOp.compositionId) ? mainOp.compositionId : config.compositionId;
+    const frameCompId = (mainOp && mainOp.compositionId) || config.compositionId || '';
     
-    if (frameCompId) {
+    const isMultiChassis = (compoundType === 'fix_coulissant');
+    
+    if (frameCompId && !isMultiChassis) {
        const globalOpt = config.optionalSides || { top: true, bottom: true, left: true, right: true };
        const frameRes = this.calculateComponentBOM(config, L, H, frameCompId, config.glassId, globalOpt, totalH, originalL || L, totalH);
        
@@ -743,8 +761,8 @@ export class FormulaEngine {
         const overrideW = config.partOverrides?.[part.id]?.width;
         const overrideH = config.partOverrides?.[part.id]?.height;
 
-        let calcL = (direction === 'horizontal') ? (overrideW || part.width || (boxL / partList.length)) : boxL;
-        let calcH = (direction === 'vertical') ? (overrideH || part.height || (boxH / partList.length)) : boxH;
+        let calcL = Number((direction === 'horizontal') ? (overrideW || part.width || (boxL / partList.length)) : boxL);
+        let calcH = Number((direction === 'vertical') ? (overrideH || part.height || (boxH / partList.length)) : boxH);
 
         let inflation = (!isFirst) ? (divThick / 2) : 0;
 
@@ -768,12 +786,16 @@ export class FormulaEngine {
         }
 
         const compId = part.compositionId || frameCompId;
-        const subPartOpt = { top: false, bottom: false, left: false, right: false, isSubPart: true };
+        const subPartOpt = isMultiChassis 
+          ? { ...(config.optionalSides || { top: true, bottom: true, left: true, right: true }), isSubPart: false } 
+          : { top: false, bottom: false, left: false, right: false, isSubPart: true };
         
-        const res = this.calculateComponentBOM(config, calcL, calcH, compId, part.glassId || config.glassId, subPartOpt, calcH, originalL || L, totalH, divThick);
+        const res = this.calculateComponentBOM(config, calcL, calcH, compId, part.glassId || config.glassId, subPartOpt, calcH, Number(originalL || L), totalH, isMultiChassis ? 0 : divThick);
         const sourceLabel = `Partie ${idx + 1} (${part.type})`;
 
         const filterFn = (i) => {
+           if (compoundType === 'fix_coulissant') return true; // In multi-chassis, we keep everything (each has its frame)
+           
            const s = ((i.label || '') + ' ' + (i.name || '')).toLowerCase();
            if (s.includes('parclose') || s.includes('joint')) return true;
            if (i.isCouvreJoint) return false;
@@ -808,19 +830,15 @@ export class FormulaEngine {
         const kitId = config.shutterConfig.kitId;
         const type = kitId === 'KIT-SANG' ? 'MONO' : (kitId === 'KIT-MOTE' ? 'PALA' : 'OTHER');
         
-        let compForRange = (this.db.compositions || []).find(c => c.id === config.compositionId);
-        if (!compForRange && config.compoundConfig?.parts?.length > 0) {
-          const parts = config.compoundConfig.parts;
-          const mainOp = parts.find(p => p.type === 'opening' && p.compositionId) || 
-                         parts.find(p => p.compositionId) || 
-                         parts[0];
-          if (mainOp?.compositionId) {
-            compForRange = (this.db.compositions || []).find(c => c.id === mainOp.compositionId);
-          }
-        }
+        let compForRange = (config.compoundType && config.compoundType !== 'none' && config.compoundConfig?.parts?.length > 0)
+          ? (this.db.compositions || []).find(c => c.id === (config.compoundConfig.parts.find(p => p.type === 'opening' && p.compositionId) || config.compoundConfig.parts[0])?.compositionId)
+          : (this.db.compositions || []).find(c => c.id === config.compositionId);
 
         if (compForRange) {
-          const autoG = (sc.glissieres || []).find(g => (!g.rangeId || g.rangeId === compForRange.rangeId) && g.shutterType === type);
+          const autoG = (sc.glissieres || []).find(g => 
+             (!g.rangeId || g.rangeId === compForRange.rangeId) && 
+             g.shutterType === type
+          );
           if (autoG) gid = autoG.id;
         }
       }
@@ -1061,11 +1079,14 @@ export class FormulaEngine {
   validate(config) {
     if (config.useCustomLayout) return { valid: true }; // Custom layouts skip basic range checks for now
 
+    // If it's an assemblage, the global compositionId might be empty (Automatic)
+    const isAssemblage = config.compoundType && config.compoundType !== 'none';
     const composition = (this.db.compositions || []).find(c => c.id === config.compositionId);
-    if (!composition) return { valid: false, message: 'Composition inexistante' };
+    
+    if (!composition && !isAssemblage) return { valid: false, message: 'Composition inexistante' };
 
-    const range = this.db.ranges.find(r => r.id === composition.rangeId);
-    if (!range) return { valid: false, message: 'Gamme inexistante' };
+    const range = composition ? (this.db.ranges || []).find(r => r.id === composition.rangeId) : null;
+    if (!range && !isAssemblage) return { valid: false, message: 'Gamme inexistante' };
 
     const glass = (this.db.glass || []).find(g => g.id === config.glassId);
     if (!glass) return { valid: false, message: 'Vitrage selectionné inexistant' };
@@ -1074,11 +1095,13 @@ export class FormulaEngine {
     if (!color) return { valid: false, message: 'Couleur selectionnée inexistante' };
 
     const { L, H } = config;
-    if (L < range.minL || L > range.maxL) {
-      return { valid: false, message: `Largeur hors limites (${range.minL}-${range.maxL} mm)` };
-    }
-    if (H < range.minH || H > range.maxH) {
-      return { valid: false, message: `Hauteur hors limites (${range.minH}-${range.maxH} mm)` };
+    if (range) {
+       if (L < range.minL || L > range.maxL) {
+         return { valid: false, message: `Largeur hors limites (${range.minL}-${range.maxL} mm)` };
+       }
+       if (H < range.minH || H > range.maxH) {
+         return { valid: false, message: `Hauteur hors limites (${range.minH}-${range.maxH} mm)` };
+       }
     }
 
     return { valid: true };
@@ -1126,7 +1149,7 @@ export class FormulaEngine {
        ...bom,
        profiles: merge(bom.profiles || [], ['id', 'length', 'label']),
        accessories: merge(bom.accessories || [], ['id', 'label']),
-       glasses: merge(bom.glasses || [], ['id', 'label', 'width', 'height'])
+       glassDetails: merge(bom.glassDetails || bom.glasses || [], ['id', 'label', 'width', 'height'])
     };
   }
 }

@@ -228,6 +228,7 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
       const thick = (divRef?.thickness || 20) * scale;
       
       const drawPartList = (list, bx, by, bw, bh, dir) => {
+        if (!list || !Array.isArray(list)) return;
         const isH = dir !== 'vertical';
         let cx = bx;
         let cy = by;

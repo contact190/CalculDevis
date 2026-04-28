@@ -39,12 +39,13 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
   const [compareModalOpen, setCompareModalOpen] = useState(false);
 
   useEffect(() => {
+    // Standard initialization: Force default if nothing selected
     if (!config.compositionId && database.compositions?.length > 0) {
       setConfig(prev => ({
         ...prev,
         compositionId: database.compositions[0].id,
-        colorId: database.colors[0]?.id || '',
-        glassId: database.glass[0]?.id || '',
+        colorId: database.colors?.[0]?.id || '',
+        glassId: database.glass?.[0]?.id || '',
       }));
     }
   }, []);
@@ -66,7 +67,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
     setConfig(prev => {
       const next = { ...prev, [name]: newVal };
       if (name === 'compositionId') {
-         const comp = database.compositions.find(c => c.id === value);
+         const comp = (database.compositions || []).find(c => c.id === value);
          if (comp?.defaultOpeningDirection) {
             next.openingDirection = comp.defaultOpeningDirection;
          }
@@ -83,26 +84,29 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
     if (!bom) return { profiles: 0, accessories: 0, glass: 0, shutters: 0 };
     return {
       profiles: bom.profiles?.reduce((sum, p) => sum + (p.cost || 0), 0) || 0,
-      accessories: (bom.accessories?.reduce((sum, a) => sum + (a.cost || 0), 0) || 0) + (bom.gasket?.cost || 0),
+      accessories: (bom.accessories?.reduce((sum, a) => sum + (a.cost || 0), 0) || 0) + (bom.gasket?.cost || 0) || 0,
       glass: bom.glass?.cost || 0,
       shutters: bom.shutters?.reduce((sum, s) => sum + (s.cost || 0), 0) || 0
     };
   }, [priceData]);
 
-  const currentComp = database.compositions?.find(c => c.id === config.compositionId);
+  const currentCompId = (config.compoundType && config.compoundType !== 'none' && config.compoundConfig?.parts?.length > 0)
+    ? (config.compoundConfig.parts.find(p => p.type === 'opening' && p.compositionId) || config.compoundConfig.parts[0])?.compositionId
+    : config.compositionId;
+  const currentComp = (database.compositions || []).find(c => c.id === currentCompId);
   const activeCat = currentComp?.categoryId || database.categories?.[0]?.id || '';
   const activeOpen = currentComp?.openingType || 'Fixe';
-  const compsInCat = database.compositions?.filter(c => c.categoryId === activeCat) || [];
+  const compsInCat = (database.compositions || []).filter(c => c.categoryId === activeCat);
   const availableOpenings = [...new Set(compsInCat.map(c => c.openingType))];
 
   const hasCouvreJoint = currentComp?.elements?.some(e => {
     let itemName = '';
-    if (e.type === 'profile') { const p = database.profiles.find(x => x.id === e.id); if (p) itemName = p.name || ''; }
-    else if (e.type === 'accessory') { const a = database.accessories.find(x => x.id === e.id); if (a) itemName = a.name || ''; }
+    if (e.type === 'profile') { const p = (database.profiles || []).find(x => x.id === e.id); if (p) itemName = p.name || ''; }
+    else if (e.type === 'accessory') { const a = (database.accessories || []).find(x => x.id === e.id); if (a) itemName = a.name || ''; }
     return /couvres?[- ]?joints?|cj[vh]?/i.test(((e.label || '') + ' ' + itemName).toLowerCase());
   });
 
-  const availableOptions = database.options?.filter(o => (o.rangeIds || []).includes(currentComp?.rangeId)) || [];
+  const availableOptions = (database.options || []).filter(o => (o.rangeIds || []).includes(currentComp?.rangeId)) || [];
   const isPorte = activeCat === 'porte' || activeCat === 'CAT-P' || currentComp?.name?.toLowerCase().includes('porte');
 
   return (
@@ -164,11 +168,11 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               <label className="label">Type de Configuration</label>
               <div style={{ display: 'flex', gap: '0.3rem', background: '#f1f5f9', padding: '0.3rem', borderRadius: '0.5rem' }}>
-                <button onClick={() => setConfig(prev => ({ ...prev, useCustomLayout: false, compoundType: 'none' }))}
+                <button onClick={() => setConfig(prev => ({ ...prev, useCustomLayout: false, compoundType: 'none', compositionId: prev.compositionId || database.compositions?.[0]?.id || '' }))}
                   style={{ flex: 1, padding: '0.45rem', borderRadius: '0.4rem', border: 'none', background: (!config.useCustomLayout && config.compoundType === 'none') ? 'white' : 'transparent', fontWeight: (!config.useCustomLayout && config.compoundType === 'none') ? 700 : 400, color: (!config.useCustomLayout && config.compoundType === 'none') ? '#1d4ed8' : '#64748b', cursor: 'pointer', fontSize: '0.75rem' }}>
                   Standard
                 </button>
-                <button onClick={() => setConfig(prev => ({ ...prev, useCustomLayout: false, compoundType: 'fix_coulissant' }))}
+                <button onClick={() => setConfig(prev => ({ ...prev, useCustomLayout: false, compoundType: 'fix_coulissant', compositionId: '' }))}
                   style={{ flex: 1, padding: '0.45rem', borderRadius: '0.4rem', border: 'none', background: (config.compoundType !== 'none') ? 'white' : 'transparent', fontWeight: (config.compoundType !== 'none') ? 700 : 400, color: (config.compoundType !== 'none') ? '#0891b2' : '#64748b', cursor: 'pointer', fontSize: '0.75rem' }}>
                   🧩 Assemblé
                 </button>
@@ -194,19 +198,19 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                    </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1.5fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
                    <div className="form-group">
                       <label className="label">Modèle Structurel</label>
                       <select className="input" value={config.compoundType} onChange={e => setConfig(prev => ({ ...prev, compoundType: e.target.value }))}>
-                        <option value="fix_coulissant">Multi-Châssis (Fixe + Coulissant + ...) avec Unions</option>
-                        <option value="fix_ouvrant">Châssis Unique Divisé (Fixe + Ouvrant + ...) avec Traverses</option>
+                        <option value="fix_coulissant">Multi-Châssis (Unions)</option>
+                        <option value="fix_ouvrant">Châssis Divisé (Traverses)</option>
                       </select>
                    </div>
                    <div className="form-group">
                       <label className="label">Orientation</label>
                       <select className="input" value={config.compoundConfig?.orientation} onChange={e => setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, orientation: e.target.value } }))}>
-                        <option value="horizontal">Côte à côte (Horizontal)</option>
-                        <option value="vertical">Superposé (Vertical)</option>
+                        <option value="horizontal">Horizontal</option>
+                        <option value="vertical">Vertical</option>
                       </select>
                    </div>
                 </div>
@@ -454,15 +458,15 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                       }}>
                            {(database.traverses || []).filter(t => {
                               const normalize = (s) => (s || '').replace(/[-\s]+/g, '').toLowerCase();
-                              const currentNorm = normalize(config.rangeId);
+                              const currentNorm = normalize(currentComp?.rangeId || ((database.ranges || [])[0]?.id || ''));
                               return (t.rangeIds || []).some(rid => normalize(rid) === currentNorm);
                            }).map(t => { 
-                              const p = database.profiles.find(px => px.id === t.profileId); 
+                              const p = (database.profiles || []).find(px => px.id === t.profileId); 
                               if (!p) return null; 
                               return <option key={t.id} value={p.id} style={{ fontWeight: 'bold' }}>{t.name} (Mapping Admin)</option>; 
                            }).filter(Boolean)}
                            <option disabled>── PROFILÉS JONCTION ──</option>
-                           {database.profiles.filter(p => p.category === 'divider').map(p => (
+                           {(database.profiles || []).filter(p => p.category === 'divider').map(p => (
                               <option key={p.id} value={p.id}>{p.name} ({p.thickness}mm)</option>
                            ))}
                       </select>
@@ -851,35 +855,35 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
               <table className="data-table" style={{ fontSize: '0.7rem' }}>
                 <thead><tr><th>Composant</th><th>Source</th><th>Formule</th><th>Calcul</th><th>Nbre</th><th>Mesure Totale</th><th>Prix Unit.</th><th style={{ textAlign: 'right' }}>Prix Total</th></tr></thead>
                 <tbody>
-                  {priceData?.bom.profiles.map((p, i) => (
+                  {priceData?.bom?.profiles?.map((p, i) => (
                     <tr key={i}>
                       <td data-label="Composant" style={{ fontWeight: 600 }}>{p.label}</td>
                       <td data-label="Source"><span style={{ fontSize: '0.6rem', padding: '0.1rem 0.4rem', background: '#f1f5f9', borderRadius: '1rem', color: '#64748b', whiteSpace: 'nowrap' }}>{p.source || 'Standard'}</span></td>
                       <td data-label="Formule" style={{ color: '#64748b', fontSize: '0.65rem' }}>{p.formula}</td>
                       <td data-label="Calcul" style={{ color: '#3b82f6', fontSize: '0.65rem' }}>{p.resolvedFormula}</td><td data-label="Nbre">{p.qty}u</td>
-                      <td data-label="Mesure Totale">{Math.round(p.totalMeasure)} mm</td><td data-label="Prix Unit.">{p.unitPrice?.toFixed(2)}</td>
-                      <td data-label="Prix Total" style={{ textAlign: 'right', fontWeight: 600 }}>{p.cost.toFixed(2)} DZD</td>
+                      <td data-label="Mesure Totale">{Math.round(p.totalMeasure || 0)} mm</td><td data-label="Prix Unit.">{p.unitPrice?.toFixed(2)}</td>
+                      <td data-label="Prix Total" style={{ textAlign: 'right', fontWeight: 600 }}>{(p.cost || 0).toFixed(2)} DZD</td>
                     </tr>
                   ))}
-                  {priceData?.bom.accessories.map((acc, i) => (
+                  {priceData?.bom?.accessories?.map((acc, i) => (
                     <tr key={`acc-${i}`}>
                       <td data-label="Composant" style={{ fontWeight: 600 }}>{acc.label}</td>
                       <td data-label="Source"><span style={{ fontSize: '0.6rem', padding: '0.1rem 0.4rem', background: '#f1f5f9', borderRadius: '1rem', color: '#64748b', whiteSpace: 'nowrap' }}>{acc.source || 'Standard'}</span></td>
                       <td data-label="Formule" style={{ color: '#64748b', fontSize: '0.65rem' }}>{acc.formula}</td>
                       <td data-label="Calcul" style={{ color: '#3b82f6', fontSize: '0.65rem' }}>{acc.resolvedFormula}</td><td data-label="Nbre">{acc.multiplier}u</td>
-                      <td data-label="Mesure Totale">{acc.totalMeasure?.toFixed(2)} {acc.unit === 'Ml' || acc.unit === 'Joint' ? 'mm' : 'u'}</td>
-                      <td data-label="Prix Unit.">{acc.unitPrice?.toFixed(2)}</td><td data-label="Prix Total" style={{ textAlign: 'right', fontWeight: 600 }}>{acc.cost.toFixed(2)} DZD</td>
+                      <td data-label="Mesure Totale">{(acc.totalMeasure || 0).toFixed(2)} {acc.unit === 'Ml' || acc.unit === 'Joint' ? 'mm' : 'u'}</td>
+                      <td data-label="Prix Unit.">{acc.unitPrice?.toFixed(2)}</td><td data-label="Prix Total" style={{ textAlign: 'right', fontWeight: 600 }}>{(acc.cost || 0).toFixed(2)} DZD</td>
                     </tr>
                   ))}
 
-                  {priceData?.bom.shutters && priceData.bom.shutters.map((s, i) => (
+                  {priceData?.bom?.shutters?.map((s, i) => (
                     <tr key={`shutter-${i}`}>
                       <td data-label="Composant" style={{ fontWeight: 600 }}>[Volet] {s.name}</td>
                       <td data-label="Source"><span style={{ fontSize: '0.6rem', padding: '0.1rem 0.4rem', background: '#f1f5f9', borderRadius: '1rem', color: '#64748b', whiteSpace: 'nowrap' }}>{s.source || 'Volet'}</span></td>
                       <td data-label="Formule" style={{ color: '#64748b', fontSize: '0.65rem' }}>{s.formula}</td>
                       <td data-label="Calcul" style={{ color: '#3b82f6', fontSize: '0.65rem' }}>{s.resolvedFormula || '-'}</td>
                       <td data-label="Nbre">
-                        {s.qty?.toFixed(2)} {s.priceUnit === 'ML' ? 'u' : s.priceUnit}
+                        {(s.qty || 0).toFixed(2)} {s.priceUnit === 'ML' ? 'u' : s.priceUnit}
                       </td>
                       <td data-label="Mesure Totale">
                         {s.totalMeasure ? `${Math.round(s.totalMeasure)} mm` : '-'}
@@ -888,15 +892,15 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                       <td data-label="Prix Total" style={{ textAlign: 'right', fontWeight: 600 }}>{(s.cost || 0).toFixed(2)} DZD</td>
                     </tr>
                   ))}
-                  {(priceData?.bom.glassDetails || (priceData?.bom.glass ? [priceData.bom.glass] : [])).map((g, gi) => (
+                  {(priceData?.bom?.glassDetails || (priceData?.bom?.glass ? [priceData.bom.glass] : [])).filter(Boolean).map((g, gi) => (
                     <tr key={`glass-${gi}`}>
                       <td data-label="Composant" style={{ fontWeight: 600 }}>Vitrage {g.name && g.name !== 'Vitrage' ? `(${g.name})` : ''}</td>
                       <td data-label="Source"><span style={{ fontSize: '0.6rem', padding: '0.1rem 0.4rem', background: '#f1f5f9', borderRadius: '1rem', color: '#64748b', whiteSpace: 'nowrap' }}>{g.source || 'Interne'}</span></td>
-                      <td data-label="Formule">{Math.round(g.width)} x {Math.round(g.height)} mm</td>
+                      <td data-label="Formule">{Math.round(g.width || 0)} x {Math.round(g.height || 0)} mm</td>
                       <td data-label="Calcul" style={{ color: '#3b82f6', fontSize: '0.65rem' }}>{g.calculation || '-'}</td>
                       <td data-label="Nbre">{g.qty}u</td>
-                      <td data-label="Mesure Totale">{g.area.toFixed(2)} m²</td><td data-label="Prix Unit.">{(g.pricePerM2 || g.unitPrice)?.toFixed(2)}</td>
-                      <td data-label="Prix Total" style={{ textAlign: 'right', fontWeight: 600 }}>{g.cost.toFixed(2)} DZD</td>
+                      <td data-label="Mesure Totale">{(g.area || 0).toFixed(2)} m²</td><td data-label="Prix Unit.">{(g.pricePerM2 || g.unitPrice)?.toFixed(2)}</td>
+                      <td data-label="Prix Total" style={{ textAlign: 'right', fontWeight: 600 }}>{(g.cost || 0).toFixed(2)} DZD</td>
                     </tr>
                   ))}
                   <tr style={{ background: '#f1f5f9', fontWeight: 700, fontSize: '0.85rem' }}>
@@ -917,7 +921,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
               width={320} 
               height={320} 
               database={database} 
-              onDrawComplete={(dataUrl) => setConfig(prev => ({...prev, thumbnail: dataUrl}))} 
+              onDrawComplete={null} 
             />
           </div>
           <div className="price-card shadow-lg">
@@ -1137,6 +1141,8 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
   const [consumableFilter, setConsumableFilter] = useState('all'); // 'all' | item id
 
   const quote = currentQuote || { id: '', number: '', items: [] };
+
+
 
   // Totals
   const totals = useMemo(() => {
@@ -1845,7 +1851,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
                 <span>TOTAL TTC</span><span>{totals.ttc.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</span>
               </div>
               <div style={{ marginTop: '0.4rem', fontSize: '0.75rem', opacity: 0.7, textAlign: 'right' }}>
-                Validité : {quoteSettings?.validityDays || 30} jours ({validityDate})
+                Validité : {quoteSettings?.validityDays || 30} jours 
               </div>
               <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.2rem' }}>
                 {!isQuoteFrozen && (

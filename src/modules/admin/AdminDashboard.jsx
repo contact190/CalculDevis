@@ -1007,6 +1007,7 @@ const AdminDashboard = ({ data, setData }) => {
                              <th>Seuil</th>
                              <th>Gammes</th>
                              <th>Couleurs</th>
+                             <th>Coupe</th>
                              <th>Actions</th>
                            </tr>
                          </thead>
@@ -1053,6 +1054,13 @@ const AdminDashboard = ({ data, setData }) => {
                                 <td><input type="number" className="input" value={p.barLength || 6000} onChange={e => handleUpdateItem('profiles', p.id, 'barLength', e.target.value, idx)} style={{ width: '60px' }} /></td>
                                 <td><input type="number" className="input" value={p.scrapThreshold || 0} onChange={e => handleUpdateItem('profiles', p.id, 'scrapThreshold', e.target.value, idx)} style={{ width: '55px' }} /></td>
                                 <td><MultiSelectRange selectedIds={p.rangeIds || []} allRanges={data.ranges} onChange={newR => handleUpdateItem('profiles', p.id, 'rangeIds', newR, idx)} /></td>
+                                <td>
+                                   <select className="input" value={p.cutType || '45/45'} onChange={e => handleUpdateItem('profiles', p.id, 'cutType', e.target.value, idx)} style={{ width: '70px', fontSize: '0.7rem' }}>
+                                     <option value="45/45">45/45</option>
+                                     <option value="90/90">90/90</option>
+                                     <option value="45/90">45/90</option>
+                                   </select>
+                                 </td>
                                 <td><MultiSelectColor selectedColors={p.colors || []} allColors={data.colors} onChange={newC => handleUpdateItem('profiles', p.id, 'colors', newC, idx)} /></td>
                                 <td style={{ display: 'flex', gap: '0.3rem' }}>
                                   <button className="btn" onClick={() => handleDuplicateItem('profiles', p)} style={{ padding: '0.4rem', color: '#6366f1' }} title="Dupliquer"><Copy size={16} /></button>

@@ -47,9 +47,10 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
   };
 
   const activeQuote = useMemo(() => {
-    const allSources = [...(database?.quotes || []), ...(database?.orders || [])];
-    return allSources.find(q => q.id === selectedGlobalQuoteId) || currentQuote;
-  }, [database?.quotes, database?.orders, selectedGlobalQuoteId, currentQuote]);
+    // Only look at orders (launched projects), exclude simple quotes
+    const allSources = database?.orders || [];
+    return allSources.find(q => q.id === selectedGlobalQuoteId) || (currentQuote?.status === 'COMMANDE' ? currentQuote : null);
+  }, [database, selectedGlobalQuoteId, currentQuote]);
 
   const quoteItems = activeQuote?.items || [];
 
@@ -66,35 +67,33 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
             const totalQty = m.qty || 1;
             const shutters = m.shutterList || [];
             
-            // If no custom shutters defined, treat as standard units
+            // Group by measurement row
             if (shutters.length === 0) {
-              for (let i = 0; i < totalQty; i++) {
-                configs.push({
-                  config: { ...item.config, L: m.L, H: m.H, partOverrides: m.partOverrides, instanceLabel: m.instanceNames?.[i] || `${item.label} ${i+1}` },
-                  qty: 1,
-                  label: m.instanceNames?.[i] || `${item.label} ${i+1}`,
-                  itemId: item.id,
-                  measureId: `${m.id}-${i}`
-                });
-              }
+              configs.push({
+                config: { ...item.config, L: m.L, H: m.H, partOverrides: m.partOverrides },
+                qty: totalQty,
+                label: item.label,
+                allLabels: m.instanceNames || [],
+                itemId: item.id,
+                measureId: m.id
+              });
             } else {
-              // Distribute shutters and names
-              let nameIdx = 0;
+              // If shutters are different within a row, we split by shutter config
+              let nameOffset = 0;
               shutters.forEach((sh, shIdx) => {
-                for (let i = 0; i < sh.qty; i++) {
-                  configs.push({
-                    config: { 
-                      ...item.config, L: m.L, H: m.H, partOverrides: m.partOverrides,
-                      shutterOverrides: { ...sh.overrides, customLV: sh.customLV },
-                      instanceLabel: m.instanceNames?.[nameIdx] || `${item.label} ${nameIdx+1}`
-                    },
-                    qty: 1,
-                    label: m.instanceNames?.[nameIdx] || `${item.label} ${nameIdx+1}`,
-                    itemId: item.id,
-                    measureId: `${m.id}-sh${shIdx}-${i}`
-                  });
-                  nameIdx++;
-                }
+                const sQty = Number(sh.qty) || 1;
+                configs.push({
+                  config: { 
+                    ...item.config, L: m.L, H: m.H, partOverrides: m.partOverrides,
+                    shutterOverrides: { ...sh.overrides, customLV: sh.customLV }
+                  },
+                  qty: sQty,
+                  label: item.label,
+                  allLabels: m.instanceNames?.slice(nameOffset, nameOffset + sQty) || [],
+                  itemId: item.id,
+                  measureId: `${m.id}-sh${shIdx}`
+                });
+                nameOffset += sQty;
               });
             }
           });
@@ -103,7 +102,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
 
       if (productFilter === 'total') return configs;
       // Filter by item type OR specific instance
-      return configs.filter(c => c.itemId === productFilter || c.measureId === productFilter);
+      return configs.filter(c => c && (c.itemId === productFilter || c.measureId === productFilter));
     }
 
     // 2. Fallback to standard quote items
@@ -129,45 +128,61 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
     }
   }, [activeConfigs, engine, currentConfig]);
   
-  const bom = bomResult.bom;
-
+  const bom = bomResult?.bom || { profiles: [], accessories: [], shutters: [], glass: { name: '', weight: 0 } };
+  
   // Derived arrays for Purchasing List
   const purchasingProfiles = useMemo(() => {
     const map = {};
-    activeConfigs.forEach(({ config: cfg, qty: cfgQty }, configIdx) => {
+    activeConfigs.forEach((entry, configIdx) => {
+      const cfg = entry?.config;
+      const cfgQty = entry?.qty || 1;
+      if (!cfg) return;
+
       const colorInfo = database.colors?.find(c => c.id === cfg.colorId);
       const colorName = colorInfo?.name || cfg.colorId || 'Standard';
       try {
         const b = engine.calculateBOM(cfg);
-        // Add instance label to profiles for traceability
-        if (cfg.instanceLabel) {
-           b.profiles = b.profiles.map(p => ({ ...p, instanceLabel: cfg.instanceLabel }));
-        }
+        if (!b) return;
+
+        // Use grouped labels
+        const groupLabels = entry.allLabels?.filter(Boolean).join(', ') || entry.label;
         
         // Standard profiles
-        b.profiles.forEach(p => {
-          // CONSOLIDATION FIX: Use only ID and Color for the key to avoid duplicates by label
+        if (b.profiles) {
+          b.profiles.forEach(p => {
           const mapKey = `${p.id}|${colorName}`;
           const displayName = p.name || p.label || 'Sans nom';
           const measure = p.length * p.qty * cfgQty;
           
-          // Enrich each piece with metadata for sequencing
-          const newPieces = Array(p.qty * cfgQty).fill(0).map(() => ({ 
+          const newPieces = Array(p.qty * cfgQty).fill(0).map((_, i) => ({ 
             length: p.length, 
-            instanceLabel: cfg.instanceLabel || 'Inconnu',
+            instanceLabel: entry.allLabels?.[Math.floor(i / p.qty)] || groupLabels,
             usage: p.usage || 'FINITION',
             label: p.label,
             windowIdx: configIdx
           }));
           
+          const pRef = (database.profiles || []).find(x => x.id === p.id);
+          
           if (!map[mapKey]) {
-            map[mapKey] = { ...p, originalNames: new Set([displayName]), totalMeasure: measure, pieces: newPieces, colorName, baseId: p.id };
+            map[mapKey] = { 
+              ...p, 
+              originalNames: new Set([displayName]), 
+              totalMeasure: measure, 
+              pieces: newPieces, 
+              colorName, 
+              colorId: cfg.colorId,
+              baseId: p.id,
+              image: pRef?.image,
+              technicalDrawing: pRef?.technicalDrawing
+            };
           } else {
             map[mapKey].totalMeasure += measure;
             map[mapKey].pieces = [...map[mapKey].pieces, ...newPieces];
             map[mapKey].originalNames.add(displayName);
           }
         });
+        } // end if (b.profiles)
         // Shutter profiles (Linear items)
         (b.shutters || []).forEach(s => {
           const unit = (s.priceUnit || '').toUpperCase().trim();
@@ -187,7 +202,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
             }
           }
         });
-      } catch {}
+      } catch (e) { console.warn(e); }
     });
     return Object.values(map).map(item => ({
       ...item,
@@ -224,7 +239,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
             map[mapKey].originalNames.add(displayName);
           }
         });
-      } catch {}
+      } catch (e) { console.warn(e); }
     });
     return Object.values(map).map(item => ({
       ...item,
@@ -251,7 +266,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
             map[mapKey].count += (g.qty || 1) * cfgQty;
           }
         });
-      } catch {}
+      } catch (e) { console.warn(e); }
     });
     return Object.values(map).map(item => ({...item, baseId: item.id}));
   }, [activeConfigs, engine, database.colors]);
@@ -394,77 +409,528 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
     document.body.removeChild(link);
   };
 
-  const generatePDF = () => {
-    const doc = jsPDF();
-    doc.setFontSize(20);
-    doc.text('ORDRE DE FABRICATION (OF)', 105, 20, { align: 'center' });
-    doc.setFontSize(10);
-    const composition = database.compositions.find(c => c.id === currentConfig.compositionId);
-    doc.text(`Modèle: ${composition?.name} (${currentConfig.compositionId}) | Dimensions: ${currentConfig.L} x ${currentConfig.H} mm`, 20, 30);
+  const getTechnicalDrawingDataURL = (cfg) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 600;
+    canvas.height = 600;
+    const ctx = canvas.getContext('2d');
     
-    let y = 45;
-    doc.setFontSize(12);
-    doc.text('LISTE DE DÉBIT PROFILÉS', 20, y);
-    y += 10;
+    const { L, H, compositionId, optionalSides = {} } = cfg;
+    if (!L || !H) return null;
+
+    const margin = 100;
+    const drawAreaW = 600 - margin * 2;
+    const drawAreaH = 600 - margin * 2;
     
-    doc.setFontSize(10);
-    const shutterItems = (bom.shutters || [])
-      .filter(s => s.length && s.length > 0)
-      .map(s => ({
-        ...s,
-        label: s.name
-      }));
-
-    const allItems = [...bom.profiles, ...shutterItems];
-
-    const groups = allItems.reduce((acc, p) => {
-      const cat = p.usage || 'ACCESSOIRES / FINITION';
-      if (!acc[cat]) acc[cat] = [];
-      acc[cat].push(p);
-      return acc;
-    }, {});
-
-    const catOrder = ['DORMANT (CADRE)', 'FIXE', 'FENETRE (OUVRANT)', 'VOLET ROULANT', 'ACCESSOIRES / FINITION'];
-    catOrder.forEach(cat => {
-      if (groups[cat] && groups[cat].length > 0) {
-        if (y > 260) { doc.addPage(); y = 20; }
-        doc.setFont('helvetica', 'bold');
-        doc.setFillColor(241, 245, 249);
-        doc.rect(20, y-5, 170, 7, 'F');
-        doc.setTextColor(30, 41, 59);
-        doc.text(cat, 25, y);
-        y += 8;
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(9);
-        groups[cat].forEach(p => {
-          doc.text(`- ${p.label}: ${Math.round(p.length)} mm | Coupe: ${p.cutAngle || '90'}° | Qté: ${p.qty} | ${p.name}`, 25, y);
-          y += 6;
-          if (y > 275) { doc.addPage(); y = 20; }
-        });
-        y += 4;
-      }
-    });
-
-    y += 10;
-    doc.text('VITRAGES', 20, y);
-    y += 7;
-    doc.text(`${bom.glass.name}: ${currentConfig.L} x ${currentConfig.H} mm (Poids: ${bom.glass.weight.toFixed(1)} kg)`, 20, y);
-
-    if (bom.shutters && bom.shutters.length > 0) {
-      y += 15;
-      doc.setFontSize(12);
-      doc.text('COMPOSANTS DU VOLET', 20, y);
-      y += 10;
-      doc.setFontSize(10);
-      bom.shutters.forEach(s => {
-        doc.text(`${s.name}: ${s.qty?.toFixed(2)} ${s.priceUnit} | Formule: ${s.formula}`, 20, y);
-        y += 7;
-        if (y > 270) { doc.addPage(); y = 20; }
-      });
+    let caissonH = 0;
+    if (cfg.hasShutter && cfg.shutterConfig?.caissonId && database.shutterComponents) {
+      const cRef = database.shutterComponents.caissons.find(c => c.id === cfg.shutterConfig.caissonId);
+      caissonH = parseFloat(cRef?.height) || 0;
     }
 
-    doc.save(`OF_${currentConfig.compositionId}_${Date.now()}.pdf`);
+    const scale = Math.min(drawAreaW / L, drawAreaH / H);
+    const dW = L * scale;
+    const dCaissonH = caissonH * scale;
+    const dH_total = H * scale;
+    const dH_window = Math.max(0, H - caissonH) * scale;
+    
+    const offsetX = (600 - dW) / 2;
+    const offsetY = (600 - dH_total) / 2;
+
+    // Background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, 600, 600);
+
+    ctx.lineJoin = 'round';
+    
+    // 1. Draw Caisson (Shutter Box)
+    if (caissonH > 0) {
+      ctx.fillStyle = '#f1f5f9';
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 1;
+      ctx.fillRect(offsetX, offsetY, dW, dCaissonH);
+      ctx.strokeRect(offsetX, offsetY, dW, dCaissonH);
+      
+      ctx.fillStyle = '#475569';
+      ctx.font = 'bold 12px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(`H.C : ${caissonH} mm`, offsetX + dW/2, offsetY + dCaissonH/2 + 4);
+    }
+    
+    // 2. Draw Frame & Sashes
+    const winOffsetY = offsetY + dCaissonH;
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 2.5;
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(offsetX, winOffsetY, dW, dH_window);
+    ctx.strokeRect(offsetX, winOffsetY, dW, dH_window);
+
+    const compo = database.compositions?.find(c => c.id === compositionId);
+    const openingType = (compo?.openingType || '').toLowerCase();
+    
+    // Inner drawJoinery function (mirrors JoineryCanvas logic)
+    const drawJoinery = (x, y, w, h, compId) => {
+      const comp = database.compositions?.find(c => c.id === compId) || database.compositions?.find(c => c.id === compositionId);
+      const oType = comp?.openingType || 'Fixe';
+      const dir = cfg.openingDirection || 'gauche';
+
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x, y, w, h);
+      ctx.fillStyle = 'rgba(186, 230, 253, 0.15)';
+      ctx.fillRect(x, y, w, h);
+
+      if (oType.includes('Ouvrant') || oType.includes('Battant') || oType.includes('Porte')) {
+        const combined = (comp?.name || '').toLowerCase();
+        let sc = 1;
+        const m = combined.match(/(\d+)\s*(vantail|vanteau|vanteaux|battant|vant)/i);
+        if (m) sc = parseInt(m[1]);
+        else if (combined.includes('double') || combined.includes(' 2 ')) sc = 2;
+        const sW = w / sc;
+        for (let i = 0; i < sc; i++) {
+          const sX = x + i * sW;
+          ctx.setLineDash([]);
+          ctx.strokeStyle = '#334155';
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(sX + 2, y + 2, sW - 4, h - 4);
+          ctx.beginPath();
+          ctx.setLineDash([5, 5]);
+          ctx.strokeStyle = '#94a3b8';
+          ctx.lineWidth = 1.2;
+          const sDir = (sc === 1) ? dir : (i === 0 ? 'gauche' : 'droit');
+          if (sDir === 'gauche') {
+            ctx.moveTo(sX + 4, y + 4); ctx.lineTo(sX + sW - 4, y + h/2); ctx.lineTo(sX + 4, y + h - 4);
+          } else {
+            ctx.moveTo(sX + sW - 4, y + 4); ctx.lineTo(sX + 4, y + h/2); ctx.lineTo(sX + sW - 4, y + h - 4);
+          }
+          ctx.stroke();
+        }
+        ctx.setLineDash([]);
+      } else if (oType.includes('Coulissant')) {
+        const combined = (comp?.name || '').toLowerCase();
+        let sc = 2;
+        const m = combined.match(/(\d+)\s*(coulisse|vantail|vanteau|vant)/i);
+        if (m) sc = parseInt(m[1]);
+        else if (combined.includes(' 3 ')) sc = 3;
+        const sW = w / sc;
+        for (let i = 0; i < sc; i++) {
+          const sX = x + i * sW;
+          ctx.strokeStyle = '#334155';
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(sX + 2, y + 2, sW + (i < sc-1 ? 4 : -2), h - 4);
+          ctx.strokeStyle = '#94a3b8';
+          ctx.lineWidth = 1;
+          const arrowY = y + h/2 + (i % 2 === 0 ? -10 : 10);
+          const aDir = (i % 2 === 0) ? 1 : -1;
+          ctx.beginPath();
+          ctx.moveTo(sX + sW/2 - 12*aDir, arrowY);
+          ctx.lineTo(sX + sW/2 + 12*aDir, arrowY);
+          ctx.lineTo(sX + sW/2 + 6*aDir, arrowY - 4);
+          ctx.moveTo(sX + sW/2 + 12*aDir, arrowY);
+          ctx.lineTo(sX + sW/2 + 6*aDir, arrowY + 4);
+          ctx.stroke();
+        }
+      } else {
+        // Fixe: crossed lines
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.beginPath();
+        ctx.moveTo(x, y); ctx.lineTo(x + w, y + h);
+        ctx.moveTo(x + w, y); ctx.lineTo(x, y + h);
+        ctx.stroke();
+      }
+    };
+
+    // Handle compound compositions (fix + coulissant, etc.)
+    if (cfg.compoundType && cfg.compoundType !== 'none' && cfg.compoundConfig?.parts) {
+      const { parts, orientation, unionId, traverseId } = cfg.compoundConfig;
+      const divRef = (database.profiles || []).find(p => p.id === (cfg.compoundType === 'fix_coulissant' ? unionId : traverseId));
+      const thick = (divRef?.thickness || 20) * scale;
+
+      const drawPartList = (list, bx, by, bw, bh, dir) => {
+        const isH = dir !== 'vertical';
+        let cx = bx, cy = by;
+        list.forEach((part, idx) => {
+          const pW = isH ? (part.width ? part.width * scale : bw / list.length) : bw;
+          const pH = isH ? bh : (part.height ? part.height * scale : bh / list.length);
+          if (part.type === 'group' && part.subParts) {
+            drawPartList(part.subParts, cx, cy, pW, pH, isH ? 'vertical' : 'horizontal');
+          } else {
+            drawJoinery(cx, cy, pW, pH, part.compositionId || compositionId);
+          }
+          if (isH) {
+            cx += pW;
+            if (idx < list.length - 1) { ctx.fillStyle = '#64748b'; ctx.fillRect(cx, by, thick, bh); cx += thick; }
+          } else {
+            cy += pH;
+            if (idx < list.length - 1) { ctx.fillStyle = '#64748b'; ctx.fillRect(bx, cy, bw, thick); cy += thick; }
+          }
+        });
+      };
+      drawPartList(parts, offsetX, winOffsetY, dW, dH_window, orientation);
+    } else {
+      drawJoinery(offsetX, winOffsetY, dW, dH_window, compositionId);
+    }
+
+    // 3. Couvre-joints (Architraves) around the window
+    const cjThick = 18 * scale;
+    const hasCJ = cfg.optionalSides && Object.values(cfg.optionalSides).some(Boolean);
+    if (hasCJ) {
+      ctx.fillStyle = '#e2e8f0';
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 1;
+      // Top
+      if (optionalSides.top || true) {
+        ctx.fillRect(offsetX - cjThick, offsetY - cjThick, dW + cjThick * 2, cjThick);
+        ctx.strokeRect(offsetX - cjThick, offsetY - cjThick, dW + cjThick * 2, cjThick);
+      }
+      // Bottom
+      if (optionalSides.bottom || true) {
+        ctx.fillRect(offsetX - cjThick, offsetY + dH_total, dW + cjThick * 2, cjThick);
+        ctx.strokeRect(offsetX - cjThick, offsetY + dH_total, dW + cjThick * 2, cjThick);
+      }
+      // Left
+      if (optionalSides.left || true) {
+        ctx.fillRect(offsetX - cjThick, offsetY, cjThick, dH_total);
+        ctx.strokeRect(offsetX - cjThick, offsetY, cjThick, dH_total);
+      }
+      // Right
+      if (optionalSides.right || true) {
+        ctx.fillRect(offsetX + dW, offsetY, cjThick, dH_total);
+        ctx.strokeRect(offsetX + dW, offsetY, cjThick, dH_total);
+      }
+    }
+
+    // 4. Shutter Control Position (Motor / Strap)
+    if (caissonH > 0 && cfg.shutterConfig) {
+      const kitId = cfg.shutterConfig.kitId || '';
+      const controlPos = cfg.shutterConfig.controlPosition || 'Droite';
+      const isLeft = controlPos === 'Gauche';
+      const ctrlX = isLeft ? offsetX + 15 : offsetX + dW - 15;
+      const ctrlY = offsetY + dCaissonH / 2;
+
+      if (kitId === 'KIT-MOTE' || kitId.toLowerCase().includes('mot')) {
+        // Motor: blue filled circle with 'M' label
+        ctx.beginPath();
+        ctx.arc(ctrlX, ctrlY, 10, 0, Math.PI * 2);
+        ctx.fillStyle = '#3b82f6';
+        ctx.fill();
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 10px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('M', ctrlX, ctrlY + 4);
+      } else {
+        // Strap/Manivelle: vertical line hanging down from caisson
+        ctx.strokeStyle = '#64748b';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(ctrlX, ctrlY);
+        ctx.lineTo(ctrlX, offsetY + dCaissonH + 30);
+        ctx.stroke();
+        // Strap label
+        ctx.fillStyle = '#475569';
+        ctx.font = '9px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(kitId.includes('MANI') ? 'Manivelle' : 'Sangle', ctrlX, offsetY + dCaissonH + 44);
+      }
+    }
+
+    // 3. Dimension Lines (Matching the user's "desired" image)
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = 1;
+    ctx.fillStyle = '#1e293b';
+    ctx.font = '11px Inter, sans-serif';
+    
+    // Width Dimension (Bottom)
+    const dimY = offsetY + dH_total + 40;
+    ctx.beginPath();
+    ctx.moveTo(offsetX, dimY - 5); ctx.lineTo(offsetX, dimY + 5);
+    ctx.moveTo(offsetX, dimY); ctx.lineTo(offsetX + dW, dimY);
+    ctx.moveTo(offsetX + dW, dimY - 5); ctx.lineTo(offsetX + dW, dimY + 5);
+    ctx.stroke();
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 13px Inter, sans-serif';
+    ctx.fillText(`${L} mm`, offsetX + dW/2, dimY + 15);
+
+    // Height Dimensions (Left)
+    const dimX = offsetX - 60;
+    // Total H
+    ctx.beginPath();
+    ctx.moveTo(dimX - 5, offsetY); ctx.lineTo(dimX + 5, offsetY);
+    ctx.moveTo(dimX, offsetY); ctx.lineTo(dimX, offsetY + dH_total);
+    ctx.moveTo(dimX - 5, offsetY + dH_total); ctx.lineTo(dimX + 5, offsetY + dH_total);
+    ctx.stroke();
+    
+    ctx.save();
+    ctx.translate(dimX - 15, offsetY + dH_total/2);
+    ctx.rotate(-Math.PI/2);
+    ctx.fillText(`${H} mm (Total)`, 0, 0);
+    ctx.restore();
+
+    // Window H (if shutter exists)
+    if (caissonH > 0) {
+      const dimX2 = offsetX - 25;
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.beginPath();
+      ctx.moveTo(dimX2, winOffsetY); ctx.lineTo(dimX2, winOffsetY + dH_window);
+      ctx.stroke();
+      
+      ctx.save();
+      ctx.translate(dimX2 - 10, winOffsetY + dH_window/2);
+      ctx.rotate(-Math.PI/2);
+      ctx.fillStyle = '#3b82f6';
+      ctx.fillText(`${Math.round(H - caissonH)} mm (Ouv.)`, 0, 0);
+      ctx.restore();
+      
+      // Caisson H label on the side
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '10px Inter, sans-serif';
+      ctx.fillText(`${caissonH}`, dimX2 - 10, offsetY + dCaissonH/2);
+    }
+
+    return canvas.toDataURL('image/png');
   };
+
+  const drawCutVisual = (doc, x, y, width, height, cutType) => {
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineWidth(0.5);
+    
+    // Default rectangle
+    if (cutType === '90/90') {
+      doc.rect(x, y, width, height);
+    } else if (cutType === '45/45') {
+      doc.line(x, y + height, x + 5, y); // left slant
+      doc.line(x + 5, y, x + width - 5, y); // top
+      doc.line(x + width - 5, y, x + width, y + height); // right slant
+      doc.line(x + width, y + height, x, y + height); // bottom
+    } else if (cutType === '45/90') {
+      doc.line(x, y + height, x + 5, y); // left slant
+      doc.line(x + 5, y, x + width, y); // top
+      doc.line(x + width, y, x + width, y + height); // right vertical
+      doc.line(x + width, y + height, x, y + height); // bottom
+    } else {
+      doc.rect(x, y, width, height); // fallback
+    }
+  };
+
+  const generateDetailedProductionPDF = (type = 'opening') => {
+    const doc = new jsPDF();
+    const isOpening = type === 'opening';
+    const title = isOpening ? 'FICHE DE PRODUCTION : OUVERTURES' : 'FICHE DE PRODUCTION : SPÉCIAL VOLET';
+    
+    // Header
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.text(title, 105, 20, { align: 'center' });
+    
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Client: ${database.clients?.find(c => c.id === activeQuote?.clientId)?.nom || '—'}`, 20, 30);
+    doc.text(`Date: ${new Date().toLocaleDateString()}`, 160, 30);
+    doc.line(20, 35, 190, 35);
+
+    let currentY = 45;
+
+    // Process each item in activeConfigs
+    activeConfigs.forEach((item, idx) => {
+      const cfg = item.config;
+      const b = engine.calculateBOM(cfg);
+      const compo = database.compositions?.find(c => c.id === cfg.compositionId);
+      const range = database.ranges?.find(r => r.id === cfg.rangeId);
+      const color = database.colors?.find(c => c.id === cfg.colorId);
+      
+      // Filter profiles based on document type
+      const profiles = b.profiles.filter(p => {
+        const isShutter = p.usage === 'VOLET ROULANT' || p.name?.toLowerCase().includes('lame') || p.name?.toLowerCase().includes('coulisse');
+        return isOpening ? !isShutter : isShutter;
+      });
+
+      if (profiles.length === 0) return;
+      
+      // FIX: Each window starts on a new page
+      if (idx > 0) {
+        doc.addPage();
+        currentY = 20;
+      }
+
+      // Item Header with background (Enlarged to take ~1/2 page width/height)
+      doc.setFillColor(248, 250, 252);
+      doc.rect(20, currentY, 170, 100, 'F');
+      
+      // Top Left: Opening technical drawing (ENLARGED)
+      const techImage = getTechnicalDrawingDataURL(cfg);
+      if (techImage) {
+        try { 
+          doc.addImage(techImage, 'PNG', 25, currentY + 7, 85, 85); 
+        } catch(e) {
+          console.error("PDF Tech Drawing Error:", e);
+        }
+      } else if (compo?.image) {
+        try { 
+          const imgData = compo.image;
+          let format = 'JPEG';
+          if (imgData.includes('png')) format = 'PNG';
+          else if (imgData.includes('webp')) format = 'WEBP';
+          doc.addImage(imgData, format, 25, currentY + 7, 85, 85); 
+        } catch(e) {
+          doc.setDrawColor(226, 232, 240);
+          doc.rect(25, currentY + 7, 85, 85);
+          doc.text("Erreur Image", 67.5, currentY + 45, { align: 'center' });
+        }
+      } else {
+        doc.setDrawColor(226, 232, 240);
+        doc.rect(25, currentY + 7, 85, 85);
+        doc.setFontSize(10);
+        doc.text("Sans Photo", 67.5, currentY + 45, { align: 'center' });
+      }
+
+      // Top Right Table (Adjusted X and Y to prevent overlaps)
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      const startX = 115;
+      doc.text(`Réf: ${item.label}`, startX, currentY + 12);
+      doc.text(`Qté Totale: ${item.qty} u.`, startX, currentY + 20);
+      
+      doc.setFontSize(9);
+      const labels = item.allLabels?.filter(Boolean).join(', ');
+      if (labels) {
+        doc.setFont('helvetica', 'italic');
+        doc.text(`Postes: ${labels}`, startX, currentY + 28, { maxWidth: 70 });
+      }
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(11);
+      doc.text(`Modèle: ${compo?.name || '—'}`, startX, currentY + 58);
+      doc.text(`Couleur: ${color?.name || '—'}`, startX, currentY + 66);
+      doc.text(`RAL: ${cfg.colorId || 'Std'}`, startX, currentY + 74);
+      
+      doc.setFontSize(14);
+      doc.setTextColor(30, 41, 59);
+      doc.text(`DIM: ${cfg.L} x ${cfg.H} mm`, startX, currentY + 92);
+      doc.setTextColor(0, 0, 0);
+      
+      // Improved Couvre-joint detection: De-duplicate by THICKNESS only to satisfy "supprime une" request
+      const cjProfiles = profiles.filter(p => p.isCouvreJoint || p.usage === 'ACCESSOIRES / FINITION' && /couvre|cj/i.test(p.label || ''));
+      
+      const cjSummary = [];
+      const seenThick = new Set();
+
+      cjProfiles.forEach(pCalc => {
+        const pRef = (database.profiles || []).find(x => x.id === pCalc.id || x.name === pCalc.id);
+        const thicknessValue = pRef?.thickness || pRef?.epas || pRef?.epaisseur || pRef?.ep || pRef?.e || 0;
+        const thickness = parseFloat(thicknessValue) || 0;
+        
+        if (thickness > 0 && !seenThick.has(thickness)) {
+          seenThick.add(thickness);
+          cjSummary.push({ name: pRef?.name || pCalc?.name || 'Couvre-joint', thickness });
+        }
+      });
+
+      let cjY = currentY + 45; // Start CJ lines below the Postes section
+      if (cjSummary.length > 0) {
+        cjSummary.forEach((cj, cjIdx) => {
+          const displayValue = `${cj.thickness} mm`;
+          doc.text(`Couvre-joint: ${displayValue}`, startX, cjY + (cjIdx * 6));
+        });
+      } else {
+        doc.text(`Couvre-joint: Sans`, startX, cjY);
+      }
+      
+      currentY += 105;
+
+      // Group profiles by category
+      const profilesByCategory = profiles.reduce((acc, p) => {
+        const cat = p.usage || 'AUTRE';
+        if (!acc[cat]) acc[cat] = [];
+        acc[cat].push(p);
+        return acc;
+      }, {});
+
+      const catOrder = ['DORMANT (CADRE)', 'FIXE', 'FENETRE (OUVRANT)', 'VOLET ROULANT', 'ACCESSOIRES / FINITION'];
+      
+      Object.entries(profilesByCategory).sort((a, b) => {
+        const idxA = catOrder.indexOf(a[0]);
+        const idxB = catOrder.indexOf(b[0]);
+        return (idxA === -1 ? 99 : idxA) - (idxB === -1 ? 99 : idxB);
+      }).forEach(([cat, catProfiles]) => {
+        if (currentY > 240) { doc.addPage(); currentY = 20; }
+
+        // Category Sub-header
+        doc.setFillColor(30, 41, 59);
+        doc.rect(20, currentY, 170, 7, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'bold');
+        doc.text(cat, 25, currentY + 5);
+        
+        // Headers for this category
+        doc.setFontSize(7);
+        doc.text("Photo", 60, currentY + 5);
+        doc.text("Désignation", 80, currentY + 5);
+        doc.text("Longueur", 125, currentY + 5);
+        doc.text("Coupe", 150, currentY + 5);
+        doc.text("Qté", 185, currentY + 5);
+        
+        currentY += 15; // Increased space to avoid overlap with header
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0, 0, 0);
+
+          catProfiles.forEach(p => {
+            if (currentY > 275) { doc.addPage(); currentY = 20; }
+            
+            // Flexible lookup (try exact, then normalized)
+            let pRef = (database.profiles || []).find(x => x.id === p.id);
+            if (!pRef) {
+              const normId = p.id.replace(/[^a-zA-Z0-9]/g, '');
+              pRef = (database.profiles || []).find(x => x.id.replace(/[^a-zA-Z0-9]/g, '') === normId);
+            }
+
+            const cutType = pRef?.cutType || '45/45';
+            const photo = pRef?.image;
+
+            doc.setFontSize(7);
+            doc.text(`${p.id}`, 22, currentY);
+            
+            // Photo column
+            if (photo) {
+              try {
+                let format = 'JPEG';
+                if (photo.includes('png')) format = 'PNG';
+                else if (photo.includes('webp')) format = 'WEBP';
+                doc.addImage(photo, format, 58, currentY - 5, 12, 10);
+              } catch(e) {
+                doc.setDrawColor(240, 240, 240);
+                doc.rect(58, currentY - 5, 12, 10);
+              }
+            } else {
+               doc.setDrawColor(240, 240, 240);
+               doc.rect(58, currentY - 5, 12, 10);
+            }
+
+            doc.setFontSize(8);
+            doc.text(`${p.name} [${p.label}]`, 80, currentY);
+            doc.setFont('helvetica', 'bold');
+            doc.text(`${Math.round(p.length)} mm`, 125, currentY);
+            doc.setFont('helvetica', 'normal');
+            doc.text(cutType, 150, currentY);
+            
+            // Visual Cut
+            drawCutVisual(doc, 160, currentY - 3, 20, 5, cutType);
+            
+            doc.text(`x${p.qty * item.qty}`, 185, currentY);
+            
+            currentY += 14; 
+          });
+        currentY += 3;
+      });
+
+      currentY += 7; // Space between items
+    });
+
+    doc.save(`PROD_${type.toUpperCase()}_${activeQuote?.number || 'EXPORT'}.pdf`);
+  };
+
+  const generateOpeningPDF = () => generateDetailedProductionPDF('opening');
+  const generateShutterPDF = () => generateDetailedProductionPDF('shutter');
 
   const generatePurchasePDF = () => {
     const doc = new jsPDF({ format: 'a4' });
@@ -609,7 +1075,25 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
     doc.save(`Achat_${productFilter === 'total' ? 'Tous' : productFilter}.pdf`);
   };
 
-  if (!currentConfig) return <div className="glass shadow-md" style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>Aucune configuration active. Sélectionnez ou configurez un devis dans la page Projet.</div>;
+  if (!activeQuote) {
+    return (
+      <div style={{ display: 'grid', placeItems: 'center', height: '60vh' }}>
+        <div style={{ textAlign: 'center', maxWidth: '500px', background: 'white', padding: '3rem', borderRadius: '1.5rem', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+          <CheckCircle size={64} color="#2563eb" style={{ marginBottom: '1.5rem', opacity: 0.2 }} />
+          <h2 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#1e293b', marginBottom: '1rem' }}>Prêt pour la production</h2>
+          <p style={{ color: '#64748b', fontSize: '1.05rem', lineHeight: 1.6 }}>Sélectionnez une commande lancée pour générer les documents de production avec les dimensions réelles.</p>
+          <div style={{ marginTop: '2rem' }}>
+            <select value={selectedGlobalQuoteId} onChange={e => setSelectedGlobalQuoteId(e.target.value)} className="input" style={{ width: '100%', padding: '0.75rem', borderRadius: '0.75rem' }}>
+              <option value="">Sélectionner une commande...</option>
+              {(database.orders || []).map(q => (
+                <option key={q.id} value={q.id}>{q.number} - {database.clients?.find(c => c.id === q.clientId)?.nom} [Lancé]</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+    );
+  }
   
   if (activeTab === 'debit' && !bom) return (
      <div style={{ padding: '2rem', color: '#ef4444', background: '#fef2f2', borderRadius: '1rem', border: '1px solid #fee2e2' }}>
@@ -655,14 +1139,31 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                 className="input"
                 style={{ width: '300px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'white', paddingRight: '2.5rem' }}
               >
-                <option value="">Charger un autre projet...</option>
-                {currentQuote?.id && <option value={currentQuote.id}>Projet Courant (Aperçu)</option>}
-                {(database.quotes || []).map(q => (
-                  <option key={q.id} value={q.id}>{q.number} - {database.clients?.find(c => c.id === q.clientId)?.nom}</option>
+                <option value="">Sélectionner une commande lancée...</option>
+                {currentQuote?.id && currentQuote.status === 'COMMANDE' && <option value={currentQuote.id}>Commande Actuelle</option>}
+                {(database.orders || []).map(q => (
+                  <option key={q.id} value={q.id}>{q.number} - {database.clients?.find(c => c.id === q.clientId)?.nom} [Lancé]</option>
                 ))}
               </select>
             </div>
-            <button onClick={generatePDF} className="btn" style={{ background: 'white', color: '#1e293b', fontWeight: 700, padding: '0.6rem 1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem', border: 'none', borderRadius: '0.75rem' }}>
+
+            {/* Lot / Batch Selector */}
+            {activeQuote?.batches && activeQuote.batches.length > 0 && (
+              <div style={{ position: 'relative' }}>
+                <select 
+                  value={selectedBatchId} 
+                  onChange={e => { setSelectedBatchId(e.target.value); setProductFilter('total'); }}
+                  className="input"
+                  style={{ width: '180px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'white' }}
+                >
+                  <option value="ALL">📦 Tous les lots</option>
+                  {activeQuote.batches.map(b => (
+                    <option key={b.id} value={b.id}>{b.name || `Lot #${b.id.slice(-4)}`}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <button onClick={generateOpeningPDF} className="btn" style={{ background: 'white', color: '#1e293b', fontWeight: 700, padding: '0.6rem 1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem', border: 'none', borderRadius: '0.75rem' }}>
               <Download size={18} /> Exporter OF
             </button>
           </div>
@@ -753,10 +1254,26 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
               )}
             </select>
           </div>
-          {activeTab === 'achat' && (
-            <button onClick={generatePurchasePDF} className="btn" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'white', border: '1px solid #cbd5e1' }}>
-              <Download size={16} /> Exporter PDF Achat
-            </button>
+          {activeTab === 'debit' && (
+            <div style={{ display: 'flex', gap: '0.8rem' }}>
+              <button 
+                onClick={() => generateDetailedProductionPDF('opening')} 
+                className="btn btn-primary" 
+                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#2563eb' }}
+              >
+                <FileText size={16} /> Bon Production Ouvertures
+              </button>
+              <button 
+                onClick={() => generateDetailedProductionPDF('shutter')} 
+                className="btn btn-primary" 
+                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#f97316' }}
+              >
+                <FileText size={16} /> Bon Production Volets
+              </button>
+              <button onClick={generatePurchasePDF} className="btn" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'white', border: '1px solid #cbd5e1' }}>
+                <Download size={16} /> Exporter PDF Achat
+              </button>
+            </div>
           )}
         </div>
       )}
@@ -774,16 +1291,17 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
               <table className="data-table">
                 <thead>
                   <tr>
+                    <th style={{ width: '60px' }}>Photo</th>
                     <th>Réf.</th>
                     <th>Nom</th>
                     <th>Usage</th>
-                    <th>Kit / Fenêtre</th>
                     <th>Dimensions</th>
                     <th>Qté</th>
+                    <th>Source</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {(() => {
+                  {bom && bom.profiles && (() => {
                     // Combine window profiles and shutter components that have a length (cutting items)
                     const shutterItems = (bom.shutters || [])
                       .filter(s => s.length && s.length > 0)
@@ -815,41 +1333,46 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                     }).map(([cat, items]) => (
                       <React.Fragment key={cat}>
                         <tr style={{ background: '#f1f5f9' }}>
-                          <td colSpan="7" style={{ padding: '0.5rem 1rem', fontWeight: 800, fontSize: '0.75rem', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          <td colSpan="6" style={{ padding: '0.5rem 1rem', fontWeight: 800, fontSize: '0.75rem', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: catStyles[cat]?.dot || '#94a3b8' }}></div>
                                {cat} ({items.length} pièces)
                              </div>
                           </td>
                         </tr>
-                        {items.map((p, idx) => (
-                          <tr key={`${cat}-${idx}`}>
-                            <td style={{ fontSize: '0.75rem', color: '#64748b' }}>{p.id}</td>
-                            <td style={{ fontWeight: 600 }}>{p.name} <span style={{ fontWeight: 400, color: '#64748b' }}>[{p.label}]</span></td>
-                            <td>
-                              <span style={{ 
-                                fontSize: '0.7rem', 
-                                background: catStyles[cat]?.bg || '#f1f5f9',
-                                color: catStyles[cat]?.text || '#475569',
-                                padding: '0.2rem 0.5rem',
-                                borderRadius: '4px',
-                                fontWeight: 700
-                              }}>
-                                {cat}
-                              </span>
-                            </td>
-                            <td style={{ fontSize: '0.85rem', fontWeight: 600, color: '#7c3aed' }}>
-                              {p.instanceLabel || '—'}
-                            </td>
-                            <td style={{ fontWeight: 800, color: '#2563eb' }}>{Math.round(p.length)} mm</td>
-                            <td>x{p.qty}</td>
-                            <td>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                <QRCodeSVG value={`OF-${currentConfig.compositionId}-P${idx}-${p.length}mm`} size={24} level="L" />
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
+                        {items.map((p, idx) => {
+                          const pRef = (database.profiles || []).find(x => x.id === p.id);
+                          return (
+                            <tr key={`${cat}-${idx}`}>
+                              <td style={{ textAlign: 'center' }}>
+                                {pRef?.image ? (
+                                  <img src={pRef.image} style={{ width: '40px', height: '40px', objectFit: 'contain', borderRadius: '4px', border: '1px solid #e2e8f0' }} alt="" />
+                                ) : (
+                                  <div style={{ width: '40px', height: '40px', background: '#f1f5f9', borderRadius: '4px', display: 'grid', placeItems: 'center' }}>
+                                    <Package size={16} color="#94a3b8" />
+                                  </div>
+                                )}
+                              </td>
+                              <td style={{ fontSize: '0.75rem', color: '#64748b' }}>{p.id}</td>
+                              <td style={{ fontWeight: 600 }}>{p.name} <span style={{ fontWeight: 400, color: '#64748b' }}>[{p.label}]</span></td>
+                              <td>
+                                <span style={{ 
+                                  fontSize: '0.7rem', 
+                                  background: catStyles[cat]?.bg || '#f1f5f9',
+                                  color: catStyles[cat]?.text || '#475569',
+                                  padding: '0.2rem 0.5rem',
+                                  borderRadius: '4px',
+                                  fontWeight: 700
+                                }}>
+                                  {cat.replace('FENETRE ', '').replace('KIT ', '')}
+                                </span>
+                              </td>
+                              <td style={{ fontWeight: 800, color: '#2563eb' }}>{Math.round(p.length)} mm</td>
+                              <td>x{p.qty}</td>
+                              <td style={{ fontSize: '0.65rem', color: '#94a3b8' }}>{p.compositionName || '—'}</td>
+                            </tr>
+                          );
+                        })}
                       </React.Fragment>
                     ));
                   })()}
@@ -866,14 +1389,14 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                 <h3 style={{ fontWeight: 600 }}>Vitrage (Aperçu global)</h3>
               </div>
               <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '0.75rem' }}>
-                <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.875rem', fontWeight: 600 }}>{bom.glass.name}</p>
+                <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.875rem', fontWeight: 600 }}>{bom?.glass?.name || 'Vitre Standard'}</p>
                 <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b', fontSize: '0.875rem' }}>
                   <span>Dimensions du cadre :</span>
-                  <span style={{ color: '#1e293b', fontWeight: 500 }}>{currentConfig.L} x {currentConfig.H} mm</span>
+                  <span style={{ color: '#1e293b', fontWeight: 500 }}>{(activeConfigs[0]?.config?.L || currentConfig?.L || 0)} x {(activeConfigs[0]?.config?.H || currentConfig?.H || 0)} mm</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b', fontSize: '0.875rem', marginTop: '0.4rem' }}>
                   <span>Poids total estimé :</span>
-                  <span style={{ color: '#1e293b', fontWeight: 500 }}>{bom.glass.weight.toFixed(1)} kg</span>
+                  <span style={{ color: '#1e293b', fontWeight: 500 }}>{(bom?.glass?.weight || 0).toFixed(1)} kg</span>
                 </div>
               </div>
             </div>
@@ -1197,8 +1720,10 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                        />
                     </th>
                     {jumelageMode && <th style={{ width: '30px' }}></th>}
+                    <th style={{ width: '50px' }}>Photo</th>
                     <th>Référence</th>
                     <th>Finition</th>
+                    <th>RAL</th>
                     <th>Désignation</th>
                     <th>Longueur Barre (mm)</th>
                     <th>Quantité (Barres)</th>
@@ -1279,10 +1804,20 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                           </td>
                         )}
                         {jumelageMode && p._isGroup && <td data-label="-"></td>}
-                        <td data-label="Réf." style={{ color: '#64748b', fontSize: '0.75rem', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {p._isGroup ? p.id.split(' + ').map(x => x.split('|')[0]).join(' + ') : p.baseId || p.id.split('|')[0]}
-                        </td>
-                        <td data-label="Finition" style={{ fontSize: '0.85rem' }}>{p._isGroup ? 'Multicolore / Varié' : p.colorName || 'Standard'}</td>
+                        <td style={{ textAlign: 'center' }}>
+                            {p.image ? (
+                              <img src={p.image} style={{ width: '35px', height: '35px', objectFit: 'contain', borderRadius: '4px' }} alt="" />
+                            ) : (
+                              <div style={{ width: '35px', height: '35px', background: '#f8fafc', borderRadius: '4px', display: 'grid', placeItems: 'center' }}>
+                                <Package size={14} color="#cbd5e1" />
+                              </div>
+                            )}
+                         </td>
+                         <td data-label="Réf." style={{ color: '#64748b', fontSize: '0.75rem', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                           {p._isGroup ? p.id.split(' + ').map(x => x.split('|')[0]).join(' + ') : p.baseId || p.id.split('|')[0]}
+                         </td>
+                         <td data-label="Finition" style={{ fontSize: '0.85rem' }}>{p._isGroup ? 'Multicolore / Varié' : p.colorName || 'Standard'}</td>
+                         <td data-label="RAL" style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b' }}>{p._isGroup ? '—' : p.colorId || 'Std'}</td>
                         <td data-label="Nom" style={{ fontWeight: 600 }}>
                           {p._isGroup && <span style={{ fontSize: '0.7rem', background: '#8b5cf6', color: 'white', padding: '0.1rem 0.4rem', borderRadius: '999px', marginRight: '0.4rem' }}>Jumelé</span>}
                           {p.name || '—'}
