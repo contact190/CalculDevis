@@ -408,9 +408,41 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
     y += 10;
     
     doc.setFontSize(10);
-    bom.profiles.forEach((p, i) => {
-      doc.text(`${p.label}: ${Math.round(p.length)} mm | Coupe: ${p.cutAngle}° | Qté: ${p.qty} | ${p.name}`, 20, y);
-      y += 7;
+    const shutterItems = (bom.shutters || [])
+      .filter(s => s.length && s.length > 0)
+      .map(s => ({
+        ...s,
+        label: s.name
+      }));
+
+    const allItems = [...bom.profiles, ...shutterItems];
+
+    const groups = allItems.reduce((acc, p) => {
+      const cat = p.usage || 'ACCESSOIRES / FINITION';
+      if (!acc[cat]) acc[cat] = [];
+      acc[cat].push(p);
+      return acc;
+    }, {});
+
+    const catOrder = ['DORMANT (CADRE)', 'FIXE', 'FENETRE (OUVRANT)', 'VOLET ROULANT', 'ACCESSOIRES / FINITION'];
+    catOrder.forEach(cat => {
+      if (groups[cat] && groups[cat].length > 0) {
+        if (y > 260) { doc.addPage(); y = 20; }
+        doc.setFont('helvetica', 'bold');
+        doc.setFillColor(241, 245, 249);
+        doc.rect(20, y-5, 170, 7, 'F');
+        doc.setTextColor(30, 41, 59);
+        doc.text(cat, 25, y);
+        y += 8;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        groups[cat].forEach(p => {
+          doc.text(`- ${p.label}: ${Math.round(p.length)} mm | Coupe: ${p.cutAngle || '90'}° | Qté: ${p.qty} | ${p.name}`, 25, y);
+          y += 6;
+          if (y > 275) { doc.addPage(); y = 20; }
+        });
+        y += 4;
+      }
     });
 
     y += 10;
@@ -751,34 +783,76 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                   </tr>
                 </thead>
                 <tbody>
-                  {bom.profiles.map((p, i) => (
-                    <tr key={i}>
-                      <td style={{ fontSize: '0.75rem', color: '#64748b' }}>{p.id}</td>
-                      <td style={{ fontWeight: 600 }}>{p.name} <span style={{ fontWeight: 400, color: '#64748b' }}>[{p.label}]</span></td>
-                      <td>
-                        <span style={{ 
-                          fontSize: '0.7rem', 
-                          background: p.usage === 'DORMANT' ? '#dcfce7' : (p.usage === 'OUVRANT' ? '#dbeafe' : '#f1f5f9'),
-                          color: p.usage === 'DORMANT' ? '#166534' : (p.usage === 'OUVRANT' ? '#1e40af' : '#475569'),
-                          padding: '0.2rem 0.5rem',
-                          borderRadius: '4px',
-                          fontWeight: 700
-                        }}>
-                          {p.usage || 'FINITION'}
-                        </span>
-                      </td>
-                      <td style={{ fontSize: '0.85rem', fontWeight: 600, color: '#7c3aed' }}>
-                        {p.instanceLabel || '—'}
-                      </td>
-                      <td style={{ fontWeight: 800, color: '#2563eb' }}>{Math.round(p.length)} mm</td>
-                      <td>x{p.qty}</td>
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                          <QRCodeSVG value={`OF-${currentConfig.compositionId}-P${i}-${p.length}mm`} size={24} level="L" />
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  {(() => {
+                    // Combine window profiles and shutter components that have a length (cutting items)
+                    const shutterItems = (bom.shutters || [])
+                      .filter(s => s.length && s.length > 0)
+                      .map(s => ({
+                        ...s,
+                        label: s.name, // Ensure label is used for grouping/display
+                      }));
+
+                    const allItems = [...bom.profiles, ...shutterItems];
+
+                    const groups = allItems.reduce((acc, p) => {
+                      const cat = p.usage || 'AUTRE';
+                      if (!acc[cat]) acc[cat] = [];
+                      acc[cat].push(p);
+                      return acc;
+                    }, {});
+
+                    const catStyles = {
+                      'DORMANT (CADRE)': { bg: '#eff6ff', text: '#1e40af', dot: '#3b82f6' },
+                      'FIXE': { bg: '#f0fdf4', text: '#166534', dot: '#22c55e' },
+                      'FENETRE (OUVRANT)': { bg: '#faf5ff', text: '#6b21a8', dot: '#a855f7' },
+                      'VOLET ROULANT': { bg: '#fff7ed', text: '#9a3412', dot: '#f97316' },
+                      'ACCESSOIRES / FINITION': { bg: '#f8fafc', text: '#475569', dot: '#94a3b8' }
+                    };
+
+                    return Object.entries(groups).sort((a,b) => {
+                      const order = ['DORMANT (CADRE)', 'FIXE', 'FENETRE (OUVRANT)', 'VOLET ROULANT', 'ACCESSOIRES / FINITION'];
+                      return order.indexOf(a[0]) - order.indexOf(b[0]);
+                    }).map(([cat, items]) => (
+                      <React.Fragment key={cat}>
+                        <tr style={{ background: '#f1f5f9' }}>
+                          <td colSpan="7" style={{ padding: '0.5rem 1rem', fontWeight: 800, fontSize: '0.75rem', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                               <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: catStyles[cat]?.dot || '#94a3b8' }}></div>
+                               {cat} ({items.length} pièces)
+                             </div>
+                          </td>
+                        </tr>
+                        {items.map((p, idx) => (
+                          <tr key={`${cat}-${idx}`}>
+                            <td style={{ fontSize: '0.75rem', color: '#64748b' }}>{p.id}</td>
+                            <td style={{ fontWeight: 600 }}>{p.name} <span style={{ fontWeight: 400, color: '#64748b' }}>[{p.label}]</span></td>
+                            <td>
+                              <span style={{ 
+                                fontSize: '0.7rem', 
+                                background: catStyles[cat]?.bg || '#f1f5f9',
+                                color: catStyles[cat]?.text || '#475569',
+                                padding: '0.2rem 0.5rem',
+                                borderRadius: '4px',
+                                fontWeight: 700
+                              }}>
+                                {cat}
+                              </span>
+                            </td>
+                            <td style={{ fontSize: '0.85rem', fontWeight: 600, color: '#7c3aed' }}>
+                              {p.instanceLabel || '—'}
+                            </td>
+                            <td style={{ fontWeight: 800, color: '#2563eb' }}>{Math.round(p.length)} mm</td>
+                            <td>x{p.qty}</td>
+                            <td>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                <QRCodeSVG value={`OF-${currentConfig.compositionId}-P${idx}-${p.length}mm`} size={24} level="L" />
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </React.Fragment>
+                    ));
+                  })()}
                 </tbody>
               </table>
             </div>

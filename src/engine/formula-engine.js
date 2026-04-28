@@ -23,10 +23,11 @@ export class FormulaEngine {
 
   getUsageCategory(label) {
     const l = (label || '').toLowerCase();
-    if (l.includes('dormant') || l.includes('cadre') || l.includes('seuil') || l.includes('precadre')) return 'DORMANT';
-    if (l.includes('ouvrant') || l.includes('battement') || l.includes('inverseur') || l.includes('parclose')) return 'OUVRANT';
-    if (l.includes('lame') || l.includes('coulisse') || l.includes('caisson') || l.includes('axe') || l.includes('glissiere')) return 'VOLET';
-    return 'FINITION';
+    if (l.includes('dormant') || l.includes('cadre') || l.includes('seuil') || l.includes('precadre')) return 'DORMANT (CADRE)';
+    if (l.includes('fixe')) return 'FIXE';
+    if (l.includes('ouvrant') || l.includes('battement') || l.includes('inverseur') || l.includes('parclose')) return 'FENETRE (OUVRANT)';
+    if (l.includes('lame') || l.includes('coulisse') || l.includes('caisson') || l.includes('axe') || l.includes('glissiere')) return 'VOLET ROULANT';
+    return 'ACCESSOIRES / FINITION';
   }
 
   /**
@@ -600,16 +601,36 @@ export class FormulaEngine {
       nameSuffix = ' (Existant - Tunnel)';
     }
 
+    let itemLength = 0;
+    if (key === 'caissonId' || key === 'axeId' || key === 'lameId' || key === 'lameFinaleId') {
+      itemLength = itemScopeL;
+    } else if (key === 'glissiereId') {
+      itemLength = H;
+    }
+
+    // Determine piece count vs total ML
+    let pieceCount = qty;
+    const unitUpper = (item.priceUnit || '').toUpperCase().trim();
+    if ((unitUpper === 'ML' || unitUpper === 'M') && itemLength > 0) {
+       // If formula result is total ML, count = totalML / (pieceLength / 1000)
+       // If qty is very small (e.g. 1.5) and itemLength is large (e.g. 1500), it's already in ML
+       const totalML = qty > 50 ? qty / 1000 : qty; 
+       pieceCount = Math.round(totalML / (itemLength / 1000));
+       if (pieceCount === 0 && totalML > 0) pieceCount = 1;
+    }
+
     shutterPack.push({
       ...item,
       itemKey: key,
       name: displayName + nameSuffix,
-      qty: qty,
+      qty: pieceCount, // This is the count of pieces
+      totalMeasure: (unitUpper === 'ML' || unitUpper === 'M') ? (qty > 50 ? qty : qty * 1000) : 0,
+      length: itemLength, 
       barLength: barLength,
       price: effectivePrice,
       priceUnit: item.priceUnit,
       resolvedFormula: this.resolveFormula(item.formula || '1', { L: itemScopeL, H, HC }),
-      usage: 'VOLET',
+      usage: 'VOLET ROULANT',
       cost: effectiveCost
     });
 
