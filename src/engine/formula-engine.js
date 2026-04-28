@@ -602,18 +602,21 @@ export class FormulaEngine {
     }
 
     let itemLength = 0;
-    if (key === 'caissonId' || key === 'axeId' || key === 'lameId' || key === 'lameFinaleId') {
-      itemLength = itemScopeL;
-    } else if (key === 'glissiereId') {
-      itemLength = H;
+    if (item.cuttingFormula) {
+      itemLength = this.evaluate(item.cuttingFormula, { L: itemScopeL, H, HC });
+    } else {
+      // Fallback to defaults
+      if (key === 'caissonId' || key === 'axeId' || key === 'lameId' || key === 'lameFinaleId') {
+        itemLength = itemScopeL;
+      } else if (key === 'glissiereId') {
+        itemLength = H;
+      }
     }
 
     // Determine piece count vs total ML
     let pieceCount = qty;
     const unitUpper = (item.priceUnit || '').toUpperCase().trim();
     if ((unitUpper === 'ML' || unitUpper === 'M') && itemLength > 0) {
-       // If formula result is total ML, count = totalML / (pieceLength / 1000)
-       // If qty is very small (e.g. 1.5) and itemLength is large (e.g. 1500), it's already in ML
        const totalML = qty > 50 ? qty / 1000 : qty; 
        pieceCount = Math.round(totalML / (itemLength / 1000));
        if (pieceCount === 0 && totalML > 0) pieceCount = 1;
@@ -623,13 +626,14 @@ export class FormulaEngine {
       ...item,
       itemKey: key,
       name: displayName + nameSuffix,
-      qty: pieceCount, // This is the count of pieces
+      qty: pieceCount, 
       totalMeasure: (unitUpper === 'ML' || unitUpper === 'M') ? (qty > 50 ? qty : qty * 1000) : 0,
       length: itemLength, 
       barLength: barLength,
       price: effectivePrice,
       priceUnit: item.priceUnit,
       resolvedFormula: this.resolveFormula(item.formula || '1', { L: itemScopeL, H, HC }),
+      cuttingFormula: item.cuttingFormula || (key === 'glissieres' ? 'H' : 'L'),
       usage: 'VOLET ROULANT',
       cost: effectiveCost
     });

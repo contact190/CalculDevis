@@ -157,39 +157,39 @@ export const DEFAULT_DATA = {
   ],
   shutterComponents: {
     caissons: [
-      { id: 'CAI-140', name: 'Caisson 140', height: 140, price: 0, priceUnit: 'ML', formula: 'L/1000', jointPrice: 0, jointFormula: 'L/1000' },
-      { id: 'CAI-155', name: 'Caisson 155', height: 155, price: 0, priceUnit: 'ML', formula: 'L/1000', jointPrice: 0, jointFormula: 'L/1000' },
-      { id: 'CAI-165', name: 'Caisson 165', height: 165, price: 0, priceUnit: 'ML', formula: 'L/1000', jointPrice: 0, jointFormula: 'L/1000' },
-      { id: 'CAI-185', name: 'Caisson 185', height: 185, price: 0, priceUnit: 'ML', formula: 'L/1000', jointPrice: 0, jointFormula: 'L/1000' },
-      { id: 'CAI-200', name: 'Caisson 200', height: 200, price: 0, priceUnit: 'ML', formula: 'L/1000', jointPrice: 0, jointFormula: 'L/1000' },
-      { id: 'CAI-205', name: 'Caisson 205', height: 205, price: 0, priceUnit: 'ML', formula: 'L/1000', jointPrice: 0, jointFormula: 'L/1000' },
-      { id: 'CAI-225', name: 'Caisson 225', height: 225, price: 0, priceUnit: 'ML', formula: 'L/1000', jointPrice: 0, jointFormula: 'L/1000' }
+      { id: 'CAI-140', name: 'Caisson 140', height: 140, price: 0, priceUnit: 'ML', formula: 'L/1000', cuttingFormula: 'L', jointPrice: 0, jointFormula: 'L/1000' },
+      { id: 'CAI-155', name: 'Caisson 155', height: 155, price: 0, priceUnit: 'ML', formula: 'L/1000', cuttingFormula: 'L', jointPrice: 0, jointFormula: 'L/1000' },
+      { id: 'CAI-165', name: 'Caisson 165', height: 165, price: 0, priceUnit: 'ML', formula: 'L/1000', cuttingFormula: 'L', jointPrice: 0, jointFormula: 'L/1000' },
+      { id: 'CAI-185', name: 'Caisson 185', height: 185, price: 0, priceUnit: 'ML', formula: 'L/1000', cuttingFormula: 'L', jointPrice: 0, jointFormula: 'L/1000' },
+      { id: 'CAI-200', name: 'Caisson 200', height: 200, price: 0, priceUnit: 'ML', formula: 'L/1000', cuttingFormula: 'L', jointPrice: 0, jointFormula: 'L/1000' },
+      { id: 'CAI-205', name: 'Caisson 205', height: 205, price: 0, priceUnit: 'ML', formula: 'L/1000', cuttingFormula: 'L', jointPrice: 0, jointFormula: 'L/1000' },
+      { id: 'CAI-225', name: 'Caisson 225', height: 225, price: 0, priceUnit: 'ML', formula: 'L/1000', cuttingFormula: 'L', jointPrice: 0, jointFormula: 'L/1000' }
     ],
     lames: [
-      { id: 'LAM-39E', name: 'Lame 39 Extrudée', price: 0, priceUnit: 'ML', formula: 'L/1000 * ceil(H/39)' },
-      { id: 'LAM-45E', name: 'Lame 45 Extrudée', price: 0, priceUnit: 'ML', formula: 'L/1000 * ceil(H/45)' },
-      { id: 'LAM-40P', name: 'Lame 40 Plate',    price: 0, priceUnit: 'ML', formula: 'L/1000 * ceil(H/40)', barLength: 6400 },
-      { id: 'LAM-39T', name: 'Lame 39 Thermique', price: 0, priceUnit: 'ML', formula: 'L/1000 * ceil(H/39)', barLength: 6400 },
-      { id: 'LAM-43T', name: 'Lame 43 Thermique', price: 0, priceUnit: 'ML', formula: 'L/1000 * ceil(H/43)', barLength: 6400 },
-      { id: 'LAM-45T', name: 'Lame 45 Thermique', price: 0, priceUnit: 'ML', formula: 'L/1000 * ceil(H/45)', barLength: 6400 }
+      { id: 'LAM-39E', name: 'Lame 39 Extrudée', price: 0, priceUnit: 'ML', formula: 'L/1000 * ceil(H/39)', cuttingFormula: 'L' },
+      { id: 'LAM-45E', name: 'Lame 45 Extrudée', price: 0, priceUnit: 'ML', formula: 'L/1000 * ceil(H/45)', cuttingFormula: 'L' },
+      { id: 'LAM-40P', name: 'Lame 40 Plate',    price: 0, priceUnit: 'ML', formula: 'L/1000 * ceil(H/40)', cuttingFormula: 'L', barLength: 6400 },
+      { id: 'LAM-39T', name: 'Lame 39 Thermique', price: 0, priceUnit: 'ML', formula: 'L/1000 * ceil(H/39)', cuttingFormula: 'L', barLength: 6400 },
+      { id: 'LAM-43T', name: 'Lame 43 Thermique', price: 0, priceUnit: 'ML', formula: 'L/1000 * ceil(H/43)', cuttingFormula: 'L', barLength: 6400 },
+      { id: 'LAM-45T', name: 'Lame 45 Thermique', price: 0, priceUnit: 'ML', formula: 'L/1000 * ceil(H/45)', cuttingFormula: 'L', barLength: 6400 }
     ],
     lameFinales: [
-      { id: 'LF-ST', name: 'Lame Finale Standard', price: 0, priceUnit: 'ML', formula: 'L/1000', barLength: 6400 }
+      { id: 'LF-ST', name: 'Lame Finale Standard', price: 0, priceUnit: 'ML', formula: 'L/1000', cuttingFormula: 'L', barLength: 6400 }
     ],
     glissieres: [
-      { id: 'GLI-INVDC', name: 'L Invisible Double Côté', shutterType: 'PALA', price: 0, priceUnit: 'ML', formula: 'H/1000*2', 
+      { id: 'GLI-INVDC', name: 'L Invisible Double Côté', shutterType: 'PALA', price: 0, priceUnit: 'ML', formula: 'H/1000*2', cuttingFormula: 'H', 
         opt1Label: 'Largeur Monobloque', opt1Values: '85, 120, 145', barLength: 6400, hasBaguette: false, baguettePrice: 0 },
-      { id: 'GLI-VISSC', name: 'L Visible Seul Côté', shutterType: 'MONO', price: 0, priceUnit: 'ML', formula: 'H/1000', 
+      { id: 'GLI-VISSC', name: 'L Visible Seul Côté', shutterType: 'MONO', price: 0, priceUnit: 'ML', formula: 'H/1000', cuttingFormula: 'H', 
         opt1Label: 'Épaisseur L Visible', opt1Values: '120, 150, 180', opt2Label: 'Largeur Monobloque', opt2Values: '85, 120, 145', barLength: 6400, hasBaguette: false, baguettePrice: 0 },
-      { id: 'GLI-VIDC', name: 'L Visible Double Côté', shutterType: 'MONO', price: 0, priceUnit: 'ML', formula: 'H/1000*2', 
+      { id: 'GLI-VIDC', name: 'L Visible Double Côté', shutterType: 'MONO', price: 0, priceUnit: 'ML', formula: 'H/1000*2', cuttingFormula: 'H', 
         opt1Label: 'Épaisseur L Visible', opt1Values: '120, 150, 180', barLength: 6400, hasBaguette: false, baguettePrice: 0 },
-      { id: 'GLI-SIMDC', name: 'Simple Double Côté', shutterType: 'PALA', price: 0, priceUnit: 'ML', formula: 'H/1000*2', barLength: 6400, hasBaguette: false, baguettePrice: 0 },
+      { id: 'GLI-SIMDC', name: 'Simple Double Côté', shutterType: 'PALA', price: 0, priceUnit: 'ML', formula: 'H/1000*2', cuttingFormula: 'H', barLength: 6400, hasBaguette: false, baguettePrice: 0 },
     ],
     axes: [
-      { id: 'AXE-40', name: 'Axe 40', price: 0, priceUnit: 'ML', formula: 'L/1000', barLength: 6400 },
-      { id: 'AXE-60', name: 'Axe 60', price: 0, priceUnit: 'ML', formula: 'L/1000', barLength: 6400 },
-      { id: 'AXE-70', name: 'Axe 70', price: 0, priceUnit: 'ML', formula: 'L/1000', barLength: 6400 },
-      { id: 'AXE-80', name: 'Axe 80', price: 0, priceUnit: 'ML', formula: 'L/1000', barLength: 6400 }
+      { id: 'AXE-40', name: 'Axe 40', price: 0, priceUnit: 'ML', formula: 'L/1000', cuttingFormula: 'L', barLength: 6400 },
+      { id: 'AXE-60', name: 'Axe 60', price: 0, priceUnit: 'ML', formula: 'L/1000', cuttingFormula: 'L', barLength: 6400 },
+      { id: 'AXE-70', name: 'Axe 70', price: 0, priceUnit: 'ML', formula: 'L/1000', cuttingFormula: 'L', barLength: 6400 },
+      { id: 'AXE-80', name: 'Axe 80', price: 0, priceUnit: 'ML', formula: 'L/1000', cuttingFormula: 'L', barLength: 6400 }
     ],
     kits: [
       { id: 'KIT-SANG',   name: 'Kit Sangle',    price: 0, priceUnit: 'Unité', formula: '1', barLength: 1 },

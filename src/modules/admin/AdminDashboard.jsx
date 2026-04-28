@@ -2162,6 +2162,7 @@ const AdminDashboard = ({ data, setData }) => {
                           {key !== 'extras' && <th>Seuil Chute</th>}
 
                           <th>Formule Qté</th>
+                          <th>Formule Débit</th>
                           <th>Unité</th>
                           <th>Prix (DZD)</th>
                           <th>Add-ons (JSON)</th>
@@ -2218,7 +2219,8 @@ const AdminDashboard = ({ data, setData }) => {
                             {key !== 'extras' && <td><input className="input" type="number" value={item.barLength || 6400} onChange={e => updateShutterItem(key, i, 'barLength', e.target.value)} style={{ width: '90px', fontSize: '0.8rem' }} /></td>}
                             {key !== 'extras' && <td><input className="input" type="number" value={item.scrapThreshold || 0} onChange={e => updateShutterItem(key, i, 'scrapThreshold', e.target.value)} style={{ width: '90px', fontSize: '0.8rem' }} placeholder="Ex: 500" /></td>}
 
-                            <td><input className="input" value={item.formula || ''} onChange={e => updateShutterItem(key, i, 'formula', e.target.value)} style={{ width: '140px' }} /></td>
+                            <td><input className="input" value={item.formula || ''} onChange={e => updateShutterItem(key, i, 'formula', e.target.value)} style={{ width: '120px' }} /></td>
+                            <td><input className="input" value={item.cuttingFormula || ''} onChange={e => updateShutterItem(key, i, 'cuttingFormula', e.target.value)} style={{ width: '100px' }} placeholder={key === 'glissieres' ? 'H' : 'L'} /></td>
                             <td>
                               <select className="input" value={item.priceUnit} onChange={e => updateShutterItem(key, i, 'priceUnit', e.target.value)} style={{ width: '90px' }}>
                                 <option>ML</option>
