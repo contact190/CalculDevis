@@ -507,10 +507,9 @@ export class FormulaEngine {
 
     return { profiles, accessories, glasses };
   }
-
-  processShutterComponent(item, vars, shutterPack, key = '', config = {}) {
+  processShutterComponent(item, vars, shutterPack, key = '', config = {}) {
     const { L, H, HC } = vars;
-    const barLength = parseFloat(item.barLength) || 6400; // Default to 6400mm to match UI if not set
+    const barLength = parseFloat(item.barLength) || 6400;
     
     // Rule: Couvre Joint reduction ONLY on the caisson length
     let itemScopeL = L;
@@ -518,13 +517,43 @@ export class FormulaEngine {
       itemScopeL -= 3;
     }
 
-    const qty = this.evaluate(item.formula || '1', { L: itemScopeL, H, HC });
-    if (qty <= 0) return;
+    // 1. Calculate Piece Length (Dimension de coupe)
+    let itemLength = 0;
+    if (item.cuttingFormula) {
+      itemLength = this.evaluate(item.cuttingFormula, { L: itemScopeL, H, HC });
+    } else {
+      if (key === 'caissonId' || key === 'axeId' || key === 'lameId' || key === 'lameFinaleId') {
+        itemLength = itemScopeL;
+      } else if (key === 'glissiereId') {
+        itemLength = H;
+      }
+    }
+
+    // 2. Calculate Piece Count (Nombre de pièces)
+    const pieceCount = this.evaluate(item.formula || '1', { L: itemScopeL, H, HC });
+    if (pieceCount <= 0) return;
+
+    // 3. Inclusion & Existing Checks (Standalone Logic V3.2)
+    const includedParts = config.shutterConfig?.includedParts || { caisson: true, tablier: true, axe: true, glissieres: true, accessories: true };
+    const isExistant = config.shutterConfig?.isExistant || false;
+    const categoryMap = {
+      'caissonId': 'caisson', 'lameId': 'tablier', 'lameFinaleId': 'tablier',
+      'axeId': 'axe', 'glissiereId': 'glissieres', 'kitId': 'accessories', 'baguetteId': 'tablier'
+    };
+    const category = categoryMap[key] || 'accessories';
+    if (!includedParts[category]) return;
 
     let itemPrice = item.price || 0;
     let displayName = item.name;
+    let nameSuffix = '';
 
-    // Handle Glissiere Params
+    // Special case: Caisson Tunnel (Existing)
+    if (key === 'caissonId' && isExistant) {
+      itemPrice = 0;
+      nameSuffix = ' (Existant - Tunnel)';
+    }
+
+    // 4. Glissiere Params Logic
     if (key === 'glissiereId' && config.shutterConfig?.glissiereParams) {
       const params = config.shutterConfig.glissiereParams;
       const paramStrings = [];
@@ -555,111 +584,42 @@ export class FormulaEngine {
       }
     }
 
-    let finalCost = 0;
-    const unitRaw = (item.priceUnit || 'Unité').toUpperCase().trim();
-    
-    if (unitRaw === 'BARRE') {
-      finalCost = (qty / barLength) * itemPrice;
-    } else if (unitRaw === 'ML' || unitRaw === 'M' || unitRaw === 'JOINT') {
-      // If result is large (e.g. > 50), it's likely mm being used with an ML price
-      const effectiveQty = qty > 50 ? qty / 1000 : qty;
-      finalCost = effectiveQty * itemPrice;
+    // 5. Calculate Total Measure for Pricing
+    let totalMeasure = 0;
+    const unitUpper = (item.priceUnit || 'Unité').toUpperCase().trim();
+    if (unitUpper === 'ML' || unitUpper === 'M' || unitUpper === 'JOINT') {
+      totalMeasure = pieceCount * (itemLength / 1000);
+    } else if (unitUpper === 'BARRE') {
+      totalMeasure = pieceCount * (itemLength / barLength);
     } else {
-      finalCost = qty * itemPrice;
+      totalMeasure = pieceCount;
     }
 
-    // Standalone / Manual Selection Logic (V3.2)
-    const includedParts = config.shutterConfig?.includedParts || { caisson: true, tablier: true, axe: true, glissieres: true, accessories: true };
-    const isExistant = config.shutterConfig?.isExistant || false; // For Caisson Tunnel/Existing
-
-    // Map family keys to our logic categories
-    const categoryMap = {
-      'caissonId': 'caisson',
-      'lameId': 'tablier',
-      'lameFinaleId': 'tablier',
-      'axeId': 'axe',
-      'glissiereId': 'glissieres',
-      'kitId': 'accessories',
-      'baguetteId': 'tablier'
-    };
-    
-    const category = categoryMap[key] || 'accessories';
-    const isIncluded = includedParts[category];
-
-    // Calculate but filter from BOM/Cost if not included
-    if (!isIncluded) return;
-
-    // Special case: Caisson Tunnel (Existing)
-    // Price and Cost become 0, but item is technically processed
-    let effectivePrice = itemPrice;
-    let effectiveCost = finalCost;
-    let nameSuffix = '';
-
-    if (key === 'caissonId' && isExistant) {
-      effectivePrice = 0;
-      effectiveCost = 0;
-      nameSuffix = ' (Existant - Tunnel)';
-    }
-
-    let itemLength = 0;
-    if (item.cuttingFormula) {
-      itemLength = this.evaluate(item.cuttingFormula, { L: itemScopeL, H, HC });
-    } else {
-      // Fallback to defaults
-      if (key === 'caissonId' || key === 'axeId' || key === 'lameId' || key === 'lameFinaleId') {
-        itemLength = itemScopeL;
-      } else if (key === 'glissiereId') {
-        itemLength = H;
-      }
-    }
-
-    // Determine piece count vs total ML
-    let pieceCount = qty;
-    const unitUpper = (item.priceUnit || '').toUpperCase().trim();
-    if ((unitUpper === 'ML' || unitUpper === 'M') && itemLength > 0) {
-       const totalML = qty > 50 ? qty / 1000 : qty; 
-       pieceCount = Math.round(totalML / (itemLength / 1000));
-       if (pieceCount === 0 && totalML > 0) pieceCount = 1;
-    }
+    const finalCost = totalMeasure * itemPrice;
 
     shutterPack.push({
       ...item,
       itemKey: key,
       name: displayName + nameSuffix,
-      qty: pieceCount, 
-      totalMeasure: (unitUpper === 'ML' || unitUpper === 'M') ? (qty > 50 ? qty : qty * 1000) : 0,
-      length: itemLength, 
+      qty: pieceCount,
+      totalMeasure: totalMeasure * (unitUpper === 'ML' || unitUpper === 'M' || unitUpper === 'JOINT' ? 1000 : 1), 
+      length: itemLength,
       barLength: barLength,
-      price: effectivePrice,
+      price: itemPrice,
       priceUnit: item.priceUnit,
-      resolvedFormula: this.resolveFormula(item.formula || '1', { L: itemScopeL, H, HC }),
-      cuttingFormula: item.cuttingFormula || (key === 'glissieres' ? 'H' : 'L'),
+      resolvedFormula: `${this.resolveFormula(item.formula || '1', { L: itemScopeL, H, HC })} x [${this.resolveFormula(item.cuttingFormula || 'L/H', { L: itemScopeL, H, HC })}]`,
       usage: 'VOLET ROULANT',
-      cost: effectiveCost
+      cost: finalCost
     });
 
-    // Process Add-ons (Only if main part is included)
+    // 6. Process Add-ons
     if (item.addOns && Array.isArray(item.addOns)) {
       item.addOns.forEach(addon => {
         const addonQty = this.evaluate(addon.formula || '1', { L: itemScopeL, H, HC });
         if (addonQty > 0) {
           const addonPrice = addon.price || 0;
           const addonUnit = (addon.unit || 'Unité').toUpperCase();
-          
-          let addonCost = 0;
-          if (addonUnit === 'BARRE') {
-            let addBarLen = 6400;
-            if (addon.linkedId) {
-              const linkedArt = (this.db.profiles || []).find(p => p.id === addon.linkedId) || 
-                               ((this.db.shutterComponents?.lames || []) || []).find(l => l.id === addon.linkedId) ||
-                               ((this.db.shutterComponents?.glissieres || []) || []).find(g => g.id === addon.linkedId);
-              if (linkedArt && linkedArt.barLength) addBarLen = parseFloat(linkedArt.barLength);
-            }
-            addonCost = (addonQty / addBarLen) * addonPrice;
-          } else {
-            addonCost = addonQty * addonPrice;
-          }
-
+          let addonCost = (addonUnit === 'BARRE') ? (addonQty / 6400 * addonPrice) : (addonQty * addonPrice);
           shutterPack.push({
             id: `${item.id}-addon-${(addon.name || 'opt').replace(/\s+/g, '-').toLowerCase()}`,
             name: `Add-on (${item.name}): ${addon.name}`,
@@ -673,23 +633,22 @@ export class FormulaEngine {
       });
     }
 
-    // Baguette (Now linked to the Slat)
+    // 7. Baguette
     if (key === 'lameId' && config.shutterConfig?.enableBaguette) {
-      const baguettePrice = item.baguettePrice || 0;
-      
-      // Since we are inside 'lameId' processing, 'qty' is already the slat quantity.
-      const bCost = qty * (baguettePrice / 1000); 
+      const bPrice = item.baguettePrice || 0;
+      const bCost = pieceCount * (itemLength / 1000) * bPrice;
       shutterPack.push({
         id: `${item.id}-baguette`,
         itemKey: 'baguetteId',
         name: `Baguette pour ${item.name}`,
-        qty: qty,
-        barLength: barLength,
+        qty: pieceCount,
+        length: itemLength,
         priceUnit: 'ML',
-        price: baguettePrice,
+        price: bPrice,
         cost: bCost
       });
     }
+  }
   }
 
   /**
