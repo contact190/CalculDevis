@@ -844,10 +844,10 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                       <td data-label="Formule" style={{ color: '#64748b', fontSize: '0.65rem' }}>{s.formula}</td>
                       <td data-label="Calcul" style={{ color: '#3b82f6', fontSize: '0.65rem' }}>{s.resolvedFormula || '-'}</td>
                       <td data-label="Nbre">
-                        {(['BARRE', 'JOINT'].includes((s.priceUnit || '').toUpperCase().trim())) ? (s.qty / (s.barLength || 6400)).toFixed(2) : s.qty?.toFixed(2)} {s.priceUnit}
+                        {s.qty?.toFixed(2)} {s.priceUnit === 'ML' ? 'u' : s.priceUnit}
                       </td>
                       <td data-label="Mesure Totale">
-                        {['BARRE', 'ML', 'M', 'JOINT'].includes((s.priceUnit || '').toUpperCase().trim()) ? `${Math.round((['ML', 'JOINT'].includes((s.priceUnit || '').toUpperCase().trim())) && s.qty < 50 ? s.qty * 1000 : s.qty)} mm` : '-'}
+                        {s.totalMeasure ? `${Math.round(s.totalMeasure)} mm` : '-'}
                       </td>
                       <td data-label="Prix Unit.">{s.price?.toFixed(2)}</td>
                       <td data-label="Prix Total" style={{ textAlign: 'right', fontWeight: 600 }}>{(s.cost || 0).toFixed(2)} DZD</td>

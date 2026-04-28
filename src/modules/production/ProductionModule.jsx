@@ -1596,15 +1596,20 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
 
               if (b.shutters && Array.isArray(b.shutters)) {
                 b.shutters.forEach(s => {
-                  if (s.priceUnit === 'ML' && s.qty > 0) {
-                    const lenMm = Math.round((Number(s.qty) || 0) * 1000);
-                    totalPiecesInBoms += qty;
-                    for (let q = 0; q < qty; q++) {
+                  const unitUpper = (s.priceUnit || '').toUpperCase().trim();
+                  const isLinear = ['ML', 'M', 'JOINT'].includes(unitUpper);
+                  
+                  if (isLinear && s.length > 0 && s.qty > 0) {
+                    const piecesPerUnit = Math.max(0, Number(s.qty) || 0);
+                    const totalPieces = piecesPerUnit * qty;
+                    totalPiecesInBoms += totalPieces;
+                    
+                    for (let q = 0; q < totalPieces; q++) {
                       globalCuts.push({
                         profileId: s.id,
                         profileName: s.name,
-                        label: s.name,
-                        length: lenMm,
+                        label: `[Volet] ${s.name}`,
+                        length: Math.round(s.length),
                         usage: 'VOLET',
                         windowIdx,
                         windowLabel: item.label || item.instanceLabel || `Fenêtre #${windowIdx + 1}`,
