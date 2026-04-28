@@ -7,7 +7,7 @@ import jsPDF from 'jspdf';
 
 const EMPTY_CONFIG = {
   L: 1200, H: 2150,
-  compositionId: '', colorId: '', glassId: '',
+  compositionId: '', colorId: '', glassId: '', openingDirection: 'gauche',
   optionalSides: { top: true, bottom: true, left: true, right: true },
   selectedOptions: [],
   hasShutter: false,
@@ -65,6 +65,12 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
     const newVal = (name === 'L' || name === 'H') ? (parseInt(value) || 0) : value;
     setConfig(prev => {
       const next = { ...prev, [name]: newVal };
+      if (name === 'compositionId') {
+         const comp = database.compositions.find(c => c.id === value);
+         if (comp?.defaultOpeningDirection) {
+            next.openingDirection = comp.defaultOpeningDirection;
+         }
+      }
       if ((name === 'L' || name === 'H') && prev.useCustomLayout && prev.customLayout) {
         next.customLayout = rescaleTree(prev.customLayout, name === 'L' ? newVal : prev.L, name === 'H' ? newVal : prev.H);
       }
@@ -498,13 +504,29 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                   {database.compositions.filter(c => c.categoryId === activeCat && c.openingType === activeOpen).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
-              <div className="form-group" style={{ marginTop: '1rem' }}>
-                <label className="label" style={{ color: '#3b82f6' }}>4. Sens d'ouverture</label>
-                <select className="input" name="openingDirection" value={config.openingDirection || 'gauche'} onChange={handleChange}>
-                  <option value="gauche">Ouvrant Gauche</option>
-                  <option value="droit">Ouvrant Droit</option>
-                </select>
-              </div>
+            </div>
+          </div>
+
+          <div className="form-group" style={{ marginTop: '1rem', background: '#eff6ff', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #bfdbfe' }}>
+            <label className="label" style={{ color: '#1e40af', fontWeight: 700 }}>4. Sens d'ouverture / Main</label>
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              {[
+                { id: 'gauche', label: 'Ouvrant Gauche', icon: '⬅️' },
+                { id: 'droit', label: 'Ouvrant Droit', icon: '➡️' }
+              ].map(dir => (
+                <label key={dir.id} style={{ 
+                  flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', 
+                  padding: '0.75rem', border: `2px solid ${config.openingDirection === dir.id ? '#2563eb' : '#e2e8f0'}`,
+                  borderRadius: '0.5rem', cursor: 'pointer', background: config.openingDirection === dir.id ? '#white' : '#f8fafc',
+                  transition: 'all 0.2s', fontWeight: config.openingDirection === dir.id ? 700 : 400,
+                  boxShadow: config.openingDirection === dir.id ? '0 4px 6px -1px rgba(37, 99, 235, 0.1)' : 'none'
+                }}>
+                  <input type="radio" name="openingDirection" value={dir.id} checked={config.openingDirection === dir.id}
+                    onChange={() => setConfig(prev => ({ ...prev, openingDirection: dir.id }))}
+                    style={{ display: 'none' }} />
+                  {dir.icon} {dir.label}
+                </label>
+              ))}
             </div>
           </div>
 
@@ -778,24 +800,37 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                   );
                 })}
 
-                {/* Motor Cable Position (Only if KIT-MOTE is selected) */}
-                {config.shutterConfig?.kitId === 'KIT-MOTE' && (
+                {/* Control Position (Motor/Strap/Crank) */}
+                {(config.shutterConfig?.kitId === 'KIT-MOTE' || config.shutterConfig?.kitId === 'KIT-SANG' || config.shutterConfig?.kitId === 'KIT-MANI') && (
                   <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                    <label className="label" style={{ fontSize: '0.8rem', fontWeight: 700 }}>Position du Câble Moteur</label>
+                    <label className="label" style={{ fontSize: '0.8rem', fontWeight: 700 }}>
+                      {config.shutterConfig?.kitId === 'KIT-MOTE' ? 'Position du Câble Moteur' : 
+                       config.shutterConfig?.kitId === 'KIT-SANG' ? 'Position de la Sangle' : 'Position de la Manivelle'}
+                    </label>
                     <div style={{ display: 'flex', gap: '1rem' }}>
-                      {['Gauche', 'Droite'].map(pos => (
-                        <label key={pos} style={{ 
-                          flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', 
-                          padding: '0.6rem', border: `2px solid ${config.shutterConfig?.motorCablePosition === pos ? '#3b82f6' : '#e2e8f0'}`,
-                          borderRadius: '0.5rem', cursor: 'pointer', background: config.shutterConfig?.motorCablePosition === pos ? '#eff6ff' : 'white',
-                          transition: 'all 0.2s', fontWeight: config.shutterConfig?.motorCablePosition === pos ? 700 : 400
-                        }}>
-                          <input type="radio" name="cablePos" checked={config.shutterConfig?.motorCablePosition === pos}
-                            onChange={() => setConfig(prev => ({ ...prev, shutterConfig: { ...(prev.shutterConfig || {}), motorCablePosition: pos } }))}
-                            style={{ display: 'none' }} />
-                          {pos === 'Gauche' ? '⬅️' : '➡️'} {pos}
-                        </label>
-                      ))}
+                      {['Gauche', 'Droite'].map(pos => {
+                        const isSelected = (config.shutterConfig?.controlPosition || 'Droite') === pos;
+                        
+                        return (
+                          <label key={pos} style={{ 
+                            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', 
+                            padding: '0.6rem', border: `2px solid ${isSelected ? '#3b82f6' : '#e2e8f0'}`,
+                            borderRadius: '0.5rem', cursor: 'pointer', background: isSelected ? '#eff6ff' : 'white',
+                            transition: 'all 0.2s', fontWeight: isSelected ? 700 : 400
+                          }}>
+                            <input type="radio" name="controlPos" checked={isSelected}
+                              onChange={() => setConfig(prev => ({ 
+                                ...prev, 
+                                shutterConfig: { 
+                                  ...(prev.shutterConfig || {}), 
+                                  controlPosition: pos 
+                                } 
+                              }))}
+                              style={{ display: 'none' }} />
+                            {pos === 'Gauche' ? '⬅️' : '➡️'} {pos}
+                          </label>
+                        );
+                      })}
                     </div>
                   </div>
                 )}

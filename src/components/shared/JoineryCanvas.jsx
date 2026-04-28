@@ -50,37 +50,63 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
       ctx.fillRect(offsetX, offsetY, dW, dCaissonH);
       ctx.strokeRect(offsetX, offsetY, dW, dCaissonH);
       
-      // Add a small circle to indicate shutter roll
-      ctx.beginPath();
-      ctx.arc(offsetX + dW - dCaissonH/2, offsetY + dCaissonH/2, dCaissonH/3, 0, Math.PI * 2);
-      ctx.stroke();
+      // Control Position indication
+      const kitId = config.shutterConfig?.kitId;
+      const controlPos = config.shutterConfig?.controlPosition || 'Droite';
+      const isLeft = controlPos === 'Gauche';
+      
+      if (kitId === 'KIT-MOTE') {
+         // Motor: small circle (blue)
+         ctx.beginPath();
+         ctx.arc(isLeft ? offsetX + 10 : offsetX + dW - 10, offsetY + dCaissonH/2, 5, 0, Math.PI*2);
+         ctx.fillStyle = '#3b82f6';
+         ctx.fill();
+         ctx.stroke();
+      } else if (kitId === 'KIT-SANG' || kitId === 'KIT-MANI') {
+         // Strap/Crank: small vertical line representing the output
+         ctx.lineWidth = 3;
+         ctx.strokeStyle = '#64748b';
+         ctx.beginPath();
+         const lineX = isLeft ? offsetX + 5 : offsetX + dW - 5;
+         ctx.moveTo(lineX, offsetY + dCaissonH/2);
+         ctx.lineTo(lineX, offsetY + dCaissonH + 20); // Extends down slightly
+         ctx.stroke();
+         ctx.lineWidth = 2;
+      }
+
+      // Write HC
+      ctx.fillStyle = '#475569';
+      ctx.font = 'bold 10px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(`H.C : ${caissonH} mm`, offsetX + dW/2, offsetY + dCaissonH/2 + 4);
     }
     
     // Window part starts AFTER total caisson
     const winOffsetY = offsetY + dCaissonH;
     const dH = dH_window; // For compatibility with rest of code
     
-    // 0. Draw Architraves (Couvre-joints optionnels)
+    // 0. Draw Architraves (Couvre-joints optionnels) around the ENTIRE assembly
     const cjW = 40 * scale; 
     ctx.fillStyle = '#f1f5f9';
     const oldStroke = ctx.strokeStyle;
     ctx.strokeStyle = '#cbd5e1';
     
+    // The couvre-joint surrounds the TOTAL height (offsetY to offsetY + dH_total)
     if (optionalSides.top) {
-      ctx.fillRect(offsetX - cjW, winOffsetY - cjW, dW + cjW * 2, cjW);
-      ctx.strokeRect(offsetX - cjW, winOffsetY - cjW, dW + cjW * 2, cjW);
+      ctx.fillRect(offsetX - cjW, offsetY - cjW, dW + cjW * 2, cjW);
+      ctx.strokeRect(offsetX - cjW, offsetY - cjW, dW + cjW * 2, cjW);
     }
     if (optionalSides.bottom) {
-      ctx.fillRect(offsetX - cjW, winOffsetY + dH, dW + cjW * 2, cjW);
-      ctx.strokeRect(offsetX - cjW, winOffsetY + dH, dW + cjW * 2, cjW);
+      ctx.fillRect(offsetX - cjW, offsetY + dH_total, dW + cjW * 2, cjW);
+      ctx.strokeRect(offsetX - cjW, offsetY + dH_total, dW + cjW * 2, cjW);
     }
     if (optionalSides.left) {
-      ctx.fillRect(offsetX - cjW, winOffsetY, cjW, dH);
-      ctx.strokeRect(offsetX - cjW, winOffsetY, cjW, dH);
+      ctx.fillRect(offsetX - cjW, offsetY, cjW, dH_total);
+      ctx.strokeRect(offsetX - cjW, offsetY, cjW, dH_total);
     }
     if (optionalSides.right) {
-      ctx.fillRect(offsetX + dW, winOffsetY, cjW, dH);
-      ctx.strokeRect(offsetX + dW, winOffsetY, cjW, dH);
+      ctx.fillRect(offsetX + dW, offsetY, cjW, dH_total);
+      ctx.strokeRect(offsetX + dW, offsetY, cjW, dH_total);
     }
 
     ctx.strokeStyle = oldStroke;
@@ -102,75 +128,89 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
       const fW = 12 * scale; // Sash frame width roughly
 
       if (openingType.includes('Ouvrant') || openingType.includes('Battant') || openingType.includes('Porte')) {
-        const isDouble = openingType.includes('2') || openingType.includes('Double');
+        const name = (comp?.name || '').toLowerCase();
+        const typeStr = openingType.toLowerCase();
+        const combined = name + ' ' + typeStr;
         
-        if (isDouble) {
-          // Ventail 1
-          ctx.strokeRect(x + 2, y + 2, w/2 - 2, h - 4);
-          // Triangle V1
-          ctx.beginPath();
-          ctx.setLineDash([5, 5]);
-          ctx.strokeStyle = '#94a3b8';
-          ctx.moveTo(x + 2, y + 2);
-          ctx.lineTo(x + w/2 - 2, y + h/2);
-          ctx.lineTo(x + 2, y + h - 4);
-          ctx.stroke();
-          
-          // Ventail 2
+        let sashCount = 1;
+        const matches = combined.match(/(\d+)\s*(vantail|vanteau|vanteaux|ouvrant|battant|vant)/i);
+        if (matches) {
+          sashCount = parseInt(matches[1]);
+        } else if (combined.includes('double') || combined.includes(' 2 ')) {
+          sashCount = 2;
+        } else if (combined.includes('triple') || combined.includes(' 3 ')) {
+          sashCount = 3;
+        }
+
+        const sW = w / sashCount;
+        for (let i = 0; i < sashCount; i++) {
+          const sX = x + i * sW;
           ctx.setLineDash([]);
           ctx.strokeStyle = '#334155';
-          ctx.strokeRect(x + w/2, y + 2, w/2 - 2, h - 4);
-          // Triangle V2
+          ctx.strokeRect(sX + 2, y + 2, sW - 4, h - 4);
+          
+          // Triangle
           ctx.beginPath();
           ctx.setLineDash([5, 5]);
           ctx.strokeStyle = '#94a3b8';
-          ctx.moveTo(x + w - 2, y + 2);
-          ctx.lineTo(x + w/2 + 2, y + h/2);
-          ctx.lineTo(x + w - 2, y + h - 4);
-          ctx.stroke();
-          ctx.setLineDash([]);
-        } else {
-          ctx.strokeRect(x + fW, y + fW, w - fW * 2, h - fW * 2);
-          // Opening Triangle
-          ctx.beginPath();
-          ctx.setLineDash([5, 5]);
-          ctx.strokeStyle = '#94a3b8';
-          if (dir === 'gauche') {
-            ctx.moveTo(x + fW, y + fW);
-            ctx.lineTo(x + w - fW, y + h/2);
-            ctx.lineTo(x + fW, y + h - fW);
+          
+          let sashDir = dir;
+          if (sashCount === 2) {
+            sashDir = (i === 0) ? 'gauche' : 'droit';
+          } else if (sashCount > 2) {
+             sashDir = (i % 2 === 0) ? 'gauche' : 'droit';
+          }
+
+          if (sashDir === 'gauche') {
+            ctx.moveTo(sX + 4, y + 4);
+            ctx.lineTo(sX + sW - 4, y + h/2);
+            ctx.lineTo(sX + 4, y + h - 4);
           } else {
-            ctx.moveTo(x + w - fW, y + fW);
-            ctx.lineTo(x + fW, y + h/2);
-            ctx.lineTo(x + w - fW, y + h - fW);
+            ctx.moveTo(sX + sW - 4, y + 4);
+            ctx.lineTo(sX + 4, y + h/2);
+            ctx.lineTo(sX + sW - 4, y + h - 4);
           }
           ctx.stroke();
-          ctx.setLineDash([]);
         }
+        ctx.setLineDash([]);
       } else if (openingType.includes('Coulissant')) {
-        const isDouble = openingType.includes('2') || openingType.includes('Double');
-        ctx.strokeRect(x + 2, y + 2, w/2 + 2, h - 4);
-        ctx.strokeRect(x + w/2 - 2, y + 2, w/2, h - 4);
+        const name = (comp?.name || '').toLowerCase();
+        const typeStr = openingType.toLowerCase();
+        const combined = name + ' ' + typeStr;
+
+        let sashCount = 2; 
+        const matches = combined.match(/(\d+)\s*(coulisse|vantail|vanteau|vanteaux|ouvrant|vant)/i);
+        if (matches) {
+          sashCount = parseInt(matches[1]);
+        } else if (combined.includes(' 3 ')) {
+          sashCount = 3;
+        } else if (combined.includes(' 4 ')) {
+          sashCount = 4;
+        }
         
-        // Sliding Arrows
-        ctx.fillStyle = '#64748b';
-        const arrowY = y + h/2;
-        // Arrow 1
-        ctx.beginPath();
-        ctx.moveTo(x + w/4 - 10, arrowY);
-        ctx.lineTo(x + w/4 + 10, arrowY);
-        ctx.lineTo(x + w/4 + 5, arrowY - 3);
-        ctx.moveTo(x + w/4 + 10, arrowY);
-        ctx.lineTo(x + w/4 + 5, arrowY + 3);
-        ctx.stroke();
-        // Arrow 2
-        ctx.beginPath();
-        ctx.moveTo(x + 3*w/4 + 10, arrowY + 10);
-        ctx.lineTo(x + 3*w/4 - 10, arrowY + 10);
-        ctx.lineTo(x + 3*w/4 - 5, arrowY + 7);
-        ctx.moveTo(x + 3*w/4 - 10, arrowY + 10);
-        ctx.lineTo(x + 3*w/4 - 5, arrowY + 13);
-        ctx.stroke();
+        const sW = w / sashCount;
+        for (let i = 0; i < sashCount; i++) {
+          const sX = x + i * sW;
+          ctx.strokeStyle = '#334155';
+          ctx.lineWidth = 1.5;
+          // Overlap effect for sliding
+          const overlap = 4;
+          ctx.strokeRect(sX + 2, y + 2, sW + (i < sashCount-1 ? overlap : -2), h - 4);
+          
+          // Sliding Arrow
+          ctx.strokeStyle = '#94a3b8';
+          ctx.lineWidth = 1;
+          const arrowY = y + h/2 + (i % 2 === 0 ? -10 : 10);
+          const arrowDir = (i % 2 === 0) ? 1 : -1; // Alternate directions
+          
+          ctx.beginPath();
+          ctx.moveTo(sX + sW/2 - 10 * arrowDir, arrowY);
+          ctx.lineTo(sX + sW/2 + 10 * arrowDir, arrowY);
+          ctx.lineTo(sX + sW/2 + 5 * arrowDir, arrowY - 3);
+          ctx.moveTo(sX + sW/2 + 10 * arrowDir, arrowY);
+          ctx.lineTo(sX + sW/2 + 5 * arrowDir, arrowY + 3);
+          ctx.stroke();
+        }
       } else {
         // Fixe
         ctx.lineWidth = 1;
@@ -225,28 +265,6 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
       drawJoinery(offsetX, winOffsetY, dW, dH, compositionId);
     }
 
-    // 4. Draw Caisson (Shutter Box) - Re-draw on top for better visibility
-    if (caissonH > 0) {
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = '#334155';
-      ctx.fillStyle = '#f8fafc';
-      ctx.fillRect(offsetX, offsetY, dW, dCaissonH);
-      ctx.strokeRect(offsetX, offsetY, dW, dCaissonH);
-      
-      // Write HC
-      ctx.fillStyle = '#475569';
-      ctx.font = 'bold 10px Inter, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(`H.C : ${caissonH} mm`, offsetX + dW/2, offsetY + dCaissonH/2 + 4);
-
-      // Manoeuvre side
-      const mSide = config.shutterConfig?.motorCablePosition || 'Droite';
-      ctx.fillStyle = '#ef4444';
-      ctx.beginPath();
-      const dotX = (mSide === 'Gauche') ? offsetX + 10 : offsetX + dW - 10;
-      ctx.arc(dotX, offsetY + dCaissonH/2, 4, 0, Math.PI * 2);
-      ctx.fill();
-    }
 
     // 5. Draw dimensions with lines
     ctx.fillStyle = '#1e293b';
@@ -265,20 +283,58 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
     ctx.stroke();
     ctx.fillText(`${L} mm`, offsetX + dW / 2, dimY - 5);
 
-    // H dimension line
-    const dimX = offsetX - 45;
+    // H dimension lines
+    const dimX_total = offsetX - 55;
+    const dimX_detail = offsetX - 25;
+    ctx.lineWidth = 1;
+    ctx.font = 'bold 10px Inter, sans-serif';
+
+    // 1. Total Height Line
     ctx.beginPath();
-    ctx.moveTo(dimX, offsetY);
-    ctx.lineTo(dimX, offsetY + dH_total);
-    ctx.moveTo(dimX - 5, offsetY); ctx.lineTo(dimX + 5, offsetY);
-    ctx.moveTo(dimX - 5, offsetY + dH_total); ctx.lineTo(dimX + 5, offsetY + dH_total);
+    ctx.strokeStyle = '#94a3b8';
+    ctx.moveTo(dimX_total, offsetY);
+    ctx.lineTo(dimX_total, offsetY + dH_total);
+    ctx.moveTo(dimX_total - 5, offsetY); ctx.lineTo(dimX_total + 5, offsetY);
+    ctx.moveTo(dimX_total - 5, offsetY + dH_total); ctx.lineTo(dimX_total + 5, offsetY + dH_total);
     ctx.stroke();
 
     ctx.save();
-    ctx.translate(dimX - 5, offsetY + dH_total / 2);
+    ctx.translate(dimX_total - 5, offsetY + dH_total / 2);
     ctx.rotate(-Math.PI / 2);
-    ctx.fillText(`${H} mm`, 0, 0);
+    ctx.fillStyle = '#1e293b';
+    ctx.fillText(`${H} mm (Total)`, 0, 0);
     ctx.restore();
+
+    // 2. Detail Height Lines (Box & Opening)
+    if (caissonH > 0) {
+      // Box height dim
+      ctx.beginPath();
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.moveTo(dimX_detail, offsetY);
+      ctx.lineTo(dimX_detail, offsetY + dCaissonH);
+      ctx.stroke();
+      
+      ctx.save();
+      ctx.translate(dimX_detail - 3, offsetY + dCaissonH / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillStyle = '#64748b';
+      ctx.fillText(`${caissonH}`, 0, 0);
+      ctx.restore();
+
+      // Opening height dim
+      ctx.beginPath();
+      ctx.moveTo(dimX_detail, winOffsetY);
+      ctx.lineTo(dimX_detail, winOffsetY + dH);
+      ctx.stroke();
+      
+      ctx.save();
+      ctx.translate(dimX_detail - 3, winOffsetY + dH / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillStyle = '#3b82f6'; // Blue for opening
+      ctx.font = 'bold 11px Inter, sans-serif';
+      ctx.fillText(`${Math.round(H - caissonH)} mm (Ouv.)`, 0, 0);
+      ctx.restore();
+    }
 
     // Export
     if (onDrawComplete) {

@@ -1690,6 +1690,21 @@ const AdminDashboard = ({ data, setData }) => {
                         {data.ranges.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                       </select>
                     </div>
+                    <div className="form-group">
+                      <label className="label">Sens par défaut</label>
+                      <select 
+                        className="input" 
+                        value={editingComposition.defaultOpeningDirection || 'gauche'} 
+                        onChange={(e) => {
+                          const updated = { ...editingComposition, defaultOpeningDirection: e.target.value };
+                          setEditingComposition(updated);
+                          handleUpdateComposition(updated);
+                        }}
+                      >
+                        <option value="gauche">Gauche</option>
+                        <option value="droit">Droit</option>
+                      </select>
+                    </div>
                     <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', paddingTop: '1.5rem' }}>
                       <input 
                         type="checkbox" 
