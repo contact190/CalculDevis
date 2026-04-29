@@ -158,7 +158,7 @@ const SearchableDropdown = ({ value, onChange, options, placeholder, style = {},
 };
 
 // ─── SUB-COMPONENT: Product Configurator (View B) ──────────────────────────
-const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, label, setLabel, qty, setQty }) => {
+const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, label, setLabel, qty, setQty, globalMargin }) => {
   const engine = useMemo(() => new FormulaEngine(database), [database]);
   const [validation, setValidation] = useState({ valid: true });
   const [priceData, setPriceData] = useState(null);
@@ -181,12 +181,12 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
     const v = engine.validate(config);
     setValidation(v);
     if (v.valid) {
-      try { setPriceData(engine.calculatePrice(config)); }
+      try { setPriceData(engine.calculatePrice({ ...config, margin: globalMargin })); }
       catch(e) { setPriceData(null); }
     } else {
       setPriceData(null);
     }
-  }, [config]);
+  }, [config, globalMargin]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -1071,15 +1071,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
             />
           </div>
           <div className="price-card shadow-lg">
-            <div style={{ marginBottom: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '1rem' }}>
-              <label style={{ fontSize: '0.75rem', opacity: 0.8, display: 'block', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Coefficient de Marge</label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <input type="number" step="0.1" min="1" value={config.margin}
-                  onChange={e => setConfig(prev => ({ ...prev, margin: parseFloat(e.target.value) || 1 }))}
-                  style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: 'white', borderRadius: '0.4rem', padding: '0.4rem 0.6rem', width: '80px', fontSize: '1.1rem', fontWeight: 700 }} />
-                <span style={{ fontSize: '0.9rem', opacity: 0.8 }}>x Coût Matériaux</span>
-              </div>
-            </div>
+            {/* Coefficient de Marge removed from here (now global) */}
             <span style={{ fontSize: '0.875rem', opacity: 0.8 }}>TOTAL DEVIS (HT) — 1 unité</span>
             <div style={{ fontSize: '2.5rem', fontWeight: 800 }}>
               {priceData ? `${priceData.priceHT.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD` : '---'}
@@ -1312,7 +1304,8 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
 
       if (shouldLiveRecalculate) {
          try {
-           const livePd = engine.calculatePrice(item.config);
+           const tempConfig = { ...item.config, margin: quoteSettings?.globalMargin || 2.2 };
+           const livePd = engine.calculatePrice(tempConfig);
            if (livePd && livePd.priceHT) {
              currentPriceHT = livePd.priceHT;
              pd = livePd;
@@ -1392,7 +1385,8 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
   };
 
   const handleSaveProduct = () => {
-    const priceData = engine.calculatePrice(draftConfig);
+    const tempConfig = { ...draftConfig, margin: quoteSettings?.globalMargin || 2.2 };
+    const priceData = engine.calculatePrice(tempConfig);
     const newItem = {
       id: editingItemId || `ITEM-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       label: draftLabel || `Produit ${(quote.items?.length || 0) + 1}`,
@@ -1453,6 +1447,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
         setLabel={setDraftLabel}
         qty={draftQty}
         setQty={setDraftQty}
+        globalMargin={quoteSettings?.globalMargin || 2.2}
       />
     );
   }
@@ -1998,7 +1993,8 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
                     let effectivePriceHT = item.unitPriceHT || 0;
                     if (!quote.status || quote.status === 'Brouillon') {
                       try {
-                        const pd = engine.calculatePrice(item.config);
+                        const tempConfig = { ...item.config, margin: quoteSettings?.globalMargin || 2.2 };
+                        const pd = engine.calculatePrice(tempConfig);
                         if (pd && pd.priceHT) effectivePriceHT = pd.priceHT;
                       } catch(e) {}
                     }
@@ -2066,6 +2062,15 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
 
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', opacity: 0.85 }}>
                 <span>Total HT</span><span>{totals.ht.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', opacity: 0.85 }}>
+                <span>Marge Globale</span>
+                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                  <input type="number" step="0.1" min="1" value={quoteSettings?.globalMargin || 2.2}
+                    onChange={e => setQuoteSettings(prev => ({ ...prev, globalMargin: parseFloat(e.target.value) || 2.2 }))}
+                    style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: 'white', borderRadius: '4px', padding: '2px 6px', width: '60px', fontSize: '0.8rem', fontWeight: 700, textAlign: 'right' }} />
+                  <span style={{ fontSize: '0.75rem' }}>x</span>
+                </div>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', opacity: 0.85 }}>
                 <span>TVA (%)</span>
