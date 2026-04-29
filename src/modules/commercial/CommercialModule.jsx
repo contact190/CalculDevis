@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Calculator, Package, Settings, FileText, Info, LayoutGrid, Plus, Edit2, Trash2, Copy, ArrowLeft, Save, ChevronDown, ChevronUp, Building2, Phone, Mail, MapPin, Calendar, Clock, GitCompare } from 'lucide-react';
+import { Calculator, Package, Settings, FileText, Info, LayoutGrid, Plus, Edit2, Trash2, Copy, ArrowLeft, Save, ChevronDown, ChevronUp, Building2, Phone, Mail, MapPin, Calendar, Clock, GitCompare, Search } from 'lucide-react';
 import { FormulaEngine } from '../../engine/formula-engine';
 import JoineryCanvas from '../../components/shared/JoineryCanvas';
 import LayoutComposer, { defaultLayout, rescaleTree } from '../../components/shared/LayoutComposer';
@@ -31,6 +31,109 @@ const EMPTY_CONFIG = {
   }
 };
 
+// ─── REUSABLE COMPONENT: SearchableDropdown ────────────────────────────────
+const SearchableDropdown = ({ value, onChange, options, placeholder, style = {}, compact = false }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const wrapperRef = useRef(null);
+
+  const filteredOptions = options.filter(o => 
+    o.label.toLowerCase().includes(search.toLowerCase()) || 
+    o.value.toString().toLowerCase().includes(search.toLowerCase())
+  );
+
+  const selectedOption = options.find(o => o.value === value);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  return (
+    <div ref={wrapperRef} style={{ position: 'relative', width: style.width || '100%', ...style }}>
+      <div 
+        onClick={() => setIsOpen(!isOpen)}
+        className="glass"
+        style={{
+          padding: compact ? '0.2rem 0.5rem' : '0.6rem 0.75rem',
+          border: '1px solid #cbd5e1',
+          borderRadius: compact ? '0.3rem' : '0.5rem',
+          background: 'white',
+          cursor: 'pointer',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          fontSize: compact ? '0.8rem' : '0.9rem',
+          fontWeight: 600,
+          minWidth: compact ? '140px' : 'auto'
+        }}
+      >
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {selectedOption ? selectedOption.label : placeholder}
+        </span>
+        <ChevronDown size={compact ? 12 : 16} color="#64748b" style={{ transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }} />
+      </div>
+
+      {isOpen && (
+        <div className="shadow-xl" style={{
+          position: 'absolute',
+          top: '100%',
+          left: 0,
+          right: 0,
+          zIndex: 9999,
+          background: 'white',
+          border: '1px solid #e2e8f0',
+          borderRadius: '0.5rem',
+          marginTop: '0.25rem',
+          overflow: 'hidden'
+        }}>
+          <div style={{ padding: '0.5rem', borderBottom: '1px solid #f1f5f9' }}>
+            <div style={{ position: 'relative' }}>
+              <Search size={14} style={{ position: 'absolute', left: '0.6rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+              <input 
+                autoFocus
+                className="input"
+                placeholder="Rechercher..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                onClick={e => e.stopPropagation()}
+                style={{ paddingLeft: '2rem', fontSize: '0.8rem', height: '32px', width: '100%' }}
+              />
+            </div>
+          </div>
+          <div style={{ maxHeight: '250px', overflowY: 'auto' }}>
+            {filteredOptions.length > 0 ? filteredOptions.map(o => (
+              <div 
+                key={o.value}
+                onClick={(e) => { e.stopPropagation(); onChange(o.value); setIsOpen(false); setSearch(''); }}
+                style={{
+                  padding: '0.6rem 0.75rem',
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                  background: value === o.value ? '#eff6ff' : 'transparent',
+                  color: value === o.value ? '#2563eb' : '#1e293b',
+                  fontWeight: value === o.value ? 700 : 400
+                }}
+                onMouseEnter={e => e.target.style.background = value === o.value ? '#eff6ff' : '#f8fafc'}
+                onMouseLeave={e => e.target.style.background = value === o.value ? '#eff6ff' : 'transparent'}
+              >
+                {o.label}
+              </div>
+            )) : (
+              <div style={{ padding: '0.75rem', fontSize: '0.8rem', color: '#94a3b8', textAlign: 'center' }}>Aucun résultat</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ─── SUB-COMPONENT: Product Configurator (View B) ──────────────────────────
 const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, label, setLabel, qty, setQty }) => {
   const engine = useMemo(() => new FormulaEngine(database), [database]);
@@ -40,12 +143,13 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
 
   useEffect(() => {
     // Standard initialization: Force default if nothing selected
-    if (!config.compositionId && database.compositions?.length > 0) {
+    if (database.compositions?.length > 0) {
       setConfig(prev => ({
         ...prev,
-        compositionId: database.compositions[0].id,
-        colorId: database.colors?.[0]?.id || '',
-        glassId: database.glass?.[0]?.id || '',
+        compositionId: prev.compositionId || database.compositions[0].id,
+        colorId: prev.colorId || database.colors?.[0]?.id || '',
+        glassId: prev.glassId || database.glass?.[0]?.id || '',
+        clientId: prev.clientId || database.clients?.[0]?.id || ''
       }));
     }
   }, []);
@@ -142,13 +246,17 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
             <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Détails de l'ouvrage</h2>
           </div>
 
-          {/* Client */}
           <div className="form-group" style={{ marginBottom: '1.5rem', paddingBottom: '1.5rem', borderBottom: '1px solid #e2e8f0' }}>
-            <label className="label">Client Assigné</label>
-            <select name="clientId" value={config.clientId || ''} onChange={handleChange} className="input">
-              <option value="">-- Aucun client spécifique --</option>
-              {(database.clients || []).map(c => <option key={c.id} value={c.id}>{c.nom} ({c.id})</option>)}
-            </select>
+            <label className="label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+               Client Assigné
+               <span style={{ fontSize: '0.7rem', color: '#ef4444', fontWeight: 700 }}>Obligatoire</span>
+            </label>
+            <SearchableDropdown 
+              value={config.clientId}
+              onChange={val => setConfig(prev => ({ ...prev, clientId: val }))}
+              options={(database.clients || []).map(c => ({ value: c.id, label: `${c.nom} (${c.id})` }))}
+              placeholder="Sélectionner un client..."
+            />
           </div>
 
           {/* Dimensions */}
@@ -1126,6 +1234,7 @@ export const QuoteSettingsPanel = ({ settings, onSave, onClose, title = "Paramè
 
 // ─── MAIN COMPONENT ────────────────────────────────────────────────────────
 const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuote, setCurrentQuote, quoteSettings, setQuoteSettings, onNewQuote }) => {
+  const quote = currentQuote || { id: '', number: '', items: [] };
   const engine = useMemo(() => new FormulaEngine(database), [database]);
   const [localView, setLocalView] = useState('list'); // 'list' | 'configure'
   const [editingItemId, setEditingItemId] = useState(null);
@@ -1136,7 +1245,12 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
   const [showSettings, setShowSettings] = useState(false);
   const [consumableFilter, setConsumableFilter] = useState('all'); // 'all' | item id
 
-  const quote = currentQuote || { id: '', number: '', items: [] };
+  useEffect(() => {
+    if (setCurrentQuote && !quote.clientId && database.clients?.length > 0) {
+      setCurrentQuote(prev => ({ ...prev, clientId: database.clients[0].id }));
+    }
+  }, [database.clients, quote.clientId, setCurrentQuote]);
+
 
 
 
@@ -1711,18 +1825,15 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
           <div style={{ fontSize: '0.78rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.3rem', justifyContent: 'flex-end', marginBottom: '0.5rem' }}>
             <Calendar size={12} /> {new Date(quote.createdAt || Date.now()).toLocaleDateString('fr-FR')}
           </div>
-          <div style={{ fontSize: '0.78rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.3rem', justifyContent: 'flex-end' }}>
+          <div style={{ fontSize: '0.78rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'flex-end' }}>
             <span style={{ fontWeight: 600 }}>Client :</span>
-            <select 
-              value={quote.clientId || ''} 
-              onChange={e => setCurrentQuote(p => ({ ...p, clientId: e.target.value }))}
-              style={{ padding: '0.2rem', borderRadius: '0.3rem', border: '1px solid #cbd5e1', fontSize: '0.8rem', background: '#f8fafc', maxWidth: '150px' }}
-            >
-              <option value="">-- Aucun --</option>
-              {(database.clients || []).map(c => (
-                <option key={c.id} value={c.id}>{c.nom}</option>
-              ))}
-            </select>
+            <SearchableDropdown 
+              compact
+              value={quote.clientId}
+              onChange={val => setCurrentQuote(p => ({ ...p, clientId: val }))}
+              options={(database.clients || []).map(c => ({ value: c.id, label: c.nom }))}
+              placeholder="Client..."
+            />
           </div>
         </div>
       </div>
