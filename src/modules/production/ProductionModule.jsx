@@ -1902,20 +1902,23 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                         isStock: true
                       }));
 
-                      // 2. Optimization: First Fit into stock then new bars
+                      // 2. Optimization: BEST FIT into stock then new bars
                       sortedPieces.forEach(pObj => {
                         const piece = pObj.length || pObj;
-                        let fitIdx = -1;
+                        let bestFitIdx = -1;
+                        let minRemainder = Infinity;
+
                         for (let j = 0; j < currentBars.length; j++) {
-                          if (currentBars[j].remaining >= piece) {
-                            fitIdx = j;
-                            break;
+                          const remainder = currentBars[j].remaining - piece;
+                          if (remainder >= 0 && remainder < minRemainder) {
+                            minRemainder = remainder;
+                            bestFitIdx = j;
                           }
                         }
                         
-                        if (fitIdx !== -1) {
-                          currentBars[fitIdx].remaining -= piece;
-                          currentBars[fitIdx].pieces.push(pObj);
+                        if (bestFitIdx !== -1) {
+                          currentBars[bestFitIdx].remaining -= piece;
+                          currentBars[bestFitIdx].pieces.push(pObj);
                         } else {
                           currentBars.push({ 
                             remaining: bLength - piece, 
@@ -2626,7 +2629,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
               
               doc.setFontSize(8);
               doc.setFont('helvetica', 'bold');
-              doc.text(`${bar.isStock ? '[STOCK] ' : ''}Barre #${bIdx + 1}`, margin, currentY - 2);
+              doc.text(`${bar.isStock ? `[STOCK ${bar.originalLen}mm] ` : ''}Barre #${bIdx + 1}`, margin, currentY - 2);
               
               const barWidth = 170;
               const barHeight = 8;
@@ -2905,7 +2908,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                                           <div key={bi} style={{ background: '#fafafa', border: '1px solid #f1f5f9', borderRadius: '6px', padding: '0.5rem' }}>
                                             <div style={{ fontWeight: 800, fontSize: '0.75rem', color: '#1e293b', marginBottom: '0.3rem', display: 'flex', justifyContent: 'space-between' }}>
                                               <span>
-                                                {bar.isStock && <span style={{ background: '#10b981', color: 'white', padding: '0.1rem 0.4rem', borderRadius: '4px', marginRight: '0.4rem', fontSize: '0.65rem' }}>STOCK</span>}
+                                                {bar.isStock && <span style={{ background: '#10b981', color: 'white', padding: '0.1rem 0.4rem', borderRadius: '4px', marginRight: '0.4rem', fontSize: '0.65rem', fontWeight: 700 }}>STOCK {bar.barLen}mm</span>}
                                                 {bar.profileName} <span style={{fontWeight:400, color:'#64748b'}}>(L={bar.barLen}mm)</span>
                                               </span>
                                               <span style={{color:'#7c3aed'}}>#{bi+1}</span>
