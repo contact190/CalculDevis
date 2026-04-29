@@ -55,14 +55,13 @@ const SearchableDropdown = ({ value, onChange, options, placeholder, style = {},
   }, []);
 
   return (
-    <div ref={wrapperRef} style={{ position: 'relative', width: style.width || '100%', ...style }}>
+    <div ref={wrapperRef} style={{ position: 'relative', width: compact ? 'auto' : '100%', textAlign: 'left', ...style }}>
       <div 
         onClick={() => setIsOpen(!isOpen)}
-        className="glass"
         style={{
-          padding: compact ? '0.2rem 0.5rem' : '0.6rem 0.75rem',
+          padding: compact ? '0.3rem 0.6rem' : '0.6rem 0.75rem',
           border: '1px solid #cbd5e1',
-          borderRadius: compact ? '0.3rem' : '0.5rem',
+          borderRadius: compact ? '0.4rem' : '0.5rem',
           background: 'white',
           cursor: 'pointer',
           display: 'flex',
@@ -70,7 +69,8 @@ const SearchableDropdown = ({ value, onChange, options, placeholder, style = {},
           alignItems: 'center',
           fontSize: compact ? '0.8rem' : '0.9rem',
           fontWeight: 600,
-          minWidth: compact ? '140px' : 'auto'
+          minWidth: compact ? '160px' : 'auto',
+          textAlign: 'left'
         }}
       >
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -92,17 +92,28 @@ const SearchableDropdown = ({ value, onChange, options, placeholder, style = {},
           marginTop: '0.25rem',
           overflow: 'hidden'
         }}>
-          <div style={{ padding: '0.5rem', borderBottom: '1px solid #f1f5f9' }}>
+          <div style={{ padding: '0.75rem', background: '#f8fafc', borderBottom: '1px solid #f1f5f9' }}>
             <div style={{ position: 'relative' }}>
-              <Search size={14} style={{ position: 'absolute', left: '0.6rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+              <Search size={14} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: '#3b82f6' }} />
               <input 
                 autoFocus
                 className="input"
-                placeholder="Rechercher..."
+                placeholder="Tapez le nom ou l'ID..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 onClick={e => e.stopPropagation()}
-                style={{ paddingLeft: '2rem', fontSize: '0.8rem', height: '32px', width: '100%' }}
+                onKeyDown={e => e.stopPropagation()}
+                style={{ 
+                  paddingLeft: '2.2rem', 
+                  fontSize: '0.85rem', 
+                  height: '36px', 
+                  width: '100%', 
+                  textAlign: 'left',
+                  border: '1px solid #3b82f6',
+                  borderRadius: '0.5rem',
+                  boxShadow: '0 0 0 2px rgba(59, 130, 246, 0.1)',
+                  background: 'white'
+                }}
               />
             </div>
           </div>
@@ -112,15 +123,25 @@ const SearchableDropdown = ({ value, onChange, options, placeholder, style = {},
                 key={o.value}
                 onClick={(e) => { e.stopPropagation(); onChange(o.value); setIsOpen(false); setSearch(''); }}
                 style={{
-                  padding: '0.6rem 0.75rem',
-                  fontSize: '0.85rem',
+                  padding: '0.75rem 1rem',
+                  fontSize: '0.875rem',
                   cursor: 'pointer',
+                  textAlign: 'left',
                   background: value === o.value ? '#eff6ff' : 'transparent',
                   color: value === o.value ? '#2563eb' : '#1e293b',
-                  fontWeight: value === o.value ? 700 : 400
+                  fontWeight: value === o.value ? 600 : 400,
+                  transition: 'all 0.15s ease',
+                  margin: '0 0.25rem',
+                  borderRadius: '0.4rem'
                 }}
-                onMouseEnter={e => e.target.style.background = value === o.value ? '#eff6ff' : '#f8fafc'}
-                onMouseLeave={e => e.target.style.background = value === o.value ? '#eff6ff' : 'transparent'}
+                onMouseEnter={e => {
+                  e.target.style.background = value === o.value ? '#eff6ff' : '#f1f5f9';
+                  e.target.style.paddingLeft = '1.25rem';
+                }}
+                onMouseLeave={e => {
+                  e.target.style.background = value === o.value ? '#eff6ff' : 'transparent';
+                  e.target.style.paddingLeft = '1rem';
+                }}
               >
                 {o.label}
               </div>
