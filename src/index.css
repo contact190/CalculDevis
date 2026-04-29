@@ -440,3 +440,28 @@ body {
     margin-top: 0.25rem;
   }
 }
+
+/* Configurator Grid - Sticky Sidebar Layout */
+.configurator-grid {
+  display: grid;
+  grid-template-columns: 1fr 370px;
+  gap: 2rem;
+  align-items: start;
+}
+
+@media (max-width: 1200px) {
+  .configurator-grid {
+    grid-template-columns: 1fr 320px;
+    gap: 1.5rem;
+  }
+}
+
+@media (max-width: 1024px) {
+  .configurator-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .configurator-sticky-sidebar {
+    position: static !important;
+  }
+}

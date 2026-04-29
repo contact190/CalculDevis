@@ -810,10 +810,10 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         doc.text("Sans Photo", 67.5, currentY + 45, { align: 'center' });
       }
 
-      // Top Right Table (Adjusted X and Y to prevent overlaps)
+      // Top Right Table
+      const startX = 115;
       doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
-      const startX = 115;
       doc.text(`Réf: ${item.label}`, startX, currentY + 12);
       doc.text(`Qté Totale: ${item.qty} u.`, startX, currentY + 20);
       
@@ -824,15 +824,62 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         doc.text(`Postes: ${labels}`, startX, currentY + 28, { maxWidth: 70 });
       }
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(11);
-      doc.text(`Modèle: ${compo?.name || '—'}`, startX, currentY + 45);
-      doc.text(`Couleur: ${color?.name || '—'}`, startX, currentY + 53);
-      doc.text(`RAL: ${cfg.colorId || 'Std'}`, startX, currentY + 61);
+
+      // ── Modèle & Dimensions (smart for compound configs) ──
+      const isCompound = cfg.compoundType && cfg.compoundType !== 'none' && cfg.compoundConfig?.parts?.length > 0;
       
-      doc.setFontSize(14);
-      doc.setTextColor(30, 41, 59);
-      doc.text(`DIM: ${cfg.L} x ${cfg.H} mm`, startX, currentY + 95);
-      doc.setTextColor(0, 0, 0);
+      if (isCompound) {
+        // Find opening part and fix parts
+        const openingPart = cfg.compoundConfig.parts.find(p => p.type === 'opening');
+        const fixParts = cfg.compoundConfig.parts.filter(p => p.type === 'fixe');
+        
+        const openingComp = database.compositions?.find(c => c.id === openingPart?.compositionId);
+        const fixLabel = fixParts.length > 0 ? `Fix (×${fixParts.length})` : '';
+        
+        const modelLabel = [openingComp?.name, fixLabel].filter(Boolean).join(' + ');
+        doc.setFontSize(11);
+        doc.text(`Modèle: ${modelLabel || '—'}`, startX, currentY + 37);
+        doc.text(`Couleur: ${color?.name || '—'}`, startX, currentY + 44);
+        doc.text(`RAL: ${cfg.colorId || 'Std'}`, startX, currentY + 51);
+        
+        // Total dimension
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(30, 41, 59);
+        doc.text(`DIM TOTALE: ${cfg.L} x ${cfg.H} mm`, startX, currentY + 82);
+        
+        // Per-part breakdown
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(71, 85, 105);
+        let partY = currentY + 89;
+        
+        if (openingPart) {
+          const w = openingPart.width || cfg.L;
+          const h = openingPart.height || cfg.H;
+          doc.text(`↳ Ouverture: ${w} x ${h} mm`, startX, partY);
+          partY += 6;
+        }
+        fixParts.forEach((fp, fi) => {
+          const w = fp.width || 0;
+          const h = fp.height || cfg.H;
+          doc.text(`↳ Fix ${fi + 1}: ${w} x ${h} mm`, startX, partY);
+          partY += 6;
+        });
+        
+        doc.setTextColor(0, 0, 0);
+      } else {
+        doc.setFontSize(11);
+        doc.text(`Modèle: ${compo?.name || '—'}`, startX, currentY + 37);
+        doc.text(`Couleur: ${color?.name || '—'}`, startX, currentY + 45);
+        doc.text(`RAL: ${cfg.colorId || 'Std'}`, startX, currentY + 53);
+        
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(30, 41, 59);
+        doc.text(`DIM: ${cfg.L} x ${cfg.H} mm`, startX, currentY + 92);
+        doc.setTextColor(0, 0, 0);
+      }
 
       // Shutter Info Box (NEW)
       if (cfg.hasShutter && database.shutterComponents) {
@@ -871,7 +918,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         }
       });
 
-      let cjY = currentY + 45; // Start CJ lines below the Postes section
+      let cjY = currentY + 60; // After Modèle (+37), Couleur (+45), RAL (+53)
       if (cjSummary.length > 0) {
         cjSummary.forEach((cj, cjIdx) => {
           const displayValue = `${cj.thickness} mm`;

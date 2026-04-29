@@ -236,8 +236,20 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
 
   return (
     <div className="animate-fade-in">
-      {/* Top Bar */}
-      <div className="flex-mobile-stack" style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem', padding: '1rem', background: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
+      {/* Top Bar - Sticky */}
+      <div className="flex-mobile-stack shadow-md" style={{ 
+        position: 'sticky', 
+        top: 0, 
+        zIndex: 100, 
+        display: 'flex', 
+        alignItems: 'center', 
+        gap: '1rem', 
+        marginBottom: '2rem', 
+        padding: '1rem 1.5rem', 
+        background: 'white', 
+        borderBottom: '1px solid #e2e8f0',
+        borderRadius: '0.5rem'
+      }}>
         <button onClick={onCancel} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', border: '1px solid #e2e8f0', borderRadius: '0.5rem', background: 'white', cursor: 'pointer', color: '#64748b', fontSize: '0.875rem' }}>
           <ArrowLeft size={16} /> Retour
         </button>
@@ -259,7 +271,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
         </button>
       </div>
 
-      <div className="flex-column-mobile" style={{ gap: '2.0rem' }}>
+      <div className="configurator-grid">
         {/* Left: Config */}
         <div className="glass shadow-lg" style={{ padding: '1.5rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
@@ -304,10 +316,6 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                 <button onClick={() => setConfig(prev => ({ ...prev, useCustomLayout: false, compoundType: 'fix_coulissant', compositionId: '' }))}
                   style={{ flex: 1, padding: '0.45rem', borderRadius: '0.4rem', border: 'none', background: (config.compoundType !== 'none') ? 'white' : 'transparent', fontWeight: (config.compoundType !== 'none') ? 700 : 400, color: (config.compoundType !== 'none') ? '#0891b2' : '#64748b', cursor: 'pointer', fontSize: '0.75rem' }}>
                   🧩 Assemblé
-                </button>
-                <button onClick={() => setConfig(prev => ({ ...prev, useCustomLayout: true, customLayout: prev.customLayout || defaultLayout() }))}
-                  style={{ flex: 1, padding: '0.45rem', borderRadius: '0.4rem', border: 'none', background: config.useCustomLayout ? 'white' : 'transparent', fontWeight: config.useCustomLayout ? 700 : 400, color: config.useCustomLayout ? '#7c3aed' : '#64748b', cursor: 'pointer', fontSize: '0.75rem' }}>
-                  🖼️ Libre
                 </button>
               </div>
             </div>
@@ -1042,8 +1050,15 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
           </div>
         </div>
 
-        {/* Right: Drawing + Price */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', alignItems: 'center' }}>
+        {/* Right: Drawing + Price - Sticky */}
+        <div className="configurator-sticky-sidebar" style={{ 
+          display: 'flex', 
+          flexDirection: 'column', 
+          gap: '1.5rem', 
+          alignItems: 'center',
+          position: 'sticky',
+          top: '80px'
+        }}>
           <div style={{ background: 'white', padding: '1rem', borderRadius: '1rem', border: '1px solid #e2e8f0', overflow: 'hidden', width: '100%', display: 'flex', justifyContent: 'center' }}>
             <JoineryCanvas 
               config={config} 
@@ -1587,43 +1602,107 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
 
     if (quote.items && quote.items.length > 0) {
       quote.items.forEach((item, idx) => {
-        const rowHeight = 40;
-        
+        // Build description lines dynamically
+        const cfg = item.config || {};
+        const comp = database.compositions?.find(c => c.id === cfg.compositionId);
+        const color = database.colors?.find(c => c.id === cfg.colorId);
+        const glass = database.glass?.find(g => g.id === cfg.glassId);
+        const sc = database.shutterComponents;
+
+        const descLines = [];
+
+        // Système / Modèle
+        if (cfg.compoundType && cfg.compoundType !== 'none' && cfg.compoundConfig?.parts?.length > 0) {
+          const openingPart = cfg.compoundConfig.parts.find(p => p.type === 'opening');
+          const fixParts = cfg.compoundConfig.parts.filter(p => p.type === 'fixe');
+          const openingComp = database.compositions?.find(c => c.id === openingPart?.compositionId);
+          const fixLabel = fixParts.length > 0 ? ` + Fix (×${fixParts.length})` : '';
+          descLines.push(`Système : ${openingComp?.name || comp?.name || '—'}${fixLabel}`);
+        } else {
+          descLines.push(`Système : ${comp?.name || '—'}`);
+        }
+
+        // Couleur & Dimensions
+        descLines.push(`Couleur : ${color?.name || cfg.colorId || '—'}`);
+        descLines.push(`Dimensions : ${cfg.L} x ${cfg.H} mm`);
+
+        // Vitrage
+        if (glass) {
+          descLines.push(`Vitrage : ${glass.name} (${glass.thickness || ''}mm)`);
+        }
+
+        // Couvre-joint
+        const hasTopJoin = cfg.optionalSides?.top;
+        const hasLeftJoin = cfg.optionalSides?.left;
+        descLines.push(`Couvre-Joint : ${(hasTopJoin || hasLeftJoin) ? 'Oui' : 'Non'}`);
+
+        // Options sélectionnées
+        if (cfg.selectedOptions?.length > 0) {
+          const optNames = cfg.selectedOptions.map(oId => {
+            const opt = (database.options || []).find(o => o.id === oId);
+            return opt?.name || oId;
+          }).join(', ');
+          descLines.push(`Options : ${optNames}`);
+        }
+
+        // Volet roulant
+        if (cfg.hasShutter && sc) {
+          const caisson = sc.caissons?.find(c => c.id === (cfg.shutterConfig?.caissonId));
+          const glissiere = sc.glissieres?.find(g => g.id === (cfg.shutterConfig?.glissiereId));
+          const lame = sc.lames?.find(l => l.id === (cfg.shutterConfig?.lameId));
+          const kit = sc.kits?.find(k => k.id === (cfg.shutterConfig?.kitId));
+          const axe = sc.axes?.find(a => a.id === (cfg.shutterConfig?.axeId));
+          descLines.push(`Volet Roulant :`);
+          if (caisson) descLines.push(`  Caisson : ${caisson.name}`);
+          if (glissiere) descLines.push(`  Glissière : ${glissiere.name}`);
+          if (lame) descLines.push(`  Lame : ${lame.name}`);
+          if (axe) descLines.push(`  Axe : ${axe.name}`);
+          if (kit) descLines.push(`  Kit : ${kit.name}`);
+        }
+
+        // Dynamic row height (5pt per line + padding)
+        const lineHeight = 5;
+        const padding = 8;
+        const rowHeight = Math.max(40, descLines.length * lineHeight + padding * 2);
+
         // Draw row border
         doc.rect(15, y, pw - 30, rowHeight);
-        
+
         // Image
         if (item.config?.thumbnail) {
           try {
-             doc.addImage(item.config.thumbnail, 'PNG', 17, y + 2, 35, 35, '', 'FAST');
+            doc.addImage(item.config.thumbnail, 'PNG', 17, y + 2, 35, 35, '', 'FAST');
           } catch(e){}
         }
-        
+
         // Description
         const descX = 60;
-        let descY = y + 8;
+        let descY = y + padding;
+        doc.setFontSize(8);
         doc.setFont('helvetica', 'normal');
-        
-        const comp = database.compositions?.find(c => c.id === item.config?.compositionId);
-        const color = database.colors?.find(c => c.id === item.config?.colorId);
-        
-        doc.text(`Système : ${comp?.name || ''}`, descX, descY); descY += 5;
-        doc.text(`Couleur : ${color?.name || item.config?.colorId || ''}`, descX, descY); descY += 5;
-        doc.text(`Dimensions : ${item.config?.L} x ${item.config?.H} mm`, descX, descY); descY += 5;
-        
-        // Specific configs
-        const hasTopJoin = item.config?.optionalSides?.top;
-        const hasLeftJoin = item.config?.optionalSides?.left;
-        doc.text(`Couvre Joint : ${hasTopJoin || hasLeftJoin ? 'Oui' : 'Non'}`, descX, descY); descY += 5;
+
+        descLines.forEach(line => {
+          const isBoldLabel = line === 'Volet Roulant :';
+          if (isBoldLabel) {
+            doc.setFont('helvetica', 'bold');
+          }
+          doc.text(line, descX, descY);
+          doc.setFont('helvetica', 'normal');
+          descY += lineHeight;
+        });
 
         // QTY & Prices
         const priceU = formatPrice(item.unitPriceHT);
         const totalLine = formatPrice((item.unitPriceHT || 0) * item.qty);
-        
-        doc.text(`${item.qty}`, 133, y + 20, { align: 'right' });
-        doc.text(`${priceU} DZD`, 165, y + 20, { align: 'right' });
-        doc.text(`${totalLine} DZD`, pw - 17, y + 20, { align: 'right' });
-        
+        const midY = y + rowHeight / 2;
+
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${item.qty}`, 133, midY, { align: 'right' });
+        doc.text(`${priceU} DZD`, 165, midY, { align: 'right' });
+        doc.text(`${totalLine} DZD`, pw - 17, midY, { align: 'right' });
+        doc.setFont('helvetica', 'normal');
+
         y += rowHeight;
         if (y > 240) {
           doc.addPage();
