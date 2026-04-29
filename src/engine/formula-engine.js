@@ -824,7 +824,9 @@ export class FormulaEngine {
 
     if (!isOnlyShutter && config.hasShutter && config.shutterConfig) {
       const sc = this.db.shutterComponents;
-      let gid = config.shutterConfig.glissiereId;
+      
+      // FIX: Use overridden glissiereId if present
+      let gid = config.shutterOverrides?.glissiereId || config.shutterConfig.glissiereId;
 
       if (gid === 'AUTO') {
         const kitId = config.shutterConfig.kitId;
@@ -866,7 +868,9 @@ export class FormulaEngine {
       if (config.shutterOverrides?.customHC) {
         shutterHeight = config.shutterOverrides.customHC;
       } else {
-        const caisson = (this.db.shutterComponents?.caissons || []).find(c => c.id === shutterConfig.caissonId);
+        // FIX: Use overridden caissonId if present
+        const effectiveCaissonId = config.shutterOverrides?.caissonId || shutterConfig.caissonId;
+        const caisson = (this.db.shutterComponents?.caissons || []).find(c => c.id === effectiveCaissonId);
         shutterHeight = parseFloat(caisson?.height) || 0;
       }
     }

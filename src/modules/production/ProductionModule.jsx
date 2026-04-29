@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Package, Scissors, Ruler, Download, CheckCircle, Barcode, ShoppingCart, Layers, Edit2, Link2, Link2Off, Plus, QrCode, Trash2, ArrowLeft, FileText, FileSpreadsheet } from 'lucide-react';
+import { Package, Scissors, Ruler, Download, CheckCircle, Barcode, ShoppingCart, Layers, Edit2, Link2, Link2Off, Plus, QrCode, Trash2, ArrowLeft, FileText, FileSpreadsheet, RefreshCw, Info } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { FormulaEngine } from '../../engine/formula-engine';
 import { DEFAULT_DATA } from '../../data/default-data';
@@ -67,32 +67,43 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
             const totalQty = m.qty || 1;
             const shutters = m.shutterList || [];
             
-            // Group by measurement row
+            // Group by measurement row - Split into individual items (one page per window)
             if (shutters.length === 0) {
-              configs.push({
-                config: { ...item.config, L: m.L, H: m.H, partOverrides: m.partOverrides },
-                qty: totalQty,
-                label: item.label,
-                allLabels: m.instanceNames || [],
-                itemId: item.id,
-                measureId: m.id
-              });
+              for (let i = 0; i < totalQty; i++) {
+                configs.push({
+                  config: { ...item.config, L: m.L, H: m.H, partOverrides: m.partOverrides },
+                  qty: 1,
+                  label: item.label,
+                  allLabels: [m.instanceNames?.[i] || `${item.label}-${i + 1}`],
+                  itemId: item.id,
+                  measureId: `${m.id}-i${i}`
+                });
+              }
             } else {
-              // If shutters are different within a row, we split by shutter config
+              // If shutters are present, split by shutter config AND by individual units
               let nameOffset = 0;
               shutters.forEach((sh, shIdx) => {
                 const sQty = Number(sh.qty) || 1;
-                configs.push({
-                  config: { 
-                    ...item.config, L: m.L, H: m.H, partOverrides: m.partOverrides,
-                    shutterOverrides: { ...sh.overrides, customLV: sh.customLV }
-                  },
-                  qty: sQty,
-                  label: item.label,
-                  allLabels: m.instanceNames?.slice(nameOffset, nameOffset + sQty) || [],
-                  itemId: item.id,
-                  measureId: `${m.id}-sh${shIdx}`
-                });
+                for (let i = 0; i < sQty; i++) {
+                  configs.push({
+                    config: { 
+                      ...item.config, 
+                      L: m.L, 
+                      H: m.H, 
+                      partOverrides: m.partOverrides,
+                      shutterConfig: {
+                        ...(item.config?.shutterConfig || {}),
+                        ...(sh.overrides || {})
+                      },
+                      shutterOverrides: { ...(sh.overrides || {}), customLV: sh.customLV }
+                    },
+                    qty: 1,
+                    label: item.label,
+                    allLabels: [m.instanceNames?.[nameOffset + i] || `${item.label}-${nameOffset + i + 1}`],
+                    itemId: item.id,
+                    measureId: `${m.id}-sh${shIdx}-i${i}`
+                  });
+                }
                 nameOffset += sQty;
               });
             }
@@ -739,13 +750,28 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
       const range = database.ranges?.find(r => r.id === cfg.rangeId);
       const color = database.colors?.find(c => c.id === cfg.colorId);
       
-      // Filter profiles based on document type
-      const profiles = b.profiles.filter(p => {
+      // Combine regular profiles with ALL shutter components (slats, caissons, motors, etc.)
+      const allItems = [
+        ...(b.profiles || []),
+        ...(b.shutters || []).map(s => {
+           const unit = (s.priceUnit || '').toUpperCase().trim();
+           const isLinear = ['ML', 'BARRE', 'JOINT'].includes(unit);
+           return { 
+             ...s, 
+             usage: 'VOLET ROULANT',
+             // If it's a unit item (caisson, motor), set length to 0 or null to distinguish from cutting items
+             length: isLinear ? s.length : null 
+           };
+        })
+      ];
+
+      // Filter based on document type (Opening vs Shutter)
+      const filteredItems = allItems.filter(p => {
         const isShutter = p.usage === 'VOLET ROULANT' || p.name?.toLowerCase().includes('lame') || p.name?.toLowerCase().includes('coulisse');
         return isOpening ? !isShutter : isShutter;
       });
 
-      if (profiles.length === 0) return;
+      if (filteredItems.length === 0) return;
       
       // FIX: Each window starts on a new page
       if (idx > 0) {
@@ -799,17 +825,37 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
       }
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(11);
-      doc.text(`Modèle: ${compo?.name || '—'}`, startX, currentY + 58);
-      doc.text(`Couleur: ${color?.name || '—'}`, startX, currentY + 66);
-      doc.text(`RAL: ${cfg.colorId || 'Std'}`, startX, currentY + 74);
+      doc.text(`Modèle: ${compo?.name || '—'}`, startX, currentY + 45);
+      doc.text(`Couleur: ${color?.name || '—'}`, startX, currentY + 53);
+      doc.text(`RAL: ${cfg.colorId || 'Std'}`, startX, currentY + 61);
       
       doc.setFontSize(14);
       doc.setTextColor(30, 41, 59);
-      doc.text(`DIM: ${cfg.L} x ${cfg.H} mm`, startX, currentY + 92);
+      doc.text(`DIM: ${cfg.L} x ${cfg.H} mm`, startX, currentY + 95);
       doc.setTextColor(0, 0, 0);
+
+      // Shutter Info Box (NEW)
+      if (cfg.hasShutter && database.shutterComponents) {
+         const sc = database.shutterComponents;
+         const caisson = sc.caissons?.find(c => c.id === (cfg.shutterOverrides?.caissonId || cfg.shutterConfig?.caissonId));
+         const glissiere = sc.glissieres?.find(g => g.id === (cfg.shutterOverrides?.glissiereId || cfg.shutterConfig?.glissiereId));
+         const lame = sc.lames?.find(l => l.id === (cfg.shutterOverrides?.lameId || cfg.shutterConfig?.lameId));
+         const kit = sc.kits?.find(k => k.id === (cfg.shutterOverrides?.kitId || cfg.shutterConfig?.kitId));
+
+         doc.setFillColor(241, 245, 249);
+         doc.roundedRect(110, currentY + 65, 80, 25, 2, 2, 'F');
+         doc.setFontSize(8);
+         doc.setFont('helvetica', 'bold');
+         doc.text("INFO VOLET :", 115, currentY + 70);
+         doc.setFont('helvetica', 'normal');
+         doc.setFontSize(7.5);
+         doc.text(`Caisson: ${caisson?.name || '—'}`, 115, currentY + 75);
+         doc.text(`Glissière: ${glissiere?.name || '—'}`, 115, currentY + 80);
+         doc.text(`Lame: ${lame?.name || '—'} / ${kit?.name || '—'}`, 115, currentY + 85);
+      }
       
       // Improved Couvre-joint detection: De-duplicate by THICKNESS only to satisfy "supprime une" request
-      const cjProfiles = profiles.filter(p => p.isCouvreJoint || p.usage === 'ACCESSOIRES / FINITION' && /couvre|cj/i.test(p.label || ''));
+      const cjProfiles = filteredItems.filter(p => p.isCouvreJoint || p.usage === 'ACCESSOIRES / FINITION' && /couvre|cj/i.test(p.label || ''));
       
       const cjSummary = [];
       const seenThick = new Set();
@@ -837,8 +883,8 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
       
       currentY += 105;
 
-      // Group profiles by category
-      const profilesByCategory = profiles.reduce((acc, p) => {
+      // Group items by category
+      const itemsByCategory = filteredItems.reduce((acc, p) => {
         const cat = p.usage || 'AUTRE';
         if (!acc[cat]) acc[cat] = [];
         acc[cat].push(p);
@@ -847,7 +893,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
 
       const catOrder = ['DORMANT (CADRE)', 'FIXE', 'FENETRE (OUVRANT)', 'VOLET ROULANT', 'ACCESSOIRES / FINITION'];
       
-      Object.entries(profilesByCategory).sort((a, b) => {
+      Object.entries(itemsByCategory).sort((a, b) => {
         const idxA = catOrder.indexOf(a[0]);
         const idxB = catOrder.indexOf(b[0]);
         return (idxA === -1 ? 99 : idxA) - (idxB === -1 ? 99 : idxB);
@@ -864,11 +910,11 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         
         // Headers for this category
         doc.setFontSize(7);
-        doc.text("Photo", 60, currentY + 5);
-        doc.text("Désignation", 80, currentY + 5);
-        doc.text("Longueur", 125, currentY + 5);
-        doc.text("Coupe", 150, currentY + 5);
-        doc.text("Qté", 185, currentY + 5);
+        doc.text("Photo", 55, currentY + 5);
+        doc.text("Désignation", 75, currentY + 5);
+        doc.text("Longueur", 135, currentY + 5);
+        doc.text("Coupe", 160, currentY + 5);
+        doc.text("Qté", 188, currentY + 5);
         
         currentY += 15; // Increased space to avoid overlap with header
         doc.setFont('helvetica', 'normal');
@@ -880,11 +926,23 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
             // Flexible lookup (try exact, then normalized)
             let pRef = (database.profiles || []).find(x => x.id === p.id);
             if (!pRef) {
-              const normId = p.id.replace(/[^a-zA-Z0-9]/g, '');
-              pRef = (database.profiles || []).find(x => x.id.replace(/[^a-zA-Z0-9]/g, '') === normId);
+              const normId = String(p.id).replace(/[^a-zA-Z0-9]/g, '');
+              pRef = (database.profiles || []).find(x => String(x.id).replace(/[^a-zA-Z0-9]/g, '') === normId);
+            }
+            
+            // If still not found, check shutter components
+            if (!pRef && database.shutterComponents) {
+               const allShutterComp = [
+                 ...(database.shutterComponents.caissons || []),
+                 ...(database.shutterComponents.lames || []),
+                 ...(database.shutterComponents.lamesFinales || []),
+                 ...(database.shutterComponents.glissieres || []),
+                 ...(database.shutterComponents.axes || [])
+               ];
+               pRef = allShutterComp.find(x => x.id === p.id);
             }
 
-            const cutType = pRef?.cutType || '45/45';
+            const cutType = pRef?.cutType || (cat === 'VOLET ROULANT' ? '90/90' : '45/45');
             const photo = pRef?.image;
 
             doc.setFontSize(7);
@@ -896,29 +954,37 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                 let format = 'JPEG';
                 if (photo.includes('png')) format = 'PNG';
                 else if (photo.includes('webp')) format = 'WEBP';
-                doc.addImage(photo, format, 58, currentY - 5, 12, 10);
+                doc.addImage(photo, format, 53, currentY - 5, 12, 10);
               } catch(e) {
                 doc.setDrawColor(240, 240, 240);
-                doc.rect(58, currentY - 5, 12, 10);
+                doc.rect(53, currentY - 5, 12, 10);
               }
             } else {
                doc.setDrawColor(240, 240, 240);
-               doc.rect(58, currentY - 5, 12, 10);
+               doc.rect(53, currentY - 5, 12, 10);
             }
 
             doc.setFontSize(8);
-            doc.text(`${p.name} [${p.label}]`, 80, currentY);
+            // Use maxWidth to prevent designation overlapping with Longueur
+            doc.text(`${p.name} [${p.label || 'Pièce'}]`, 75, currentY, { maxWidth: 55 });
+            
             doc.setFont('helvetica', 'bold');
-            doc.text(`${Math.round(p.length)} mm`, 125, currentY);
+            if (p.length) {
+              doc.text(`${Math.round(p.length)} mm`, 135, currentY);
+              doc.setFont('helvetica', 'normal');
+              doc.text(cutType, 160, currentY);
+              // Visual Cut
+              drawCutVisual(doc, 168, currentY - 3, 15, 5, cutType);
+            } else {
+              doc.text(`1 unité`, 135, currentY);
+            }
+            
             doc.setFont('helvetica', 'normal');
-            doc.text(cutType, 150, currentY);
+            doc.text(`x${Math.round(p.qty * item.qty)}`, 188, currentY);
             
-            // Visual Cut
-            drawCutVisual(doc, 160, currentY - 3, 20, 5, cutType);
-            
-            doc.text(`x${p.qty * item.qty}`, 185, currentY);
-            
-            currentY += 14; 
+            // Calculate height taken by multiline text if any
+            const textLines = doc.splitTextToSize(`${p.name} [${p.label || 'Pièce'}]`, 55);
+            currentY += Math.max(14, textLines.length * 4 + 2); 
           });
         currentY += 3;
       });
@@ -2287,6 +2353,145 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
           doc.save(`Etiquettes_${selectedGlobalQuoteId}.pdf`);
         };
 
+        const generateCuttingOptimizationPDF = () => {
+          const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+          const margin = 15;
+          let currentY = 20;
+
+          doc.setFontSize(18);
+          doc.setFont('helvetica', 'bold');
+          doc.text("PLAN DE COUPE OPTIMISÉ (NESTING)", 105, currentY, { align: 'center' });
+          doc.setFontSize(10);
+          doc.setFont('helvetica', 'normal');
+          doc.text(`Client: ${activeQuote?.clientNom || '—'}  |  Dossier: ${activeQuote?.number || '—'}  |  Date: ${new Date().toLocaleDateString()}`, 105, currentY + 7, { align: 'center' });
+          currentY += 20;
+
+          // 1. Collect ALL cuts from ALL active configs
+          const allCutsList = [];
+          activeConfigs.forEach(cfg => {
+            const b = engine.calculateBOM(cfg.config);
+            const combined = [
+              ...(b.profiles || []), 
+              ...(b.shutters || []).filter(s => ['ML', 'BARRE', 'JOINT'].includes((s.priceUnit || '').toUpperCase().trim()))
+            ];
+            
+            combined.forEach(p => {
+              for (let i = 0; i < cfg.qty; i++) {
+                allCutsList.push({
+                  ...p,
+                  instanceLabel: cfg.allLabels[i] || cfg.label
+                });
+              }
+            });
+          });
+
+          if (allCutsList.length === 0) {
+            doc.text("Aucune coupe à optimiser.", 20, currentY);
+            doc.save(`OPTIM_COUPE_${selectedGlobalQuoteId}.pdf`);
+            return;
+          }
+
+          // 2. Group by Profile + Color
+          const groups = {};
+          allCutsList.forEach(c => {
+            const colorId = c.colorId || 'STD';
+            const groupKey = `${c.id}|${colorId}`;
+            if (!groups[groupKey]) groups[groupKey] = { id: c.id, colorId, name: c.name, cuts: [] };
+            groups[groupKey].cuts.push(c);
+          });
+
+          // 3. Process each group
+          Object.values(groups).forEach(group => {
+            if (currentY > 250) { doc.addPage(); currentY = 20; }
+            
+            const pRef = (database.profiles || []).find(p => p.id === group.id);
+            const barLen = pRef?.barLength || 6000;
+            const threshold = pRef?.scrapThreshold || 500;
+            const blade = 4; // 4mm blade width
+
+            doc.setFillColor(30, 41, 59);
+            doc.rect(margin, currentY, 180, 8, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'bold');
+            doc.text(`${group.name} (${group.id}) - Couleur: ${group.colorId}`, margin + 5, currentY + 5.5);
+            currentY += 15;
+
+            // FFD Nesting Algorithm
+            const sortedCuts = [...group.cuts].sort((a, b) => b.length - a.length);
+            const nestedBars = [];
+            
+            sortedCuts.forEach(cut => {
+              let placed = false;
+              for (let bar of nestedBars) {
+                if (bar.remaining >= cut.length + blade) {
+                  bar.items.push(cut);
+                  bar.remaining -= (cut.length + blade);
+                  placed = true;
+                  break;
+                }
+              }
+              if (!placed) {
+                nestedBars.push({ items: [cut], remaining: barLen - cut.length - blade });
+              }
+            });
+
+            // 4. Draw Bars
+            doc.setTextColor(0, 0, 0);
+            nestedBars.forEach((bar, bIdx) => {
+              if (currentY > 260) { doc.addPage(); currentY = 20; }
+              
+              doc.setFontSize(8);
+              doc.setFont('helvetica', 'bold');
+              doc.text(`Barre #${bIdx + 1}`, margin, currentY - 2);
+              
+              const barWidth = 170;
+              const barHeight = 8;
+              const scale = barWidth / barLen;
+              
+              doc.setDrawColor(200, 200, 200);
+              doc.rect(margin, currentY, barWidth, barHeight);
+              
+              let currentXPos = margin;
+              bar.items.forEach(cut => {
+                const w = cut.length * scale;
+                doc.setDrawColor(30, 41, 59);
+                doc.setFillColor(255, 255, 255);
+                doc.rect(currentXPos, currentY, w, barHeight, 'FD');
+                
+                doc.setFontSize(5);
+                doc.setFont('helvetica', 'normal');
+                doc.text(`${cut.instanceLabel}`, currentXPos + 1, currentY + barHeight / 2 + 1.5, { maxWidth: w - 2 });
+                doc.text(`${Math.round(cut.length)}`, currentXPos + 1, currentY + barHeight + 3);
+                
+                currentXPos += w;
+                doc.setDrawColor(200, 200, 200);
+                doc.line(currentXPos, currentY, currentXPos, currentY + barHeight);
+                currentXPos += (blade * scale);
+              });
+              
+              const remainingW = bar.remaining * scale;
+              if (remainingW > 0) {
+                const isReusable = bar.remaining >= threshold;
+                doc.setFillColor(isReusable ? 220 : 254, isReusable ? 252 : 226, isReusable ? 231 : 226); 
+                doc.setDrawColor(isReusable ? 22 : 185, isReusable ? 163 : 28, isReusable ? 74 : 28);
+                doc.rect(currentXPos, currentY, remainingW, barHeight, 'FD');
+                
+                doc.setFontSize(5);
+                doc.setTextColor(isReusable ? 21 : 153, isReusable ? 128 : 27, isReusable ? 61 : 27);
+                doc.text(`${Math.round(bar.remaining)}mm`, currentXPos + 1, currentY + barHeight / 2 + 1.5);
+                doc.text(isReusable ? "RÉUTIL." : "CHUTE", currentXPos + 1, currentY - 2);
+                doc.setTextColor(0, 0, 0);
+              }
+              
+              currentY += 18;
+            });
+            currentY += 10;
+          });
+
+          doc.save(`OPTIM_COUPE_${selectedGlobalQuoteId}.pdf`);
+        };
+
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
             {/* Deep Inspection Panel (Debug) */}
@@ -2471,9 +2676,17 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.5rem' }}>
                 <Layers size={20} color="#8b5cf6" />
                 <h2 style={{ fontSize: '1.125rem', fontWeight: 600, flex: 1 }}>Plan des Chariots — {totalBars} barres</h2>
-                <button onClick={generateLabelsPDF} className="btn btn-primary" style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem' }}>
-                   🏷️ Générer Étiquettes
-                </button>
+                 <button onClick={generateLabelsPDF} className="btn btn-primary" style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem' }}>
+                    🏷️ Générer Étiquettes
+                 </button>
+                 <button onClick={generateCuttingOptimizationPDF} className="btn btn-primary" style={{ background: '#10b981', borderColor: '#10b981', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', padding: '0.4rem 0.8rem' }}>
+                    <RefreshCw size={16} />
+                    Plan de Coupe Optimisé (Nesting)
+                 </button>
+              </div>
+              <div style={{ marginTop: '1rem', background: '#f8fafc', padding: '0.75rem 1rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0', fontSize: '0.8rem', color: '#64748b' }}>
+                 <Info size={14} style={{ marginRight: '0.5rem', verticalAlign: 'middle' }} />
+                 Le plan d'optimisation (Nesting) utilise le <strong>Seuil de Chute</strong> défini dans l'Administration pour marquer les morceaux réutilisables (<span style={{color:'#16a34a', fontWeight:700}}>Vert</span>) ou les chutes perdues (<span style={{color:'#dc2626', fontWeight:700}}>Rouge</span>).
               </div>
               {totalBars === 0 ? (
                 <p style={{ color: '#94a3b8', fontStyle: 'italic' }}>Aucune barre à afficher.</p>
