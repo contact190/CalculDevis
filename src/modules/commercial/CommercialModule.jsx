@@ -1104,10 +1104,6 @@ export const QuoteSettingsPanel = ({ settings, onSave, onClose, title = "Paramè
                 <label style={{ fontSize: '0.75rem', color: '#64748b' }}>Validité (jours)</label>
                 <input type="number" className="input" value={draft.validityDays || 30} onChange={e => setDraft(p => ({ ...p, validityDays: parseInt(e.target.value) || 30 }))} />
               </div>
-              <div>
-                <label style={{ fontSize: '0.75rem', color: '#64748b' }}>TVA (%)</label>
-                <input type="number" className="input" value={draft.tvaRate || 19} onChange={e => setDraft(p => ({ ...p, tvaRate: parseFloat(e.target.value) || 19 }))} />
-              </div>
             </div>
           </div>
 
@@ -1188,7 +1184,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
       }
     });
 
-    const tva = ht * ((quoteSettings?.tvaRate || 19) / 100);
+    const tva = ht * ((quoteSettings?.tvaRate ?? 19) / 100);
     return { ht, tva, ttc: ht + tva, profiles, accessories, glass, shutters };
   }, [quote.items, quoteSettings, engine]);
 
@@ -1522,7 +1518,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
     const rightBoxX = 110;
     const boxHeight = 45; // Increased height to fit categories
     doc.roundedRect(rightBoxX, y, pw - 15 - rightBoxX, boxHeight, 3, 3);
-    const tvaRate = quoteSettings?.tvaRate || 19;
+    const tvaRate = quoteSettings?.tvaRate ?? 19;
     
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
@@ -1844,8 +1840,32 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', opacity: 0.85 }}>
                 <span>Total HT</span><span>{totals.ht.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</span>
               </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', opacity: 0.85 }}>
+                <span>TVA (%)</span>
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  {[0, 9, 19].map(rate => (
+                    <button 
+                      key={rate}
+                      onClick={() => setQuoteSettings(prev => ({ ...prev, tvaRate: rate }))}
+                      style={{
+                        padding: '2px 8px',
+                        fontSize: '0.7rem',
+                        fontWeight: 700,
+                        borderRadius: '4px',
+                        border: '1px solid rgba(255,255,255,0.3)',
+                        background: (quoteSettings?.tvaRate ?? 19) === rate ? 'white' : 'transparent',
+                        color: (quoteSettings?.tvaRate ?? 19) === rate ? '#1e293b' : 'white',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      {rate}%
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', opacity: 0.85 }}>
-                <span>TVA ({quoteSettings?.tvaRate || 19}%)</span><span>{totals.tva.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</span>
+                <span>Montant TVA</span><span>{totals.tva.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: '1.3rem', borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '0.75rem', marginTop: '0.5rem' }}>
                 <span>TOTAL TTC</span><span>{totals.ttc.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</span>
