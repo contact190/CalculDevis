@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Home, Package, Settings, FileText, ChevronRight, Menu, LogOut, LayoutDashboard, Users, RefreshCw, ShoppingBag, ClipboardList, Rotate3D } from 'lucide-react';
+import { Home, Package, Settings, FileText, ChevronRight, Menu, LogOut, LayoutDashboard, Users, RefreshCw, ShoppingBag, ClipboardList, Rotate3D, Truck } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import CommercialModule from './modules/commercial/CommercialModule';
 import ProductionModule from './modules/production/ProductionModule';
 import AdminDashboard from './modules/admin/AdminDashboard';
 import ClientsModule from './modules/clients/ClientsModule';
 import OrdersModule from './modules/orders/OrdersModule';
+import ShippingModule from './modules/shipping/ShippingModule';
 import { DEFAULT_DATA } from './data/default-data';
 import { syncDatabase } from './utils/supabaseClient';
 
@@ -270,6 +271,7 @@ function App() {
     { id: 'commercial', label: 'Commercial', icon: LayoutDashboard },
     { id: 'orders', label: 'Commandes', icon: ShoppingBag },
     { id: 'production', label: 'Atelier / Production', icon: Package },
+    { id: 'shipping', label: 'Expédition & Colisage', icon: Truck },
     { id: 'clients', label: 'Clients', icon: Users },
     { id: 'admin', label: 'Administration', icon: Settings },
   ];
@@ -383,6 +385,12 @@ function App() {
               setQuoteSettings(settings);
               localStorage.setItem('quoteSettings', JSON.stringify(settings));
             }}
+          />
+        )}
+        {activeTab === 'shipping' && (
+          <ShippingModule 
+            data={database}
+            setData={setDatabase}
           />
         )}
         {activeTab === 'admin' && (
