@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Package, Scissors, Ruler, Download, CheckCircle, Barcode, ShoppingCart, Layers, Edit2, Link2, Link2Off, Plus, QrCode, Trash2, ArrowLeft, FileText, FileSpreadsheet, RefreshCw, Info } from 'lucide-react';
+import { Package, Scissors, Download, CheckCircle, Barcode, ShoppingCart, Layers, Edit2, Link2, Link2Off, Plus, QrCode, Trash2, ArrowLeft, FileText, FileSpreadsheet, RefreshCw, Info } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { FormulaEngine } from '../../engine/formula-engine';
 import { DEFAULT_DATA } from '../../data/default-data';
@@ -29,8 +29,6 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
   }, [manualStockOffcuts]);
 
   // Prise de mesures states
-  const [selectedClientId, setSelectedClientId] = useState('');
-  const [selectedQuoteId, setSelectedQuoteId] = useState('');
   const [selectedGlobalQuoteId, setSelectedGlobalQuoteId] = useState(currentQuote?.id || '');
   const [selectedBatchId, setSelectedBatchId] = useState('ALL');
   const [proformaSelection, setProformaSelection] = useState(new Set()); // Selected IDs for proforma
@@ -376,61 +374,90 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
   const chutesData = useMemo(() => {
     const scraps = [];
     const reusable = [];
+    const blade = 4; // 4mm blade width
+    let totalRawLength = 0;
+    let totalScrapLength = 0;
+    let totalReusableLength = 0;
     
     displayProfiles.forEach(p => {
-       const barKey = p._barKey || p.baseId || p.id;
+       const barKey = p.id;
        const bLength = barLengths[barKey] || p.barLength || 6400;
-       const sThreshold = p.scrapThreshold || 0;
+       const sThreshold = p.scrapThreshold || 500; // Default 500mm
        
-       const usagePriority = { 'DORMANT': 1, 'OUVRANT': 2, 'VOLET': 3, 'FINITION': 4 };
-       const pieces = (p.pieces || []).sort((a, b) => {
-         const prioA = usagePriority[a.usage] || 9;
-         const prioB = usagePriority[b.usage] || 9;
-         if (prioA !== prioB) return prioA - prioB;
-         if (a.windowIdx !== b.windowIdx) return a.windowIdx - b.windowIdx;
-         return (b.length || b) - (a.length || a);
-       });
+       const pieces = (p.pieces || []).sort((a, b) => (b.length || b) - (a.length || a));
        
        if (pieces.length > 0) {
-          const currentBars = [];
+          // Initialize bars with stock
+          const currentBars = (manualStockOffcuts[barKey] || []).map((len, idx) => ({
+            remaining: Number(len),
+            originalLen: Number(len),
+            isStock: true
+          }));
+
+          // Best Fit optimization
           pieces.forEach(pObj => {
             const piece = pObj.length || pObj;
-            let fitIdx = -1;
+            let bestFitIdx = -1;
+            let minRemainder = Infinity;
+
             for (let j = 0; j < currentBars.length; j++) {
-              if (currentBars[j] >= piece) {
-                fitIdx = j;
-                break;
+              const remainder = currentBars[j].remaining - (piece + blade);
+              if (remainder >= 0 && remainder < minRemainder) {
+                minRemainder = remainder;
+                bestFitIdx = j;
               }
             }
-            if (fitIdx !== -1) {
-              currentBars[fitIdx] -= piece;
+            
+            if (bestFitIdx !== -1) {
+              currentBars[bestFitIdx].remaining -= (piece + blade);
             } else {
-              currentBars.push(bLength - piece);
+              currentBars.push({ 
+                remaining: bLength - (piece + blade),
+                originalLen: bLength,
+                isStock: false
+              });
             }
           });
           
-          currentBars.forEach(remaining => {
-            if (remaining > 5) { // Only count if more than 5mm
+          currentBars.forEach(bar => {
+            totalRawLength += bar.originalLen;
+            const remaining = bar.remaining;
+            if (remaining > 10) { // Only count if more than 10mm
               const chute = {
                 id: p.id,
                 baseId: p.baseId || p.id.split('|')[0],
                 name: p.combinedName || p.name,
                 length: Math.round(remaining),
-                color: p.colorName || 'Std'
+                color: p.colorName || 'Std',
+                isFromStock: bar.isStock
               };
-              if (sThreshold > 0 && remaining <= sThreshold) {
+              if (remaining <= sThreshold) {
                 scraps.push(chute);
+                totalScrapLength += remaining;
               } else {
-                // Default to reusable if no threshold or if remaining > threshold
                 reusable.push(chute);
+                totalReusableLength += remaining;
               }
             }
           });
        }
     });
     
-    return { scraps, reusable };
-  }, [displayProfiles, barLengths]);
+    const totalWasteRate = totalRawLength > 0 ? ((totalScrapLength + totalReusableLength) / totalRawLength) * 100 : 0;
+    const scrapRate = totalRawLength > 0 ? (totalScrapLength / totalRawLength) * 100 : 0;
+    const reusableRate = totalRawLength > 0 ? (totalReusableLength / totalRawLength) * 100 : 0;
+
+    return { 
+      scraps, 
+      reusable, 
+      totalRawLength, 
+      totalScrapLength, 
+      totalReusableLength,
+      totalWasteRate,
+      scrapRate,
+      reusableRate
+    };
+  }, [displayProfiles, barLengths, manualStockOffcuts]);
 
   const exportChutesCSV = (type) => {
     const target = type === 'scraps' ? chutesData.scraps : chutesData.reusable;
@@ -1321,8 +1348,19 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
               <span style={{ fontSize: '1.75rem', fontWeight: 800 }}>{activeConfigs.length} <span style={{fontSize:'0.9rem', fontWeight:400, color: '#94a3b8'}}>unités</span></span>
            </div>
            <div style={{ background: 'rgba(255,255,255,0.05)', padding: '1.25rem', borderRadius: '1.25rem', border: '1px solid rgba(255,255,255,0.1)' }}>
-              <span style={{ display: 'block', color: '#94a3b8', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700, marginBottom: '0.5rem' }}>Taux de Chutes</span>
-              <span style={{ fontSize: '1.75rem', fontWeight: 800, color: '#10b981' }}>8.2 <span style={{fontSize:'0.9rem', fontWeight:400, color: '#94a3b8'}}>%</span></span>
+              <span style={{ display: 'block', color: '#94a3b8', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700, marginBottom: '0.5rem' }}>Optimisation Matière</span>
+              <span style={{ fontSize: '1.75rem', fontWeight: 800, color: '#10b981' }}>{chutesData.totalWasteRate.toFixed(1)} <span style={{fontSize:'0.9rem', fontWeight:400, color: '#94a3b8'}}>%</span></span>
+               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', marginTop: '0.5rem', fontSize: '0.7rem' }}>
+                 <span style={{ color: '#14b8a6', display: 'flex', justifyContent: 'space-between' }}>
+                   <span>♻️ Réutilisable:</span> 
+                   <span style={{ fontWeight: 700 }}>{chutesData.reusableRate.toFixed(1)}%</span>
+                 </span>
+                 <span style={{ color: '#f87171', display: 'flex', justifyContent: 'space-between' }}>
+                   <span>🗑️ Déchets:</span> 
+                   <span style={{ fontWeight: 700 }}>{chutesData.scrapRate.toFixed(1)}%</span>
+                 </span>
+               </div>
+
            </div>
            <div style={{ background: 'rgba(255,255,255,0.05)', padding: '1.25rem', borderRadius: '1.25rem', border: '1px solid rgba(255,255,255,0.1)' }}>
               <span style={{ display: 'block', color: '#94a3b8', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700, marginBottom: '0.5rem' }}>Poids Vitrage</span>
@@ -1346,7 +1384,6 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
           { id: 'debit', label: '2. Liste de Débit', icon: Scissors, color: '#2563eb' },
           { id: 'logistique', label: '3. Logistique & Tri', icon: Layers, color: '#0ea5e9' },
           { id: 'chutes', label: '4. Chutes & Stock', icon: Trash2, color: '#f59e0b' },
-          { id: 'measure', label: 'Site (Mesures)', icon: Ruler, color: '#64748b' },
         ].map((tab) => (
           <button 
             key={tab.id}
@@ -1378,7 +1415,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
 
 
       {/* Product Filter and PDF Export - Moved outside to apply to both pages */}
-      {quoteItems.length > 0 && activeTab !== 'measure' && (
+      {quoteItems.length > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem 1rem', background: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #e2e8f0', marginBottom: '1.5rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#64748b', whiteSpace: 'nowrap' }}>📋 Produit à afficher :</span>
