@@ -76,44 +76,51 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
             const totalQty = m.qty || 1;
             const shutters = m.shutterList || [];
             
-            // Group by measurement row - Split into individual items (one page per window)
-            if (shutters.length === 0) {
-              for (let i = 0; i < totalQty; i++) {
+            // Robust processing: Always process totalQty windows
+            const instancesProcessed = new Set();
+            
+            // 1. First process windows with explicit shutter overrides
+            let nameOffset = 0;
+            shutters.forEach((sh, shIdx) => {
+              const sQty = Number(sh.qty) || 1;
+              for (let i = 0; i < sQty; i++) {
+                const globalIdx = nameOffset + i;
+                if (globalIdx >= totalQty) break; // Safety
+                
                 configs.push({
-                  config: { ...item.config, L: m.L, H: m.H, partOverrides: m.partOverrides },
+                  config: { 
+                    ...item.config, 
+                    L: m.L, 
+                    H: m.H, 
+                    partOverrides: m.partOverrides,
+                    shutterConfig: {
+                      ...(item.config?.shutterConfig || {}),
+                      ...(sh.overrides || {})
+                    },
+                    shutterOverrides: { ...(sh.overrides || {}), customLV: sh.customLV }
+                  },
                   qty: 1,
                   label: item.label,
-                  allLabels: [m.instanceNames?.[i] || `${item.label}-${i + 1}`],
+                  allLabels: [m.instanceNames?.[globalIdx] || `${item.label}-${globalIdx + 1}`],
                   itemId: item.id,
-                  measureId: `${m.id}-i${i}`
+                  measureId: `${m.id}-sh${shIdx}-i${i}`
                 });
+                instancesProcessed.add(globalIdx);
               }
-            } else {
-              // If shutters are present, split by shutter config AND by individual units
-              let nameOffset = 0;
-              shutters.forEach((sh, shIdx) => {
-                const sQty = Number(sh.qty) || 1;
-                for (let i = 0; i < sQty; i++) {
-                  configs.push({
-                    config: { 
-                      ...item.config, 
-                      L: m.L, 
-                      H: m.H, 
-                      partOverrides: m.partOverrides,
-                      shutterConfig: {
-                        ...(item.config?.shutterConfig || {}),
-                        ...(sh.overrides || {})
-                      },
-                      shutterOverrides: { ...(sh.overrides || {}), customLV: sh.customLV }
-                    },
-                    qty: 1,
-                    label: item.label,
-                    allLabels: [m.instanceNames?.[nameOffset + i] || `${item.label}-${nameOffset + i + 1}`],
-                    itemId: item.id,
-                    measureId: `${m.id}-sh${shIdx}-i${i}`
-                  });
-                }
-                nameOffset += sQty;
+              nameOffset += sQty;
+            });
+
+            // 2. Process remaining windows with base configuration
+            for (let i = 0; i < totalQty; i++) {
+              if (instancesProcessed.has(i)) continue;
+              
+              configs.push({
+                config: { ...item.config, L: m.L, H: m.H, partOverrides: m.partOverrides },
+                qty: 1,
+                label: item.label,
+                allLabels: [m.instanceNames?.[i] || `${item.label}-${i + 1}`],
+                itemId: item.id,
+                measureId: `${m.id}-base-i${i}`
               });
             }
           });
@@ -797,10 +804,37 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
 
     let currentY = 45;
 
-    // Process each item in activeConfigs
-    activeConfigs.forEach((item, idx) => {
+    // Group configurations based on their technical identity
+    const groupedConfigs = [];
+    activeConfigs.forEach(item => {
+      const b = engine.calculateBOM(item.config);
+      
+      // Use a very specific technical key including itemId to keep different items separate
+      // and stringify the whole config to catch every single detail
+      const technicalKey = JSON.stringify({
+        itemId: item.itemId,
+        config: item.config
+      });
+      
+      const existing = groupedConfigs.find(g => g.technicalKey === technicalKey);
+      if (existing) {
+        existing.qty += (item.qty || 1);
+        const newLabels = (item.allLabels || []);
+        existing.allLabels = [...(existing.allLabels || []), ...newLabels];
+      } else {
+        groupedConfigs.push({ 
+          ...item, 
+          technicalKey, 
+          qty: item.qty || 1,
+          bom: b 
+        });
+      }
+    });
+
+    // Process each grouped item
+    groupedConfigs.forEach((item, idx) => {
       const cfg = item.config;
-      const b = engine.calculateBOM(cfg);
+      const b = item.bom;
       const compo = database.compositions?.find(c => c.id === cfg.compositionId);
       const range = database.ranges?.find(r => r.id === cfg.rangeId);
       const color = database.colors?.find(c => c.id === cfg.colorId);
@@ -874,15 +908,19 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
       
       doc.setFontSize(9);
       const labels = item.allLabels?.filter(Boolean).join(', ');
+      let labelOffset = 0;
       if (labels) {
         doc.setFont('helvetica', 'italic');
-        doc.text(`Postes: ${labels}`, startX, currentY + 28, { maxWidth: 70 });
+        const splitLabels = doc.splitTextToSize(`Postes: ${labels}`, 70);
+        doc.text(splitLabels, startX, currentY + 28);
+        labelOffset = (splitLabels.length - 1) * 3.5; // Offset for next lines
       }
       doc.setFont('helvetica', 'normal');
 
       // ── Modèle & Dimensions (smart for compound configs) ──
       const isCompound = cfg.compoundType && cfg.compoundType !== 'none' && cfg.compoundConfig?.parts?.length > 0;
       
+      const detailsStartY = currentY + 37 + labelOffset;
       if (isCompound) {
         // Find opening part and fix parts
         const openingPart = cfg.compoundConfig.parts.find(p => p.type === 'opening');
@@ -893,9 +931,9 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         
         const modelLabel = [openingComp?.name, fixLabel].filter(Boolean).join(' + ');
         doc.setFontSize(11);
-        doc.text(`Modèle: ${modelLabel || '—'}`, startX, currentY + 37);
-        doc.text(`Couleur: ${color?.name || '—'}`, startX, currentY + 44);
-        doc.text(`RAL: ${cfg.colorId || 'Std'}`, startX, currentY + 51);
+        doc.text(`Modèle: ${modelLabel || '—'}`, startX, detailsStartY);
+        doc.text(`Couleur: ${color?.name || '—'}`, startX, detailsStartY + 7);
+        doc.text(`RAL: ${cfg.colorId || 'Std'}`, startX, detailsStartY + 14);
         
         // Total dimension
         doc.setFontSize(12);
@@ -925,62 +963,72 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         doc.setTextColor(0, 0, 0);
       } else {
         doc.setFontSize(11);
-        doc.text(`Modèle: ${compo?.name || '—'}`, startX, currentY + 37);
-        doc.text(`Couleur: ${color?.name || '—'}`, startX, currentY + 45);
-        doc.text(`RAL: ${cfg.colorId || 'Std'}`, startX, currentY + 53);
+        doc.text(`Modèle: ${compo?.name || '—'}`, startX, detailsStartY);
+        doc.text(`Couleur: ${color?.name || '—'}`, startX, detailsStartY + 8);
+        doc.text(`RAL: ${cfg.colorId || 'Std'}`, startX, detailsStartY + 16);
         
+        doc.setTextColor(0, 0, 0);
+
+        // ── Dynamic Positions for following elements ──
+        let nextY = detailsStartY + 24;
+
+        // Couvre-joint detection
+        const cjProfiles = filteredItems.filter(p => p.isCouvreJoint || p.usage === 'ACCESSOIRES / FINITION' && /couvre|cj/i.test(p.label || ''));
+        const cjSummary = [];
+        const seenThick = new Set();
+
+        cjProfiles.forEach(pCalc => {
+          const pRef = (database.profiles || []).find(x => x.id === pCalc.id || x.name === pCalc.id);
+          const thicknessValue = pRef?.thickness || pRef?.epas || pRef?.epaisseur || pRef?.ep || pRef?.e || 0;
+          const thickness = parseFloat(thicknessValue) || 0;
+          if (thickness > 0 && !seenThick.has(thickness)) {
+            seenThick.add(thickness);
+            cjSummary.push({ name: pRef?.name || pCalc?.name || 'Couvre-joint', thickness });
+          }
+        });
+
+        if (cjSummary.length > 0) {
+          doc.setFontSize(9);
+          cjSummary.forEach((cj, cjIdx) => {
+            doc.text(`Couvre-joint: ${cj.thickness} mm`, startX, nextY);
+            nextY += 7;
+          });
+        } else {
+          doc.setFontSize(9);
+          doc.text("Couvre-joint: Sans", startX, nextY);
+          nextY += 7;
+        }
+
+        // Shutter Info Box
+        if (cfg.hasShutter && database.shutterComponents) {
+           const sc = database.shutterComponents;
+           const caisson = sc.caissons?.find(c => c.id === (cfg.shutterOverrides?.caissonId || cfg.shutterConfig?.caissonId));
+           const glissiere = sc.glissieres?.find(g => g.id === (cfg.shutterOverrides?.glissiereId || cfg.shutterConfig?.glissiereId));
+           const lame = sc.lames?.find(l => l.id === (cfg.shutterOverrides?.lameId || cfg.shutterConfig?.lameId));
+           const kit = sc.kits?.find(k => k.id === (cfg.shutterOverrides?.kitId || cfg.shutterConfig?.kitId));
+
+           const boxY = nextY + 2;
+           doc.setFillColor(241, 245, 249);
+           doc.roundedRect(110, boxY, 80, 25, 2, 2, 'F');
+           doc.setFontSize(8);
+           doc.setFont('helvetica', 'bold');
+           doc.text("INFO VOLET :", 115, boxY + 5);
+           doc.setFont('helvetica', 'normal');
+           doc.setFontSize(7.5);
+           doc.text(`Caisson: ${caisson?.name || '—'}`, 115, boxY + 10);
+           doc.text(`Glissière: ${glissiere?.name || '—'}`, 115, boxY + 15);
+           doc.text(`Lame: ${lame?.name || '—'} / ${kit?.name || '—'}`, 115, boxY + 20);
+           nextY = boxY + 28;
+        } else {
+          nextY += 5;
+        }
+
+        // DIM TOTALE position adjusted
         doc.setFontSize(14);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(30, 41, 59);
-        doc.text(`DIM: ${cfg.L} x ${cfg.H} mm`, startX, currentY + 92);
+        doc.text(`DIM: ${cfg.L} x ${cfg.H} mm`, startX, currentY + 95);
         doc.setTextColor(0, 0, 0);
-      }
-
-      // Shutter Info Box (NEW)
-      if (cfg.hasShutter && database.shutterComponents) {
-         const sc = database.shutterComponents;
-         const caisson = sc.caissons?.find(c => c.id === (cfg.shutterOverrides?.caissonId || cfg.shutterConfig?.caissonId));
-         const glissiere = sc.glissieres?.find(g => g.id === (cfg.shutterOverrides?.glissiereId || cfg.shutterConfig?.glissiereId));
-         const lame = sc.lames?.find(l => l.id === (cfg.shutterOverrides?.lameId || cfg.shutterConfig?.lameId));
-         const kit = sc.kits?.find(k => k.id === (cfg.shutterOverrides?.kitId || cfg.shutterConfig?.kitId));
-
-         doc.setFillColor(241, 245, 249);
-         doc.roundedRect(110, currentY + 65, 80, 25, 2, 2, 'F');
-         doc.setFontSize(8);
-         doc.setFont('helvetica', 'bold');
-         doc.text("INFO VOLET :", 115, currentY + 70);
-         doc.setFont('helvetica', 'normal');
-         doc.setFontSize(7.5);
-         doc.text(`Caisson: ${caisson?.name || '—'}`, 115, currentY + 75);
-         doc.text(`Glissière: ${glissiere?.name || '—'}`, 115, currentY + 80);
-         doc.text(`Lame: ${lame?.name || '—'} / ${kit?.name || '—'}`, 115, currentY + 85);
-      }
-      
-      // Improved Couvre-joint detection: De-duplicate by THICKNESS only to satisfy "supprime une" request
-      const cjProfiles = filteredItems.filter(p => p.isCouvreJoint || p.usage === 'ACCESSOIRES / FINITION' && /couvre|cj/i.test(p.label || ''));
-      
-      const cjSummary = [];
-      const seenThick = new Set();
-
-      cjProfiles.forEach(pCalc => {
-        const pRef = (database.profiles || []).find(x => x.id === pCalc.id || x.name === pCalc.id);
-        const thicknessValue = pRef?.thickness || pRef?.epas || pRef?.epaisseur || pRef?.ep || pRef?.e || 0;
-        const thickness = parseFloat(thicknessValue) || 0;
-        
-        if (thickness > 0 && !seenThick.has(thickness)) {
-          seenThick.add(thickness);
-          cjSummary.push({ name: pRef?.name || pCalc?.name || 'Couvre-joint', thickness });
-        }
-      });
-
-      let cjY = currentY + 60; // After Modèle (+37), Couleur (+45), RAL (+53)
-      if (cjSummary.length > 0) {
-        cjSummary.forEach((cj, cjIdx) => {
-          const displayValue = `${cj.thickness} mm`;
-          doc.text(`Couvre-joint: ${displayValue}`, startX, cjY + (cjIdx * 6));
-        });
-      } else {
-        doc.text(`Couvre-joint: Sans`, startX, cjY);
       }
       
       currentY += 105;
@@ -2718,35 +2766,6 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
 
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-            {/* Deep Inspection Panel (Debug) */}
-            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '1rem', borderRadius: '0.5rem', fontSize: '0.75rem' }}>
-              <strong style={{ display: 'block', marginBottom: '0.5rem' }}>🔍 Inspecteur de Calcul (Premier article) :</strong>
-              {quoteItems.length > 0 ? (() => {
-                const first = quoteItems[0];
-                const compo = database.compositions?.find(c => c.id === first.config?.compositionId);
-                const b = first.config ? engine.calculateBOM(first.config) : null;
-                return (
-                  <div style={{ display: 'flex', gap: '2rem' }}>
-                    <div>
-                      <strong>Article:</strong> {first.label}<br/>
-                      <strong>Composition:</strong> {compo ? compo.name : <span style={{color:'red'}}>NON TROUVÉE ({first.config?.compositionId})</span>}<br/>
-                      <strong>L x H:</strong> {first.config?.L} x {first.config?.H}
-                    </div>
-                    <div>
-                       <strong>Profiles trouvés dans la BOM:</strong> {b?.profiles?.length || 0}<br/>
-                       <strong>Volets trouvés:</strong> {b?.shutters?.length || 0}<br/>
-                       <strong>Détail Profile 1:</strong> {b?.profiles?.[0] ? `${b.profiles[0].name} (qty:${b.profiles[0].qty})` : 'Aucun'}
-                    </div>
-                    {b?.profiles?.length === 0 && compo?.elements?.length > 0 && (
-                      <div style={{ color: '#ef4444', fontWeight: 600 }}>
-                        ⚠️ ALERTE : La recette a {compo.elements.length} éléments mais le calcul sort 0 profilés ! 
-                        Vérifiez les formules dans l'Admin.
-                      </div>
-                    )}
-                  </div>
-                );
-              })() : 'Aucun article sélectionné'}
-            </div>
 
             {/* Config panel */}
             <div className="glass shadow-md" style={{ borderLeft: '4px solid #f59e0b' }}>

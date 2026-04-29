@@ -3,6 +3,38 @@ import { ShoppingBag, FileText, Ruler, Plus, Trash2, CheckCircle, Package, Sciss
 import { FormulaEngine } from '../../engine/formula-engine';
 import { QuoteSettingsPanel } from '../commercial/CommercialModule';
 import jsPDF from 'jspdf';
+import { getTechnicalDrawingDataURL } from '../../utils/drawingUtils';
+
+const ItemPreview = ({ config, database }) => {
+  const [dataUrl, setDataUrl] = React.useState(null);
+  
+  React.useEffect(() => {
+    if (config && database) {
+      const url = getTechnicalDrawingDataURL(config, database);
+      setDataUrl(url);
+    }
+  }, [config, database]);
+
+  if (!dataUrl) return <div style={{ width: '100%', height: '100%', background: '#f1f5f9' }} />;
+
+  return (
+    <div style={{ 
+      width: '100%', 
+      height: '100%', 
+      background: 'white', 
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '10px'
+    }}>
+      <img 
+        src={dataUrl} 
+        alt="Aperçu" 
+        style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
+      />
+    </div>
+  );
+};
 
 const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
   const [selectedOrderId, setSelectedOrderId] = useState(null);
@@ -132,7 +164,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
     updatedItems[orderItemIndex] = {
       ...updatedItems[orderItemIndex],
       siteMeasurements: updatedItems[orderItemIndex].siteMeasurements.map(m => 
-        m.id === measureId ? { ...m, [field]: (['instanceNames', 'shutterList', 'label'].includes(field) ? value : (parseFloat(value) || 0)) } : m
+        m.id === measureId ? { ...m, [field]: (['instanceNames', 'shutterList', 'label', 'partOverrides'].includes(field) ? value : (parseFloat(value) || 0)) } : m
       )
     };
     handleUpdateOrder({ ...selectedOrder, items: updatedItems });
@@ -544,21 +576,28 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
               const remaining = (item.qty || 1) - alreadyBatchQty - currentDraftQty;
               
               return (
-                <div key={item.id} className="glass shadow-sm" style={{ padding: '1.5rem', borderLeft: '4px solid #3b82f6' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem', alignItems: 'flex-start' }}>
-                    <div>
-                      <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700 }}>{item.label}</h3>
-                      <p style={{ margin: '0.2rem 0', color: '#64748b', fontSize: '0.875rem' }}>
-                        Devis: <strong>{item.qty || 1} u</strong> | Produit: <strong>{alreadyBatchQty} u</strong> | <span style={{ color: '#3b82f6' }}>En cours: <strong>{currentDraftQty} u</strong></span>
-                      </p>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'block' }}>Reste à produire:</span>
-                      <span style={{ fontSize: '1.25rem', fontWeight: 800, color: remaining > 0 ? '#3b82f6' : (remaining < 0 ? '#ef4444' : '#10b981') }}>
-                        {remaining}
-                      </span>
-                    </div>
+                <div key={item.id} className="glass shadow-sm" style={{ display: 'flex', overflow: 'hidden', borderLeft: '4px solid #3b82f6', minHeight: '350px', marginBottom: '1.5rem' }}>
+                  {/* Left Side: Massive Image Area */}
+                  <div style={{ width: '350px', background: '#f8fafc', borderRight: '1px solid #e2e8f0', flexShrink: 0 }}>
+                    <ItemPreview config={item.config} database={data} />
                   </div>
+
+                  {/* Right Side: Content */}
+                  <div style={{ flex: 1, padding: '1.5rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem', alignItems: 'center', gap: '1.5rem' }}>
+                      <div>
+                        <h3 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 800, color: '#1e293b' }}>{item.label}</h3>
+                        <p style={{ margin: '0.2rem 0', color: '#64748b', fontSize: '0.9rem', fontWeight: 500 }}>
+                          Devis: <strong>{item.qty || 1} u</strong> | Produit: <strong>{alreadyBatchQty} u</strong> | <span style={{ color: '#3b82f6' }}>En cours: <strong>{currentDraftQty} u</strong></span>
+                        </p>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'block' }}>Reste à produire:</span>
+                        <span style={{ fontSize: '1.5rem', fontWeight: 900, color: remaining > 0 ? '#3b82f6' : (remaining < 0 ? '#ef4444' : '#10b981') }}>
+                          {remaining}
+                        </span>
+                      </div>
+                    </div>
 
                   {/* Measurements Table */}
                   <table className="data-table" style={{ background: '#f8fafc', marginBottom: '1rem' }}>
@@ -634,7 +673,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                         placeholder={item.config.compoundConfig.orientation === 'horizontal' ? p.width : p.height}
                                         value={m.partOverrides?.[p.id]?.[item.config.compoundConfig.orientation === 'horizontal' ? 'width' : 'height'] || ''} 
                                         onChange={e => {
-                                          const val = parseFloat(e.target.value) || 0;
+                                          const val = e.target.value === '' ? '' : (parseFloat(e.target.value) || 0);
                                           const field = item.config.compoundConfig.orientation === 'horizontal' ? 'width' : 'height';
                                           const currentOverrides = m.partOverrides || {};
                                           const partData = currentOverrides[p.id] || {};
@@ -665,8 +704,9 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                     <Plus size={14} /> Ajouter une cote réelle
                   </button>
                 </div>
-              );
-            })}
+              </div>
+            );
+          })}
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem', padding: '1rem', background: '#f0f9ff', borderRadius: '0.75rem', border: '1px dashed #3b82f6' }}>
                <button 

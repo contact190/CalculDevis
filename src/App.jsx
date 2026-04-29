@@ -6,7 +6,6 @@ import ProductionModule from './modules/production/ProductionModule';
 import AdminDashboard from './modules/admin/AdminDashboard';
 import ClientsModule from './modules/clients/ClientsModule';
 import OrdersModule from './modules/orders/OrdersModule';
-import TechnicalViewerModule from './modules/viewer/TechnicalViewerModule';
 import { DEFAULT_DATA } from './data/default-data';
 import { syncDatabase } from './utils/supabaseClient';
 
@@ -271,7 +270,6 @@ function App() {
     { id: 'commercial', label: 'Commercial', icon: LayoutDashboard },
     { id: 'orders', label: 'Commandes', icon: ShoppingBag },
     { id: 'production', label: 'Atelier / Production', icon: Package },
-    { id: 'viewer', label: 'Technique 2D/3D', icon: Rotate3D },
     { id: 'clients', label: 'Clients', icon: Users },
     { id: 'admin', label: 'Administration', icon: Settings },
   ];
@@ -386,9 +384,6 @@ function App() {
               localStorage.setItem('quoteSettings', JSON.stringify(settings));
             }}
           />
-        )}
-        {activeTab === 'viewer' && (
-          <TechnicalViewerModule data={database} />
         )}
         {activeTab === 'admin' && (
           <AdminDashboard 
