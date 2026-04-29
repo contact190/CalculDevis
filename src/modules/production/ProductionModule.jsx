@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Package, Scissors, Ruler, Download, CheckCircle, Barcode, ShoppingCart, Layers, Edit2, Link2, Link2Off, Plus, QrCode, Trash2, ArrowLeft, FileText, FileSpreadsheet, RefreshCw, Info } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { FormulaEngine } from '../../engine/formula-engine';
@@ -7,7 +7,7 @@ import jsPDF from 'jspdf';
 
 const ProductionModule = ({ currentConfig, currentQuote, database, setData }) => {
   const engine = useMemo(() => new FormulaEngine(database), [database]);
-  const [activeTab, setActiveTab] = useState('debit');
+  const [activeTab, setActiveTab] = useState('achat');
   const [barLengths, setBarLengths] = useState({});
   const [jumelageGroups, setJumelageGroups] = useState([]);
   const [jumelageMode, setJumelageMode] = useState(false);
@@ -17,6 +17,16 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
   // Kitting / Logistics
   const [kitConfig, setKitConfig] = useState({ trolleys: 2, slotsPerTrolley: 10, barsPerSlot: 1 });
   const [selectedLabelItem, setSelectedLabelItem] = useState(null);
+  const [manualStockOffcuts, setManualStockOffcuts] = useState(() => {
+    try {
+      const saved = localStorage.getItem('manualStockOffcuts');
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) { return {}; }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('manualStockOffcuts', JSON.stringify(manualStockOffcuts));
+  }, [manualStockOffcuts]);
 
   // Prise de mesures states
   const [selectedClientId, setSelectedClientId] = useState('');
@@ -24,6 +34,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
   const [selectedGlobalQuoteId, setSelectedGlobalQuoteId] = useState(currentQuote?.id || '');
   const [selectedBatchId, setSelectedBatchId] = useState('ALL');
   const [proformaSelection, setProformaSelection] = useState(new Set()); // Selected IDs for proforma
+  const [offcutInputs, setOffcutInputs] = useState({}); // { [barKey]: "" }
   const [supplierName, setSupplierName] = useState('');
   const [docHeader, setDocHeader] = useState('DEMANDE DE PROFORMA');
   const [companyInfo, setCompanyInfo] = useState({
@@ -285,6 +296,23 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
 
   const handleBarLengthChange = (id, val) => {
     setBarLengths(prev => ({ ...prev, [id]: parseFloat(val) || 6400 }));
+  };
+
+  const handleAddStockOffcut = (key) => {
+    const val = parseFloat(offcutInputs[key]);
+    if (!val || isNaN(val)) return;
+    setManualStockOffcuts(prev => ({
+      ...prev,
+      [key]: [...(prev[key] || []), val].sort((a,b) => b-a)
+    }));
+    setOffcutInputs(prev => ({ ...prev, [key]: "" }));
+  };
+
+  const handleRemoveStockOffcut = (key, idx) => {
+    setManualStockOffcuts(prev => ({
+      ...prev,
+      [key]: (prev[key] || []).filter((_, i) => i !== idx)
+    }));
   };
 
   const handleJumelageToggle = (id) => {
@@ -1532,7 +1560,6 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
 
       {activeTab === 'achat' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-          
           {/* Document Personalization Panel */}
           <div className="glass shadow-md" style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '1.25rem', padding: '1.5rem' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem' }}>
@@ -1840,12 +1867,13 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                     <th>Désignation</th>
                     <th>Longueur Barre (mm)</th>
                     <th>Quantité (Barres)</th>
+                    <th>Stock (Chutes)</th>
                     <th></th>
                   </tr>
                 </thead>
                 <tbody>
                   {displayProfiles.map((p, i) => {
-                    const barKey = p._barKey || p.baseId || p.id;
+                    const barKey = p.id;
                     const bLength = barLengths[barKey] || 6400;
                     const ml = p.totalMeasure;
                     // Bin Packing Algorithm (1D Nesting / Next Fit Decreasing)
@@ -1853,7 +1881,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                     let bars = 0;
                     const unitClean = (p.priceUnit || '').toUpperCase().trim();
                     
-                    if (unitClean === 'BARRE' && pieces.length > 0) {
+                    if ((unitClean === 'BARRE' || !unitClean) && pieces.length > 0) {
                       // --- LEAN SEQUENCING SORT ---
                       const usagePriority = { 'DORMANT': 1, 'OUVRANT': 2, 'VOLET': 3, 'FINITION': 4 };
                       
@@ -1866,10 +1894,17 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                         return b.length - a.length; // Maximize material use within the window group
                       });
 
-                      const currentBars = [];
+                      // 1. Initialize with manual stock offcuts
+                      const currentBars = (manualStockOffcuts[barKey] || []).map((len, idx) => ({
+                        remaining: len,
+                        pieces: [],
+                        id: `STOCK-${barKey}-${idx}`,
+                        isStock: true
+                      }));
+
+                      // 2. Optimization: First Fit into stock then new bars
                       sortedPieces.forEach(pObj => {
                         const piece = pObj.length || pObj;
-                        // Nesting: First Fit (to preserve sequence as much as possible)
                         let fitIdx = -1;
                         for (let j = 0; j < currentBars.length; j++) {
                           if (currentBars[j].remaining >= piece) {
@@ -1885,11 +1920,13 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                           currentBars.push({ 
                             remaining: bLength - piece, 
                             pieces: [pObj],
-                            id: `BAR-${p.id}-${currentBars.length + 1}`
+                            id: `BAR-${barKey}-${currentBars.length + 1}`
                           });
                         }
                       });
-                      bars = currentBars.length;
+                      
+                      // 3. Count only NEW bars to buy
+                      bars = currentBars.filter(b => !b.isStock).length;
                     } else {
                       // No optimization for ML or other units, just straight division
                       bars = Math.ceil(ml / bLength);
@@ -1950,7 +1987,63 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                             <Edit2 size={12} color="#94a3b8" />
                           </div>
                         </td>
-                        <td data-label="Barres" style={{ color: '#8b5cf6', fontWeight: 700, fontSize: '1.1rem' }}>{bars}</td>
+                        <td data-label="Barres">
+                          <div style={{ fontSize: '1.25rem', fontWeight: 800, color: bars > 0 ? '#1e293b' : '#10b981' }}>
+                            {bars}
+                          </div>
+                          {bars > 0 && <div style={{ fontSize: '0.65rem', color: '#64748b' }}>Achat nécessaire</div>}
+                          {bars === 0 && <div style={{ fontSize: '0.65rem', color: '#10b981' }}>Stock suffisant</div>}
+                        </td>
+                        <td data-label="Chutes Stock" style={{ minWidth: '180px' }}>
+                          {(unitClean === 'BARRE' || !unitClean) ? (
+                            <>
+                              <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '0.5rem' }}>
+                                <input 
+                                  type="number" 
+                                  placeholder="Lg. chute"
+                                  className="input"
+                                  value={offcutInputs[barKey] || ""}
+                                  onChange={(e) => setOffcutInputs(prev => ({ ...prev, [barKey]: e.target.value }))}
+                                  onKeyDown={(e) => { if (e.key === 'Enter') handleAddStockOffcut(barKey); }}
+                                  style={{ width: '80px', padding: '0.2rem 0.4rem', fontSize: '0.75rem' }}
+                                />
+                                <button 
+                                  onClick={() => handleAddStockOffcut(barKey)}
+                                  className="btn btn-secondary"
+                                  style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
+                                >
+                                  <Plus size={14} />
+                                </button>
+                              </div>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.2rem' }}>
+                                {(manualStockOffcuts[barKey] || []).map((len, sIdx) => (
+                                  <span 
+                                    key={sIdx}
+                                    style={{ 
+                                      fontSize: '0.7rem', 
+                                      background: '#f1f5f9', 
+                                      padding: '0.1rem 0.4rem', 
+                                      borderRadius: '4px',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '0.2rem',
+                                      border: '1px solid #e2e8f0'
+                                    }}
+                                  >
+                                    {len}
+                                    <Trash2 
+                                      size={10} 
+                                      style={{ cursor: 'pointer', color: '#ef4444' }} 
+                                      onClick={() => handleRemoveStockOffcut(barKey, sIdx)}
+                                    />
+                                  </span>
+                                ))}
+                              </div>
+                            </>
+                          ) : (
+                            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>N/A (Unité: {p.priceUnit})</span>
+                          )}
+                        </td>
                         <td data-label="Action">
                           {p._isGroup && (
                             <button
@@ -2226,6 +2319,10 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                   const totalPieces = piecesPerUnit * qty;
                   totalPiecesInBoms += totalPieces;
                   
+                  const colorInfo = database.colors?.find(c => c.id === item.config.colorId);
+                  const colorName = colorInfo?.name || item.config.colorId || 'Standard';
+                  const barKey = `${p.id}|${colorName}`;
+
                   for (let q = 0; q < totalPieces; q++) {
                     globalCuts.push({
                       profileId: p.id,
@@ -2236,7 +2333,9 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                       windowIdx,
                       windowLabel: item.label || item.instanceLabel || `Fenêtre #${windowIdx + 1}`,
                       windowItemId: item.id,
-                      isBatch: !!item.isFromBatch
+                      isBatch: !!item.isFromBatch,
+                      colorName,
+                      barKey
                     });
                   }
                 });
@@ -2280,14 +2379,16 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         // --- 3. OPTIMIZATION (BFD) ---
         const profileGroups = {};
         globalCuts.forEach(cut => {
-          if (!profileGroups[cut.profileId]) profileGroups[cut.profileId] = { profileName: cut.profileName, cuts: [] };
-          profileGroups[cut.profileId].cuts.push(cut);
+          const key = cut.barKey || cut.profileId;
+          if (!profileGroups[key]) profileGroups[key] = { profileName: cut.profileName, colorName: cut.colorName, cuts: [] };
+          profileGroups[key].cuts.push(cut);
         });
 
         // Best-Fit Decreasing per profile group
         const barsResult = {};
-        Object.entries(profileGroups).forEach(([profId, { profileName, cuts }]) => {
-          const barLen = barLengths[profId] || 6400;
+        Object.entries(profileGroups).forEach(([barKey, { profileName, colorName, cuts }]) => {
+          const profId = barKey.split('|')[0];
+          const barLen = barLengths[barKey] || 6400;
           const usagePriority = { 'DORMANT': 1, 'OUVRANT': 2, 'VOLET': 3, 'FINITION': 4 };
           const sorted = [...cuts].sort((a, b) => {
             const prioA = usagePriority[a.usage] || 9;
@@ -2296,13 +2397,24 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
             if (a.windowIdx !== b.windowIdx) return a.windowIdx - b.windowIdx;
             return b.length - a.length;
           });
-          const bars = []; 
+          
+          // 1. Initialize with manual stock offcuts
+          const bars = (manualStockOffcuts[barKey] || []).map((len, idx) => ({
+            id: `STOCK-${barKey}-${idx}`,
+            remaining: Number(len),
+            used: 0,
+            pieces: [],
+            isStock: true,
+            barLen: Number(len)
+          }));
+
           const allLengths = cuts.map(c => c.length);
           const minPieceInOrder = Math.min(...allLengths, 300);
 
           sorted.forEach(cut => {
             let bestBarIdx = -1;
             let minLeft = Infinity;
+            // Prefer Stock bars first, then new bars
             bars.forEach((bar, idx) => {
               if (bar.remaining >= cut.length && bar.remaining - cut.length < minLeft) {
                 bestBarIdx = idx;
@@ -2315,7 +2427,13 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
               bars[bestBarIdx].used += cut.length;
               bars[bestBarIdx].remaining -= cut.length;
             } else {
-              const newBar = { id: `${profId}-BAR${bars.length + 1}`, used: cut.length, remaining: barLen - cut.length, pieces: [] };
+              const newBar = { 
+                id: `${profId}-BAR${bars.length + 1}`, 
+                used: cut.length, 
+                remaining: barLen - cut.length, 
+                pieces: [],
+                barLen: barLen
+              };
               newBar.pieces.push({ ...cut, barId: newBar.id });
               bars.push(newBar);
             }
@@ -2325,14 +2443,21 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
             bar.isTrash = bar.remaining < minPieceInOrder;
             bar.waste = bar.remaining;
           });
-          barsResult[profId] = { profileName, bars, barLen };
+          barsResult[barKey] = { profileName, colorName, bars, barLen };
         });
 
         // Assign each BAR to a chariot slot based on barsPerSlot
         const barsPerSlot = kitConfig.barsPerSlot || 1;
         const allBarsFlat = [];
-        Object.entries(barsResult).forEach(([profId, { profileName, bars, barLen }]) => {
-          bars.forEach(bar => allBarsFlat.push({ ...bar, profileName, barLen, profId }));
+        Object.entries(barsResult).forEach(([profId, { profileName, bars, barLen: standardLen }]) => {
+          bars.filter(b => b.pieces.length > 0).forEach(bar => {
+            allBarsFlat.push({ 
+              ...bar, 
+              profileName, 
+              profId, 
+              barLen: bar.barLen || standardLen 
+            });
+          });
         });
         
         allBarsFlat.forEach((bar, idx) => {
@@ -2347,6 +2472,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         const barAddressMap = {};
         allBarsFlat.forEach(b => { barAddressMap[b.id] = b.address; });
         const totalBars = allBarsFlat.length;
+        const totalStockBarsUsed = allBarsFlat.filter(b => b.isStock).length;
 
         // --- 4. KIT SUMMARY (Window status) ---
         const windowSummary = {};
@@ -2422,11 +2548,17 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
               ...(b.shutters || []).filter(s => ['ML', 'BARRE', 'JOINT'].includes((s.priceUnit || '').toUpperCase().trim()))
             ];
             
+            const colorInfo = database.colors?.find(c => c.id === cfg.config.colorId);
+            const colorName = colorInfo?.name || cfg.config.colorId || 'Standard';
+            
             combined.forEach(p => {
+              const barKey = `${p.id}|${colorName}`;
               for (let i = 0; i < cfg.qty; i++) {
                 allCutsList.push({
                   ...p,
-                  instanceLabel: cfg.allLabels[i] || cfg.label
+                  instanceLabel: cfg.allLabels[i] || cfg.label,
+                  colorName,
+                  barKey
                 });
               }
             });
@@ -2441,9 +2573,8 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
           // 2. Group by Profile + Color
           const groups = {};
           allCutsList.forEach(c => {
-            const colorId = c.colorId || 'STD';
-            const groupKey = `${c.id}|${colorId}`;
-            if (!groups[groupKey]) groups[groupKey] = { id: c.id, colorId, name: c.name, cuts: [] };
+            const groupKey = c.barKey || `${c.id}|STD`;
+            if (!groups[groupKey]) groups[groupKey] = { id: c.id, colorName: c.colorName, name: c.name, cuts: [], barKey: groupKey };
             groups[groupKey].cuts.push(c);
           });
 
@@ -2461,13 +2592,18 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
             doc.setTextColor(255, 255, 255);
             doc.setFontSize(10);
             doc.setFont('helvetica', 'bold');
-            doc.text(`${group.name} (${group.id}) - Couleur: ${group.colorId}`, margin + 5, currentY + 5.5);
+            doc.text(`${group.name} (${group.id}) - Finition: ${group.colorName || 'Standard'}`, margin + 5, currentY + 5.5);
             currentY += 15;
 
-            // FFD Nesting Algorithm
+            // FFD Nesting Algorithm with Stock priority
             const sortedCuts = [...group.cuts].sort((a, b) => b.length - a.length);
             const nestedBars = [];
             
+            // 1. Initialize with stock
+            (manualStockOffcuts[group.barKey] || []).forEach((len, sIdx) => {
+              nestedBars.push({ items: [], remaining: len, isStock: true, originalLen: len });
+            });
+
             sortedCuts.forEach(cut => {
               let placed = false;
               for (let bar of nestedBars) {
@@ -2479,7 +2615,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                 }
               }
               if (!placed) {
-                nestedBars.push({ items: [cut], remaining: barLen - cut.length - blade });
+                nestedBars.push({ items: [cut], remaining: barLen - cut.length - blade, originalLen: barLen });
               }
             });
 
@@ -2490,11 +2626,12 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
               
               doc.setFontSize(8);
               doc.setFont('helvetica', 'bold');
-              doc.text(`Barre #${bIdx + 1}`, margin, currentY - 2);
+              doc.text(`${bar.isStock ? '[STOCK] ' : ''}Barre #${bIdx + 1}`, margin, currentY - 2);
               
               const barWidth = 170;
               const barHeight = 8;
-              const scale = barWidth / barLen;
+              const actualBarLen = bar.originalLen || barLen;
+              const scale = barWidth / actualBarLen;
               
               doc.setDrawColor(200, 200, 200);
               doc.rect(margin, currentY, barWidth, barHeight);
@@ -2722,7 +2859,14 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
             <div className="glass shadow-md" style={{ borderLeft: '4px solid #8b5cf6' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.5rem' }}>
                 <Layers size={20} color="#8b5cf6" />
-                <h2 style={{ fontSize: '1.125rem', fontWeight: 600, flex: 1 }}>Plan des Chariots — {totalBars} barres</h2>
+                <h2 style={{ fontSize: '1.125rem', fontWeight: 600, flex: 1 }}>
+                  Plan des Chariots — {totalBars} barres
+                  {totalStockBarsUsed > 0 && (
+                    <span style={{ marginLeft: '1rem', fontSize: '0.75rem', background: '#d1fae5', color: '#065f46', padding: '0.2rem 0.6rem', borderRadius: '699px', fontWeight: 700 }}>
+                      ♻️ {totalStockBarsUsed} chute(s) de stock utilisée(s)
+                    </span>
+                  )}
+                </h2>
                  <button onClick={generateLabelsPDF} className="btn btn-primary" style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem' }}>
                     🏷️ Générer Étiquettes
                  </button>
@@ -2760,14 +2904,20 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                                         {slotBars.map((bar, bi) => (
                                           <div key={bi} style={{ background: '#fafafa', border: '1px solid #f1f5f9', borderRadius: '6px', padding: '0.5rem' }}>
                                             <div style={{ fontWeight: 800, fontSize: '0.75rem', color: '#1e293b', marginBottom: '0.3rem', display: 'flex', justifyContent: 'space-between' }}>
-                                              <span>{bar.profileName} <span style={{fontWeight:400, color:'#64748b'}}>(L={bar.barLen}mm)</span></span>
+                                              <span>
+                                                {bar.isStock && <span style={{ background: '#10b981', color: 'white', padding: '0.1rem 0.4rem', borderRadius: '4px', marginRight: '0.4rem', fontSize: '0.65rem' }}>STOCK</span>}
+                                                {bar.profileName} <span style={{fontWeight:400, color:'#64748b'}}>(L={bar.barLen}mm)</span>
+                                              </span>
                                               <span style={{color:'#7c3aed'}}>#{bi+1}</span>
                                             </div>
                                             <div style={{ display: 'flex', height: '24px', borderRadius: '4px', overflow: 'hidden', background: '#e2e8f0', position: 'relative' }}>
                                               {bar.pieces.map((piece, pi) => (
                                                 <div key={pi} style={{ 
                                                   flex: `0 0 ${(piece.length / bar.barLen) * 100}%`, 
-                                                  background: `hsl(${(piece.windowIdx * 47) % 360},65%,55%)`, 
+                                                                                                    background: piece.windowIdx % 2 === 0 
+                                                    ? `hsl(30, 85%, ${45 + (piece.windowIdx % 5) * 4}%)` 
+                                                    : `hsl(210, 85%, ${45 + (piece.windowIdx % 5) * 4}%)`,
+ 
                                                   borderRight: '1px solid rgba(255,255,255,0.4)',
                                                   display: 'grid',
                                                   placeItems: 'center',
@@ -2783,11 +2933,12 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                                               {bar.waste > 0 && (
                                                 <div style={{ 
                                                   flex: `0 0 ${(bar.waste / bar.barLen) * 100}%`, 
-                                                  background: bar.isTrash ? '#fca5a5' : '#86efac',
+                                                  background: bar.isTrash ? '#ef4444' : '#22c55e',
                                                   display: 'grid',
                                                   placeItems: 'center',
                                                   fontSize: '0.6rem',
-                                                  color: bar.isTrash ? '#991b1b' : '#065f46'
+                                                  color: 'white',
+                                                  fontWeight: 700
                                                 }}>
                                                   {bar.waste >= 300 && <span>{bar.waste}</span>}
                                                 </div>
@@ -2828,11 +2979,12 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                 <div key={profId} style={{ marginBottom: '1rem' }}>
                   <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.4rem' }}>{profileName} ({bars.length} barres)</div>
                   {bars.map((bar, bi) => (
-                    <div key={bi} style={{ fontSize: '0.75rem', padding: '0.3rem', borderBottom: '1px solid #f1f5f9', display: 'flex', gap: '1rem' }}>
-                      <span style={{ fontWeight: 700 }}>{bar.address}</span>
-                      <span>{bar.id}</span>
+                    <div key={bi} style={{ fontSize: '0.75rem', padding: '0.3rem', borderBottom: '1px solid #f1f5f9', display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                      <span style={{ fontWeight: 700, minWidth: '80px' }}>{bar.address}</span>
+                      {bar.isStock && <span style={{ background: '#10b981', color: 'white', padding: '0.1rem 0.4rem', borderRadius: '4px', fontSize: '0.6rem', fontWeight: 700 }}>STOCK</span>}
+                      <span style={{ flex: 1 }}>{bar.id}</span>
                       <span>{bar.used}mm utilisé</span>
-                      <span style={{ color: bar.isTrash ? '#ef4444' : '#10b981' }}>{bar.waste}mm {bar.isTrash ? 'Déchet' : 'Chute'}</span>
+                      <span style={{ color: bar.isTrash ? '#ef4444' : '#10b981', fontWeight: 700 }}>{bar.waste}mm {bar.isTrash ? 'Déchet' : 'Chute'}</span>
                     </div>
                   ))}
                 </div>
