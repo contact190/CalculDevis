@@ -4,6 +4,8 @@ import { FormulaEngine } from '../../engine/formula-engine';
 import JoineryCanvas from '../../components/shared/JoineryCanvas';
 import LayoutComposer, { defaultLayout, rescaleTree } from '../../components/shared/LayoutComposer';
 import jsPDF from 'jspdf';
+import { getTechnicalDrawingDataURL } from '../../utils/drawingUtils';
+
 
 const EMPTY_CONFIG = {
   L: 1200, H: 2150,
@@ -1604,23 +1606,25 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
       quote.items.forEach((item, idx) => {
         // Build description lines dynamically
         const cfg = item.config || {};
-        const comp = database.compositions?.find(c => c.id === cfg.compositionId);
-        const color = database.colors?.find(c => c.id === cfg.colorId);
-        const glass = database.glass?.find(g => g.id === cfg.glassId);
-        const sc = database.shutterComponents;
-
+        let comp = database.compositions?.find(c => c.id === cfg.compositionId);
+        let openingComp = null;
         const descLines = [];
-
+        
         // Système / Modèle
-        if (cfg.compoundType && cfg.compoundType !== 'none' && cfg.compoundConfig?.parts?.length > 0) {
+        const isCompound = cfg.compoundType && cfg.compoundType !== 'none' && cfg.compoundConfig?.parts?.length > 0;
+        if (isCompound) {
           const openingPart = cfg.compoundConfig.parts.find(p => p.type === 'opening');
           const fixParts = cfg.compoundConfig.parts.filter(p => p.type === 'fixe');
-          const openingComp = database.compositions?.find(c => c.id === openingPart?.compositionId);
+          openingComp = database.compositions?.find(c => c.id === openingPart?.compositionId);
           const fixLabel = fixParts.length > 0 ? ` + Fix (×${fixParts.length})` : '';
           descLines.push(`Système : ${openingComp?.name || comp?.name || '—'}${fixLabel}`);
         } else {
           descLines.push(`Système : ${comp?.name || '—'}`);
         }
+
+        const color = database.colors?.find(c => c.id === cfg.colorId);
+        const glass = database.glass?.find(g => g.id === cfg.glassId);
+        const sc = database.shutterComponents;
 
         // Couleur & Dimensions
         descLines.push(`Couleur : ${color?.name || cfg.colorId || '—'}`);
@@ -1632,9 +1636,17 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
         }
 
         // Couvre-joint
-        const hasTopJoin = cfg.optionalSides?.top;
-        const hasLeftJoin = cfg.optionalSides?.left;
-        descLines.push(`Couvre-Joint : ${(hasTopJoin || hasLeftJoin) ? 'Oui' : 'Non'}`);
+        const cjSides = [];
+        if (cfg.optionalSides?.top) cjSides.push('Haut');
+        if (cfg.optionalSides?.bottom) cjSides.push('Bas');
+        if (cfg.optionalSides?.left) cjSides.push('Gauche');
+        if (cfg.optionalSides?.right) cjSides.push('Droite');
+        
+        if (cjSides.length > 0) {
+          descLines.push(`Couvre-Joint : ${cjSides.join(', ')}`);
+        } else {
+          descLines.push(`Couvre-Joint : Non`);
+        }
 
         // Options sélectionnées
         if (cfg.selectedOptions?.length > 0) {
@@ -1663,20 +1675,44 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
         // Dynamic row height (5pt per line + padding)
         const lineHeight = 5;
         const padding = 8;
-        const rowHeight = Math.max(40, descLines.length * lineHeight + padding * 2);
+        const rowHeight = Math.max(50, descLines.length * lineHeight + padding * 2); // Min 50 for larger image
 
         // Draw row border
         doc.rect(15, y, pw - 30, rowHeight);
 
         // Image
-        if (item.config?.thumbnail) {
+        let imgData = null;
+        try {
+          // 1. Try to generate technical drawing
+          imgData = getTechnicalDrawingDataURL(cfg, database);
+        } catch(e) {
+          console.error('Drawing generation error:', e);
+        }
+        
+        // 2. Fallback to saved thumbnail or composition image
+        if (!imgData) {
+          imgData = item.config?.thumbnail || openingComp?.image || comp?.image;
+        }
+
+        if (imgData) {
           try {
-            doc.addImage(item.config.thumbnail, 'PNG', 17, y + 2, 35, 35, '', 'FAST');
-          } catch(e){}
+            let format = 'JPEG';
+            if (imgData.includes('png') || imgData.startsWith('data:image/png')) format = 'PNG';
+            else if (imgData.includes('webp') || imgData.startsWith('data:image/webp')) format = 'WEBP';
+            // Increased image size to 45x45
+            doc.addImage(imgData, format, 17, y + 2.5, 45, 45, '', 'FAST');
+          } catch(e) {
+            console.error('PDF Image Error:', e);
+            doc.setDrawColor(226, 232, 240);
+            doc.rect(17, y + 2.5, 45, 45);
+          }
+        } else {
+          doc.setDrawColor(226, 232, 240);
+          doc.rect(17, y + 2.5, 45, 45);
         }
 
         // Description
-        const descX = 60;
+        const descX = 70; // Moved right to accommodate larger image
         let descY = y + padding;
         doc.setFontSize(8);
         doc.setFont('helvetica', 'normal');
@@ -1728,49 +1764,29 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
     doc.text('Commercial', 37, y + 6, { align: 'center' });
     doc.text('Client', 82, y + 6, { align: 'center' });
 
-    // Right Box: Totals
+    // Right Box: Totals (simplified - total only)
     const rightBoxX = 110;
-    const boxHeight = 45; // Increased height to fit categories
+    const boxHeight = 22;
     doc.roundedRect(rightBoxX, y, pw - 15 - rightBoxX, boxHeight, 3, 3);
     const tvaRate = quoteSettings?.tvaRate ?? 19;
     
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
-    doc.text('RÉCAPITULATIF DES COÛTS', rightBoxX + 5, y + 7);
-    
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.text('Total Profilés Aluminium', rightBoxX + 5, y + 14);
-    doc.text(`${formatPrice(totals.profiles)} DZD`, pw - 20, y + 14, { align: 'right' });
-    
-    doc.text('Total Accessoires et Joints', rightBoxX + 5, y + 19);
-    doc.text(`${formatPrice(totals.accessories)} DZD`, pw - 20, y + 19, { align: 'right' });
-    
-    doc.text('Total Vitrage', rightBoxX + 5, y + 24);
-    doc.text(`${formatPrice(totals.glass)} DZD`, pw - 20, y + 24, { align: 'right' });
-    
-    if (totals.shutters > 0) {
-      doc.text('Total Composants Volet', rightBoxX + 5, y + 29);
-      doc.text(`${formatPrice(totals.shutters)} DZD`, pw - 20, y + 29, { align: 'right' });
-    }
-    
-    doc.line(rightBoxX + 5, y + 32, pw - 20, y + 32);
-    
-    doc.setFont('helvetica', 'bold');
-    doc.text('MONTANT TOTAL HT', rightBoxX + 5, y + 38);
-    doc.text(`${formatPrice(totals.ht)} DZD`, pw - 20, y + 38, { align: 'right' });
+    doc.text('MONTANT TOTAL HT', rightBoxX + 5, y + 10);
+    doc.text(`${formatPrice(totals.ht)} DZD`, pw - 20, y + 10, { align: 'right' });
     
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.text(`TVA ${tvaRate}% : ${formatPrice(totals.tva)} DZD`, rightBoxX + 5, y + 42);
-    
-    y += boxHeight + 5;
+    doc.setFontSize(8.5);
+    doc.text(`TVA ${tvaRate}% : ${formatPrice(totals.tva)} DZD`, rightBoxX + 5, y + 18);
+    doc.text(`${formatPrice(totals.tva)} DZD`, pw - 20, y + 18, { align: 'right' });
+
+    y += boxHeight + 15;
     
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
     doc.text(`NET À PAYER TTC : ${formatPrice(totals.ttc)} DZD`, pw - 15, y, { align: 'right' });
 
-    y += 40;
+    y += 15;
     
     // Amount text in words
     const numberToFrenchWords = (num) => {
