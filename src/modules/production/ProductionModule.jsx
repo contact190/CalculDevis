@@ -1787,9 +1787,20 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                       doc.text("Aucun article sélectionné.", 15, y);
                     } else {
                       itemsToPrint.forEach(p => {
-                        doc.text(p.id.split('|')[0], 15, y);
-                        doc.text((p.name || p.combinedName || '').slice(0, 25) || '—', 50, y);
-                        doc.text(p.colorName || '—', 110, y);
+                        const ref = String(p.id.split('|')[0]);
+                        const name = String(p.name || p.combinedName || '—');
+                        const color = String(p.colorName || '—');
+
+                        // Utilisation de splitTextToSize pour gérer les textes longs
+                        const refLines = doc.splitTextToSize(ref, 32); 
+                        const nameLines = doc.splitTextToSize(name, 55);
+                        const rowHeight = Math.max(refLines.length, nameLines.length) * 5 + 3;
+
+                        if (y + rowHeight > 280) { doc.addPage(); y = 20; }
+                        
+                        doc.text(refLines, 15, y);
+                        doc.text(nameLines, 50, y);
+                        doc.text(color, 110, y);
                         
                         const isProfile = !!p.pieces;
                         const isMl = isProfile || ['M', 'ML', 'JOINT'].includes((p.unit || '').toUpperCase());
@@ -1797,8 +1808,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                         doc.text(val.toString(), 150, y);
                         doc.text(isProfile ? 'ML' : (p.unit || 'U'), 185, y);
                         
-                        y += 8;
-                        if (y > 270) { doc.addPage(); y = 20; }
+                        y += rowHeight;
                       });
                     }
                     
@@ -1847,6 +1857,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                     doc.setFontSize(11);
                     doc.setFillColor(30, 41, 59);
                     doc.rect(10, y-6, 190, 7, 'F');
+                    doc.setTextColor(255, 255, 255);
                     doc.text("Désignation", 15, y);
                     doc.text("Largeur", 80, y);
                     doc.text("Hauteur", 110, y);
@@ -1854,14 +1865,20 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                     doc.text("Surface (m2)", 160, y);
                     
                     y += 10;
+                    doc.setTextColor(30, 41, 59);
                     purchasingGlass.forEach(g => {
-                      doc.text(g.name || 'Vitrage', 15, y);
+                      const name = String(g.name || 'Vitrage');
+                      const lines = doc.splitTextToSize(name, 60);
+                      const rowHeight = lines.length * 5 + 3;
+
+                      if (y + rowHeight > 280) { doc.addPage(); y = 20; }
+
+                      doc.text(lines, 15, y);
                       doc.text(`${g.width} mm`, 80, y);
                       doc.text(`${g.height} mm`, 110, y);
                       doc.text(g.count.toString(), 140, y);
                       doc.text((g.area || 0).toFixed(3), 160, y);
-                      y += 8;
-                      if (y > 270) { doc.addPage(); y = 20; }
+                      y += rowHeight;
                     });
                     
                     doc.save(`Commande_Vitrage_${activeQuote?.number || 'Chantier'}.pdf`);
