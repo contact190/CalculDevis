@@ -2613,60 +2613,60 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
 
           let currentLabel = 0;
 
-          globalCuts.forEach((cut) => {
-            const bar = allBarsFlat.find(b => b.pieces.some(p => p.windowIdx === cut.windowIdx && p.profileId === cut.profileId && p.length === cut.length));
-            const address = bar ? bar.address : 'N/A';
+          // Parcourir les barres optimisées dans l'ordre du plan de coupe
+          allBarsFlat.forEach((bar) => {
+            bar.pieces.forEach((piece) => {
+              const col = currentLabel % cols;
+              const row = Math.floor(currentLabel / cols) % rows;
+              
+              if (currentLabel > 0 && currentLabel % (cols * rows) === 0) {
+                doc.addPage();
+              }
 
-            const col = currentLabel % cols;
-            const row = Math.floor(currentLabel / cols) % rows;
-            
-            if (currentLabel > 0 && currentLabel % (cols * rows) === 0) {
-              doc.addPage();
-            }
+              const x = marginX + (col * (labelW + spacingX));
+              const y = marginY + (row * (labelH + spacingY));
 
-            const x = marginX + (col * (labelW + spacingX));
-            const y = marginY + (row * (labelH + spacingY));
+              // Draw label border (light gray)
+              doc.setDrawColor(230, 230, 230);
+              doc.setLineWidth(0.1);
+              doc.rect(x, y, labelW, labelH);
 
-            // Draw label border (light gray)
-            doc.setDrawColor(230, 230, 230);
-            doc.setLineWidth(0.1);
-            doc.rect(x, y, labelW, labelH);
+              // Content
+              doc.setTextColor(0, 0, 0);
+              
+              // 1. Window Label (Top Left)
+              doc.setFont('helvetica', 'bold');
+              doc.setFontSize(10);
+              doc.text(`${piece.windowLabel}`, x + 3, y + 6);
 
-            // Content
-            doc.setTextColor(0, 0, 0);
-            
-            // 1. Window Label (Top Left)
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(10);
-            doc.text(`${cut.windowLabel}`, x + 3, y + 6);
+              // 2. Address (Top Right)
+              doc.setFontSize(9);
+              doc.setFillColor(245, 245, 245);
+              doc.rect(x + labelW - 18, y + 2, 16, 6, 'F');
+              doc.text(bar.address, x + labelW - 17, y + 6.5);
 
-            // 2. Address (Top Right)
-            doc.setFontSize(9);
-            doc.setFillColor(245, 245, 245);
-            doc.rect(x + labelW - 18, y + 2, 16, 6, 'F');
-            doc.text(address, x + labelW - 17, y + 6.5);
+              // 3. Category & Usage (Middle)
+              doc.setFont('helvetica', 'normal');
+              doc.setFontSize(7);
+              doc.setTextColor(100, 100, 100);
+              doc.text(piece.usage || 'PROFILÉ', x + 3, y + 11);
+              
+              // 4. Profile Designation
+              doc.setFont('helvetica', 'bold');
+              doc.setFontSize(7.5);
+              doc.setTextColor(0, 0, 0);
+              const splitName = doc.splitTextToSize(piece.label || bar.profileName, labelW - 6);
+              doc.text(splitName, x + 3, y + 15);
 
-            // 3. Category & Usage (Middle)
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(7);
-            doc.setTextColor(100, 100, 100);
-            doc.text(cut.usage || 'PROFILÉ', x + 3, y + 11);
-            
-            // 4. Profile Designation
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(7.5);
-            doc.setTextColor(0, 0, 0);
-            const splitName = doc.splitTextToSize(cut.label || cut.profileName, labelW - 6);
-            doc.text(splitName, x + 3, y + 15);
+              // 5. Length (Bottom)
+              doc.setFontSize(11);
+              doc.text(`${piece.length} mm`, x + 3, y + 22);
 
-            // 5. Length (Bottom)
-            doc.setFontSize(11);
-            doc.text(`${cut.length} mm`, x + 3, y + 22);
-
-            currentLabel++;
+              currentLabel++;
+            });
           });
 
-          doc.save(`Etiquettes_Profils_44up_${activeQuote?.number || 'Export'}.pdf`);
+          doc.save(`Etiquettes_DEBIT_OPTIMISE_${activeQuote?.number || 'Export'}.pdf`);
         };
 
         const generateCuttingOptimizationPDF = () => {
