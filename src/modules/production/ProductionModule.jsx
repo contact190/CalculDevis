@@ -2577,22 +2577,38 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
 
         // Assign each BAR to a chariot slot based on barsPerSlot
         const barsPerSlot = kitConfig.barsPerSlot || 1;
+        // --- 5. SORTING & FLATTENING BARS FOR PDF/LABELS ---
+        const getProfilePriority = (name) => {
+          const n = (name || '').toLowerCase();
+          if (n.includes('cadre') || n.includes('dormant')) return 1;
+          if (n.includes('ouvrant') || n.includes('panneau') || n.includes('vantail') || n.includes('chicane')) return 2;
+          return 3;
+        };
+
         const allBarsFlat = [];
-        Object.entries(barsResult).forEach(([profId, { profileName, bars, barLen: standardLen }]) => {
+        Object.entries(barsResult).forEach(([profId, { profileName, bars, barLen: standardLen, colorName }]) => {
           bars.filter(b => b.pieces.length > 0).forEach(bar => {
             allBarsFlat.push({ 
               ...bar, 
               profileName, 
               profId, 
+              colorName,
+              priority: getProfilePriority(profileName),
               barLen: bar.barLen || standardLen 
             });
           });
         });
+
+        // Sort bars by priority, then by name
+        allBarsFlat.sort((a, b) => {
+          if (a.priority !== b.priority) return a.priority - b.priority;
+          return a.profileName.localeCompare(b.profileName);
+        });
         
+        // Re-address sorted bars
         allBarsFlat.forEach((bar, idx) => {
           const slotIdxTotal = Math.floor(idx / barsPerSlot);
           const trolleyIdx = Math.floor(slotIdxTotal / kitConfig.slotsPerTrolley);
-          
           bar.trolley = trolleyIdx + 1;
           bar.slot = (slotIdxTotal % kitConfig.slotsPerTrolley) + 1;
           bar.address = `CH${bar.trolley}-C${String(bar.slot).padStart(2, '0')}`;
@@ -2603,7 +2619,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         const totalBars = allBarsFlat.length;
         const totalStockBarsUsed = allBarsFlat.filter(b => b.isStock).length;
 
-        // --- 4. KIT SUMMARY (Window status) ---
+        // --- 6. KIT SUMMARY (Window status) ---
         const windowSummary = {};
         globalCuts.forEach(cut => {
           if (!windowSummary[cut.windowIdx]) {
@@ -2615,7 +2631,6 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
               slots: new Set()
             };
           }
-          // Find where this piece went
           const bar = allBarsFlat.find(b => b.pieces.some(p => p.windowIdx === cut.windowIdx && p.profileId === cut.profileId && p.length === cut.length));
           if (bar) {
             windowSummary[cut.windowIdx].pieces.push({ ...cut, address: bar.address });
@@ -2624,261 +2639,94 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
           }
         });
 
+        // --- 7. PDF GENERATORS ---
         const generateLabelsPDF = () => {
           const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-          const cols = 4;
-          const rows = 11;
-          const marginX = 7;
-          const marginY = 9;
-          const labelW = 48.5;
-          const labelH = 25.4;
-          const spacingX = 0;
-          const spacingY = 0;
-
+          const cols = 4; const rows = 11;
+          const marginX = 7; const marginY = 9;
+          const labelW = 48.5; const labelH = 25.4;
           let currentLabel = 0;
 
-          // Parcourir les barres optimisées dans l'ordre du plan de coupe
           allBarsFlat.forEach((bar) => {
             const nameLower = (bar.profileName || '').toLowerCase();
             const profIdLower = (bar.profId || '').toLowerCase();
-            // Filtrage : Ne pas imprimer d'étiquettes pour parclose et couvre-joint
             if (nameLower.includes('parclose') || nameLower.includes('couvre') || 
-                nameLower.includes('cj') || profIdLower.includes('cj')) {
-              return;
-            }
+                nameLower.includes('cj') || profIdLower.includes('cj')) return;
 
             bar.pieces.forEach((piece) => {
-              const col = currentLabel % cols;
-              const row = Math.floor(currentLabel / cols) % rows;
-              
-              if (currentLabel > 0 && currentLabel % (cols * rows) === 0) {
-                doc.addPage();
-              }
-
-              const x = marginX + (col * (labelW + spacingX));
-              const y = marginY + (row * (labelH + spacingY));
-
-              // Draw label border (light gray)
-              doc.setDrawColor(230, 230, 230);
-              doc.setLineWidth(0.1);
-              doc.rect(x, y, labelW, labelH);
-
-              // Content
-              doc.setTextColor(0, 0, 0);
-              
-              // 1. Window Label (Top Left)
-              doc.setFont('helvetica', 'bold');
-              doc.setFontSize(10);
+              const col = currentLabel % cols; const row = Math.floor(currentLabel / cols) % rows;
+              if (currentLabel > 0 && currentLabel % (cols * rows) === 0) doc.addPage();
+              const x = marginX + (col * labelW); const y = marginY + (row * labelH);
+              doc.setDrawColor(230, 230, 230); doc.setLineWidth(0.1); doc.rect(x, y, labelW, labelH);
+              doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
               doc.text(`${piece.windowLabel}`, x + 3, y + 6);
-
-              // 2. Address (Top Right)
-              doc.setFontSize(9);
-              doc.setFillColor(245, 245, 245);
-              doc.rect(x + labelW - 18, y + 2, 16, 6, 'F');
+              doc.setFontSize(9); doc.setFillColor(245, 245, 245); doc.rect(x + labelW - 18, y + 2, 16, 6, 'F');
               doc.text(bar.address, x + labelW - 17, y + 6.5);
-
-              // 3. Category & Usage (Middle)
-              doc.setFont('helvetica', 'normal');
-              doc.setFontSize(7);
-              doc.setTextColor(100, 100, 100);
+              doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(100, 100, 100);
               doc.text(piece.usage || 'PROFILÉ', x + 3, y + 11);
-              
-              // 4. Profile Designation
-              doc.setFont('helvetica', 'bold');
-              doc.setFontSize(7.5);
-              doc.setTextColor(0, 0, 0);
+              doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(0, 0, 0);
               const splitName = doc.splitTextToSize(piece.label || bar.profileName, labelW - 6);
               doc.text(splitName, x + 3, y + 15);
-
-              // 5. Length (Bottom)
-              doc.setFontSize(11);
-              doc.text(`${piece.length} mm`, x + 3, y + 22);
-
+              doc.setFontSize(11); doc.text(`${piece.length} mm`, x + 3, y + 22);
               currentLabel++;
             });
           });
-
-          doc.save(`Etiquettes_DEBIT_OPTIMISE_${activeQuote?.number || 'Export'}.pdf`);
+          doc.save(`Etiquettes_DEBIT_PRIORISE_${activeQuote?.number || 'Export'}.pdf`);
         };
 
         const generateCuttingOptimizationPDF = () => {
           const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-          const margin = 15;
-          let currentY = 20;
+          const margin = 15; let currentY = 20;
 
-          doc.setFontSize(18);
-          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(18); doc.setFont('helvetica', 'bold');
           doc.text("PLAN DE COUPE OPTIMISÉ (NESTING)", 105, currentY, { align: 'center' });
-          doc.setFontSize(10);
-          doc.setFont('helvetica', 'normal');
-          doc.text(`Client: ${activeQuote?.clientNom || '—'}  |  Dossier: ${activeQuote?.number || '—'}  |  Date: ${new Date().toLocaleDateString()}`, 105, currentY + 7, { align: 'center' });
+          doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+          doc.text(`Client: ${activeQuote?.clientNom || '—'}  |  Dossier: ${activeQuote?.number || '—'}`, 105, currentY + 7, { align: 'center' });
           currentY += 20;
 
-          // 1. Collect ALL cuts from ALL active configs
-          const allCutsList = [];
-          activeConfigs.forEach(cfg => {
-            const b = engine.calculateBOM(cfg.config);
-            const combined = [
-              ...(b.profiles || []), 
-              ...(b.shutters || []).filter(s => ['ML', 'BARRE', 'JOINT'].includes((s.priceUnit || '').toUpperCase().trim()))
-            ];
-            
-            const colorInfo = database.colors?.find(c => c.id === cfg.config.colorId);
-            const colorName = colorInfo?.name || cfg.config.colorId || 'Standard';
-            
-            combined.forEach(p => {
-              const barKey = `${p.id}|${colorName}`;
-              for (let i = 0; i < cfg.qty; i++) {
-                allCutsList.push({
-                  ...p,
-                  instanceLabel: cfg.allLabels[i] || cfg.label,
-                  colorName,
-                  barKey
-                });
-              }
-            });
+          const groupedByProfile = {};
+          allBarsFlat.forEach(bar => {
+            const nameLower = (bar.profileName || '').toLowerCase();
+            const profIdLower = (bar.profId || '').toLowerCase();
+            if (nameLower.includes('parclose') || nameLower.includes('couvre') || 
+                nameLower.includes('cj') || profIdLower.includes('cj')) return;
+
+            if (!groupedByProfile[bar.profId]) groupedByProfile[bar.profId] = { name: bar.profileName, color: bar.colorName, bars: [] };
+            groupedByProfile[bar.profId].bars.push(bar);
           });
 
-          if (allCutsList.length === 0) {
-            doc.text("Aucune coupe à optimiser.", 20, currentY);
-            doc.save(`OPTIM_COUPE_${selectedGlobalQuoteId}.pdf`);
-            return;
-          }
-
-          // 2. Group by Profile + Color
-          const groups = {};
-          allCutsList.forEach(c => {
-            const nameLower = (c.name || '').toLowerCase();
-            const labelLower = (c.label || '').toLowerCase();
-            // Filtrage : Exclure parclose et couvre-joint
-            if (nameLower.includes('parclose') || labelLower.includes('parclose') || 
-                nameLower.includes('couvre') || labelLower.includes('couvre') || 
-                nameLower.includes('cj') || labelLower.includes('cj')) {
-              return;
-            }
-
-            const groupKey = c.barKey || `${c.id}|STD`;
-            if (!groups[groupKey]) groups[groupKey] = { id: c.id, colorName: c.colorName, name: c.name, cuts: [], barKey: groupKey };
-            groups[groupKey].cuts.push(c);
-          });
-
-          // 3. Process each group
-          Object.values(groups).forEach(group => {
+          Object.values(groupedByProfile).forEach(group => {
             if (currentY > 250) { doc.addPage(); currentY = 20; }
-            
-            const pRef = (database.profiles || []).find(p => p.id === group.id);
-            const barLen = barLengths[group.barKey] || pRef?.barLength || 6400;
-            const threshold = pRef?.scrapThreshold || 500;
-            const blade = 4; // 4mm blade width
+            const newBarsCount = group.bars.filter(b => !b.isStock).length;
+            const stockBarsCount = group.bars.filter(b => b.isStock).length;
 
-            // Pré-calcul de l'optimisation pour le titre
-            const sortedForTitle = [...group.cuts].sort((a, b) => b.length - a.length);
-            const barsForTitle = [];
-            (manualStockOffcuts[group.barKey] || []).forEach(len => {
-              barsForTitle.push({ remaining: len, isStock: true });
-            });
-            sortedForTitle.forEach(cut => {
-              let placed = false;
-              for (let b of barsForTitle) {
-                if (b.remaining >= cut.length + blade) { b.remaining -= (cut.length + blade); placed = true; break; }
-              }
-              if (!placed) barsForTitle.push({ remaining: barLen - cut.length - blade });
-            });
-            const stockUsed = barsForTitle.filter(b => b.isStock && b.remaining < barLen).length; // simple check
-            const newBars = barsForTitle.filter(b => !b.isStock).length;
-
-            doc.setFillColor(30, 41, 59);
-            doc.rect(margin, currentY, 180, 8, 'F');
-            doc.setTextColor(255, 255, 255);
-            doc.setFontSize(9);
-            doc.setFont('helvetica', 'bold');
-            doc.text(`${group.name} (${group.id}) - Finition: ${group.colorName || 'Std'}`, margin + 3, currentY + 5.5);
-            
-            doc.setFontSize(8);
-            const summaryText = `${newBars + barsForTitle.filter(b=>b.isStock).length} Barres ( ${newBars} Neuves + ${barsForTitle.filter(b=>b.isStock).length} Stock )`;
-            doc.text(summaryText, 195, currentY + 5.5, { align: 'right' });
+            doc.setFillColor(30, 41, 59); doc.rect(margin, currentY, 180, 8, 'F');
+            doc.setTextColor(255, 255, 255); doc.setFontSize(9); doc.setFont('helvetica', 'bold');
+            doc.text(`${group.name} (${group.color || 'Standard'})`, margin + 3, currentY + 5.5);
+            doc.setFontSize(8); doc.text(`${group.bars.length} Barres (${newBarsCount} Neuves + ${stockBarsCount} Stock)`, 195, currentY + 5.5, { align: 'right' });
             currentY += 15;
 
-            // FFD Nesting Algorithm with Stock priority
-            const sortedCuts = [...group.cuts].sort((a, b) => b.length - a.length);
-            const nestedBars = [];
-            
-            // 1. Initialize with stock
-            (manualStockOffcuts[group.barKey] || []).forEach((len, sIdx) => {
-              nestedBars.push({ items: [], remaining: len, isStock: true, originalLen: len });
-            });
-
-            sortedCuts.forEach(cut => {
-              let placed = false;
-              for (let bar of nestedBars) {
-                if (bar.remaining >= cut.length + blade) {
-                  bar.items.push(cut);
-                  bar.remaining -= (cut.length + blade);
-                  placed = true;
-                  break;
-                }
-              }
-              if (!placed) {
-                nestedBars.push({ items: [cut], remaining: barLen - cut.length - blade, originalLen: barLen });
-              }
-            });
-
-            // 4. Draw Bars
-            doc.setTextColor(0, 0, 0);
-            nestedBars.forEach((bar, bIdx) => {
+            group.bars.forEach((bar, bIdx) => {
               if (currentY > 260) { doc.addPage(); currentY = 20; }
-              
-              doc.setFontSize(8);
-              doc.setFont('helvetica', 'bold');
-              doc.text(`${bar.isStock ? `[STOCK ${bar.originalLen}mm] ` : ''}Barre #${bIdx + 1}`, margin, currentY - 2);
-              
-              const barWidth = 170;
-              const barHeight = 8;
-              const actualBarLen = bar.originalLen || barLen;
-              const scale = barWidth / actualBarLen;
-              
-              doc.setDrawColor(200, 200, 200);
-              doc.rect(margin, currentY, barWidth, barHeight);
-              
+              doc.setTextColor(0, 0, 0); doc.setFontSize(8); doc.text(`${bar.isStock ? '[STOCK] ' : ''}Barre #${bIdx + 1} - ${bar.address}`, margin, currentY - 2);
+              const barWidth = 170; const barHeight = 8; const scale = barWidth / bar.barLen;
+              doc.setDrawColor(200, 200, 200); doc.rect(margin, currentY, barWidth, barHeight);
               let currentXPos = margin;
-              bar.items.forEach(cut => {
-                const w = cut.length * scale;
-                doc.setDrawColor(30, 41, 59);
-                doc.setFillColor(255, 255, 255);
-                doc.rect(currentXPos, currentY, w, barHeight, 'FD');
-                
-                doc.setFontSize(5);
-                doc.setFont('helvetica', 'normal');
-                doc.text(`${cut.instanceLabel}`, currentXPos + 1, currentY + barHeight / 2 + 1.5, { maxWidth: w - 2 });
-                doc.text(`${Math.round(cut.length)}`, currentXPos + 1, currentY + barHeight + 3);
-                
-                currentXPos += w;
-                doc.setDrawColor(200, 200, 200);
-                doc.line(currentXPos, currentY, currentXPos, currentY + barHeight);
-                currentXPos += (blade * scale);
+              bar.pieces.forEach(piece => {
+                const w = piece.length * scale;
+                doc.setDrawColor(30, 41, 59); doc.setFillColor(255, 255, 255); doc.rect(currentXPos, currentY, w, barHeight, 'FD');
+                doc.setFontSize(5); doc.text(`${piece.windowLabel}`, currentXPos + 1, currentY + barHeight / 2 + 1, { maxWidth: w - 2 });
+                doc.text(`${piece.length}`, currentXPos + 1, currentY + barHeight + 3);
+                currentXPos += w + (4 * scale); // 4mm blade
               });
-              
-              const remainingW = bar.remaining * scale;
-              if (remainingW > 0) {
-                const isReusable = bar.remaining >= threshold;
-                doc.setFillColor(isReusable ? 220 : 254, isReusable ? 252 : 226, isReusable ? 231 : 226); 
-                doc.setDrawColor(isReusable ? 22 : 185, isReusable ? 163 : 28, isReusable ? 74 : 28);
-                doc.rect(currentXPos, currentY, remainingW, barHeight, 'FD');
-                
-                doc.setFontSize(5);
-                doc.setTextColor(isReusable ? 21 : 153, isReusable ? 128 : 27, isReusable ? 61 : 27);
-                doc.text(`${Math.round(bar.remaining)}mm`, currentXPos + 1, currentY + barHeight / 2 + 1.5);
-                doc.text(isReusable ? "RÉUTIL." : "CHUTE", currentXPos + 1, currentY - 2);
-                doc.setTextColor(0, 0, 0);
-              }
-              
               currentY += 18;
             });
             currentY += 10;
           });
-
-          doc.save(`OPTIM_COUPE_${selectedGlobalQuoteId}.pdf`);
+          doc.save(`OPTIM_COUPE_${activeQuote?.number || 'Export'}.pdf`);
         };
+
+
 
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
