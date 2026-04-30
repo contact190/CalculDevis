@@ -2639,6 +2639,14 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
 
           // Parcourir les barres optimisées dans l'ordre du plan de coupe
           allBarsFlat.forEach((bar) => {
+            const nameLower = (bar.profileName || '').toLowerCase();
+            const profIdLower = (bar.profId || '').toLowerCase();
+            // Filtrage : Ne pas imprimer d'étiquettes pour parclose et couvre-joint
+            if (nameLower.includes('parclose') || nameLower.includes('couvre') || 
+                nameLower.includes('cj') || profIdLower.includes('cj')) {
+              return;
+            }
+
             bar.pieces.forEach((piece) => {
               const col = currentLabel % cols;
               const row = Math.floor(currentLabel / cols) % rows;
