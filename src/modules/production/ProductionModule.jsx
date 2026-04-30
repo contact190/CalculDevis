@@ -2601,34 +2601,72 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         });
 
         const generateLabelsPDF = () => {
-          const doc = new jsPDF();
-          doc.setFontSize(10);
-          let x = 10, y = 10;
-          const labelW = 60, labelH = 30;
+          const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+          const cols = 4;
+          const rows = 11;
+          const marginX = 7;
+          const marginY = 9;
+          const labelW = 48.5;
+          const labelH = 25.4;
+          const spacingX = 0;
+          const spacingY = 0;
 
-          globalCuts.forEach((cut, i) => {
+          let currentLabel = 0;
+
+          globalCuts.forEach((cut) => {
             const bar = allBarsFlat.find(b => b.pieces.some(p => p.windowIdx === cut.windowIdx && p.profileId === cut.profileId && p.length === cut.length));
             const address = bar ? bar.address : 'N/A';
 
-            doc.rect(x, y, labelW, labelH);
-            doc.setFont('helvetica', 'bold');
-            doc.text(`${cut.windowLabel}`, x + 2, y + 5);
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(8);
-            doc.text(`${cut.profileName}`, x + 2, y + 10);
-            doc.text(`${cut.label}`, x + 2, y + 14);
-            doc.setFontSize(10);
-            doc.text(`${cut.length} mm`, x + 2, y + 20);
+            const col = currentLabel % cols;
+            const row = Math.floor(currentLabel / cols) % rows;
             
-            doc.setFillColor(240, 240, 240);
-            doc.rect(x + 35, y + 2, 23, 8, 'F');
-            doc.text(address, x + 37, y + 8);
+            if (currentLabel > 0 && currentLabel % (cols * rows) === 0) {
+              doc.addPage();
+            }
 
-            x += labelW + 5;
-            if (x > 180) { x = 10; y += labelH + 5; }
-            if (y > 260) { doc.addPage(); x = 10; y = 10; }
+            const x = marginX + (col * (labelW + spacingX));
+            const y = marginY + (row * (labelH + spacingY));
+
+            // Draw label border (light gray)
+            doc.setDrawColor(230, 230, 230);
+            doc.setLineWidth(0.1);
+            doc.rect(x, y, labelW, labelH);
+
+            // Content
+            doc.setTextColor(0, 0, 0);
+            
+            // 1. Window Label (Top Left)
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(10);
+            doc.text(`${cut.windowLabel}`, x + 3, y + 6);
+
+            // 2. Address (Top Right)
+            doc.setFontSize(9);
+            doc.setFillColor(245, 245, 245);
+            doc.rect(x + labelW - 18, y + 2, 16, 6, 'F');
+            doc.text(address, x + labelW - 17, y + 6.5);
+
+            // 3. Category & Usage (Middle)
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7);
+            doc.setTextColor(100, 100, 100);
+            doc.text(cut.usage || 'PROFILÉ', x + 3, y + 11);
+            
+            // 4. Profile Designation
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(7.5);
+            doc.setTextColor(0, 0, 0);
+            const splitName = doc.splitTextToSize(cut.label || cut.profileName, labelW - 6);
+            doc.text(splitName, x + 3, y + 15);
+
+            // 5. Length (Bottom)
+            doc.setFontSize(11);
+            doc.text(`${cut.length} mm`, x + 3, y + 22);
+
+            currentLabel++;
           });
-          doc.save(`Etiquettes_${selectedGlobalQuoteId}.pdf`);
+
+          doc.save(`Etiquettes_Profils_44up_${activeQuote?.number || 'Export'}.pdf`);
         };
 
         const generateCuttingOptimizationPDF = () => {
