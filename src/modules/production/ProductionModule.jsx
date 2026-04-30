@@ -2434,10 +2434,32 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
               bar.pieces.forEach(piece => {
                 const w = piece.length * scale;
                 doc.setDrawColor(30, 41, 59); doc.setFillColor(255, 255, 255); doc.rect(currentXPos, currentY, w, barHeight, 'FD');
-                doc.setFontSize(5); doc.text(`${piece.windowLabel}`, currentXPos + 1, currentY + barHeight / 2 + 1, { maxWidth: w - 2 });
+                doc.setFontSize(5); doc.setTextColor(0,0,0);
+                doc.text(`${piece.windowLabel}`, currentXPos + 1, currentY + barHeight / 2 + 1, { maxWidth: w - 2 });
                 doc.text(`${piece.length}`, currentXPos + 1, currentY + barHeight + 3);
                 currentXPos += w + (4 * scale); // 4mm blade
               });
+
+              // --- Draw the Chute (Remaining Part) ---
+              if (bar.remaining > 0) {
+                const chuteW = (margin + barWidth) - currentXPos;
+                if (chuteW > 0) {
+                  const isReusable = bar.remaining >= 500;
+                  // Colors: Light Green for reusable, Light Red for waste
+                  if (isReusable) {
+                    doc.setFillColor(209, 250, 229); doc.setDrawColor(5, 150, 105); doc.setTextColor(5, 150, 105);
+                  } else {
+                    doc.setFillColor(254, 226, 226); doc.setDrawColor(185, 28, 28); doc.setTextColor(185, 28, 28);
+                  }
+                  
+                  doc.rect(currentXPos, currentY, chuteW, barHeight, 'FD');
+                  doc.setFontSize(4);
+                  doc.setFont('helvetica', 'bold');
+                  doc.text(isReusable ? "RÉUTILISABLE" : "DÉCHET", currentXPos + 1, currentY + barHeight / 2 + 0.8);
+                  doc.setFontSize(5);
+                  doc.text(`${Math.round(bar.remaining)}`, currentXPos + 1, currentY + barHeight + 3);
+                }
+              }
               currentY += 18;
             });
             currentY += 10;

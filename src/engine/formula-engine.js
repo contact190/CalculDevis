@@ -529,7 +529,7 @@ export class FormulaEngine {
     
     // Detect if this shutter component is a couvre-joint
     const isCJ = /couvres?[- ]?joints?|cj[vh]?/i.test((item.name || '').toLowerCase());
-    const effectiveH = isCJ ? (HT || (H + HC)) : H;
+    const effectiveH = HT || (H + HC);
 
     // Rule: Couvre Joint reduction ONLY on the caisson length
     let itemScopeL = L;
