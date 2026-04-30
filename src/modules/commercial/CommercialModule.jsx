@@ -1520,12 +1520,13 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
     // Left: Logo
     if (quoteSettings?.logoBase64) {
       try {
-        doc.addImage(quoteSettings.logoBase64, 'PNG', 15, y, 35, 20, '', 'FAST');
+        // Logo carré 25x25mm
+        doc.addImage(quoteSettings.logoBase64, 'PNG', 15, y, 25, 25, '', 'FAST');
       } catch (e) {}
     }
     
     // Middle: Company Information
-    const midX = 60;
+    const midX = 50; // Decalage réduit pour le logo carré
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
     doc.text(quoteSettings?.companyName || 'Mon Entreprise', midX, y + 5);
@@ -1533,13 +1534,16 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
     doc.setFont('helvetica', 'normal');
     let phoneEmailYOffset = 15;
     if (quoteSettings?.companyAddress) {
-      const addressLines = doc.splitTextToSize(quoteSettings.companyAddress, 85);
-      doc.text(addressLines, midX, y + 10);
-      phoneEmailYOffset = 10 + (addressLines.length * 4);
+      // Largeur réduite à 70 pour éviter le chevauchement avec la droite
+      const addressLines = doc.splitTextToSize(quoteSettings.companyAddress, 70);
+      doc.text(addressLines, midX, y + 12);
+      phoneEmailYOffset = 12 + (addressLines.length * 4) + 2;
     }
     const phone = quoteSettings?.companyPhone || '';
     const email = quoteSettings?.companyEmail || '';
+    doc.setFont('helvetica', 'bold');
     doc.text(`${phone} ${email ? ' - ' + email : ''}`, midX, y + phoneEmailYOffset);
+    doc.setFont('helvetica', 'normal');
 
     // Right: Legal Information (RC, AI, NIF)
     const rightX = pw - 15;

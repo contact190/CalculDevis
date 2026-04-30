@@ -13,8 +13,11 @@ const ShippingModule = ({ data, setData }) => {
   }, [data.orders]);
 
   const selectedOrder = useMemo(() => {
-    return (data.orders || []).find(o => o.id === selectedOrderId);
-  }, [data.orders, selectedOrderId]);
+    const order = (data.orders || []).find(o => o.id === selectedOrderId);
+    if (!order) return null;
+    const client = (data.clients || []).find(c => c.id === order.clientId);
+    return { ...order, clientName: order.clientName || client?.nom || 'CLIENT INCONNU' };
+  }, [data.orders, data.clients, selectedOrderId]);
 
   const allUnits = useMemo(() => {
     if (!selectedOrder) return [];
@@ -82,32 +85,85 @@ const ShippingModule = ({ data, setData }) => {
     }
   };
 
-  const generatePackingLabels = () => {
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [100, 150] });
-    allUnits.forEach((unit, idx) => {
-      if (idx > 0) doc.addPage([100, 150], 'landscape');
-      doc.setFillColor(30, 41, 59);
-      doc.rect(0, 0, 150, 15, 'F');
+  const generatePackingLabels = async () => {
+    // Format 100mm x 150mm (Standard Bordereau Logistique)
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [100, 150] });
+    
+    // Helper function to get DataURL from URL
+    const getQrDataUrl = (data) => {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'Anonymous';
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+          resolve(canvas.toDataURL('image/png'));
+        };
+        img.src = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(data)}`;
+      });
+    };
+
+    for (let idx = 0; idx < allUnits.length; idx++) {
+      const unit = allUnits[idx];
+      if (idx > 0) doc.addPage([100, 150], 'portrait');
+      
+      // Bordure extérieure
+      doc.setLineWidth(0.8);
+      doc.rect(2, 2, 96, 146);
+      
+      // Header - Titre Bordereau
+      doc.setFillColor(0, 0, 0);
+      doc.rect(2, 2, 96, 12, 'F');
       doc.setTextColor(255, 255, 255);
       doc.setFontSize(14); doc.setFont('helvetica', 'bold');
-      doc.text('ETIQUETTE DE COLISAGE', 75, 10, { align: 'center' });
-      doc.setTextColor(0, 0, 0); doc.setFontSize(12);
-      doc.text(`Client: ${selectedOrder.clientName || '---'}`, 10, 25);
-      doc.text(`Commande: ${selectedOrder.id}`, 10, 32);
-      doc.text(`Lot: ${unit.batchId}`, 10, 39);
-      doc.setLineWidth(0.5); doc.line(10, 45, 140, 45);
-      doc.setFontSize(18); doc.text(unit.name, 75, 58, { align: 'center' });
-      doc.setFontSize(12);
-      doc.text(`Produit: ${unit.label}`, 10, 75);
-      doc.text(`Dimensions: ${unit.dimensions} mm`, 10, 82);
-      doc.text(`Volet: ${unit.shutter}`, 10, 89);
-      doc.setDrawColor(200, 200, 200); doc.rect(110, 55, 30, 30);
-      doc.setFontSize(8); doc.text('SCAN QR', 125, 80, { align: 'center' });
-      doc.text(unit.id, 125, 88, { align: 'center' });
-      doc.setFontSize(9); doc.setTextColor(100, 100, 100);
-      doc.text('Logiciel CalculDevis PRO - Traçabilité Totale', 75, 95, { align: 'center' });
-    });
-    doc.save(`Etiquettes_Trace_${selectedOrder.id}.pdf`);
+      doc.text('BORDEREAU D\'EXPÉDITION', 50, 10, { align: 'center' });
+      
+      doc.setTextColor(0, 0, 0);
+      
+      // Section 1 : Info Commande
+      doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+      doc.text('CLIENT :', 5, 22);
+      const cName = (selectedOrder.clientName).toUpperCase();
+      doc.setFontSize(16); doc.text(cName, 5, 29);
+      
+      doc.setFontSize(10);
+      doc.text(`CMD N° : ${selectedOrder.id}`, 5, 38);
+      doc.text(`LOT : ${unit.batchId}`, 60, 38);
+      
+      doc.setLineWidth(0.3);
+      doc.line(5, 42, 95, 42);
+      
+      // Section 2 : REPERE (Très Gros)
+      doc.setFontSize(12); doc.text('REPÈRE / EMPLACEMENT :', 5, 50);
+      doc.setFontSize(28); doc.setFont('helvetica', 'bold');
+      doc.text(unit.name, 50, 65, { align: 'center' });
+      
+      doc.line(5, 75, 95, 75);
+      
+      // Section 3 : Détails Techniques
+      doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+      doc.text(`Type : ${unit.label}`, 5, 85);
+      doc.text(`Cotes : ${unit.dimensions} mm`, 5, 92);
+      doc.text(`Volet : ${unit.shutter === 'Oui' ? 'AVEC VOLET' : 'SANS VOLET'}`, 5, 99);
+      
+      // Section 4 : QR CODE (VRAI CODE SCANNABLE)
+      doc.setLineWidth(0.5);
+      doc.rect(25, 105, 50, 35); // Cadre pour le scan
+      doc.setFontSize(8);
+      doc.text('SCANNEZ POUR VALIDER (CHARGEMENT/LIVRAISON)', 50, 103, { align: 'center' });
+      
+      const qrDataUrl = await getQrDataUrl(unit.id);
+      doc.addImage(qrDataUrl, 'PNG', 35, 108, 30, 30);
+      
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(8); doc.setFont('helvetica', 'bold');
+      doc.text(unit.id, 50, 143, { align: 'center', charSpace: 1 });
+    }
+    
+    doc.save(`Bordereaux_Logistique_${selectedOrder.id}.pdf`);
   };
 
   const generateInstallationSheet = () => {
