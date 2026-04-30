@@ -170,19 +170,19 @@ export const getTechnicalDrawingDataURL = (cfg, database) => {
     ctx.fillStyle = '#e2e8f0';
     ctx.strokeStyle = '#94a3b8';
     ctx.lineWidth = 1;
-    if (optionalSides.top || true) {
+    if (optionalSides.top) {
       ctx.fillRect(offsetX - cjThick, offsetY - cjThick, dW + cjThick * 2, cjThick);
       ctx.strokeRect(offsetX - cjThick, offsetY - cjThick, dW + cjThick * 2, cjThick);
     }
-    if (optionalSides.bottom || true) {
+    if (optionalSides.bottom) {
       ctx.fillRect(offsetX - cjThick, offsetY + dH_total, dW + cjThick * 2, cjThick);
       ctx.strokeRect(offsetX - cjThick, offsetY + dH_total, dW + cjThick * 2, cjThick);
     }
-    if (optionalSides.left || true) {
+    if (optionalSides.left) {
       ctx.fillRect(offsetX - cjThick, offsetY, cjThick, dH_total);
       ctx.strokeRect(offsetX - cjThick, offsetY, cjThick, dH_total);
     }
-    if (optionalSides.right || true) {
+    if (optionalSides.right) {
       ctx.fillRect(offsetX + dW, offsetY, cjThick, dH_total);
       ctx.strokeRect(offsetX + dW, offsetY, cjThick, dH_total);
     }

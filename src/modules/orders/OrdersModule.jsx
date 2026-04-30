@@ -1004,29 +1004,71 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                           }}
                         />
                       </div>
-                      {['caissonId', 'lameId', 'glissiereId', 'axeId', 'kitId'].map(field => (
+                      {['controlPosition', 'caissonId', 'lameId', 'glissiereId', 'axeId', 'kitId'].map(field => (
                         <div key={field} className="form-group">
-                          <label className="label" style={{ fontSize: '0.7rem' }}>{field.replace('Id', '')}</label>
-                          <select 
-                            className="input" style={{ fontSize: '0.8rem' }}
-                            value={sh.overrides?.[field] || ''}
-                            onChange={e => {
-                              const newList = [...shutterMeasure.shutters];
-                              newList[sIdx].overrides = { ...newList[sIdx].overrides, [field]: e.target.value || undefined };
-                              setShutterMeasure({ ...shutterMeasure, shutters: newList });
-                            }}
-                          >
-                            <option value="">Auto</option>
-                            {(data.shutterComponents?.[field.replace('Id', 's')] || []).map(opt => <option key={opt.id} value={opt.id}>{opt.name}</option>)}
-                          </select>
+                          <label className="label" style={{ fontSize: '0.7rem' }}>
+                            {field === 'controlPosition' ? 'Position Manoeuvre' : field.replace('Id', '')}
+                          </label>
+                          {field === 'controlPosition' ? (
+                            <select 
+                              className="input" style={{ fontSize: '0.8rem', fontWeight: 700 }}
+                              value={sh.overrides?.[field] || ''}
+                              onChange={e => {
+                                const newList = [...shutterMeasure.shutters];
+                                newList[sIdx].overrides = { ...newList[sIdx].overrides, [field]: e.target.value || undefined };
+                                setShutterMeasure({ ...shutterMeasure, shutters: newList });
+                              }}
+                            >
+                              <option value="">Auto</option>
+                              <option value="Gauche">Gauche</option>
+                              <option value="Droite">Droite</option>
+                            </select>
+                          ) : (
+                            <select 
+                              className="input" style={{ fontSize: '0.8rem' }}
+                              value={sh.overrides?.[field] || ''}
+                              onChange={e => {
+                                const newList = [...shutterMeasure.shutters];
+                                newList[sIdx].overrides = { ...newList[sIdx].overrides, [field]: e.target.value || undefined };
+                                setShutterMeasure({ ...shutterMeasure, shutters: newList });
+                              }}
+                            >
+                              <option value="">Auto</option>
+                              {(data.shutterComponents?.[field.replace('Id', 's')] || []).map(opt => <option key={opt.id} value={opt.id}>{opt.name}</option>)}
+                            </select>
+                          )}
                         </div>
                       ))}
-                      <button 
-                        onClick={() => setShutterMeasure({ ...shutterMeasure, shutters: shutterMeasure.shutters.filter((_, i) => i !== sIdx) })}
-                        style={{ color: '#ef4444', border: 'none', background: 'transparent', padding: '0.5rem', cursor: 'pointer' }}
-                      >
-                        <Trash2 size={20} />
-                      </button>
+                      <div style={{ display: 'flex', gap: '0.5rem', alignSelf: 'flex-end', marginBottom: '4px' }}>
+                        <button 
+                          onClick={() => {
+                            if (!window.confirm("Appliquer cette configuration de volet à TOUTES les fenêtres de cette commande ?")) return;
+                            const currentShutterCfg = { ...sh };
+                            const updatedItems = selectedOrder.items.map(item => ({
+                              ...item,
+                              siteMeasurements: (item.siteMeasurements || []).map(m => ({
+                                ...m,
+                                shutterList: [{ ...currentShutterCfg, id: Date.now() + Math.random(), qty: m.qty }]
+                              }))
+                            }));
+                            handleUpdateOrder({ ...selectedOrder, items: updatedItems });
+                            setShutterMeasure(null);
+                            alert("Configuration appliquée à toute la commande.");
+                          }}
+                          className="btn btn-secondary"
+                          style={{ fontSize: '0.7rem', padding: '0.4rem 0.6rem', color: '#7c3aed', borderColor: '#ddd6fe', background: '#f5f3ff' }}
+                          title="Copier ces réglages sur toutes les fenêtres"
+                        >
+                          <Copy size={14} style={{ marginRight: '4px' }} /> Appliquer à tous
+                        </button>
+                        <button 
+                          onClick={() => setShutterMeasure({ ...shutterMeasure, shutters: shutterMeasure.shutters.filter((_, i) => i !== sIdx) })}
+                          style={{ color: '#ef4444', border: 'none', background: 'transparent', padding: '0.4rem', cursor: 'pointer' }}
+                          title="Supprimer ce volet"
+                        >
+                          <Trash2 size={20} />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -1042,7 +1084,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                   className="btn btn-primary"
                   style={{ minWidth: '150px' }}
                 >
-                  Valider tout
+                  Valider pour cette fenêtre
                 </button>
               </div>
             </div>
