@@ -1803,10 +1803,34 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                         doc.text(color, 110, y);
                         
                         const isProfile = !!p.pieces;
-                        const isMl = isProfile || ['M', 'ML', 'JOINT'].includes((p.unit || '').toUpperCase());
-                        const val = isMl ? (p.totalMeasure / 1000).toFixed(2) : p.totalQty;
-                        doc.text(val.toString(), 150, y);
-                        doc.text(isProfile ? 'ML' : (p.unit || 'U'), 185, y);
+                        if (isProfile) {
+                          const barKey = p._barKey || p.baseId || p.id;
+                          const bLength = barLengths[barKey] || 6400;
+                          const pieces = p.pieces ? [...p.pieces].sort((a,b) => b.length - a.length) : [];
+                          let barsNeeded = 0;
+                          if (pieces.length > 0) {
+                            let currentBars = [];
+                            pieces.forEach(piece => {
+                              let bestIdx = -1; let minLeft = Infinity;
+                              for (let j = 0; j < currentBars.length; j++) {
+                                if (currentBars[j] >= piece.length && currentBars[j] - piece.length < minLeft) {
+                                  bestIdx = j; minLeft = currentBars[j] - piece.length;
+                                }
+                              }
+                              if (bestIdx !== -1) currentBars[bestIdx] -= piece.length;
+                              else { currentBars.push(bLength - piece.length); barsNeeded++; }
+                            });
+                          } else {
+                            barsNeeded = Math.ceil(p.totalMeasure / bLength);
+                          }
+                          doc.text(barsNeeded.toString(), 150, y);
+                          doc.text("BARRES", 185, y);
+                        } else {
+                          const isMl = ['M', 'ML', 'JOINT'].includes((p.unit || '').toUpperCase());
+                          const val = isMl ? (p.totalMeasure / 1000).toFixed(2) : p.totalQty;
+                          doc.text(val.toString(), 150, y);
+                          doc.text(isMl ? 'ML' : (p.unit || 'U'), 185, y);
+                        }
                         
                         y += rowHeight;
                       });
@@ -2716,6 +2740,15 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
           // 2. Group by Profile + Color
           const groups = {};
           allCutsList.forEach(c => {
+            const nameLower = (c.name || '').toLowerCase();
+            const labelLower = (c.label || '').toLowerCase();
+            // Filtrage : Exclure parclose et couvre-joint
+            if (nameLower.includes('parclose') || labelLower.includes('parclose') || 
+                nameLower.includes('couvre') || labelLower.includes('couvre') || 
+                nameLower.includes('cj') || labelLower.includes('cj')) {
+              return;
+            }
+
             const groupKey = c.barKey || `${c.id}|STD`;
             if (!groups[groupKey]) groups[groupKey] = { id: c.id, colorName: c.colorName, name: c.name, cuts: [], barKey: groupKey };
             groups[groupKey].cuts.push(c);
@@ -2726,16 +2759,36 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
             if (currentY > 250) { doc.addPage(); currentY = 20; }
             
             const pRef = (database.profiles || []).find(p => p.id === group.id);
-            const barLen = pRef?.barLength || 6000;
+            const barLen = barLengths[group.barKey] || pRef?.barLength || 6400;
             const threshold = pRef?.scrapThreshold || 500;
             const blade = 4; // 4mm blade width
+
+            // Pré-calcul de l'optimisation pour le titre
+            const sortedForTitle = [...group.cuts].sort((a, b) => b.length - a.length);
+            const barsForTitle = [];
+            (manualStockOffcuts[group.barKey] || []).forEach(len => {
+              barsForTitle.push({ remaining: len, isStock: true });
+            });
+            sortedForTitle.forEach(cut => {
+              let placed = false;
+              for (let b of barsForTitle) {
+                if (b.remaining >= cut.length + blade) { b.remaining -= (cut.length + blade); placed = true; break; }
+              }
+              if (!placed) barsForTitle.push({ remaining: barLen - cut.length - blade });
+            });
+            const stockUsed = barsForTitle.filter(b => b.isStock && b.remaining < barLen).length; // simple check
+            const newBars = barsForTitle.filter(b => !b.isStock).length;
 
             doc.setFillColor(30, 41, 59);
             doc.rect(margin, currentY, 180, 8, 'F');
             doc.setTextColor(255, 255, 255);
-            doc.setFontSize(10);
+            doc.setFontSize(9);
             doc.setFont('helvetica', 'bold');
-            doc.text(`${group.name} (${group.id}) - Finition: ${group.colorName || 'Standard'}`, margin + 5, currentY + 5.5);
+            doc.text(`${group.name} (${group.id}) - Finition: ${group.colorName || 'Std'}`, margin + 3, currentY + 5.5);
+            
+            doc.setFontSize(8);
+            const summaryText = `${newBars + barsForTitle.filter(b=>b.isStock).length} Barres ( ${newBars} Neuves + ${barsForTitle.filter(b=>b.isStock).length} Stock )`;
+            doc.text(summaryText, 195, currentY + 5.5, { align: 'right' });
             currentY += 15;
 
             // FFD Nesting Algorithm with Stock priority
