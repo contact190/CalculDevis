@@ -95,6 +95,14 @@ export const getTechnicalDrawingDataURL = (cfg, database) => {
           ctx.moveTo(sX + sW - 4, y + 4); ctx.lineTo(sX + 4, y + h/2); ctx.lineTo(sX + sW - 4, y + h - 4);
         }
         ctx.stroke();
+
+        // Add G/D label
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#64748b';
+        ctx.font = 'bold 14px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        const labelText = sDir === 'gauche' ? 'G' : 'D';
+        ctx.fillText(labelText, sX + sW/2, y + h/2 + 5);
       }
       ctx.setLineDash([]);
     } else if (oType.includes('Coulissant')) {
