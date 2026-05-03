@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Calculator, Package, Settings, FileText, Info, LayoutGrid, Plus, Edit2, Trash2, Copy, ArrowLeft, Save, ChevronDown, ChevronUp, Building2, Phone, Mail, MapPin, Calendar, Clock, GitCompare, Search } from 'lucide-react';
+import { Calculator, Package, Settings, FileText, Info, LayoutGrid, Plus, Edit2, Trash2, Copy, ArrowLeft, Save, ChevronDown, ChevronUp, Building2, Phone, Mail, MapPin, Calendar, Clock, GitCompare, Search, Layers } from 'lucide-react';
 import { FormulaEngine } from '../../engine/formula-engine';
 import JoineryCanvas from '../../components/shared/JoineryCanvas';
 import LayoutComposer, { defaultLayout, rescaleTree } from '../../components/shared/LayoutComposer';
@@ -717,15 +717,41 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
           {availableOptions.length > 0 && !config.isOnlyShutter && (
             <div className="form-group" style={{ marginTop: '1.5rem', padding: '1rem', background: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
               <label className="label" style={{ marginBottom: '0.75rem' }}>Options & Variantes</label>
-              <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', flexDirection: 'column' }}>
-                {availableOptions.map(opt => (
-                  <label key={opt.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.875rem' }}>
-                    <input type="checkbox" checked={config.selectedOptions?.includes(opt.id) || false}
-                      onChange={e => setConfig(prev => ({ ...prev, selectedOptions: e.target.checked ? [...(prev.selectedOptions || []), opt.id] : (prev.selectedOptions || []).filter(id => id !== opt.id) }))}
-                      style={{ width: '1.2rem', height: '1.2rem' }} />
-                    <span>{opt.name}</span>
-                  </label>
-                ))}
+              <div style={{ display: 'flex', gap: '0.75rem', flexDirection: 'column' }}>
+                {availableOptions.map(opt => {
+                  const isSelected = (config.selectedOptions || []).includes(opt.id);
+                  const optionSide = config.optionSides?.[opt.id] || 'both';
+                  
+                  return (
+                    <div key={opt.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem', background: isSelected ? '#f0f9ff' : 'transparent', borderRadius: '0.5rem', border: isSelected ? '1px solid #bae6fd' : '1px solid transparent' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.875rem', flex: 1 }}>
+                        <input type="checkbox" checked={isSelected}
+                          onChange={e => setConfig(prev => ({ ...prev, selectedOptions: e.target.checked ? [...(prev.selectedOptions || []), opt.id] : (prev.selectedOptions || []).filter(id => id !== opt.id) }))}
+                          style={{ width: '1.1rem', height: '1.1rem' }} />
+                        <span style={{ fontWeight: isSelected ? 600 : 400 }}>{opt.name}</span>
+                      </label>
+                      
+                      {isSelected && (
+                        <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center', background: 'white', padding: '0.2rem', borderRadius: '0.4rem', border: '1px solid #e2e8f0' }}>
+                          {['both', 'gauche', 'droit'].map(side => (
+                            <button
+                              key={side}
+                              onClick={() => setConfig(prev => ({ ...prev, optionSides: { ...(prev.optionSides || {}), [opt.id]: side } }))}
+                              style={{
+                                padding: '0.2rem 0.4rem', fontSize: '0.65rem', border: 'none', borderRadius: '0.2rem', cursor: 'pointer',
+                                background: optionSide === side ? '#3b82f6' : 'transparent',
+                                color: optionSide === side ? 'white' : '#64748b',
+                                fontWeight: optionSide === side ? 700 : 400
+                              }}
+                            >
+                              {side === 'both' ? '2 Côtés' : side === 'gauche' ? 'G' : 'D'}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -810,12 +836,12 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
         {config.hasShutter && database.shutterComponents && (
               <div style={{ marginTop: '1rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                 {[
-                  { key: 'caissonId', label: 'Caisson', items: database.shutterComponents.caissons },
-                  { key: 'lameId', label: 'Lame', items: database.shutterComponents.lames },
-                  { key: 'lameFinaleId', label: 'Lame Finale', items: database.shutterComponents.lameFinales || [] },
-                  { key: 'glissiereId', label: 'Glissière', items: database.shutterComponents.glissieres },
-                  { key: 'axeId', label: 'Axe', items: database.shutterComponents.axes },
-                  { key: 'kitId', label: 'Kit Manœuvre', items: database.shutterComponents.kits }
+                  { key: 'caissonId', label: 'Caisson', items: database.shutterComponents?.caissons || [] },
+                  { key: 'lameId', label: 'Lame', items: database.shutterComponents?.lames || [] },
+                  { key: 'lameFinaleId', label: 'Lame Finale', items: database.shutterComponents?.lameFinales || [] },
+                  { key: 'glissiereId', label: 'Glissière', items: database.shutterComponents?.glissieres || [] },
+                  { key: 'axeId', label: 'Axe', items: database.shutterComponents?.axes || [] },
+                  { key: 'kitId', label: 'Kit Manœuvre', items: database.shutterComponents?.kits || [] }
                 ].map(({ key, label, items }) => {
 
 
@@ -855,13 +881,13 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                     if (id === 'AUTO') {
                       const kitId = config.shutterConfig?.kitId;
                       const type = kitId === 'KIT-SANG' ? 'MONO' : (kitId === 'KIT-MOTE' ? 'PALA' : 'OTHER');
-                      const autoG = database.shutterComponents.glissieres.find(g => 
+                      const autoG = (database.shutterComponents?.glissieres || []).find(g => 
                         (!g.rangeId || !currentComp || g.rangeId === currentComp.rangeId) && 
                         g.shutterType === type
                       );
                       id = autoG?.id;
                     }
-                    effectiveItem = database.shutterComponents.glissieres.find(g => g.id === id);
+                    effectiveItem = (database.shutterComponents?.glissieres || []).find(g => g.id === id);
                   } else {
                     effectiveItem = filteredItems.find(i => i.id === selectedItemId);
                   }
@@ -1285,6 +1311,8 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
 
 
   // Totals
+  const [showKitDetails, setShowKitDetails] = useState(false);
+  
   const totals = useMemo(() => {
     let ht = 0;
     let profiles = 0;
@@ -1969,6 +1997,14 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
 
       {/* Quote Lines */}
       {activeListTab === 'quote' && (
+        <>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem', gap: '0.5rem' }}>
+           <button onClick={() => setShowKitDetails(!showKitDetails)} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.8rem', borderRadius: '0.4rem', border: '1px solid #e2e8f0', background: showKitDetails ? '#eff6ff' : 'white', color: showKitDetails ? '#2563eb' : '#64748b', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}>
+             {showKitDetails ? <Layers size={14} /> : <Package size={14} />}
+             {showKitDetails ? 'Masquer Détails Kits' : 'Afficher Détails Kits'}
+           </button>
+        </div>
+
         <div>
           {quote.items?.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '4rem', color: '#94a3b8' }}>
@@ -2004,38 +2040,57 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
                     }
                     const totalHT = effectivePriceHT * (item.qty || 1);
                     return (
-                      <tr key={item.id}>
-                        <td data-label="Désignation" style={{ fontWeight: 600 }}>
-                          <div>{item.label}</div>
-                          <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{comp?.name}</div>
-                        </td>
-                        <td data-label="Modèle / Dim." style={{ fontSize: '0.85rem' }}>
-                          <span style={{ fontWeight: 700, color: '#2563eb' }}>{item.config?.L} × {item.config?.H}</span>{' '}mm
-                        </td>
-                        <td data-label="Finition" style={{ fontSize: '0.85rem' }}>{color?.name || item.config?.colorId}</td>
-                        <td data-label="Qté">
-                          <input type="number" min="1" value={item.qty}
-                            disabled={isQuoteFrozen}
-                            onChange={e => handleQtyChange(item.id, e.target.value)}
-                            style={{ width: '60px', padding: '0.3rem 0.5rem', border: '1px solid #e2e8f0', borderRadius: '0.4rem', textAlign: 'center', fontWeight: 700, background: isQuoteFrozen ? '#f1f5f9' : 'white' }} />
-                        </td>
+                      <React.Fragment key={item.id}>
+                        <tr>
+                          <td data-label="Désignation" style={{ fontWeight: 600 }}>
+                            <div>{item.label}</div>
+                            <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{comp?.name}</div>
+                          </td>
+                          <td data-label="Modèle / Dim." style={{ fontSize: '0.85rem' }}>
+                            <span style={{ fontWeight: 700, color: '#2563eb' }}>{item.config?.L} × {item.config?.H}</span>{' '}mm
+                          </td>
+                          <td data-label="Finition" style={{ fontSize: '0.85rem' }}>{color?.name || item.config?.colorId}</td>
+                          <td data-label="Qté">
+                            <input type="number" min="1" value={item.qty}
+                              disabled={isQuoteFrozen}
+                              onChange={e => handleQtyChange(item.id, e.target.value)}
+                              style={{ width: '60px', padding: '0.3rem 0.5rem', border: '1px solid #e2e8f0', borderRadius: '0.4rem', textAlign: 'center', fontWeight: 700, background: isQuoteFrozen ? '#f1f5f9' : 'white' }} />
+                          </td>
 
-                        <td data-label="Prix U. HT" style={{ fontWeight: 600 }}>{effectivePriceHT.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
-                        <td data-label="Total HT" style={{ fontWeight: 700, color: '#2563eb' }}>{totalHT.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
-                        <td data-label="Actions">
-                          <div style={{ display: 'flex', gap: '0.3rem', justifyContent: 'flex-end' }}>
-                            <button onClick={() => startEditProduct(item)} title={isQuoteFrozen ? "Voir (Lecture seule)" : "Modifier"} style={{ padding: '0.3rem', border: '1px solid #e2e8f0', borderRadius: '0.3rem', background: 'white', cursor: 'pointer', color: '#2563eb' }}>{isQuoteFrozen ? <FileText size={14} /> : <Edit2 size={14} />}</button>
-                            {!isQuoteFrozen && (
-                              <>
-                                <button onClick={() => handleDuplicateItem(item)} title="Dupliquer" style={{ padding: '0.3rem', border: '1px solid #e2e8f0', borderRadius: '0.3rem', background: 'white', cursor: 'pointer', color: '#10b981' }}><Copy size={14} /></button>
-                                <button onClick={() => handleDeleteItem(item.id)} title="Supprimer" style={{ padding: '0.3rem', border: '1px solid #fee2e2', borderRadius: '0.3rem', background: '#fef2f2', cursor: 'pointer', color: '#ef4444' }}><Trash2 size={14} /></button>
-                              </>
-                            )}
-                          </div>
-                        </td>
-
-                      </tr>
-                    );
+                          <td data-label="Prix U. HT" style={{ fontWeight: 600 }}>{effectivePriceHT.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
+                          <td data-label="Total HT" style={{ fontWeight: 700, color: '#2563eb' }}>{totalHT.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
+                          <td data-label="Actions">
+                            <div style={{ display: 'flex', gap: '0.3rem', justifyContent: 'flex-end' }}>
+                              <button onClick={() => startEditProduct(item)} title={isQuoteFrozen ? "Voir (Lecture seule)" : "Modifier"} style={{ padding: '0.3rem', border: '1px solid #e2e8f0', borderRadius: '0.3rem', background: 'white', cursor: 'pointer', color: '#2563eb' }}>{isQuoteFrozen ? <FileText size={14} /> : <Edit2 size={14} />}</button>
+                              {!isQuoteFrozen && (
+                                <>
+                                  <button onClick={() => handleDuplicateItem(item)} title="Dupliquer" style={{ padding: '0.3rem', border: '1px solid #e2e8f0', borderRadius: '0.3rem', background: 'white', cursor: 'pointer', color: '#10b981' }}><Copy size={14} /></button>
+                                  <button onClick={() => handleDeleteItem(item.id)} title="Supprimer" style={{ padding: '0.3rem', border: '1px solid #fee2e2', borderRadius: '0.3rem', background: '#fef2f2', cursor: 'pointer', color: '#ef4444' }}><Trash2 size={14} /></button>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                        {showKitDetails && item.priceData?.bom?.shutters?.length > 0 && (
+                          <tr>
+                            <td colSpan="7" style={{ padding: '0', background: '#f8fafc' }}>
+                               <div style={{ padding: '0.75rem 1.5rem', borderLeft: '4px solid #2563eb', margin: '0.5rem 0' }}>
+                                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Détail des composants du volet</div>
+                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '1rem', fontSize: '0.75rem' }}>
+                                     {item.priceData.bom.shutters.map((s, idx) => (
+                                        <React.Fragment key={idx}>
+                                           <div style={{ color: '#1e293b' }}>• {s.name}</div>
+                                           <div style={{ color: '#64748b' }}>{s.qty} {s.priceUnit || 'u'}</div>
+                                           <div style={{ fontWeight: 600, textAlign: 'right' }}>{(s.cost * (item.qty || 1)).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</div>
+                                        </React.Fragment>
+                                     ))}
+                                  </div>
+                               </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                  );
                   })}
                 </tbody>
               </table>
@@ -2123,6 +2178,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
             </div>
           </div>
         </div>
+        </>
       )}
 
 
@@ -2246,6 +2302,47 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
                             <td style={{ fontWeight: 700 }}>{Math.round((g.qty || 1) * qty)}</td>
                           </tr>
                         );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Shutter Components */}
+              {filteredBoms.some(b => b.bom.shutters?.length > 0) && (
+                <div className="glass shadow-md" style={{ borderLeft: '4px solid #ef4444', overflowX: 'auto' }}>
+                  <h3 style={{ fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ef4444', display: 'inline-block' }}></span>
+                    Composants Volets Roulants
+                  </h3>
+                  <table className="data-table">
+                    <thead>
+                      <tr><th>Référence</th><th>Finition</th><th>Désignation</th><th>Dimensions / Détails</th><th>Quantité</th></tr>
+                    </thead>
+                    <tbody>
+                      {filteredBoms.flatMap(({ itemId, bom }) => {
+                        const item = quote.items?.find(i => i.id === itemId);
+                        const color = database.colors?.find(c => c.id === item?.config?.colorId);
+                        const qty = item?.qty || 1;
+                        
+                        return (bom.shutters || []).map((s, si) => (
+                          <tr key={`${itemId}-shutter-${si}`}>
+                            <td style={{ color: '#64748b', fontSize: '0.75rem', fontFamily: 'monospace' }}>{s.id}</td>
+                            <td style={{ fontSize: '0.85rem' }}>{color?.name || '—'}</td>
+                            <td style={{ fontWeight: 600 }}>
+                              {s.name}
+                              {s.side && s.side !== 'both' && (
+                                <span style={{ marginLeft: '0.5rem', fontSize: '0.65rem', background: '#fee2e2', color: '#ef4444', padding: '0.1rem 0.4rem', borderRadius: '1rem', fontWeight: 700 }}>
+                                  {s.side.toUpperCase()}
+                                </span>
+                              )}
+                            </td>
+                            <td style={{ fontSize: '0.8rem' }}>
+                              {s.length ? `${Math.round(s.length)} mm` : (s.width && s.height ? `${Math.round(s.width)}×${Math.round(s.height)}` : '—')}
+                            </td>
+                            <td style={{ fontWeight: 700 }}>{Math.round(s.qty * qty)}</td>
+                          </tr>
+                        ));
                       })}
                     </tbody>
                   </table>

@@ -7,7 +7,7 @@ const math = create(all);
  */
 export class FormulaEngine {
   constructor(database) {
-    this.db = database;
+    this.db = database || {};
   }
 
   evaluate(formula, scope, errorContext = '') {
@@ -93,10 +93,11 @@ export class FormulaEngine {
     const scope = { 
       ...tempScope,
       glassQty,
-      qty: glassQty // alias
+      qty: glassQty, // alias
+      openingDirection: config.openingDirection || 'gauche'
     };
     
-    const originalScope = { L: originalL || L, H: originalH || H, HC };
+    const originalScope = { L: originalL || L, H: originalH || H, HC, openingDirection: config.openingDirection || 'gauche' };
 
     const expandedElements = [];
 
@@ -933,13 +934,19 @@ export class FormulaEngine {
           if (option.addAccessoryId) {
             const addRef = (this.db.accessories || []).find(a => a.id === option.addAccessoryId);
             if (addRef) {
-              const qty = this.evaluate(option.formula || '1', { L, H });
+              const optionSide = config.optionSides?.[optId] || 'both';
+              const sideFactor = (optionSide === 'gauche' || optionSide === 'droit') ? 0.5 : 1.0;
+              
+              const rawQty = this.evaluate(option.formula || '1', { L, H });
+              const qty = rawQty * sideFactor;
+              
               activeAccessories.push({
                 ...addRef,
-                label: `Option: ${option.name}`,
+                label: `Option: ${option.name}${optionSide !== 'both' ? ' (' + optionSide + ')' : ''}`,
                 qty: qty,
                 formula: option.formula || '1',
-                cost: qty * addRef.price
+                cost: qty * (addRef.price || 0),
+                side: optionSide
               });
             }
           }
@@ -962,14 +969,37 @@ export class FormulaEngine {
        }
     }
 
-    const vars = { L: shutterL, H: shutterH_val, HC: config.shutterOverrides?.customHC || shutterHeight, HT: H };
+    const vars = { 
+      L: shutterL, 
+      H: shutterH_val, 
+      HC: config.shutterOverrides?.customHC || shutterHeight, 
+      HT: H,
+      caissonSize: 0,
+      axeSize: 0,
+      kitId: config.shutterConfig?.kitId,
+      caissonId: config.shutterConfig?.caissonId,
+      axeId: config.shutterConfig?.axeId,
+      lameId: config.shutterConfig?.lameId,
+      openingDirection: config.openingDirection || 'gauche'
+    };
+    
+    const sc = this.db.shutterComponents || {};
+
+    if (vars.caissonId) {
+      const c = (sc.caissons || []).find(x => x.id === vars.caissonId);
+      if (c) vars.caissonSize = parseFloat(c.height) || parseFloat(c.thickness) || 0;
+    }
+    if (vars.axeId) {
+      const a = (sc.axes || []).find(x => x.id === vars.axeId);
+      if (a) vars.axeSize = parseFloat(a.diameter) || parseFloat((a.name || "").match(/\d+/)?.[0]) || 0;
+    }
     const shutterPack = [];
     if (config.hasShutter && config.shutterConfig && this.db.shutterComponents) {
       const sc = this.db.shutterComponents;
       const families = [
         { key: 'caissonId',    source: sc.caissons },
         { key: 'lameId',       source: sc.lames },
-        { key: 'lameFinaleId', source: sc.lamesFinales },
+        { key: 'lameFinaleId', source: sc.lameFinales },
         { key: 'glissiereId',  source: sc.glissieres },
         { key: 'axeId',        source: sc.axes },
         { key: 'moteurId',     source: sc.moteurs },
