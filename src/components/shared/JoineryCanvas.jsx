@@ -172,13 +172,21 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
           }
           ctx.stroke();
 
-          // Add G/D label
+          // Add G/D label only for the primary sash (with handle)
           ctx.setLineDash([]);
-          ctx.fillStyle = '#64748b';
-          ctx.font = 'bold 12px Inter, sans-serif';
-          ctx.textAlign = 'center';
-          const labelText = sashDir === 'gauche' ? 'G' : 'D';
-          ctx.fillText(labelText, sX + sW/2, y + h/2 + 4);
+          const isGauche = dir.toLowerCase().includes('gauche');
+          const isDroit = dir.toLowerCase().includes('droit');
+          const isPrimary = (sashCount === 1) || 
+                            (i === 0 && isGauche) || 
+                            (i === sashCount - 1 && isDroit);
+                            
+          if (isPrimary) {
+            ctx.fillStyle = '#64748b';
+            ctx.font = 'bold 12px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            const labelText = isGauche ? 'G' : 'D';
+            ctx.fillText(labelText, sX + sW/2, y + h/2 + 4);
+          }
         }
         ctx.setLineDash([]);
       } else if (openingType.includes('Coulissant')) {

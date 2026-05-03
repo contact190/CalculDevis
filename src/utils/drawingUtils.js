@@ -96,13 +96,21 @@ export const getTechnicalDrawingDataURL = (cfg, database) => {
         }
         ctx.stroke();
 
-        // Add G/D label
+        // Add G/D label only for the primary sash (with handle)
         ctx.setLineDash([]);
-        ctx.fillStyle = '#64748b';
-        ctx.font = 'bold 14px Inter, sans-serif';
-        ctx.textAlign = 'center';
-        const labelText = sDir === 'gauche' ? 'G' : 'D';
-        ctx.fillText(labelText, sX + sW/2, y + h/2 + 5);
+        const isG = dir.toLowerCase().includes('gauche');
+        const isD = dir.toLowerCase().includes('droit');
+        const isPrimary = (sc === 1) || 
+                          (i === 0 && isG) || 
+                          (i === sc - 1 && isD);
+                          
+        if (isPrimary) {
+          ctx.fillStyle = '#64748b';
+          ctx.font = 'bold 14px Inter, sans-serif';
+          ctx.textAlign = 'center';
+          const labelText = isG ? 'G' : 'D';
+          ctx.fillText(labelText, sX + sW/2, y + h/2 + 5);
+        }
       }
       ctx.setLineDash([]);
     } else if (oType.includes('Coulissant')) {
