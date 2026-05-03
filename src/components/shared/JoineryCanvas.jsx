@@ -91,7 +91,7 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
     const oldStroke = ctx.strokeStyle;
     ctx.strokeStyle = '#cbd5e1';
     
-    // The couvre-joint surrounds the TOTAL height (offsetY to offsetY + dH_total)
+    // Explicitly surround the TOTAL area from offsetY (top of caisson) to offsetY + dH_total
     if (optionalSides.top) {
       ctx.fillRect(offsetX - cjW, offsetY - cjW, dW + cjW * 2, cjW);
       ctx.strokeRect(offsetX - cjW, offsetY - cjW, dW + cjW * 2, cjW);
@@ -101,12 +101,12 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
       ctx.strokeRect(offsetX - cjW, offsetY + dH_total, dW + cjW * 2, cjW);
     }
     if (optionalSides.left) {
-      ctx.fillRect(offsetX - cjW, offsetY, cjW, dH_total);
-      ctx.strokeRect(offsetX - cjW, offsetY, cjW, dH_total);
+      ctx.fillRect(offsetX - cjW, offsetY - (optionalSides.top ? cjW : 0), cjW, dH_total + (optionalSides.top ? cjW : 0) + (optionalSides.bottom ? cjW : 0));
+      ctx.strokeRect(offsetX - cjW, offsetY - (optionalSides.top ? cjW : 0), cjW, dH_total + (optionalSides.top ? cjW : 0) + (optionalSides.bottom ? cjW : 0));
     }
     if (optionalSides.right) {
-      ctx.fillRect(offsetX + dW, offsetY, cjW, dH_total);
-      ctx.strokeRect(offsetX + dW, offsetY, cjW, dH_total);
+      ctx.fillRect(offsetX + dW, offsetY - (optionalSides.top ? cjW : 0), cjW, dH_total + (optionalSides.top ? cjW : 0) + (optionalSides.bottom ? cjW : 0));
+      ctx.strokeRect(offsetX + dW, offsetY - (optionalSides.top ? cjW : 0), cjW, dH_total + (optionalSides.top ? cjW : 0) + (optionalSides.bottom ? cjW : 0));
     }
 
     ctx.strokeStyle = oldStroke;

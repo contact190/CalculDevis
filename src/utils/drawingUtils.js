@@ -170,21 +170,30 @@ export const getTechnicalDrawingDataURL = (cfg, database) => {
     ctx.fillStyle = '#e2e8f0';
     ctx.strokeStyle = '#94a3b8';
     ctx.lineWidth = 1;
+    
+    // Top Architrave
     if (optionalSides.top) {
       ctx.fillRect(offsetX - cjThick, offsetY - cjThick, dW + cjThick * 2, cjThick);
       ctx.strokeRect(offsetX - cjThick, offsetY - cjThick, dW + cjThick * 2, cjThick);
     }
+    // Bottom Architrave
     if (optionalSides.bottom) {
       ctx.fillRect(offsetX - cjThick, offsetY + dH_total, dW + cjThick * 2, cjThick);
       ctx.strokeRect(offsetX - cjThick, offsetY + dH_total, dW + cjThick * 2, cjThick);
     }
+    // Left Architrave (Vertical) - Covers full height from Top CJ to Bottom CJ
     if (optionalSides.left) {
-      ctx.fillRect(offsetX - cjThick, offsetY, cjThick, dH_total);
-      ctx.strokeRect(offsetX - cjThick, offsetY, cjThick, dH_total);
+      const startY = offsetY - (optionalSides.top ? cjThick : 0);
+      const hExt = dH_total + (optionalSides.top ? cjThick : 0) + (optionalSides.bottom ? cjThick : 0);
+      ctx.fillRect(offsetX - cjThick, startY, cjThick, hExt);
+      ctx.strokeRect(offsetX - cjThick, startY, cjThick, hExt);
     }
+    // Right Architrave (Vertical) - Covers full height from Top CJ to Bottom CJ
     if (optionalSides.right) {
-      ctx.fillRect(offsetX + dW, offsetY, cjThick, dH_total);
-      ctx.strokeRect(offsetX + dW, offsetY, cjThick, dH_total);
+      const startY = offsetY - (optionalSides.top ? cjThick : 0);
+      const hExt = dH_total + (optionalSides.top ? cjThick : 0) + (optionalSides.bottom ? cjThick : 0);
+      ctx.fillRect(offsetX + dW, startY, cjThick, hExt);
+      ctx.strokeRect(offsetX + dW, startY, cjThick, hExt);
     }
   }
 
