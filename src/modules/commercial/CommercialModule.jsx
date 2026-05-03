@@ -233,7 +233,16 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
     return /couvres?[- ]?joints?|cj[vh]?/i.test(((e.label || '') + ' ' + itemName).toLowerCase());
   });
 
-  const availableOptions = (database.options || []).filter(o => (o.rangeIds || []).includes(currentComp?.rangeId)) || [];
+  const availableOptions = (database.options || []).filter(o => {
+    if (!(o.rangeIds || []).includes(currentComp?.rangeId)) return false;
+    const acc = database.accessories?.find(a => a.id === o.addAccessoryId);
+    if (acc && acc.side && acc.side !== 'both') {
+       const dir = (config.openingDirection || '').toLowerCase();
+       if (acc.side === 'gauche' && !dir.includes('gauch')) return false;
+       if (acc.side === 'droit' && !dir.includes('droit')) return false;
+    }
+    return true;
+  }) || [];
   const isPorte = activeCat === 'porte' || activeCat === 'CAT-P' || currentComp?.name?.toLowerCase().includes('porte');
 
   return (
@@ -720,7 +729,9 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
               <div style={{ display: 'flex', gap: '0.75rem', flexDirection: 'column' }}>
                 {availableOptions.map(opt => {
                   const isSelected = (config.selectedOptions || []).includes(opt.id);
-                  const optionSide = config.optionSides?.[opt.id] || 'both';
+                  const dir = (config.openingDirection || '').toLowerCase();
+                  const defaultSide = dir.includes('gauch') ? 'gauche' : (dir.includes('droit') ? 'droit' : 'both');
+                  const optionSide = config.optionSides?.[opt.id] || defaultSide;
                   
                   return (
                     <div key={opt.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem', background: isSelected ? '#f0f9ff' : 'transparent', borderRadius: '0.5rem', border: isSelected ? '1px solid #bae6fd' : '1px solid transparent' }}>

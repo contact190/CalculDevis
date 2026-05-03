@@ -1265,6 +1265,7 @@ const AdminDashboard = ({ data, setData }) => {
                             <th>Dessin</th>
                             <th>Désignation</th>
                             <th>Unité</th>
+                            <th>Côté</th>
                             <th>Prix (DZD)</th>
                             <th>Gammes</th>
                             <th>Actions</th>
@@ -1312,6 +1313,18 @@ const AdminDashboard = ({ data, setData }) => {
                                      <option value="Kit">Kit</option>
                                    </select>
                                  </td>
+                                 <td>
+                                   <select 
+                                     className="input" 
+                                     value={acc.side || 'both'} 
+                                     onChange={e => handleUpdateItem('accessories', acc.id, 'side', e.target.value, idx)} 
+                                     style={{ width: '80px', fontSize: '0.75rem' }}
+                                   >
+                                     <option value="both">Les deux</option>
+                                     <option value="gauche">Gauche</option>
+                                     <option value="droit">Droit</option>
+                                   </select>
+                                 </td>
                                  <td><input type="number" className="input" value={acc.price} onChange={e => handleUpdateItem('accessories', acc.id, 'price', e.target.value, idx)} style={{ width: '80px' }} /></td>
                                  <td><MultiSelectRange selectedIds={acc.rangeIds || []} allRanges={data.ranges} onChange={newR => handleUpdateItem('accessories', acc.id, 'rangeIds', newR, idx)} /></td>
                                  <td style={{ display: 'flex', gap: '0.2rem' }}>
@@ -1344,6 +1357,7 @@ const AdminDashboard = ({ data, setData }) => {
                             <th>Dessin</th>
                             <th>Désignation</th>
                             <th>Unité</th>
+                            <th>Côté</th>
                             <th>Prix (DZD)</th>
                             <th>Gammes</th>
                             <th>Actions</th>
@@ -1391,6 +1405,18 @@ const AdminDashboard = ({ data, setData }) => {
                                     <option value="ML">ML</option>
                                     <option value="Joint">Joint</option>
                                     <option value="Kit">Kit</option>
+                                  </select>
+                                </td>
+                                <td>
+                                  <select 
+                                    className="input" 
+                                    value={acc.side || 'both'} 
+                                    onChange={e => handleUpdateItem('accessories', acc.id, 'side', e.target.value, idx)} 
+                                    style={{ width: '80px', fontSize: '0.75rem' }}
+                                  >
+                                    <option value="both">Les deux</option>
+                                    <option value="gauche">Gauche</option>
+                                    <option value="droit">Droit</option>
                                   </select>
                                 </td>
                                 <td><input type="number" className="input" value={acc.price} onChange={e => handleUpdateItem('accessories', acc.id, 'price', e.target.value, idx)} style={{ width: '70px' }} /></td>
