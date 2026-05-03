@@ -548,10 +548,12 @@ export class FormulaEngine {
       itemScopeL -= 3;
     }
 
+    const evalScope = { ...vars, L: itemScopeL, H: effectiveH, HC, HT: HT || (H + HC) };
+
     // 1. Calculate Piece Length (Dimension de coupe)
     let itemLength = 0;
     if (item.cuttingFormula) {
-      itemLength = this.evaluate(item.cuttingFormula, { L: itemScopeL, H: effectiveH, HC, HT: HT || (H + HC) });
+      itemLength = this.evaluate(item.cuttingFormula, evalScope);
     } else {
       if (key === 'caissonId' || key === 'axeId' || key === 'lameId' || key === 'lameFinaleId') {
         itemLength = itemScopeL;
@@ -561,7 +563,7 @@ export class FormulaEngine {
     }
 
     // 2. Calculate Piece Count (Nombre de pièces)
-    const pieceCount = this.evaluate(item.formula || '1', { L: itemScopeL, H: effectiveH, HC, HT: HT || (H + HC) });
+    const pieceCount = this.evaluate(item.formula || '1', evalScope);
     if (pieceCount <= 0) return;
 
     // 3. Inclusion & Existing Checks (Standalone Logic V3.2)
@@ -638,7 +640,7 @@ export class FormulaEngine {
       barLength: barLength,
       price: itemPrice,
       priceUnit: item.priceUnit,
-      resolvedFormula: `${this.resolveFormula(item.formula || '1', { L: itemScopeL, H, HC })} x [${this.resolveFormula(item.cuttingFormula || 'L/H', { L: itemScopeL, H, HC })}]`,
+      resolvedFormula: `${this.resolveFormula(item.formula || '1', evalScope)} x [${this.resolveFormula(item.cuttingFormula || 'L/H', evalScope)}]`,
       usage: 'VOLET ROULANT',
       cost: finalCost
     });
@@ -646,7 +648,7 @@ export class FormulaEngine {
     // 6. Process Add-ons
     if (item.addOns && Array.isArray(item.addOns)) {
       item.addOns.forEach(addon => {
-        const addonQty = this.evaluate(addon.formula || '1', { L: itemScopeL, H, HC });
+        const addonQty = this.evaluate(addon.formula || '1', evalScope);
         if (addonQty > 0) {
           const addonPrice = addon.price || 0;
           const addonUnit = (addon.unit || 'Unité').toUpperCase();
