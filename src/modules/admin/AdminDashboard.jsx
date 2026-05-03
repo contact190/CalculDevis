@@ -2201,6 +2201,7 @@ const AdminDashboard = ({ data, setData }) => {
                           <th>Désignation</th>
                           {key === 'caissons' && (
                             <>
+                              <th>Taille (mm)</th>
                               <th>Hauteur (mm)</th>
                               <th>Prix Joint HSF</th>
                               <th>Formule Joint</th>
@@ -2217,6 +2218,11 @@ const AdminDashboard = ({ data, setData }) => {
                               <th>Gamme</th>
                               <th>Type (Auto)</th>
                               <th>Épaisseur L (mm)</th>
+                            </>
+                          )}
+                          {key === 'axes' && (
+                            <>
+                              <th>Diamètre (mm)</th>
                             </>
                           )}
                           {key === 'glissieres' ? (
@@ -2247,6 +2253,7 @@ const AdminDashboard = ({ data, setData }) => {
                              <td><input className="input" value={item.name} onChange={e => updateShutterItem(key, i, 'name', e.target.value)} style={{ width: '180px' }} /></td>
                             {key === 'caissons' && (
                               <>
+                                <td><input className="input" type="number" value={item.size || 0} onChange={e => updateShutterItem(key, i, 'size', e.target.value)} style={{ width: '80px' }} /></td>
                                 <td><input className="input" type="number" value={item.height || 0} onChange={e => updateShutterItem(key, i, 'height', e.target.value)} style={{ width: '80px' }} /></td>
                                 <td><input className="input" type="number" step="0.01" value={item.jointPrice || 0} onChange={e => updateShutterItem(key, i, 'jointPrice', e.target.value)} style={{ width: '80px' }} /></td>
                                 <td><input className="input" value={item.jointFormula || 'L/1000'} onChange={e => updateShutterItem(key, i, 'jointFormula', e.target.value)} style={{ width: '100px' }} /></td>
@@ -2276,6 +2283,11 @@ const AdminDashboard = ({ data, setData }) => {
                                 </select>
                                 </td>
                                 <td><input className="input" type="number" step="1" value={item.thickness || 0} onChange={e => updateShutterItem(key, i, 'thickness', e.target.value)} style={{ width: '80px' }} /></td>
+                              </>
+                            )}
+                            {key === 'axes' && (
+                              <>
+                                <td><input className="input" type="number" value={item.diameter || 0} onChange={e => updateShutterItem(key, i, 'diameter', e.target.value)} style={{ width: '80px' }} /></td>
                               </>
                             )}
                             {key === 'glissieres' ? (
