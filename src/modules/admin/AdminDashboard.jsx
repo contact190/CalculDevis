@@ -784,11 +784,10 @@ const AdminDashboard = ({ data, setData }) => {
                               handleUpdateItem(editingAddonItem.family, currentItem.id, 'addOns', newAddons, editingAddonItem.idx);
                             }
                           }}>
-                            <option>Unité</option>
-                            <option>ML</option>
-                            <option>M2</option>
-                            <option>Barre</option>
-                            <option>Joint</option>
+                            <option value="Unité">Unité</option>
+                            <option value="ML">ML</option>
+                            <option value="Joint">Joint</option>
+                            <option value="Kit">Kit</option>
                           </select>
                         </td>
                         <td><button className="btn" onClick={() => {
@@ -1300,7 +1299,19 @@ const AdminDashboard = ({ data, setData }) => {
                                    </div>
                                  </td>
                                  <td><input className="input" value={acc.name} onChange={e => handleUpdateItem('accessories', acc.id, 'name', e.target.value, idx)} style={{ width: '150px' }} /></td>
-                                 <td><input className="input" value={acc.unit} onChange={e => handleUpdateItem('accessories', acc.id, 'unit', e.target.value, idx)} style={{ width: '80px' }} /></td>
+                                 <td>
+                                   <select 
+                                     className="input" 
+                                     value={acc.unit} 
+                                     onChange={e => handleUpdateItem('accessories', acc.id, 'unit', e.target.value, idx)} 
+                                     style={{ width: '80px', fontSize: '0.75rem' }}
+                                   >
+                                     <option value="Unité">Unité</option>
+                                     <option value="ML">ML</option>
+                                     <option value="Joint">Joint</option>
+                                     <option value="Kit">Kit</option>
+                                   </select>
+                                 </td>
                                  <td><input type="number" className="input" value={acc.price} onChange={e => handleUpdateItem('accessories', acc.id, 'price', e.target.value, idx)} style={{ width: '80px' }} /></td>
                                  <td><MultiSelectRange selectedIds={acc.rangeIds || []} allRanges={data.ranges} onChange={newR => handleUpdateItem('accessories', acc.id, 'rangeIds', newR, idx)} /></td>
                                  <td style={{ display: 'flex', gap: '0.2rem' }}>
@@ -1369,7 +1380,19 @@ const AdminDashboard = ({ data, setData }) => {
                                   </div>
                                 </td>
                                 <td><input className="input" value={acc.name} onChange={e => handleUpdateItem('accessories', acc.id, 'name', e.target.value, idx)} style={{ width: '150px' }} /></td>
-                                <td><input className="input" value={acc.unit} onChange={e => handleUpdateItem('accessories', acc.id, 'unit', e.target.value, idx)} style={{ width: '60px' }} /></td>
+                                <td>
+                                  <select 
+                                    className="input" 
+                                    value={acc.unit} 
+                                    onChange={e => handleUpdateItem('accessories', acc.id, 'unit', e.target.value, idx)} 
+                                    style={{ width: '80px', fontSize: '0.75rem' }}
+                                  >
+                                    <option value="Unité">Unité</option>
+                                    <option value="ML">ML</option>
+                                    <option value="Joint">Joint</option>
+                                    <option value="Kit">Kit</option>
+                                  </select>
+                                </td>
                                 <td><input type="number" className="input" value={acc.price} onChange={e => handleUpdateItem('accessories', acc.id, 'price', e.target.value, idx)} style={{ width: '70px' }} /></td>
                                 <td><MultiSelectRange selectedIds={acc.rangeIds || []} allRanges={data.ranges} onChange={newR => handleUpdateItem('accessories', acc.id, 'rangeIds', newR, idx)} /></td>
                                 <td style={{ display: 'flex', gap: '0.3rem' }}>
