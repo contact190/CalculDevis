@@ -123,9 +123,8 @@ export class FormulaEngine {
         expandedElements.push({ ...el, isFrame: false, isCouvreJoint: false });
         return;
       }
-
-      const isHorizontal = /haut|bas|cjh|couvres?[- ]?joints?h/i.test(searchStr) || (/\bl\b| l$/i.test(searchStr));
-      const isVertical = /gauche|droite|cjv|couvres?[- ]?joints?v/i.test(searchStr) || (/\bh\b| h$/i.test(searchStr));
+      const isHorizontal = /haut|bas|couvres?[- ]?joints?h/i.test(searchStr) || (/\bL\b| L$/i.test(searchStr));
+      const isVertical = /gauche|droite|couvres?[- ]?joints?v/i.test(searchStr) || (/\bH\b| H$/i.test(searchStr));
       const baseLabel = label || itemName;
       const isActuallyCouvreJoint = isCouvreJoint;
 
@@ -141,46 +140,55 @@ export class FormulaEngine {
         return;
       }
 
+      // Smart Formula Swapping Helper
+      const swapFormula = (f, from, to) => {
+        if (!f || typeof f !== 'string') return f;
+        const regex = new RegExp(`\\b${from}\\b`, 'g');
+        return f.replace(regex, to);
+      };
+
       // PROFILES expansion logic
       if (isHorizontal) {
         const hasHaut = searchStr.includes('haut');
         const hasBas = searchStr.includes('bas');
         const isGenericH = !hasHaut && !hasBas;
         
+        // Ensure horizontal profiles use 'L' if they were accidentally defined with 'H'
+        const hFormula = swapFormula(el.formula || 'L', 'H', 'L');
+        
         if (isGenericH) {
-          // If it's a cover-joint, obey optionalSides. If it's a Dormant, it's mandatory unless opt is completely false (sub-part case)
           const allowTop = isActuallyCouvreJoint ? opt.top : true;
           const allowBottom = isActuallyCouvreJoint ? opt.bottom : true;
           
-          if (allowTop) expandedElements.push({ ...el, label: baseLabel + ' (Haut)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
-          if (allowBottom) expandedElements.push({ ...el, label: baseLabel + ' (Bas)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
+          if (allowTop) expandedElements.push({ ...el, formula: hFormula, label: baseLabel + ' (Haut)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
+          if (allowBottom) expandedElements.push({ ...el, formula: hFormula, label: baseLabel + ' (Bas)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
         } else {
           const allowTop = isActuallyCouvreJoint ? opt.top : true;
           const allowBottom = isActuallyCouvreJoint ? opt.bottom : true;
           
-          if (hasHaut && allowTop) expandedElements.push({ ...el, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
-          if (hasBas && allowBottom) expandedElements.push({ ...el, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
+          if (hasHaut && allowTop) expandedElements.push({ ...el, formula: hFormula, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
+          if (hasBas && allowBottom) expandedElements.push({ ...el, formula: hFormula, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
         }
       } else if (isVertical) {
         const hasGauche = searchStr.includes('gauche');
         const hasDroite = searchStr.includes('droite');
         const isGenericV = !hasGauche && !hasDroite;
 
+        // Ensure vertical profiles use 'H' if they were accidentally defined with 'L'
+        const vFormula = swapFormula(el.formula || 'H', 'L', 'H');
+
         if (isGenericV) {
           const allowLeft = isActuallyCouvreJoint ? opt.left : true;
           const allowRight = isActuallyCouvreJoint ? opt.right : true;
           
-          // Force vertical formula if it's generic L/H
-          const formula = (el.formula === 'L' || !el.formula) ? 'H' : el.formula;
-
-          if (allowLeft) expandedElements.push({ ...el, formula, label: baseLabel + ' (Gauche)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
-          if (allowRight) expandedElements.push({ ...el, formula, label: baseLabel + ' (Droite)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
+          if (allowLeft) expandedElements.push({ ...el, formula: vFormula, label: baseLabel + ' (Gauche)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
+          if (allowRight) expandedElements.push({ ...el, formula: vFormula, label: baseLabel + ' (Droite)', qty: el.qty / 2, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
         } else {
           const allowLeft = isActuallyCouvreJoint ? opt.left : true;
           const allowRight = isActuallyCouvreJoint ? opt.right : true;
           
-          if (hasGauche && allowLeft) expandedElements.push({ ...el, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
-          if (hasDroite && allowRight) expandedElements.push({ ...el, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
+          if (hasGauche && allowLeft) expandedElements.push({ ...el, formula: vFormula, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
+          if (hasDroite && allowRight) expandedElements.push({ ...el, formula: vFormula, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
         }
       } else {
         // Generic 4-sided
@@ -189,9 +197,11 @@ export class FormulaEngine {
         const allowLeft = isActuallyCouvreJoint ? opt.left : true;
         const allowRight = isActuallyCouvreJoint ? opt.right : true;
 
-        const vFormula = (el.formula === 'L' || !el.formula) ? 'H' : el.formula;
-        if (allowTop) expandedElements.push({ ...el, label: baseLabel + ' (Haut)', qty: el.qty / 4, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
-        if (allowBottom) expandedElements.push({ ...el, label: baseLabel + ' (Bas)', qty: el.qty / 4, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
+        const hFormula = swapFormula(el.formula || 'L', 'H', 'L');
+        const vFormula = swapFormula(el.formula || 'H', 'L', 'H');
+
+        if (allowTop) expandedElements.push({ ...el, formula: hFormula, label: baseLabel + ' (Haut)', qty: el.qty / 4, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
+        if (allowBottom) expandedElements.push({ ...el, formula: hFormula, label: baseLabel + ' (Bas)', qty: el.qty / 4, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
         if (allowLeft) expandedElements.push({ ...el, formula: vFormula, label: baseLabel + ' (Gauche)', qty: el.qty / 4, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
         if (allowRight) expandedElements.push({ ...el, formula: vFormula, label: baseLabel + ' (Droite)', qty: el.qty / 4, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
       }
