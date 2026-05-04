@@ -13,8 +13,19 @@ export class FormulaEngine {
   evaluate(formula, scope, errorContext = '') {
     if (!formula || typeof formula !== 'string' || formula.trim() === '') return 0;
     try {
-      let cleanFormula = formula.replace(/,/g, '.');
-      return math.evaluate(cleanFormula, scope);
+      // 1. Convert French decimals "1,5" -> "1.5" but preserve function commas "max(1, 2)"
+      let cleanFormula = formula.replace(/(\d),(\d)/g, '$1.$2');
+      
+      // 2. Convert JS logical operators to mathjs
+      cleanFormula = cleanFormula.replace(/&&/g, ' and ').replace(/\|\|/g, ' or ');
+
+      // 3. Inject custom functions
+      const evalScope = { 
+        ...scope, 
+        'if': (cond, a, b) => cond ? a : b 
+      };
+
+      return math.evaluate(cleanFormula, evalScope);
     } catch (err) {
       console.warn(`Formula Error [${errorContext}]: "${formula}"`, err);
       return 0;
@@ -99,6 +110,30 @@ export class FormulaEngine {
     
     const originalScope = { L: originalL || L, H: originalH || H, HC, openingDirection: config.openingDirection || 'gauche' };
 
+    const isCompoundWithTraverse = config.compoundType === 'compound';
+    
+    // Detection via layout/config
+    let hasHorizontalTraverse = (config.customLayout?.rows?.length > 1) || (config.rows > 1) || (isCompoundWithTraverse && config.compoundConfig?.orientation === 'vertical');
+    let hasVerticalTraverse = (config.customLayout?.cols?.length > 1) || (config.cols > 1) || (isCompoundWithTraverse && config.compoundConfig?.orientation === 'horizontal');
+
+    // Detection via composition elements (manual traverses)
+    composition.elements.forEach(el => {
+      const p = (this.db.profiles || []).find(x => x.id === el.id || x.name === el.id);
+      const a = (this.db.accessories || []).find(x => x.id === el.id || x.name === el.id);
+      const s = ((el.label || '') + ' ' + (p?.name || a?.name || '')).toLowerCase();
+      
+      if (s.includes('traverse')) {
+        // A horizontal traverse piece implies a [T] on vertical frames
+        if (s.includes('horiz') || s.includes(' h') || s.includes(' l') || s.includes('largeur')) {
+          hasHorizontalTraverse = true;
+        }
+        // A vertical traverse piece implies a [T] on horizontal frames
+        if (s.includes('vert') || s.includes(' v') || s.includes('hauteur')) {
+          hasVerticalTraverse = true;
+        }
+      }
+    });
+
     const expandedElements = [];
 
     composition.elements.forEach(el => {
@@ -126,7 +161,14 @@ export class FormulaEngine {
       }
       const isHorizontal = /haut|bas|couvres?[- ]?joints?h/i.test(searchStr) || (/\bL\b| L$/i.test(searchStr));
       const isVertical = /gauche|droite|couvres?[- ]?joints?v/i.test(searchStr) || (/\bH\b| H$/i.test(searchStr));
-      const baseLabel = label || itemName;
+      let baseLabel = label || itemName;
+      
+      // Marquage T croisé pour l'atelier
+      if (isDormant) {
+        if (isHorizontal && hasVerticalTraverse) baseLabel += ' [T]';
+        if (isVertical && hasHorizontalTraverse) baseLabel += ' [T]';
+      }
+
       const isActuallyCouvreJoint = isCouvreJoint;
 
       // SUB-PARTS never get expanded frame elements (they only get their own internal opening profiles)
@@ -167,8 +209,8 @@ export class FormulaEngine {
           const allowTop = isActuallyCouvreJoint ? opt.top : true;
           const allowBottom = isActuallyCouvreJoint ? opt.bottom : true;
           
-          if (hasHaut && allowTop) expandedElements.push({ ...el, formula: hFormula, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
-          if (hasBas && allowBottom) expandedElements.push({ ...el, formula: hFormula, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
+          if (hasHaut && allowTop) expandedElements.push({ ...el, formula: hFormula, label: baseLabel, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
+          if (hasBas && allowBottom) expandedElements.push({ ...el, formula: hFormula, label: baseLabel, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
         }
       } else if (isVertical) {
         const hasGauche = searchStr.includes('gauche');
@@ -188,8 +230,8 @@ export class FormulaEngine {
           const allowLeft = isActuallyCouvreJoint ? opt.left : true;
           const allowRight = isActuallyCouvreJoint ? opt.right : true;
           
-          if (hasGauche && allowLeft) expandedElements.push({ ...el, formula: vFormula, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
-          if (hasDroite && allowRight) expandedElements.push({ ...el, formula: vFormula, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
+          if (hasGauche && allowLeft) expandedElements.push({ ...el, formula: vFormula, label: baseLabel, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
+          if (hasDroite && allowRight) expandedElements.push({ ...el, formula: vFormula, label: baseLabel, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
         }
       } else {
         // Generic 4-sided

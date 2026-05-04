@@ -2224,6 +2224,32 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
 
         console.log(`Logistique Debug: targetItems=${targetItems.length}, bomsCalculated=${bomsCalculated}, globalCuts=${globalCuts.length}`);
 
+        // --- POST-PROCESSING: MARQUAGE [T] CROISÉ POUR L'ATELIER ---
+        const windowsWithTraverses = {};
+        globalCuts.forEach(cut => {
+           const s = ((cut.label || '') + ' ' + (cut.profileName || '')).toLowerCase();
+           if (s.includes('traverse')) {
+              if (!windowsWithTraverses[cut.windowIdx]) windowsWithTraverses[cut.windowIdx] = { h: false, v: false };
+              if (s.includes('horiz') || s.includes(' h') || s.includes(' l') || s.includes('largeur')) windowsWithTraverses[cut.windowIdx].h = true;
+              if (s.includes('vert') || s.includes(' v') || s.includes('hauteur')) windowsWithTraverses[cut.windowIdx].v = true;
+           }
+        });
+
+        globalCuts.forEach(cut => {
+           const wTr = windowsWithTraverses[cut.windowIdx];
+           if (wTr) {
+              const s = ((cut.label || '') + ' ' + (cut.profileName || '')).toLowerCase();
+              const isDormant = /dormant|cadre|chassis|batit|dorme/i.test(s);
+              if (isDormant && !cut.label.includes('[T]')) {
+                 const isHorizontal = /haut|bas|couvres?[- ]?joints?h/i.test(s) || (/\bL\b| L$/i.test(s));
+                 const isVertical = /gauche|droite|couvres?[- ]?joints?v/i.test(s) || (/\bH\b| H$/i.test(s));
+                 
+                 if (isHorizontal && wTr.v) cut.label += ' [T]';
+                 if (isVertical && wTr.h) cut.label += ' [T]';
+              }
+           }
+        });
+
         // --- 3. OPTIMIZATION (BFD) ---
         const profileGroups = {};
         globalCuts.forEach(cut => {
