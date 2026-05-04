@@ -1,0 +1,1 @@
+Fix mathjs syntax parsing for if, && and ||

@@ -1,0 +1,1 @@
+Fix addon formula scope to include caissonSize and axeSize

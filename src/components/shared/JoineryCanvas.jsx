@@ -85,13 +85,13 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
     const winOffsetY = offsetY + dCaissonH;
     const dH = dH_window; // For compatibility with rest of code
     
-    // 0. Draw Architraves (Couvre-joints optionnels) around the ENTIRE assembly
+    // 0. Draw Architraves (Couvre-joints optionnels) around the ENTIRE assembly (Caisson + Window)
     const cjW = 40 * scale; 
     ctx.fillStyle = '#f1f5f9';
     const oldStroke = ctx.strokeStyle;
     ctx.strokeStyle = '#cbd5e1';
     
-    // Explicitly surround the TOTAL area from offsetY (top of caisson) to offsetY + dH_total
+    // We use offsetY (top of everything) and dH_total (total height including caisson)
     if (optionalSides.top) {
       ctx.fillRect(offsetX - cjW, offsetY - cjW, dW + cjW * 2, cjW);
       ctx.strokeRect(offsetX - cjW, offsetY - cjW, dW + cjW * 2, cjW);
@@ -101,12 +101,16 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
       ctx.strokeRect(offsetX - cjW, offsetY + dH_total, dW + cjW * 2, cjW);
     }
     if (optionalSides.left) {
-      ctx.fillRect(offsetX - cjW, offsetY - (optionalSides.top ? cjW : 0), cjW, dH_total + (optionalSides.top ? cjW : 0) + (optionalSides.bottom ? cjW : 0));
-      ctx.strokeRect(offsetX - cjW, offsetY - (optionalSides.top ? cjW : 0), cjW, dH_total + (optionalSides.top ? cjW : 0) + (optionalSides.bottom ? cjW : 0));
+      const startY = offsetY - (optionalSides.top ? cjW : 0);
+      const totalLen = dH_total + (optionalSides.top ? cjW : 0) + (optionalSides.bottom ? cjW : 0);
+      ctx.fillRect(offsetX - cjW, startY, cjW, totalLen);
+      ctx.strokeRect(offsetX - cjW, startY, cjW, totalLen);
     }
     if (optionalSides.right) {
-      ctx.fillRect(offsetX + dW, offsetY - (optionalSides.top ? cjW : 0), cjW, dH_total + (optionalSides.top ? cjW : 0) + (optionalSides.bottom ? cjW : 0));
-      ctx.strokeRect(offsetX + dW, offsetY - (optionalSides.top ? cjW : 0), cjW, dH_total + (optionalSides.top ? cjW : 0) + (optionalSides.bottom ? cjW : 0));
+      const startY = offsetY - (optionalSides.top ? cjW : 0);
+      const totalLen = dH_total + (optionalSides.top ? cjW : 0) + (optionalSides.bottom ? cjW : 0);
+      ctx.fillRect(offsetX + dW, startY, cjW, totalLen);
+      ctx.strokeRect(offsetX + dW, startY, cjW, totalLen);
     }
 
     ctx.strokeStyle = oldStroke;

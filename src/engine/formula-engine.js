@@ -807,25 +807,56 @@ export class FormulaEngine {
         });
       }
 
-      (partList || []).forEach((part, idx) => {
-        const isFirst = idx === 0;
-        const isLast = idx === partList.length - 1;
-        const halfDiv = divThick / 2;
-
-        // Use partOverrides if available (Site Measurements)
+      // 1. Pre-calculate raw dimensions for all parts
+      const items = (partList || []).map((part, idx) => {
         const overrideW = config.partOverrides?.[part.id]?.width;
         const overrideH = config.partOverrides?.[part.id]?.height;
+        return {
+          ...part,
+          idx,
+          rawL: Number((direction === 'horizontal') ? (overrideW || part.width || (boxL / partList.length)) : boxL),
+          rawH: Number((direction === 'vertical') ? (overrideH || part.height || (boxH / partList.length)) : boxH)
+        };
+      });
 
-        let calcL = Number((direction === 'horizontal') ? (overrideW || part.width || (boxL / partList.length)) : boxL);
-        let calcH = Number((direction === 'vertical') ? (overrideH || part.height || (boxH / partList.length)) : boxH);
+      // 2. Adjust dimensions if they exceed available space (e.g. caisson deduction)
+      const available = (direction === 'horizontal' ? boxL : boxH);
+      // User requested NOT to deduct divider thickness from the available space for part calculation
+      const totalRequested = items.reduce((sum, item) => sum + (direction === 'horizontal' ? item.rawL : item.rawH), 0);
+
+      if (totalRequested > available + 0.1) {
+        const excess = totalRequested - available;
+        const flexibleItems = items.filter(it => it.type !== 'fixe');
+        
+        if (flexibleItems.length > 0) {
+          const totalFlex = flexibleItems.reduce((sum, it) => sum + (direction === 'horizontal' ? it.rawL : it.rawH), 0);
+          flexibleItems.forEach(it => {
+            const weight = totalFlex > 0 ? (direction === 'horizontal' ? it.rawL : it.rawH) / totalFlex : (1 / flexibleItems.length);
+            if (direction === 'horizontal') it.rawL -= excess * weight;
+            else it.rawH -= excess * weight;
+          });
+        } else {
+          // Fallback: Proportional reduction if all parts are fixed
+          const scale = available / totalRequested;
+          items.forEach(it => {
+            if (direction === 'horizontal') it.rawL *= scale;
+            else it.rawH *= scale;
+          });
+        }
+      }
+
+      // 3. Process each item with adjusted dimensions
+      items.forEach((part, idx) => {
+        const isFirst = idx === 0;
+        const isLast = idx === items.length - 1;
+        
+        let calcL = part.rawL;
+        let calcH = part.rawH;
 
         let inflation = (!isFirst) ? (divThick / 2) : 0;
-
-        // --- NOUVELLE RÈGLE ---
-        // Si l'assemblage contient une partie fixe, on alloue la totalité de l'épaisseur
-        // de la traverse à cette partie fixe au lieu de faire moit-moit.
-        const hasFixe = partList.some(p => p.type === 'fixe');
-        if (hasFixe) {
+        const hasFixeInOriginal = partList.some(p => p.type === 'fixe');
+        if (hasFixeInOriginal) {
+            // If there's a fixed part, it absorbs the divider thickness
             inflation = (part.type === 'fixe') ? divThick : 0;
         }
 
