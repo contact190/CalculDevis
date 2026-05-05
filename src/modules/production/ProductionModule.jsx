@@ -2148,17 +2148,45 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
           if (batch) {
             batch.items.forEach(bi => {
               (bi.measurements || []).forEach(m => {
-                targetItems.push({ 
-                  ...bi, 
-                  config: { ...bi.config, L: m.L, H: m.H }, 
-                  qty: Number(m.qty) || 1,
-                  isFromBatch: true 
-                });
+                const qty = Math.max(1, Number(m.qty) || 1);
+                for (let i = 0; i < qty; i++) {
+                  const originalLabel = bi.label || bi.config?.label || 'Produit';
+                  const instanceName = m.instanceNames?.[i] || `${originalLabel} (${i + 1}/${qty})`;
+                  targetItems.push({ 
+                    ...bi, 
+                    config: { ...bi.config, L: m.L, H: m.H }, 
+                    qty: 1, 
+                    isFromBatch: true,
+                    instanceLabel: instanceName
+                  });
+                }
               });
             });
           }
         } else {
-          targetItems = quoteItems.map(i => ({ ...i, qty: Number(i.qty) || 1 }));
+          const baseSource = isOrder ? batches.flatMap(b => b.items) : quoteItems;
+          baseSource.forEach(item => {
+            const originalLabel = item.label || item.config?.label || 'Produit';
+            if (item.measurements && item.measurements.length > 0) {
+              item.measurements.forEach(m => {
+                const mQty = Math.max(1, Number(m.qty) || 1);
+                for (let i = 0; i < mQty; i++) {
+                  const instanceName = m.instanceNames?.[i] || `${originalLabel} (${i + 1}/${mQty})`;
+                  targetItems.push({ 
+                    ...item, 
+                    config: { ...item.config, L: m.L, H: m.H }, 
+                    qty: 1, 
+                    instanceLabel: instanceName
+                  });
+                }
+              });
+            } else {
+              const qty = Math.max(1, Number(item.qty) || 1);
+              for (let i = 0; i < qty; i++) {
+                targetItems.push({ ...item, qty: 1, instanceLabel: qty > 1 ? `${originalLabel} (${i + 1}/${qty})` : originalLabel });
+              }
+            }
+          });
         }
 
         // --- 2. CALCULATION LOOP ---
@@ -2347,7 +2375,14 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         };
 
         const allBarsFlat = [];
-        Object.entries(barsResult).forEach(([profId, { profileName, bars, barLen: standardLen, colorName }]) => {
+        const sortedBarsResultEntries = Object.entries(barsResult).sort((a, b) => {
+          const pA = getProfilePriority(a[1].profileName);
+          const pB = getProfilePriority(b[1].profileName);
+          if (pA !== pB) return pA - pB;
+          return a[1].profileName.localeCompare(b[1].profileName);
+        });
+
+        sortedBarsResultEntries.forEach(([profId, { profileName, bars, barLen: standardLen, colorName }]) => {
           bars.filter(b => b.pieces.length > 0).forEach(bar => {
             allBarsFlat.push({ 
               ...bar, 
@@ -2360,48 +2395,87 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
           });
         });
 
-        // Sort bars by priority, then by reference, then by window index
-        allBarsFlat.sort((a, b) => {
-          // 1. Priorité absolue : type de profilé (Cadre > Ouvrant > Finition)
-          if (a.priority !== b.priority) return a.priority - b.priority;
-          
-          // 2. Même type → regrouper par référence (pour coupes consécutives à la scie)
-          const refA = a.profId || '';
-          const refB = b.profId || '';
-          if (refA !== refB) return refA.localeCompare(refB);
-          
-          // 3. Même référence → regrouper par fenêtre d'origine
-          const winA = a.pieces[0]?.windowIdx ?? 999;
-          const winB = b.pieces[0]?.windowIdx ?? 999;
-          return winA - winB;
-        });
-        
-        // Re-address sorted bars - Ne jamais mélanger des profilés différents dans une même case
+        // --- 5. PIECE-BASED ADDRESSING ---
         let currentSlotIdxTotal = 0;
         let piecesInCurrentSlot = 0;
         let currentProfId = null;
 
-        allBarsFlat.forEach((bar) => {
-          const barPiecesCount = bar.pieces.length;
-          
-          // Si on change de profilé OU si la case est trop pleine avec cette barre -> nouvelle case
-          if (currentProfId !== null && (bar.profId !== currentProfId || piecesInCurrentSlot + barPiecesCount > kitConfig.piecesPerSlot)) {
-            if (piecesInCurrentSlot > 0) {
+        // On récupère toutes les pièces
+        let allPiecesFlat = [];
+        allBarsFlat.forEach(bar => {
+          bar.pieces.forEach(p => {
+            allPiecesFlat.push({ 
+              ...p, 
+              barId: bar.id, 
+              profId: bar.profId, 
+              profileName: bar.profileName,
+              barRef: bar.id.split('-').pop() 
+            });
+          });
+        });
+
+        // Fonction de priorité
+        const getKitPriority = (name) => {
+          const n = name.toUpperCase();
+          if (n.includes('DORMANT') || n.includes('CADRE')) return 1;
+          if (n.includes('OUVRANT') || n.includes('PANNEAU') || n.includes('VANTAIL')) return 2;
+          return 3;
+        };
+
+        // Tri des pièces : Priorité -> Profilé -> Fenêtre
+        allPiecesFlat.sort((a, b) => {
+          const pa = getKitPriority(a.profileName);
+          const pb = getKitPriority(b.profileName);
+          if (pa !== pb) return pa - pb;
+          if (a.profId !== b.profId) return a.profId.localeCompare(b.profId);
+          return a.windowIdx - b.windowIdx;
+        });
+
+        allPiecesFlat.forEach((piece, idx) => {
+          const piecesTotalForThisWindow = allPiecesFlat.filter(p => p.profId === piece.profId && p.windowIdx === piece.windowIdx).length;
+          const isFirstPieceOfWindow = !allPiecesFlat.slice(0, idx).some(p => p.profId === piece.profId && p.windowIdx === piece.windowIdx);
+
+          if (currentProfId !== null) {
+            if (piece.profId !== currentProfId) {
+              currentSlotIdxTotal++;
+              piecesInCurrentSlot = 0;
+            }
+            else if (isFirstPieceOfWindow) {
+              // Si la fenêtre entière ne rentre pas -> SAUT
+              if (piecesInCurrentSlot > 0 && (piecesInCurrentSlot + piecesTotalForThisWindow > kitConfig.piecesPerSlot)) {
+                currentSlotIdxTotal++;
+                piecesInCurrentSlot = 0;
+              }
+            }
+            else if (piecesInCurrentSlot >= kitConfig.piecesPerSlot) {
+              // Sécurité au cas où une fenêtre dépasse la limite à elle seule
               currentSlotIdxTotal++;
               piecesInCurrentSlot = 0;
             }
           }
-          currentProfId = bar.profId;
-          piecesInCurrentSlot += barPiecesCount;
 
           const trolleyIdx = Math.floor(currentSlotIdxTotal / kitConfig.slotsPerTrolley);
-          bar.trolley = trolleyIdx + 1;
-          bar.slot = (currentSlotIdxTotal % kitConfig.slotsPerTrolley) + 1;
-          bar.address = `CH${bar.trolley}-C${String(bar.slot).padStart(2, '0')}`;
+          const slotInTrolley = (currentSlotIdxTotal % kitConfig.slotsPerTrolley) + 1;
+          piece.address = `CH${trolleyIdx + 1}-C${String(slotInTrolley).padStart(2, '0')}`;
+          
+          currentProfId = piece.profId;
+          piecesInCurrentSlot++;
+        });
+
+        // Groupement par adresse pour l'affichage
+        const slotsMap = {};
+        allPiecesFlat.forEach(p => {
+          if (!slotsMap[p.address]) slotsMap[p.address] = { address: p.address, pieces: [], profileName: p.profileName };
+          slotsMap[p.address].pieces.push(p);
         });
 
         const barAddressMap = {};
-        allBarsFlat.forEach(b => { barAddressMap[b.id] = b.address; });
+        allBarsFlat.forEach(bar => {
+          const p = allPiecesFlat.find(x => x.barId === bar.id);
+          bar.address = p ? p.address : 'N/A';
+          barAddressMap[bar.id] = bar.address;
+        });
+
         const totalBars = allBarsFlat.length;
         const totalStockBarsUsed = allBarsFlat.filter(b => b.isStock).length;
 
@@ -2730,64 +2804,67 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                                     C{String(si + 1).padStart(2, '0')}
                                   </span>
                                   <div style={{ flex: 1 }}>
-                                    {slotBars.length > 0 ? (
-                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                        {slotBars.map((bar, bi) => (
-                                          <div key={bi} style={{ background: '#fafafa', border: '1px solid #f1f5f9', borderRadius: '6px', padding: '0.5rem' }}>
-                                            <div style={{ fontWeight: 800, fontSize: '0.75rem', color: '#1e293b', marginBottom: '0.3rem', display: 'flex', justifyContent: 'space-between' }}>
-                                              <span>
-                                                {bar.isStock && <span style={{ background: '#10b981', color: 'white', padding: '0.1rem 0.4rem', borderRadius: '4px', marginRight: '0.4rem', fontSize: '0.65rem', fontWeight: 700 }}>STOCK {bar.barLen}mm</span>}
-                                                {bar.profileName} <span style={{fontWeight:400, color:'#64748b'}}>(L={bar.barLen}mm)</span>
-                                              </span>
-                                              <span style={{color:'#7c3aed'}}>#{bi+1}</span>
-                                            </div>
-                                            <div style={{ display: 'flex', height: '24px', borderRadius: '4px', overflow: 'hidden', background: '#e2e8f0', position: 'relative' }}>
-                                              {bar.pieces.map((piece, pi) => (
-                                                <div key={pi} style={{ 
-                                                  flex: `0 0 ${(piece.length / bar.barLen) * 100}%`, 
-                                                                                                    background: piece.windowIdx % 2 === 0 
-                                                    ? `hsl(30, 85%, ${45 + (piece.windowIdx % 5) * 4}%)` 
-                                                    : `hsl(210, 85%, ${45 + (piece.windowIdx % 5) * 4}%)`,
- 
-                                                  borderRight: '1px solid rgba(255,255,255,0.4)',
-                                                  display: 'grid',
-                                                  placeItems: 'center',
-                                                  color: 'white',
-                                                  fontSize: '0.65rem',
-                                                  fontWeight: 700,
-                                                  position: 'relative',
-                                                  overflow: 'hidden'
-                                                }}>
-                                                  {piece.length >= 400 && <span>{piece.length}</span>}
-                                                </div>
-                                              ))}
-                                              {bar.waste > 0 && (
-                                                <div style={{ 
-                                                  flex: `0 0 ${(bar.waste / bar.barLen) * 100}%`, 
-                                                  background: bar.isTrash ? '#ef4444' : '#22c55e',
-                                                  display: 'grid',
-                                                  placeItems: 'center',
-                                                  fontSize: '0.6rem',
-                                                  color: 'white',
-                                                  fontWeight: 700
-                                                }}>
-                                                  {bar.waste >= 300 && <span>{bar.waste}</span>}
-                                                </div>
-                                              )}
-                                            </div>
-                                            <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.25rem', flexWrap: 'wrap' }}>
-                                              {bar.pieces.map((p, i) => (
-                                                <span key={i} style={{ fontSize: '0.6rem', background: '#f1f5f9', padding: '1px 4px', borderRadius: '3px', color: '#475569' }}>
-                                                  {p.label} ({p.length}) - {p.windowLabel}
-                                                </span>
-                                              ))}
-                                            </div>
+                                    {(() => {
+                                      const slotData = slotsMap[`CH${ti + 1}-C${String(si + 1).padStart(2, '0')}`];
+                                      if (!slotData) return <span style={{ color: '#cbd5e1', fontSize: '0.75rem', fontStyle: 'italic' }}>— Case vide —</span>;
+                                      
+                                      const groups = [];
+                                      slotData.pieces.forEach(p => {
+                                        let g = groups.find(x => x.windowIdx === p.windowIdx);
+                                        if (!g) {
+                                          g = { windowIdx: p.windowIdx, windowLabel: p.windowLabel, pieces: [] };
+                                          groups.push(g);
+                                        }
+                                        g.pieces.push(p);
+                                      });
+
+                                      return (
+                                        <>
+                                          <div style={{ marginBottom: '0.8rem', fontWeight: 800, fontSize: '0.75rem', color: '#475569', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#7c3aed' }}></div>
+                                            {slotData.profileName} 
+                                            <span style={{ fontWeight: 400, color: '#94a3b8' }}>({slotData.pieces.length} / {kitConfig.piecesPerSlot} pièces)</span>
                                           </div>
-                                        ))}
-                                      </div>
-                                    ) : (
-                                      <span style={{ fontSize: '0.8rem', color: '#cbd5e1', fontStyle: 'italic' }}>— Vide —</span>
-                                    )}
+                                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.8rem' }}>
+                                            {groups.map((group, gi) => (
+                                              <div key={gi} style={{ 
+                                                background: 'rgba(0,0,0,0.03)', 
+                                                padding: '0.5rem', 
+                                                borderRadius: '8px', 
+                                                border: '1px solid rgba(0,0,0,0.05)',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                gap: '0.4rem'
+                                              }}>
+                                                <div style={{ fontSize: '0.65rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>
+                                                  {group.windowLabel}
+                                                </div>
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                                                  {group.pieces.map((piece, pi) => (
+                                                    <div key={pi} style={{ 
+                                                      background: piece.windowIdx % 2 === 0 ? '#2563eb' : '#d97706',
+                                                      color: 'white',
+                                                      padding: '4px 8px',
+                                                      borderRadius: '5px',
+                                                      fontSize: '0.7rem',
+                                                      fontWeight: 800,
+                                                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                                                      display: 'flex',
+                                                      alignItems: 'center',
+                                                      gap: '0.3rem'
+                                                    }}>
+                                                      <span>{piece.length}</span>
+                                                      <span style={{ opacity: 0.7, fontSize: '0.55rem' }}>MM</span>
+                                                      <span style={{ fontSize: '0.55rem', background: 'rgba(255,255,255,0.2)', padding: '1px 3px', borderRadius: '3px' }}>#{piece.barId.split('-').pop()}</span>
+                                                    </div>
+                                                  ))}
+                                                </div>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </>
+                                      );
+                                    })()}
                                   </div>
                                 </div>
                               </div>
