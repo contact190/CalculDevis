@@ -1,0 +1,86 @@
+  const logisticsData = useMemo(() => {
+    // --- 1. INITIALIZATION ---
+    const globalCuts = []; 
+    let bomsCalculated = 0;
+    const isOrder = database.orders?.some(o => o.id === activeQuote?.id);
+    const batches = isOrder ? (activeQuote?.batches || []) : [];
+    
+    let targetItems = [];
+    if (isOrder && selectedBatchId !== 'ALL') {
+      const batch = batches.find(b => b.id === selectedBatchId);
+      if (batch) {
+        batch.items.forEach(bi => {
+          (bi.measurements || []).forEach(m => {
+            targetItems.push({ 
+              ...bi, 
+              config: { ...bi.config, L: m.L, H: m.H }, 
+              qty: Number(m.qty) || 1,
+              isFromBatch: true 
+            });
+          });
+        });
+      }
+    } else {
+      targetItems = quoteItems.map(i => ({ ...i, qty: Number(i.qty) || 1 }));
+    }
+
+    // --- 2. CALCULATION LOOP (MOISSON) ---
+    targetItems.forEach((item, windowIdx) => {
+      if (!item.config) return;
+      try {
+        const b = engine.calculateBOM(item.config);
+        if (b) {
+          bomsCalculated++;
+          const qty = Math.max(1, Number(item.qty) || 1);
+          
+          if (b.profiles && Array.isArray(b.profiles)) {
+            b.profiles.forEach(p => {
+              const totalPieces = (Number(p.qty) || 0) * qty;
+              const colorInfo = database.colors?.find(c => c.id === item.config.colorId);
+              const colorName = colorInfo?.name || item.config.colorId || 'Standard';
+              const barKey = `${p.id}|${colorName}`;
+
+              for (let q = 0; q < totalPieces; q++) {
+                globalCuts.push({
+                  profileId: p.id,
+                  profileName: p.name,
+                  label: p.label,
+                  length: Math.round(p.length),
+                  usage: p.usage || 'FINITION',
+                  windowIdx,
+                  windowLabel: item.label || `Fenêtre #${windowIdx + 1}`,
+                  windowItemId: item.id,
+                  colorName,
+                  barKey
+                });
+              }
+            });
+          }
+          // Linear shutter items
+          if (b.shutters && Array.isArray(b.shutters)) {
+            b.shutters.forEach(s => {
+              const unitUpper = (s.priceUnit || '').toUpperCase().trim();
+              if (['ML', 'M', 'JOINT'].includes(unitUpper) && s.length > 0) {
+                const totalPieces = (Number(s.qty) || 0) * qty;
+                for (let q = 0; q < totalPieces; q++) {
+                  globalCuts.push({
+                    profileId: s.id,
+                    profileName: s.name,
+                    label: `[Volet] ${s.name}`,
+                    length: Math.round(s.length),
+                    usage: 'VOLET',
+                    windowIdx,
+                    windowLabel: item.label || `Fenêtre #${windowIdx + 1}`,
+                    windowItemId: item.id,
+                    isShutter: true
+                  });
+                }
+              }
+            });
+          }
+        }
+      } catch (err) { console.error("Extraction Error:", err); }
+    });
+
+    return { globalCuts, bomsCalculated, targetItems };
+  }, [activeQuote, selectedBatchId, database, engine, quoteItems]);

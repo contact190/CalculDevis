@@ -10,7 +10,7 @@ export class FormulaEngine {
     this.db = database || {};
   }
 
-  evaluate(formula, scope, errorContext = '') {
+  evaluate(formula, scope, errorContext = '', errorList = null) {
     if (!formula || typeof formula !== 'string' || formula.trim() === '') return 0;
     try {
       // 1. Convert French decimals "1,5" -> "1.5" but preserve function commas "max(1, 2)"
@@ -25,9 +25,14 @@ export class FormulaEngine {
         'if': (cond, a, b) => cond ? a : b 
       };
 
-      return math.evaluate(cleanFormula, evalScope);
+      const result = math.evaluate(cleanFormula, evalScope);
+      if (typeof result === 'number' && isNaN(result)) {
+        throw new Error("NaN");
+      }
+      return result;
     } catch (err) {
       console.warn(`Formula Error [${errorContext}]: "${formula}"`, err);
+      if (errorList) errorList.push({ context: errorContext, formula, error: err.message });
       return 0;
     }
   }
@@ -60,7 +65,7 @@ export class FormulaEngine {
     return resolved;
   }
 
-  calculateComponentBOM(config, L, H, compositionId, glassId, optionalSides, totalH = null, originalL = null, originalH = null, EPt = 0) {
+  calculateComponentBOM(config, L, H, compositionId, glassId, optionalSides, totalH = null, originalL = null, originalH = null, EPt = 0, errors = []) {
     const opt = optionalSides || { top: true, bottom: true, left: true, right: true };
     let composition = (this.db.compositions || []).find(c => c.id === compositionId);
     if (!composition) {
@@ -95,9 +100,9 @@ export class FormulaEngine {
 
     // 1. Calculate glass dimensions and quantity first to have them in scope
     const tempScope = { L, H, HC, totalH: totalH || H, originalL: originalL || L, totalOriginalH: originalH || H, EPt, Epd };
-    const glassL = this.evaluate(composition.glassFormulaL || 'L', tempScope, 'Largeur Vitre');
-    const glassH = this.evaluate(composition.glassFormulaH || 'H', tempScope, 'Hauteur Vitre');
-    const glassQtyRaw = this.evaluate(composition.glassFormulaQty || '1', tempScope, 'Quantité Vitre');
+    const glassL = this.evaluate(composition.glassFormulaL || 'L', tempScope, 'Largeur Vitre', errors);
+    const glassH = this.evaluate(composition.glassFormulaH || 'H', tempScope, 'Hauteur Vitre', errors);
+    const glassQtyRaw = this.evaluate(composition.glassFormulaQty || '1', tempScope, 'Quantité Vitre', errors);
     const glassQty = isNaN(glassQtyRaw) ? 0 : glassQtyRaw;
 
     // 2. Build the final enriched scope for all subsequent calculations
@@ -136,7 +141,24 @@ export class FormulaEngine {
 
     const expandedElements = [];
 
-    composition.elements.forEach(el => {
+    // --- FILTER GLOBAL FRAME ELEMENTS IF IN COMPOUND MODE ---
+    let elementsToProcess = composition.elements || [];
+    if (config._compoundMode) {
+      elementsToProcess = elementsToProcess.filter(el => {
+        const itemName = this.db.profiles?.find(px => px.id === el.id)?.name || 
+                         this.db.accessories?.find(ax => ax.id === el.id)?.name || '';
+        // Cover joints are ALWAYS global in compound mode.
+        // Dormants are only filtered if explicitly requested by the compound engine (for Traversing mode).
+        const isCj = /couvres?[- ]?joints?|cj[vh]?/i.test(((el.label || '') + ' ' + itemName).toLowerCase());
+        const isDormant = /dormant/i.test(((el.label || '') + ' ' + itemName).toLowerCase());
+        
+        if (isCj) return false;
+        if (isDormant && config._filterDormant) return false;
+        return true;
+      });
+    }
+
+    elementsToProcess.forEach(el => {
       let label = el.label || '';
       let itemName = '';
       
@@ -159,8 +181,22 @@ export class FormulaEngine {
         expandedElements.push({ ...el, isFrame: false, isCouvreJoint: false });
         return;
       }
-      const isHorizontal = /haut|bas|couvres?[- ]?joints?h/i.test(searchStr) || (/\bL\b| L$/i.test(searchStr));
-      const isVertical = /gauche|droite|couvres?[- ]?joints?v/i.test(searchStr) || (/\bH\b| H$/i.test(searchStr));
+      const isHorizontal = /haut|bas|couvres?[- ]?joints?\s?h|cj[h]/i.test(searchStr) || (/\bL\b| L$/i.test(searchStr));
+      const isVertical = /gauche|droite|couvres?[- ]?joints?\s?v|cj[v]/i.test(searchStr) || (/\bH\b| H$/i.test(searchStr));
+      
+      let finalHorizontal = isHorizontal;
+      let finalVertical = isVertical;
+
+      // Special Refinement: If an explicit side is mentioned, prioritize it over generic L/H markers
+      // This prevents "Cadre H (Gauche)" from matching both because of the "H"
+      if (/haut|bas|gauche|droite/i.test(searchStr)) {
+        finalHorizontal = /haut|bas/i.test(searchStr);
+        finalVertical = /gauche|droite/i.test(searchStr);
+      }
+      if (isCouvreJoint) {
+        if (/cj[h]/i.test(searchStr)) { finalHorizontal = true; finalVertical = false; }
+        else if (/cj[v]/i.test(searchStr)) { finalHorizontal = false; finalVertical = true; }
+      }
       let baseLabel = label || itemName;
       
       // Marquage T croisé pour l'atelier
@@ -191,7 +227,7 @@ export class FormulaEngine {
       };
 
       // PROFILES expansion logic
-      if (isHorizontal) {
+      if (finalHorizontal) {
         const hasHaut = searchStr.includes('haut');
         const hasBas = searchStr.includes('bas');
         const isGenericH = !hasHaut && !hasBas;
@@ -212,7 +248,7 @@ export class FormulaEngine {
           if (hasHaut && allowTop) expandedElements.push({ ...el, formula: hFormula, label: baseLabel, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
           if (hasBas && allowBottom) expandedElements.push({ ...el, formula: hFormula, label: baseLabel, isCouvreJoint: isActuallyCouvreJoint, isFrame: true });
         }
-      } else if (isVertical) {
+      } else if (finalVertical) {
         const hasGauche = searchStr.includes('gauche');
         const hasDroite = searchStr.includes('droite');
         const isGenericV = !hasGauche && !hasDroite;
@@ -262,7 +298,7 @@ export class FormulaEngine {
         currentScope = { ...currentScope, ...originalScope, H: totalH || scope.totalOriginalH || H, L: originalL || scope.originalL || L };
       }
       
-      const value = this.evaluate(formulaStr, currentScope, el.label || itemName);
+      const value = this.evaluate(formulaStr, currentScope, el.label || itemName, errors);
       const isError = isNaN(value);
       const safeValue = isError ? 0 : value;
       const qty = safeValue * elQty;
@@ -354,7 +390,7 @@ export class FormulaEngine {
         const gRef = (this.db.accessories || []).find(a => a.id === compatibility.gasketId);
         if (gRef) {
           const formula = compatibility.formula || '(L+H)*2';
-          const lenMm = this.evaluate(formula, scope, 'Joint Vitrage');
+          const lenMm = this.evaluate(formula, scope, 'Joint Vitrage', errors);
           const isError = isNaN(lenMm);
           const safeLenMm = isError ? 0 : lenMm;
           const qtyMl = safeLenMm / 1000;
@@ -391,7 +427,18 @@ export class FormulaEngine {
              parseFloat(c.glassThickness) === parseFloat(glass.thickness)
       );
 
-      // Fallback: If no exact range match AND no rangeId is defined on the composition,
+      // Fallback 1: Fuzzy match (prefix/suffix)
+      if (glassProfiles.length === 0) {
+        glassProfiles = (this.db.glassProfileCompatibility || []).filter(
+          c => {
+            const norm = normalizeRangeId(c.rangeId);
+            return norm && compNormRangeId && (compNormRangeId.startsWith(norm) || norm.startsWith(compNormRangeId)) &&
+                   parseFloat(c.glassThickness) === parseFloat(glass.thickness);
+          }
+        );
+      }
+
+      // Fallback 2: If no range match AND no rangeId is defined on the composition,
       // try matching by thickness ONLY (supports generic/manual compositions)
       if (glassProfiles.length === 0 && !composition.rangeId) {
         glassProfiles = (this.db.glassProfileCompatibility || []).filter(
@@ -410,7 +457,7 @@ export class FormulaEngine {
         if (pHRef && !hasManualParcloseH) {
           const unitPrice = (pHRef.pricePerBar || pHRef.pricePerKg || 0);
           const formulaH = gp.formulaH || composition.glassFormulaL || 'L';
-          const hValue = this.evaluate(formulaH, scope, 'ParcloseH');
+          const hValue = this.evaluate(formulaH, scope, 'ParcloseH', errors);
           const isErrorH = isNaN(hValue);
           const safeHValue = isErrorH ? 0 : hValue;
           const hQty = (gp.qtyH || 2) * (isNaN(glassQty)?0:glassQty);
@@ -436,7 +483,7 @@ export class FormulaEngine {
         if (pVRef && !hasManualParcloseV) {
           const unitPrice = (pVRef.pricePerBar || pVRef.pricePerKg || 0);
           const formulaV = gp.formulaV || composition.glassFormulaH || 'H';
-          const vValue = this.evaluate(formulaV, scope, 'ParcloseV');
+          const vValue = this.evaluate(formulaV, scope, 'ParcloseV', errors);
           const isErrorV = isNaN(vValue);
           const safeVValue = isErrorV ? 0 : vValue;
           const vQty = (gp.qtyV || 2) * (isNaN(glassQty)?0:glassQty);
@@ -482,7 +529,7 @@ export class FormulaEngine {
   /**
    * Recursive grid BOM calculation (handles root and sub-layouts)
    */
-  calculateGridBOM(grid, L, H, config, totalH = null, originalL = null, originalH = null) {
+  calculateGridBOM(grid, L, H, config, totalH = null, originalL = null, originalH = null, errors = []) {
     let profiles = [];
     let accessories = [];
     let glasses = [];
@@ -503,7 +550,7 @@ export class FormulaEngine {
         
         if (cell.subLayout) {
           // Recursive call for sub-layout
-          const subRes = this.calculateGridBOM(cell.subLayout, Lc, Hc, config, totalH, originalL, originalH);
+          const subRes = this.calculateGridBOM(cell.subLayout, Lc, Hc, config, totalH, originalL, originalH, errors);
           profiles = [...profiles, ...subRes.profiles];
           accessories = [...accessories, ...subRes.accessories];
           glasses = [...glasses, ...subRes.glasses];
@@ -512,7 +559,7 @@ export class FormulaEngine {
           const compId = cell.compositionId || config.compositionId;
           const glId = cell.glassId || config.glassId;
 
-          const res = this.calculateComponentBOM(config, Lc, Hc, compId, glId, config.optionalSides, totalH, originalL, originalH);
+          const res = this.calculateComponentBOM(config, Lc, Hc, compId, glId, config.optionalSides, totalH, originalL, originalH, 0, errors);
           profiles = [...profiles, ...res.profiles];
           accessories = [...accessories, ...res.accessories];
           if (res.gasket) accessories.push(res.gasket);
@@ -576,7 +623,7 @@ export class FormulaEngine {
 
     return { profiles, accessories, glasses };
   }
-  processShutterComponent(item, vars, shutterPack, key = '', config = {}) {
+  processShutterComponent(item, vars, shutterPack, key = '', config = {}, errors = []) {
     const { L, H, HC, HT } = vars;
     const barLength = parseFloat(item.barLength) || 6400;
     
@@ -705,10 +752,10 @@ export class FormulaEngine {
       item.addOns.forEach(addon => {
         // Compatibility Check for Add-on
         if (addon.compatibilityFormula) {
-          const isCompatible = this.evaluate(addon.compatibilityFormula, evalScope, `Compatibilité Add-on ${addon.name}`);
+          const isCompatible = this.evaluate(addon.compatibilityFormula, evalScope, `Compatibilité Add-on ${addon.name}`, errors);
           if (!isCompatible) return;
         }
-        const addonQty = this.evaluate(addon.formula || '1', evalScope);
+        const addonQty = this.evaluate(addon.formula || '1', evalScope, `Quantité Add-on ${addon.name}`, errors);
         if (addonQty > 0) {
           const addonPrice = addon.price || 0;
           const addonUnit = (addon.unit || 'Unité').toUpperCase();
@@ -747,7 +794,7 @@ export class FormulaEngine {
    * Calculate BOM (Bill of Materials) for a given configuration
    */
 
-  calculateCompoundBOM(config, L, H, totalH, originalL = null) {
+  calculateCompoundBOM(config, L, H, totalH, originalL = null, errors = []) {
     const { compoundType, compoundConfig } = config;
     if (!compoundConfig || !compoundConfig.parts) return { profiles: [], accessories: [], glasses: [] };
     const { parts, unionId, traverseId, orientation } = compoundConfig;
@@ -763,16 +810,23 @@ export class FormulaEngine {
     
     const isMultiChassis = (compoundType === 'fix_coulissant');
     
-    if (frameCompId && !isMultiChassis) {
+    if (frameCompId) {
        const globalOpt = config.optionalSides || { top: true, bottom: true, left: true, right: true };
        const frameRes = this.calculateComponentBOM(config, L, H, frameCompId, config.glassId, globalOpt, totalH, originalL || L, totalH);
        
        const isCouvreJointFn = p => /couvres?[- ]?joints?|cj[vh]?/i.test(((p.label || '') + ' ' + (p.name || '')).toLowerCase());
        const isDormantFn = p => /dormant|cadre|chassis|batit|dorme/i.test(((p.label || '') + ' ' + (p.name || '')).toLowerCase());
 
-       const frameProfiles = frameRes.profiles.filter(p => isDormantFn(p) || isCouvreJointFn(p)).map(p => ({ ...p, source: 'Cadre Global' }));
+       const frameProfiles = frameRes.profiles.filter(p => {
+         if (isMultiChassis) return isCouvreJointFn(p); // Only global cover joints for multi-chassis
+         return isDormantFn(p) || isCouvreJointFn(p);
+       }).map(p => ({ ...p, source: 'Cadre Global' }));
+       
        results.profiles.push(...frameProfiles);
-       results.accessories.push(...frameRes.accessories.filter(a => isDormantFn(a) || isCouvreJointFn(a)).map(a => ({ ...a, source: 'Cadre Global' })));
+       results.accessories.push(...frameRes.accessories.filter(a => {
+         if (isMultiChassis) return isCouvreJointFn(a);
+         return isDormantFn(a) || isCouvreJointFn(a);
+       }).map(a => ({ ...a, source: 'Cadre Global' })));
     }
 
     // --- 2. DIVIDER SETUP ---
@@ -894,16 +948,27 @@ export class FormulaEngine {
           ? { ...(config.optionalSides || { top: true, bottom: true, left: true, right: true }), isSubPart: false } 
           : { top: false, bottom: false, left: false, right: false, isSubPart: true };
         
-        const res = this.calculateComponentBOM(config, calcL, calcH, compId, part.glassId || config.glassId, subPartOpt, calcH, Number(originalL || L), totalH, isMultiChassis ? 0 : divThick);
+        const res = this.calculateComponentBOM({
+        ...config,
+        compositionId: compId,
+        _compoundMode: true,
+        _filterDormant: compoundType === 'fix_ouvrant' // Only filter dormant if we handled it globally
+      }, calcL, calcH, compId, part.glassId || config.glassId, subPartOpt, calcH, Number(originalL || L), totalH, isMultiChassis ? 0 : divThick, errors);
         const sourceLabel = `Partie ${idx + 1} (${part.type})`;
 
         const filterFn = (i) => {
-           if (compoundType === 'fix_coulissant') return true; // In multi-chassis, we keep everything (each has its frame)
-           
            const s = ((i.label || '') + ' ' + (i.name || '')).toLowerCase();
+           const isCJ = i.isCouvreJoint || /couvres?[- ]?joints?|cj[vh]?/i.test(s);
+           const isDormant = ['dormant', 'cadre', 'batit', 'dorme'].some(t => s.includes(t));
+
+           if (compoundType === 'fix_coulissant') {
+              if (isCJ) return false; // CJ are now global
+              return true; // Keep dormants for multi-chassis
+           }
+           
            if (s.includes('parclose') || s.includes('joint')) return true;
-           if (i.isCouvreJoint) return false;
-           if (['dormant', 'cadre', 'batit', 'dorme'].some(t => s.includes(t))) return false;
+           if (isCJ) return false;
+           if (isDormant) return false;
            if (part.type === 'fixe' && ['ouvrant', 'vantail', 'chicane', 'panneau', 'reducteur', 'poignee', 'cremone', 'paumelle', 'galet', 'serrure'].some(t => s.includes(t))) return false;
            return true;
         };
@@ -920,7 +985,8 @@ export class FormulaEngine {
   }
 
   calculateBOM(config) {
-    if (!this.db || !config) return { profiles: [], accessories: [], glasses: [], shutters: [] };
+    if (!this.db || !config) return { profiles: [], accessories: [], glasses: [], shutters: [], errors: [] };
+    const errors = [];
     let { L, H, glassId } = config;
     
     const isOnlyShutter = !!config.isOnlyShutter;
@@ -988,7 +1054,7 @@ export class FormulaEngine {
 
     if (!isOnlyShutter) {
       if (config.compoundType && config.compoundType !== 'none') {
-        const compRes = this.calculateCompoundBOM(config, L, windowH, totalH, initialL);
+        const compRes = this.calculateCompoundBOM(config, L, windowH, totalH, initialL, errors);
         profiles = compRes.profiles;
         accessories = compRes.accessories;
         glasses = compRes.glasses;
@@ -998,7 +1064,7 @@ export class FormulaEngine {
         accessories = gridResults.accessories;
         glasses = gridResults.glasses;
       } else {
-        const res = this.calculateComponentBOM(config, L, windowH, config.compositionId, glassId, config.optionalSides, totalH, initialL, totalH);
+        const res = this.calculateComponentBOM(config, L, windowH, config.compositionId, glassId, config.optionalSides, totalH, initialL, totalH, 0, errors);
         profiles = res.profiles;
         accessories = res.accessories;
         if (res.gasket) accessories.push(res.gasket);
@@ -1031,7 +1097,7 @@ export class FormulaEngine {
               const optionSide = config.optionSides?.[optId] || 'both';
               const sideFactor = (optionSide === 'gauche' || optionSide === 'droit') ? 0.5 : 1.0;
               
-              const rawQty = this.evaluate(option.formula || '1', { L, H });
+              const rawQty = this.evaluate(option.formula || '1', { L, H }, `Option: ${option.name}`, errors);
               const qty = rawQty * sideFactor;
               
               activeAccessories.push({
@@ -1123,7 +1189,7 @@ export class FormulaEngine {
 
         const item = (source || []).find(x => x.id === selectedId);
         if (item) {
-          this.processShutterComponent(item, vars, shutterPack, key, config);
+          this.processShutterComponent(item, vars, shutterPack, key, config, errors);
         }
       });
 
@@ -1159,7 +1225,8 @@ export class FormulaEngine {
       glassDetails: glasses,
       gasket: finalGasket,
       accessories: activeAccessories,
-      shutters: shutterPack
+      shutters: shutterPack,
+      errors: errors
     };
 
     return this.mergeBOM(bom);
@@ -1170,8 +1237,9 @@ export class FormulaEngine {
    * Calculate final pricing
    */
   calculatePrice(config) {
-    if (!this.db || !config) return { cost: 0, priceHT: 0, priceTTC: 0, subtotals: {}, bom: { profiles: [], accessories: [], glass: {}, shutters: [] } };
+    if (!this.db || !config) return { cost: 0, priceHT: 0, priceTTC: 0, subtotals: {}, bom: { profiles: [], accessories: [], glass: {}, shutters: [], errors: [] }, errors: [] };
     const bom = this.calculateBOM(config);
+    const errors = bom.errors || [];
     const color = (this.db.colors || []).find(c => c.id === config.colorId);
     
     // Subtotals (Raw material costs)
@@ -1207,7 +1275,8 @@ export class FormulaEngine {
       },
       priceHT,
       priceTTC: priceHT * 1.20,
-      bom
+      bom,
+      errors
     };
   }
 

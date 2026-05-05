@@ -14,7 +14,7 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
     // Clear canvas
     ctx.clearRect(0, 0, width, height);
     
-    const { L, H, compositionId, optionalSides = {} } = config;
+    const { L, H, compositionId, optionalSides = {}, isOnlyShutter } = config;
     if (!L || !H) return;
 
     const margin = 80;
@@ -281,9 +281,13 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
         });
       };
 
-      drawPartList(parts, offsetX, winOffsetY, dW, dH, orientation);
+      if (!isOnlyShutter) {
+        drawPartList(parts, offsetX, winOffsetY, dW, dH, orientation);
+      }
     } else {
-      drawJoinery(offsetX, winOffsetY, dW, dH, compositionId);
+      if (!isOnlyShutter) {
+        drawJoinery(offsetX, winOffsetY, dW, dH, compositionId);
+      }
     }
 
 
@@ -343,18 +347,20 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
       ctx.restore();
 
       // Opening height dim
-      ctx.beginPath();
-      ctx.moveTo(dimX_detail, winOffsetY);
-      ctx.lineTo(dimX_detail, winOffsetY + dH);
-      ctx.stroke();
-      
-      ctx.save();
-      ctx.translate(dimX_detail - 3, winOffsetY + dH / 2);
-      ctx.rotate(-Math.PI / 2);
-      ctx.fillStyle = '#3b82f6'; // Blue for opening
-      ctx.font = 'bold 11px Inter, sans-serif';
-      ctx.fillText(`${Math.round(H - caissonH)} mm (Ouv.)`, 0, 0);
-      ctx.restore();
+      if (!isOnlyShutter) {
+        ctx.beginPath();
+        ctx.moveTo(dimX_detail, winOffsetY);
+        ctx.lineTo(dimX_detail, winOffsetY + dH);
+        ctx.stroke();
+        
+        ctx.save();
+        ctx.translate(dimX_detail - 3, winOffsetY + dH / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillStyle = '#3b82f6'; // Blue for opening
+        ctx.font = 'bold 11px Inter, sans-serif';
+        ctx.fillText(`${Math.round(H - caissonH)} mm (Ouv.)`, 0, 0);
+        ctx.restore();
+      }
     }
 
     // Export

@@ -307,11 +307,11 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
             <div>
               <div className="form-group">
-                <label className="label">Longeur (L) en mm</label>
+                <label className="label">{config.isOnlyShutter ? 'Largeur Volet (LV) en mm' : 'Largeur (L) en mm'}</label>
                 <input type="number" name="L" value={config.L} onChange={handleChange} className="input" />
               </div>
               <div className="form-group">
-                <label className="label">Hauteur (H) en mm</label>
+                <label className="label">{config.isOnlyShutter ? 'Hauteur Totale (HT) en mm' : 'Hauteur (H) en mm'}</label>
                 <input type="number" name="H" value={config.H} onChange={handleChange} className="input" />
               </div>
             </div>
@@ -332,11 +332,11 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
             </div>
           </div>
 
-          {config.useCustomLayout && config.compoundType === 'none' && (
+          {!config.isOnlyShutter && config.useCustomLayout && config.compoundType === 'none' && (
             <LayoutComposer layout={config.customLayout || defaultLayout()} onChange={newLayout => setConfig(prev => ({ ...prev, customLayout: newLayout }))} database={database} globalConfig={config} />
           )}
 
-          {config.compoundType !== 'none' && (
+          {!config.isOnlyShutter && config.compoundType !== 'none' && (
             <div style={{ background: '#f8fafc', padding: '1.5rem', borderRadius: '15px', border: '1px solid #e2e8f0', marginBottom: '1.5rem', animation: 'slideUp 0.3s ease' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.5rem' }}>
                    <div style={{ background: '#3b82f6', color: 'white', width: '36px', height: '36px', borderRadius: '10px', display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: '1.2rem' }}>🧩</div>
@@ -630,7 +630,8 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
             </div>
           )}
 
-          <div style={{ display: (config.useCustomLayout || config.compoundType !== 'none') ? 'none' : 'block' }}>
+          {!config.isOnlyShutter && (
+            <div style={{ display: (config.useCustomLayout || config.compoundType !== 'none') ? 'none' : 'block' }}>
             <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0', marginBottom: '1rem' }}>
               <div className="form-group" style={{ marginBottom: '1rem' }}>
                 <label className="label" style={{ color: '#3b82f6' }}>1. Catégorie</label>
@@ -658,29 +659,32 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
               </div>
             </div>
           </div>
+        )}
 
-          <div className="form-group" style={{ marginTop: '1rem', background: '#eff6ff', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #bfdbfe' }}>
-            <label className="label" style={{ color: '#1e40af', fontWeight: 700 }}>4. Sens d'ouverture / Main</label>
-            <div style={{ display: 'flex', gap: '1rem' }}>
-              {[
-                { id: 'gauche', label: 'Ouvrant Gauche', icon: '⬅️' },
-                { id: 'droit', label: 'Ouvrant Droit', icon: '➡️' }
-              ].map(dir => (
-                <label key={dir.id} style={{ 
-                  flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', 
-                  padding: '0.75rem', border: `2px solid ${config.openingDirection === dir.id ? '#2563eb' : '#e2e8f0'}`,
-                  borderRadius: '0.5rem', cursor: 'pointer', background: config.openingDirection === dir.id ? '#white' : '#f8fafc',
-                  transition: 'all 0.2s', fontWeight: config.openingDirection === dir.id ? 700 : 400,
-                  boxShadow: config.openingDirection === dir.id ? '0 4px 6px -1px rgba(37, 99, 235, 0.1)' : 'none'
-                }}>
-                  <input type="radio" name="openingDirection" value={dir.id} checked={config.openingDirection === dir.id}
-                    onChange={() => setConfig(prev => ({ ...prev, openingDirection: dir.id }))}
-                    style={{ display: 'none' }} />
-                  {dir.icon} {dir.label}
-                </label>
-              ))}
+          {!config.isOnlyShutter && (
+            <div className="form-group" style={{ marginTop: '1rem', background: '#eff6ff', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #bfdbfe' }}>
+              <label className="label" style={{ color: '#1e40af', fontWeight: 700 }}>4. Sens d'ouverture / Main</label>
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                {[
+                  { id: 'gauche', label: 'Ouvrant Gauche', icon: '⬅️' },
+                  { id: 'droit', label: 'Ouvrant Droit', icon: '➡️' }
+                ].map(dir => (
+                  <label key={dir.id} style={{ 
+                    flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', 
+                    padding: '0.75rem', border: `2px solid ${config.openingDirection === dir.id ? '#2563eb' : '#e2e8f0'}`,
+                    borderRadius: '0.5rem', cursor: 'pointer', background: config.openingDirection === dir.id ? 'white' : '#f8fafc',
+                    transition: 'all 0.2s', fontWeight: config.openingDirection === dir.id ? 700 : 400,
+                    boxShadow: config.openingDirection === dir.id ? '0 4px 6px -1px rgba(37, 99, 235, 0.1)' : 'none'
+                  }}>
+                    <input type="radio" name="openingDirection" value={dir.id} checked={config.openingDirection === dir.id}
+                      onChange={() => setConfig(prev => ({ ...prev, openingDirection: dir.id }))}
+                      style={{ display: 'none' }} />
+                    {dir.icon} {dir.label}
+                  </label>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {currentComp?.openingType !== 'VoletSeul' && !config.isOnlyShutter && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
@@ -1032,6 +1036,19 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
             )}
           </div>
 
+          {priceData?.errors && priceData.errors.length > 0 && (
+            <div style={{ marginTop: '1rem', padding: '1rem', background: '#fffbeb', border: '1px solid #fef3c7', borderRadius: '0.5rem', color: '#92400e' }}>
+              <h4 style={{ margin: '0 0 0.5rem', fontSize: '0.875rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                 ⚠️ Erreurs de calcul détectées
+              </h4>
+              <ul style={{ margin: 0, paddingLeft: '1.2rem', fontSize: '0.75rem' }}>
+                {priceData.errors.map((err, i) => (
+                  <li key={i}><strong>{err.context}</strong> : {err.error} (Formule: <code>{err.formula}</code>)</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {!validation.valid && (
             <div style={{ marginTop: '1rem', padding: '1rem', background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '0.5rem', color: '#991b1b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <Info size={16} /><span style={{ fontSize: '0.875rem' }}>{validation.message}</span>
@@ -1355,16 +1372,16 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
       
       const shouldLiveRecalculate = !quote.status || quote.status === 'Brouillon' || isExpired;
 
-      if (shouldLiveRecalculate) {
-         try {
-           const tempConfig = { ...item.config, margin: quoteSettings?.globalMargin || 2.2 };
-           const livePd = engine.calculatePrice(tempConfig);
-           if (livePd && livePd.priceHT) {
-             currentPriceHT = livePd.priceHT;
-             pd = livePd;
-           }
-         } catch(e) {}
-      }
+          try {
+            const tempConfig = { ...item.config, margin: quoteSettings?.globalMargin || 2.2 };
+            const livePd = engine.calculatePrice(tempConfig);
+            if (livePd) {
+              pd = livePd;
+              if (livePd.priceHT) currentPriceHT = livePd.priceHT;
+            }
+          } catch(e) {
+            console.error("Error recalulating item price:", e);
+          }
 
 
       ht += currentPriceHT * (item.qty || 1);

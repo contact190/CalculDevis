@@ -1,7 +1,64 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Package, Search, Plus, Trash2, Save, Download, Upload, AlertCircle, RefreshCw, Layers, Edit2, ChevronDown, Check, FileSpreadsheet, Info, Copy, Image as ImageIcon } from 'lucide-react';
 import { DEFAULT_DATA } from '../../data/default-data';
 import * as XLSX from 'xlsx';
+import { create, all } from 'mathjs';
+
+const math = create(all);
+
+// ─── REUSABLE COMPONENT: FormulaInput with Real-time Validation ─────────────
+const FormulaInput = ({ value, onChange, placeholder, style = {}, variables = ['L', 'H', 'HC', 'HT', 'totalH', 'originalL', 'EPt', 'Epd'] }) => {
+  const [error, setError] = useState(null);
+
+  const validate = (val) => {
+    if (!val || typeof val !== 'string' || val.trim() === '') {
+      setError(null);
+      return;
+    }
+    try {
+      const scope = { 'if': (c, a, b) => c ? a : b };
+      variables.forEach(v => scope[v] = 1);
+      
+      let clean = val.replace(/(\d),(\d)/g, '$1.$2').replace(/&&/g, ' and ').replace(/\|\|/g, ' or ');
+      math.evaluate(clean, scope);
+      setError(null);
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  useEffect(() => {
+    validate(value);
+  }, [value]);
+
+  return (
+    <div style={{ position: 'relative', width: '100%', ...style }}>
+      <input 
+        className="input"
+        value={value || ''}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        style={{ 
+          width: '100%',
+          borderColor: error ? '#ef4444' : undefined,
+          backgroundColor: error ? '#fef2f2' : undefined,
+          color: error ? '#b91c1c' : undefined
+        }}
+      />
+      {error && (
+        <div style={{ 
+          position: 'absolute', bottom: '100%', right: 0, zIndex: 100,
+          background: '#ef4444', color: 'white', fontSize: '0.65rem',
+          padding: '2px 8px', borderRadius: '4px', marginBottom: '4px',
+          boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', whiteSpace: 'normal',
+          maxWidth: '200px', pointerEvents: 'none'
+        }}>
+          Erreur : {error}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const MultiSelectRange = ({ selectedIds = [], allRanges, onChange }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -758,24 +815,35 @@ const AdminDashboard = ({ data, setData }) => {
                           </select>
                         </td>
 
-                        <td><input className="input" value={addon.formula} onChange={e => {
-                          const newAddons = [...(currentItem.addOns || [])];
-                          newAddons[ai].formula = e.target.value;
-                          if (editingAddonItem.isShutter) {
-                            updateShutterItem(editingAddonItem.family, editingAddonItem.idx, 'addOns', newAddons);
-                          } else {
-                            handleUpdateItem(editingAddonItem.family, currentItem.id, 'addOns', newAddons, editingAddonItem.idx);
-                          }
-                        }} /></td>
-                        <td><input className="input" value={addon.compatibilityFormula || ''} onChange={e => {
-                          const newAddons = [...(currentItem.addOns || [])];
-                          newAddons[ai].compatibilityFormula = e.target.value;
-                          if (editingAddonItem.isShutter) {
-                            updateShutterItem(editingAddonItem.family, editingAddonItem.idx, 'addOns', newAddons);
-                          } else {
-                            handleUpdateItem(editingAddonItem.family, currentItem.id, 'addOns', newAddons, editingAddonItem.idx);
-                          }
-                        }} placeholder="Ex: L < 1000" /></td>
+                        <td>
+                          <FormulaInput 
+                            value={addon.formula} 
+                            onChange={val => {
+                              const newAddons = [...(currentItem.addOns || [])];
+                              newAddons[ai].formula = val;
+                              if (editingAddonItem.isShutter) {
+                                updateShutterItem(editingAddonItem.family, editingAddonItem.idx, 'addOns', newAddons);
+                              } else {
+                                handleUpdateItem(editingAddonItem.family, currentItem.id, 'addOns', newAddons, editingAddonItem.idx);
+                              }
+                            }} 
+                          />
+                        </td>
+                        <td>
+                          <FormulaInput 
+                            value={addon.compatibilityFormula || ''} 
+                            onChange={val => {
+                              const newAddons = [...(currentItem.addOns || [])];
+                              newAddons[ai].compatibilityFormula = val;
+                              if (editingAddonItem.isShutter) {
+                                updateShutterItem(editingAddonItem.family, editingAddonItem.idx, 'addOns', newAddons);
+                              } else {
+                                handleUpdateItem(editingAddonItem.family, currentItem.id, 'addOns', newAddons, editingAddonItem.idx);
+                              }
+                            }} 
+                            placeholder="Ex: L < 1000"
+                          />
+                        </td>
                         <td><input className="input" type="number" value={addon.price} onChange={e => {
                           const newAddons = [...(currentItem.addOns || [])];
                           newAddons[ai].price = parseFloat(e.target.value) || 0;
@@ -1001,7 +1069,7 @@ const AdminDashboard = ({ data, setData }) => {
                 
                 return (
                   <CollapsibleGroup key={range.id} title={range.name || range.id} count={rangeProfiles.length}>
-                    <div style={{ overflowX: 'auto' }}>
+                    <div className="table-container-sticky">
                       <table className="data-table">
                          <thead>
                            <tr>
@@ -1145,7 +1213,7 @@ const AdminDashboard = ({ data, setData }) => {
           )}
 
           {activeTab === 'glass' && (
-            <div className="table-responsive" style={{ border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+            <div className="table-container-sticky">
               <table className="data-table">
                 <thead>
                   <tr>
@@ -1215,7 +1283,7 @@ const AdminDashboard = ({ data, setData }) => {
           )}
 
           {activeTab === 'colors' && (
-            <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+            <div className="table-container-sticky">
               <table className="data-table">
                 <thead>
                   <tr>
@@ -1464,8 +1532,7 @@ const AdminDashboard = ({ data, setData }) => {
 
                 return (
                   <CollapsibleGroup key={range.id} title={range.name || range.id} count={rangeGaskets.length}>
-
-                    <div className="table-responsive">
+                    <div className="table-container-sticky">
                       <table className="data-table">
                       <thead>
                         <tr>
@@ -1519,11 +1586,10 @@ const AdminDashboard = ({ data, setData }) => {
                                 </select>
                               </td>
                               <td>
-                                <input 
-                                  className="input" 
+                                <FormulaInput 
                                   value={gc.formula || ''} 
-                                  onChange={e => handleUpdateGasketCompatibility(i, 'formula', e.target.value)}
-                                  style={{ width: '150px' }} 
+                                  onChange={val => handleUpdateGasketCompatibility(i, 'formula', val)}
+                                  variables={['L', 'H']}
                                 />
                               </td>
                               <td style={{ display: 'flex', gap: '0.3rem' }}>
@@ -1558,7 +1624,7 @@ const AdminDashboard = ({ data, setData }) => {
 
                 return (
                   <CollapsibleGroup key={range.id} title={range.name || range.id} count={rangeGPS.length}>
-                    <div className="table-responsive">
+                    <div className="table-container-sticky">
                       <table className="data-table">
                         <thead>
                           <tr>
@@ -1612,10 +1678,13 @@ const AdminDashboard = ({ data, setData }) => {
                                     style={{ width: '50px' }} 
                                   />
                                 </td>
-                                <td data-label="Formule H"><input className="input" value={gc.formulaH || ''} 
-                                  onChange={e => handleUpdateGlassProfileCompatibility(i, 'formulaH', e.target.value)} 
-                                  style={{ width: '80px' }} 
-                                /></td>
+                                <td data-label="Formule H">
+                                  <FormulaInput 
+                                    value={gc.formulaH || ''} 
+                                    onChange={val => handleUpdateGlassProfileCompatibility(i, 'formulaH', val)} 
+                                    variables={['L', 'H']}
+                                  />
+                                </td>
                                 <td data-label="Parcase V">
                                   <select 
                                     className="input" value={gc.profileVId || ''} 
@@ -1634,10 +1703,13 @@ const AdminDashboard = ({ data, setData }) => {
                                     style={{ width: '50px' }} 
                                   />
                                 </td>
-                                <td data-label="Formule V"><input className="input" value={gc.formulaV || ''} 
-                                  onChange={e => handleUpdateGlassProfileCompatibility(i, 'formulaV', e.target.value)} 
-                                  style={{ width: '80px' }} 
-                                /></td>
+                                <td data-label="Formule V">
+                                  <FormulaInput 
+                                    value={gc.formulaV || ''} 
+                                    onChange={val => handleUpdateGlassProfileCompatibility(i, 'formulaV', val)} 
+                                    variables={['L', 'H']}
+                                  />
+                                </td>
                                 <td data-label="Actions" style={{ display: 'flex', gap: '0.3rem', justifyContent: 'flex-end' }}>
                                   <button className="btn" onClick={() => handleDuplicateItem('glassProfileCompatibility', gc)} style={{ padding: '0.4rem', color: '#6366f1' }} title="Dupliquer"><Copy size={16} /></button>
                                   <button className="btn" onClick={() => handleDeleteGlassProfileCompatibility(i)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
@@ -1822,11 +1894,10 @@ const AdminDashboard = ({ data, setData }) => {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginBottom: '1.5rem', padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '0.5rem' }}>
                     <div className="form-group">
                       <label className="label">Formule Largeur Vitrage (L-..)</label>
-                      <input 
-                        className="input" 
+                      <FormulaInput 
                         value={editingComposition.glassFormulaL || 'L-80'} 
-                        onChange={(e) => {
-                          const updated = { ...editingComposition, glassFormulaL: e.target.value };
+                        onChange={(val) => {
+                          const updated = { ...editingComposition, glassFormulaL: val };
                           setEditingComposition(updated);
                           handleUpdateComposition(updated);
                         }} 
@@ -1834,11 +1905,10 @@ const AdminDashboard = ({ data, setData }) => {
                     </div>
                     <div className="form-group">
                       <label className="label">Formule Hauteur Vitrage (H-..)</label>
-                      <input 
-                        className="input" 
+                      <FormulaInput 
                         value={editingComposition.glassFormulaH || 'H-80'} 
-                        onChange={(e) => {
-                          const updated = { ...editingComposition, glassFormulaH: e.target.value };
+                        onChange={(val) => {
+                          const updated = { ...editingComposition, glassFormulaH: val };
                           setEditingComposition(updated);
                           handleUpdateComposition(updated);
                         }} 
@@ -1846,11 +1916,10 @@ const AdminDashboard = ({ data, setData }) => {
                     </div>
                     <div className="form-group">
                       <label className="label">Nombre de Vitrages</label>
-                      <input 
-                        className="input" 
+                      <FormulaInput 
                         value={editingComposition.glassFormulaQty || '1'} 
-                        onChange={(e) => {
-                          const updated = { ...editingComposition, glassFormulaQty: e.target.value };
+                        onChange={(val) => {
+                          const updated = { ...editingComposition, glassFormulaQty: val };
                           setEditingComposition(updated);
                           handleUpdateComposition(updated);
                         }} 
@@ -2008,12 +2077,11 @@ const AdminDashboard = ({ data, setData }) => {
                             />
                           </td>
                           <td>
-                            <input 
-                              className="input" 
+                            <FormulaInput 
                               value={el.formula} 
-                              onChange={(e) => {
+                              onChange={(val) => {
                                 const newEls = [...editingComposition.elements];
-                                newEls[i].formula = e.target.value;
+                                newEls[i].formula = val;
                                 const updated = { ...editingComposition, elements: newEls };
                                 setEditingComposition(updated);
                                 handleUpdateComposition(updated);
@@ -2108,7 +2176,7 @@ const AdminDashboard = ({ data, setData }) => {
           )}
 
           {activeTab === 'options' && (
-            <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+            <div className="table-container-sticky">
               <table className="data-table">
                 <thead>
                   <tr>
@@ -2151,11 +2219,9 @@ const AdminDashboard = ({ data, setData }) => {
                         </select>
                       </td>
                       <td>
-                        <input 
-                          className="input" 
+                        <FormulaInput 
                           value={opt.formula} 
-                          onChange={e => handleUpdateItem('options', opt.id, 'formula', e.target.value, idx)} 
-                          style={{ width: '100px' }} 
+                          onChange={val => handleUpdateItem('options', opt.id, 'formula', val, idx)} 
                         />
                       </td>
                       <td>
@@ -2205,7 +2271,7 @@ const AdminDashboard = ({ data, setData }) => {
                 {shutterFamilies.map(({ key, label }) => (
                   <div key={key}>
                     <h4 style={{ margin: '0 0 0.75rem', color: '#1e293b', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.4rem' }}>{label}</h4>
-                    <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+                    <div className="table-container-sticky">
                       <table className="data-table" style={{ minWidth: key === 'glissieres' ? '1200px' : '100%', marginBottom: 0 }}>
                       <thead>
                         <tr>
@@ -2214,8 +2280,6 @@ const AdminDashboard = ({ data, setData }) => {
                             <>
                               <th>Taille (mm)</th>
                               <th>Hauteur (mm)</th>
-                              <th>Prix Joint HSF</th>
-                              <th>Formule Joint</th>
                             </>
                           )}
                           {key === 'lames' && (
@@ -2267,8 +2331,6 @@ const AdminDashboard = ({ data, setData }) => {
                               <>
                                 <td><input className="input" type="number" value={item.size || 0} onChange={e => updateShutterItem(key, i, 'size', e.target.value)} style={{ width: '80px' }} /></td>
                                 <td><input className="input" type="number" value={item.height || 0} onChange={e => updateShutterItem(key, i, 'height', e.target.value)} style={{ width: '80px' }} /></td>
-                                <td><input className="input" type="number" step="0.01" value={item.jointPrice || 0} onChange={e => updateShutterItem(key, i, 'jointPrice', e.target.value)} style={{ width: '80px' }} /></td>
-                                <td><input className="input" value={item.jointFormula || 'L/1000'} onChange={e => updateShutterItem(key, i, 'jointFormula', e.target.value)} style={{ width: '100px' }} /></td>
                               </>
                             )}
                             {key === 'lames' && (
@@ -2315,9 +2377,34 @@ const AdminDashboard = ({ data, setData }) => {
                             {!['extras', 'moteurs', 'kits'].includes(key) && <td><input className="input" type="number" value={item.barLength || 6400} onChange={e => updateShutterItem(key, i, 'barLength', e.target.value)} style={{ width: '90px', fontSize: '0.8rem' }} /></td>}
                             {!['extras', 'moteurs', 'kits'].includes(key) && <td><input className="input" type="number" value={item.scrapThreshold || 0} onChange={e => updateShutterItem(key, i, 'scrapThreshold', e.target.value)} style={{ width: '90px', fontSize: '0.8rem' }} placeholder="Ex: 500" /></td>}
 
-                            <td><input className="input" value={item.formula || '1'} onChange={e => updateShutterItem(key, i, 'formula', e.target.value)} style={{ width: '120px' }} placeholder="Ex: ceil(H/39)" /></td>
-                            {key !== 'kits' && key !== 'moteurs' && <td><input className="input" value={item.cuttingFormula || ''} onChange={e => updateShutterItem(key, i, 'cuttingFormula', e.target.value)} style={{ width: '120px' }} placeholder="Ex: L-10" /></td>}
-                            {key === 'moteurs' && <td><input className="input" value={item.compatibilityFormula || ''} onChange={e => updateShutterItem(key, i, 'compatibilityFormula', e.target.value)} style={{ width: '120px' }} placeholder="Ex: L < 1500" /></td>}
+                            <td>
+                              <FormulaInput 
+                                value={item.formula || '1'} 
+                                onChange={val => updateShutterItem(key, i, 'formula', val)} 
+                                variables={['L', 'H', 'HC']}
+                                placeholder="Ex: ceil(H/39)"
+                              />
+                            </td>
+                            {key !== 'kits' && key !== 'moteurs' && (
+                              <td>
+                                <FormulaInput 
+                                  value={item.cuttingFormula || ''} 
+                                  onChange={val => updateShutterItem(key, i, 'cuttingFormula', val)} 
+                                  variables={['L', 'H', 'HC']}
+                                  placeholder="Ex: L-10"
+                                />
+                              </td>
+                            )}
+                            {key === 'moteurs' && (
+                              <td>
+                                <FormulaInput 
+                                  value={item.compatibilityFormula || ''} 
+                                  onChange={val => updateShutterItem(key, i, 'compatibilityFormula', val)} 
+                                  variables={['L', 'H', 'HC']}
+                                  placeholder="Ex: L < 1500"
+                                />
+                              </td>
+                            )}
                             <td>
                               <select className="input" value={item.priceUnit} onChange={e => updateShutterItem(key, i, 'priceUnit', e.target.value)} style={{ width: '90px' }}>
                                 <option>ML</option>
@@ -2355,7 +2442,7 @@ const AdminDashboard = ({ data, setData }) => {
           })()}
 
           {activeTab === 'traverses' && (
-            <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+            <div className="table-container-sticky">
               <table className="data-table">
                 <thead>
                   <tr>
