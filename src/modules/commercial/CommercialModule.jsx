@@ -1090,7 +1090,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                       <td data-label="Formule" style={{ color: '#64748b', fontSize: '0.65rem' }}>{s.formula}</td>
                       <td data-label="Calcul" style={{ color: '#3b82f6', fontSize: '0.65rem' }}>{s.resolvedFormula || '-'}</td>
                       <td data-label="Nbre">
-                        {(s.qty || 0).toFixed(2)} {s.priceUnit === 'ML' ? 'u' : s.priceUnit}
+                        {(s.qty || 0).toFixed(2)} u
                       </td>
                       <td data-label="Mesure Totale">
                         {s.totalMeasure ? `${Math.round(s.totalMeasure)} mm` : '-'}
