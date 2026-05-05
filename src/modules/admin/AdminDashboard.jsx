@@ -1079,7 +1079,8 @@ const AdminDashboard = ({ data, setData }) => {
                              <th>Désignation</th>
                              <th>Type</th>
                              <th>Poids</th>
-                             <th>Prix</th>
+                             <th>P. Kg</th>
+                             <th>P. Barre</th>
                              <th>Épas.</th>
                              <th>Lg Barre</th>
                              <th>Seuil</th>
@@ -1127,7 +1128,8 @@ const AdminDashboard = ({ data, setData }) => {
                                   </select>
                                 </td>
                                 <td><input type="number" step="0.001" className="input" value={p.weightPerM} onChange={e => handleUpdateItem('profiles', p.id, 'weightPerM', e.target.value, idx)} style={{ width: '60px' }} /></td>
-                                <td><input type="number" step="0.01" className="input" value={p.pricePerKg} onChange={e => handleUpdateItem('profiles', p.id, 'pricePerKg', e.target.value, idx)} style={{ width: '60px' }} /></td>
+                                <td><input type="number" step="0.01" className="input" value={p.pricePerKg} onChange={e => handleUpdateItem('profiles', p.id, 'pricePerKg', e.target.value, idx)} style={{ width: '60px' }} title="Prix au KG" /></td>
+                                <td><input type="number" step="0.01" className="input" value={p.pricePerBar} onChange={e => handleUpdateItem('profiles', p.id, 'pricePerBar', e.target.value, idx)} style={{ width: '60px' }} title="Prix à la Barre" /></td>
                                 <td><input type="number" className="input" value={p.thickness || 0} onChange={e => handleUpdateItem('profiles', p.id, 'thickness', e.target.value, idx)} style={{ width: '50px' }} /></td>
                                 <td><input type="number" className="input" value={p.barLength || 6000} onChange={e => handleUpdateItem('profiles', p.id, 'barLength', e.target.value, idx)} style={{ width: '60px' }} /></td>
                                 <td><input type="number" className="input" value={p.scrapThreshold || 0} onChange={e => handleUpdateItem('profiles', p.id, 'scrapThreshold', e.target.value, idx)} style={{ width: '55px' }} /></td>
@@ -1168,8 +1170,9 @@ const AdminDashboard = ({ data, setData }) => {
                             <th>Dessin</th>
                             <th>Désignation</th>
                             <th>Type</th>
-                            <th>Poids</th>
-                            <th>Prix</th>
+                            <th>Poids/m</th>
+                            <th>P. Kg</th>
+                            <th>P. Barre</th>
                             <th>Épaisseur</th>
                             <th>Gammes Compatibles</th>
                             <th>Actions</th>
