@@ -776,14 +776,28 @@ export class FormulaEngine {
     // 7. Baguette
     if (key === 'lameId' && config.shutterConfig?.enableBaguette) {
       const bPrice = item.baguettePrice || 0;
-      const bCost = pieceCount * (itemLength / 1000) * bPrice;
+      const bUnit = item.priceUnit || 'ML';
+      const bUnitUpper = bUnit.toUpperCase().trim();
+      
+      let bTotalMeasure = 0;
+      if (bUnitUpper === 'ML' || bUnitUpper === 'M' || bUnitUpper === 'JOINT') {
+        bTotalMeasure = pieceCount * (itemLength / 1000);
+      } else if (bUnitUpper === 'BARRE') {
+        bTotalMeasure = pieceCount * (itemLength / barLength);
+      } else {
+        bTotalMeasure = pieceCount;
+      }
+
+      const bCost = bTotalMeasure * bPrice;
+
       shutterPack.push({
         id: `${item.id}-baguette`,
         itemKey: 'baguetteId',
         name: `Baguette pour ${item.name}`,
         qty: pieceCount,
         length: itemLength,
-        priceUnit: 'ML',
+        totalMeasure: bTotalMeasure * (bUnitUpper === 'ML' || bUnitUpper === 'M' || bUnitUpper === 'JOINT' ? 1000 : 1),
+        priceUnit: bUnit,
         price: bPrice,
         cost: bCost
       });
