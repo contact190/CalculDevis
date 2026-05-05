@@ -312,21 +312,12 @@ export class FormulaEngine {
           let unitPrice = 0;
           let cost = 0;
           
-          let priceUnit = 'ML';
-          let displayMeasure = safeValue * elQty; // Default to mm
-          
           if (pRef.pricePerBar) {
             unitPrice = pRef.pricePerBar;
-            priceUnit = 'Barre';
-            const bLen = pRef.barLength || 6000;
-            const piecesPerBar = Math.floor(bLen / safeValue);
-            displayMeasure = piecesPerBar > 0 ? Math.ceil(elQty / piecesPerBar) : (qty / bLen);
-            cost = displayMeasure * unitPrice;
+            cost = (qty / (pRef.barLength || 6000)) * unitPrice;
           } else if (pRef.pricePerKg) {
             unitPrice = pRef.pricePerKg;
-            priceUnit = 'KG';
-            displayMeasure = (qty / 1000) * (pRef.weightPerM || 1);
-            cost = displayMeasure * unitPrice;
+            cost = (qty / 1000) * (pRef.weightPerM || 1) * unitPrice;
           }
 
           profiles.push({
@@ -342,10 +333,9 @@ export class FormulaEngine {
             usage: this.getUsageCategory((el.label || '') + ' ' + (pRef.name || '')),
             error: isError ? "Formule Invalide" : null,
             unitPrice: unitPrice,
-            priceUnit: priceUnit,
             compositionId: composition.id,
             compositionName: composition.name,
-            totalMeasure: displayMeasure,
+            totalMeasure: safeValue * elQty,
             cost: cost
           });
         }
@@ -735,12 +725,7 @@ export class FormulaEngine {
     if (unitUpper === 'ML' || unitUpper === 'M' || unitUpper === 'JOINT') {
       totalMeasure = pieceCount * (itemLength / 1000);
     } else if (unitUpper === 'BARRE') {
-      const piecesPerBar = Math.floor(barLength / itemLength);
-      if (piecesPerBar > 0) {
-        totalMeasure = Math.ceil(pieceCount / piecesPerBar);
-      } else {
-        totalMeasure = pieceCount * (itemLength / barLength);
-      }
+      totalMeasure = pieceCount * (itemLength / barLength);
     } else {
       totalMeasure = pieceCount;
     }
