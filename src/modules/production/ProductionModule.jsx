@@ -2376,12 +2376,23 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
           return winA - winB;
         });
         
-        // Re-address sorted bars
-        allBarsFlat.forEach((bar, idx) => {
-          const slotIdxTotal = Math.floor(idx / barsPerSlot);
-          const trolleyIdx = Math.floor(slotIdxTotal / kitConfig.slotsPerTrolley);
+        // Re-address sorted bars - Ne jamais mélanger des profilés différents dans une même case
+        let currentSlotIdxTotal = 0;
+        let barsInCurrentSlot = 0;
+        let currentProfId = null;
+
+        allBarsFlat.forEach((bar) => {
+          // Si on change de profilé OU si la case est pleine -> nouvelle case
+          if (currentProfId !== null && (bar.profId !== currentProfId || barsInCurrentSlot >= kitConfig.barsPerSlot)) {
+            currentSlotIdxTotal++;
+            barsInCurrentSlot = 0;
+          }
+          currentProfId = bar.profId;
+          barsInCurrentSlot++;
+
+          const trolleyIdx = Math.floor(currentSlotIdxTotal / kitConfig.slotsPerTrolley);
           bar.trolley = trolleyIdx + 1;
-          bar.slot = (slotIdxTotal % kitConfig.slotsPerTrolley) + 1;
+          bar.slot = (currentSlotIdxTotal % kitConfig.slotsPerTrolley) + 1;
           bar.address = `CH${bar.trolley}-C${String(bar.slot).padStart(2, '0')}`;
         });
 
