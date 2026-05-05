@@ -146,13 +146,14 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
 
   const bomResult = useMemo(() => {
     const cfg = activeConfigs[0]?.config || currentConfig;
-    if (!cfg) return { bom: null, error: null };
+    if (!cfg) return { bom: null, errors: [] };
     try { 
-      const b = engine.calculateBOM(cfg); 
-      return { bom: b, error: null };
+      const errors = [];
+      const b = engine.calculateBOM(cfg, errors); 
+      return { bom: b, errors };
     } catch (e) { 
       console.error(e); 
-      return { bom: null, error: e.message || 'Erreur inattendue' }; 
+      return { bom: null, errors: [{ context: 'Erreur Fatale', formula: 'Calcul global', error: e.message || 'Erreur inattendue' }] }; 
     }
   }, [activeConfigs, engine, currentConfig]);
   
@@ -169,7 +170,8 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
       const colorInfo = database.colors?.find(c => c.id === cfg.colorId);
       const colorName = colorInfo?.name || cfg.colorId || 'Standard';
       try {
-        const b = engine.calculateBOM(cfg);
+        const bErrors = [];
+        const b = engine.calculateBOM(cfg, bErrors);
         if (!b) return;
 
         // Use grouped labels
@@ -247,7 +249,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
       const colorInfo = database.colors?.find(c => c.id === cfg.colorId);
       const colorName = colorInfo?.name || cfg.colorId || 'Standard';
       try {
-        const b = engine.calculateBOM(cfg);
+        const b = engine.calculateBOM(cfg, []);
         const items = [...(b.accessories || [])];
         if (b.gasket) items.push(b.gasket);
         // Add non-profile shutter items
@@ -283,7 +285,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
       const colorInfo = database.colors?.find(c => c.id === cfg.colorId);
       const colorName = colorInfo?.name || cfg.colorId || 'Standard';
       try {
-        const b = engine.calculateBOM(cfg);
+        const b = engine.calculateBOM(cfg, []);
         (b.glassDetails || []).forEach(g => {
           const w = Math.round(g.width || 0);
           const h = Math.round(g.height || 0);
@@ -526,7 +528,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
     // Group configurations based on their technical identity
     const groupedConfigs = [];
     activeConfigs.forEach(item => {
-      const b = engine.calculateBOM(item.config);
+      const b = engine.calculateBOM(item.config, []);
       
       // Use a very specific technical key including itemId to keep different items separate
       // and stringify the whole config to catch every single detail
@@ -1179,6 +1181,20 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
           </button>
         ))}
       </div>
+      
+      {bomResult?.errors && bomResult.errors.length > 0 && (
+        <div style={{ marginBottom: '1.5rem', padding: '1rem', background: '#fffbeb', border: '1px solid #fef3c7', borderRadius: '1rem', color: '#92400e' }}>
+          <h4 style={{ margin: '0 0 0.5rem', fontSize: '0.9rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+             ⚠️ Erreurs de calcul détectées
+          </h4>
+          <p style={{ margin: '0 0 0.5rem', fontSize: '0.8rem' }}>Certaines formules de votre catalogue présentent des erreurs. Veuillez vérifier les configurations suivantes dans l'administration :</p>
+          <ul style={{ margin: 0, paddingLeft: '1.2rem', fontSize: '0.75rem' }}>
+            {bomResult.errors.map((err, i) => (
+              <li key={i}><strong>{err.context}</strong> : {err.error} (Formule: <code>{err.formula}</code>)</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
 
       {/* Product Filter and PDF Export - Moved outside to apply to both pages */}
@@ -2344,10 +2360,20 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
           });
         });
 
-        // Sort bars by priority, then by name
+        // Sort bars by priority, then by reference, then by window index
         allBarsFlat.sort((a, b) => {
+          // 1. Priorité absolue : type de profilé (Cadre > Ouvrant > Finition)
           if (a.priority !== b.priority) return a.priority - b.priority;
-          return a.profileName.localeCompare(b.profileName);
+          
+          // 2. Même type → regrouper par référence (pour coupes consécutives à la scie)
+          const refA = a.profId || '';
+          const refB = b.profId || '';
+          if (refA !== refB) return refA.localeCompare(refB);
+          
+          // 3. Même référence → regrouper par fenêtre d'origine
+          const winA = a.pieces[0]?.windowIdx ?? 999;
+          const winB = b.pieces[0]?.windowIdx ?? 999;
+          return winA - winB;
         });
         
         // Re-address sorted bars
