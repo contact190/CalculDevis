@@ -16,7 +16,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
   // 'total' = consolidated, or an item ID for a single product
   const [productFilter, setProductFilter] = useState('total');
   // Kitting / Logistics
-  const [kitConfig, setKitConfig] = useState({ trolleys: 2, slotsPerTrolley: 10, barsPerSlot: 1 });
+  const [kitConfig, setKitConfig] = useState({ trolleys: 2, slotsPerTrolley: 10, piecesPerSlot: 10 });
   const [selectedLabelItem, setSelectedLabelItem] = useState(null);
   const [manualStockOffcuts, setManualStockOffcuts] = useState(() => {
     try {
@@ -2378,17 +2378,21 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         
         // Re-address sorted bars - Ne jamais mélanger des profilés différents dans une même case
         let currentSlotIdxTotal = 0;
-        let barsInCurrentSlot = 0;
+        let piecesInCurrentSlot = 0;
         let currentProfId = null;
 
         allBarsFlat.forEach((bar) => {
-          // Si on change de profilé OU si la case est pleine -> nouvelle case
-          if (currentProfId !== null && (bar.profId !== currentProfId || barsInCurrentSlot >= kitConfig.barsPerSlot)) {
-            currentSlotIdxTotal++;
-            barsInCurrentSlot = 0;
+          const barPiecesCount = bar.pieces.length;
+          
+          // Si on change de profilé OU si la case est trop pleine avec cette barre -> nouvelle case
+          if (currentProfId !== null && (bar.profId !== currentProfId || piecesInCurrentSlot + barPiecesCount > kitConfig.piecesPerSlot)) {
+            if (piecesInCurrentSlot > 0) {
+              currentSlotIdxTotal++;
+              piecesInCurrentSlot = 0;
+            }
           }
           currentProfId = bar.profId;
-          barsInCurrentSlot++;
+          piecesInCurrentSlot += barPiecesCount;
 
           const trolleyIdx = Math.floor(currentSlotIdxTotal / kitConfig.slotsPerTrolley);
           bar.trolley = trolleyIdx + 1;
@@ -2676,9 +2680,9 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                     value={kitConfig.slotsPerTrolley} onChange={e => setKitConfig(p => ({ ...p, slotsPerTrolley: parseInt(e.target.value) || 1 }))} />
                 </label>
                 <label style={{ fontWeight: 600, fontSize: '0.875rem', color: '#374151' }}>
-                  Barres par case
-                  <input type="number" min={1} max={10} className="input" style={{ marginLeft: '0.5rem', width: '70px' }}
-                    value={kitConfig.barsPerSlot} onChange={e => setKitConfig(p => ({ ...p, barsPerSlot: parseInt(e.target.value) || 1 }))} />
+                  Pièces par case
+                  <input type="number" min={1} max={50} className="input" style={{ marginLeft: '0.5rem', width: '70px' }}
+                    value={kitConfig.piecesPerSlot} onChange={e => setKitConfig(p => ({ ...p, piecesPerSlot: parseInt(e.target.value) || 1 }))} />
                 </label>
               </div>
             </div>
