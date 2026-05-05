@@ -720,24 +720,24 @@ export class FormulaEngine {
     }
 
     // 5. Calculate Total Measure for Pricing
-    let totalMeasure = 0;
     const unitUpper = (item.priceUnit || 'Unité').toUpperCase().trim();
-    if (unitUpper === 'ML' || unitUpper === 'M' || unitUpper === 'JOINT') {
-      totalMeasure = pieceCount * (itemLength / 1000);
-    } else if (unitUpper === 'BARRE') {
-      totalMeasure = pieceCount * (itemLength / barLength);
-    } else {
-      totalMeasure = pieceCount;
-    }
+    let finalCost = 0;
+    const linearTotalMm = pieceCount * itemLength;
 
-    const finalCost = totalMeasure * itemPrice;
+    if (unitUpper === 'ML' || unitUpper === 'M' || unitUpper === 'JOINT') {
+      finalCost = (linearTotalMm / 1000) * itemPrice;
+    } else if (unitUpper === 'BARRE') {
+      finalCost = (linearTotalMm / barLength) * itemPrice;
+    } else {
+      finalCost = pieceCount * itemPrice;
+    }
 
     shutterPack.push({
       ...item,
       itemKey: key,
       name: displayName + nameSuffix,
       qty: pieceCount,
-      totalMeasure: totalMeasure * (unitUpper === 'ML' || unitUpper === 'M' || unitUpper === 'JOINT' ? 1000 : 1), 
+      totalMeasure: linearTotalMm, 
       length: itemLength,
       barLength: barLength,
       price: itemPrice,
@@ -779,16 +779,16 @@ export class FormulaEngine {
       const bUnit = item.priceUnit || 'ML';
       const bUnitUpper = bUnit.toUpperCase().trim();
       
-      let bTotalMeasure = 0;
-      if (bUnitUpper === 'ML' || bUnitUpper === 'M' || bUnitUpper === 'JOINT') {
-        bTotalMeasure = pieceCount * (itemLength / 1000);
-      } else if (bUnitUpper === 'BARRE') {
-        bTotalMeasure = pieceCount * (itemLength / barLength);
-      } else {
-        bTotalMeasure = pieceCount;
-      }
+      const bLinearTotalMm = pieceCount * itemLength;
+      let bCost = 0;
 
-      const bCost = bTotalMeasure * bPrice;
+      if (bUnitUpper === 'ML' || bUnitUpper === 'M' || bUnitUpper === 'JOINT') {
+        bCost = (bLinearTotalMm / 1000) * bPrice;
+      } else if (bUnitUpper === 'BARRE') {
+        bCost = (bLinearTotalMm / barLength) * bPrice;
+      } else {
+        bCost = pieceCount * bPrice;
+      }
 
       shutterPack.push({
         id: `${item.id}-baguette`,
@@ -796,7 +796,7 @@ export class FormulaEngine {
         name: `Baguette pour ${item.name}`,
         qty: pieceCount,
         length: itemLength,
-        totalMeasure: bTotalMeasure * (bUnitUpper === 'ML' || bUnitUpper === 'M' || bUnitUpper === 'JOINT' ? 1000 : 1),
+        totalMeasure: bLinearTotalMm,
         priceUnit: bUnit,
         price: bPrice,
         cost: bCost
