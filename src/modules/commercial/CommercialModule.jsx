@@ -1068,7 +1068,12 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                       <td data-label="Source"><span style={{ fontSize: '0.6rem', padding: '0.1rem 0.4rem', background: '#f1f5f9', borderRadius: '1rem', color: '#64748b', whiteSpace: 'nowrap' }}>{p.source || 'Standard'}</span></td>
                       <td data-label="Formule" style={{ color: '#64748b', fontSize: '0.65rem' }}>{p.formula}</td>
                       <td data-label="Calcul" style={{ color: '#3b82f6', fontSize: '0.65rem' }}>{p.resolvedFormula}</td><td data-label="Nbre">{p.qty}u</td>
-                      <td data-label="Mesure Totale">{Math.round(p.totalMeasure || 0)} mm</td><td data-label="Prix Unit.">{p.unitPrice?.toFixed(2)}</td>
+                      <td data-label="Mesure Totale">
+                        {p.priceUnit === 'Barre' ? `${p.totalMeasure?.toFixed(2)} bar` : 
+                         p.priceUnit === 'KG' ? `${p.totalMeasure?.toFixed(2)} kg` : 
+                         `${Math.round(p.totalMeasure || 0)} mm`}
+                      </td>
+                      <td data-label="Prix Unit.">{p.unitPrice?.toFixed(2)}</td>
                       <td data-label="Prix Total" style={{ textAlign: 'right', fontWeight: 600 }}>{(p.cost || 0).toFixed(2)} DZD</td>
                     </tr>
                   ))}
@@ -1078,7 +1083,11 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                       <td data-label="Source"><span style={{ fontSize: '0.6rem', padding: '0.1rem 0.4rem', background: '#f1f5f9', borderRadius: '1rem', color: '#64748b', whiteSpace: 'nowrap' }}>{acc.source || 'Standard'}</span></td>
                       <td data-label="Formule" style={{ color: '#64748b', fontSize: '0.65rem' }}>{acc.formula}</td>
                       <td data-label="Calcul" style={{ color: '#3b82f6', fontSize: '0.65rem' }}>{acc.resolvedFormula}</td><td data-label="Nbre">{acc.multiplier}u</td>
-                      <td data-label="Mesure Totale">{(acc.totalMeasure || 0).toFixed(2)} {acc.unit === 'Ml' || acc.unit === 'Joint' ? 'mm' : 'u'}</td>
+                      <td data-label="Mesure Totale">
+                        {['ML', 'JOINT'].includes((acc.unit || '').toUpperCase()) 
+                          ? `${(acc.totalMeasure || 0).toFixed(0)} mm` 
+                          : `${(acc.qty || 0).toFixed(2)} u`}
+                      </td>
                       <td data-label="Prix Unit.">{acc.unitPrice?.toFixed(2)}</td><td data-label="Prix Total" style={{ textAlign: 'right', fontWeight: 600 }}>{(acc.cost || 0).toFixed(2)} DZD</td>
                     </tr>
                   ))}
@@ -1093,7 +1102,9 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                         {(s.qty || 0).toFixed(2)} {s.priceUnit === 'ML' ? 'u' : s.priceUnit}
                       </td>
                       <td data-label="Mesure Totale">
-                        {s.totalMeasure ? `${Math.round(s.totalMeasure)} mm` : '-'}
+                        {s.priceUnit === 'Barre' ? `${s.totalMeasure?.toFixed(2)} bar` : 
+                         s.priceUnit === 'KG' ? `${s.totalMeasure?.toFixed(2)} kg` : 
+                         s.totalMeasure ? `${Math.round(s.totalMeasure)} mm` : '-'}
                       </td>
                       <td data-label="Prix Unit.">{s.price?.toFixed(2)}</td>
                       <td data-label="Prix Total" style={{ textAlign: 'right', fontWeight: 600 }}>{(s.cost || 0).toFixed(2)} DZD</td>
