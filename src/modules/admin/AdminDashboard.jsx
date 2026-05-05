@@ -206,6 +206,7 @@ const AdminDashboard = ({ data, setData }) => {
       priceUnit: 'ML', 
       formula: '1', 
       barLength: 6400,
+      compatibilityFormula: '',
       ...(family === 'caissons' ? { height: 185, jointPrice: 0, jointFormula: 'L/1000' } : {}),
       ...(family === 'lames' ? { hasBaguette: false, baguettePrice: 0 } : {}),
       _isNew: true
@@ -707,7 +708,8 @@ const AdminDashboard = ({ data, setData }) => {
                     <tr>
                       <th>Nom de l'option</th>
                       <th>Lier à un article (Optionnel)</th>
-                      <th>Formule Quantité (ex: 1, L/1000)</th>
+                      <th>Formule Qté (ex: 1)</th>
+                      <th>Formule Compatibilité (Optionnel)</th>
                       <th>Prix Unit. (DZD)</th>
                       <th>Unité</th>
                       <th>Action</th>
@@ -765,6 +767,15 @@ const AdminDashboard = ({ data, setData }) => {
                             handleUpdateItem(editingAddonItem.family, currentItem.id, 'addOns', newAddons, editingAddonItem.idx);
                           }
                         }} /></td>
+                        <td><input className="input" value={addon.compatibilityFormula || ''} onChange={e => {
+                          const newAddons = [...(currentItem.addOns || [])];
+                          newAddons[ai].compatibilityFormula = e.target.value;
+                          if (editingAddonItem.isShutter) {
+                            updateShutterItem(editingAddonItem.family, editingAddonItem.idx, 'addOns', newAddons);
+                          } else {
+                            handleUpdateItem(editingAddonItem.family, currentItem.id, 'addOns', newAddons, editingAddonItem.idx);
+                          }
+                        }} placeholder="Ex: L < 1000" /></td>
                         <td><input className="input" type="number" value={addon.price} onChange={e => {
                           const newAddons = [...(currentItem.addOns || [])];
                           newAddons[ai].price = parseFloat(e.target.value) || 0;
@@ -801,9 +812,9 @@ const AdminDashboard = ({ data, setData }) => {
                       </tr>
                     ))}
                     <tr>
-                      <td colSpan="6">
+                      <td colSpan="7">
                         <button className="btn btn-secondary" style={{ width: '100%', padding: '1rem', fontWeight: 'bold' }} onClick={() => {
-                          const newAddons = [...(currentItem.addOns || []), { name: 'Nouvel add-on', formula: '1', price: 0, unit: 'Unité' }];
+                          const newAddons = [...(currentItem.addOns || []), { name: 'Nouvel add-on', formula: '1', compatibilityFormula: '', price: 0, unit: 'Unité' }];
                           if (editingAddonItem.isShutter) {
                             updateShutterItem(editingAddonItem.family, editingAddonItem.idx, 'addOns', newAddons);
                           } else {
@@ -2236,11 +2247,12 @@ const AdminDashboard = ({ data, setData }) => {
                             </>
                           ) : null}
 
-                          {key !== 'extras' && <th>Lg Barre (mm)</th>}
-                          {key !== 'extras' && <th>Seuil Chute</th>}
+                          {!['extras', 'moteurs', 'kits'].includes(key) && <th>Lg Barre (mm)</th>}
+                          {!['extras', 'moteurs', 'kits'].includes(key) && <th>Seuil Chute</th>}
 
                           <th>Formule Quantité (Nb)</th>
-                          <th>Formule Dimension (L/H)</th>
+                          {key !== 'kits' && key !== 'moteurs' && <th>Formule Dimension (L/H)</th>}
+                          {key === 'moteurs' && <th>Formule Compatibilité</th>}
                           <th>Unité</th>
                           <th>Prix (DZD)</th>
                           <th>Add-ons (JSON)</th>
@@ -2300,11 +2312,12 @@ const AdminDashboard = ({ data, setData }) => {
                                 <td><input className="input" value={item.opt2Prices || ''} onChange={e => updateShutterItem(key, i, 'opt2Prices', e.target.value)} style={{ width: '120px', fontSize: '0.7rem' }} placeholder="Ex: 100, 300" /></td>
                               </>
                             ) : null}
-                            {key !== 'extras' && <td><input className="input" type="number" value={item.barLength || 6400} onChange={e => updateShutterItem(key, i, 'barLength', e.target.value)} style={{ width: '90px', fontSize: '0.8rem' }} /></td>}
-                            {key !== 'extras' && <td><input className="input" type="number" value={item.scrapThreshold || 0} onChange={e => updateShutterItem(key, i, 'scrapThreshold', e.target.value)} style={{ width: '90px', fontSize: '0.8rem' }} placeholder="Ex: 500" /></td>}
+                            {!['extras', 'moteurs', 'kits'].includes(key) && <td><input className="input" type="number" value={item.barLength || 6400} onChange={e => updateShutterItem(key, i, 'barLength', e.target.value)} style={{ width: '90px', fontSize: '0.8rem' }} /></td>}
+                            {!['extras', 'moteurs', 'kits'].includes(key) && <td><input className="input" type="number" value={item.scrapThreshold || 0} onChange={e => updateShutterItem(key, i, 'scrapThreshold', e.target.value)} style={{ width: '90px', fontSize: '0.8rem' }} placeholder="Ex: 500" /></td>}
 
                             <td><input className="input" value={item.formula || '1'} onChange={e => updateShutterItem(key, i, 'formula', e.target.value)} style={{ width: '120px' }} placeholder="Ex: ceil(H/39)" /></td>
-                            <td><input className="input" value={item.cuttingFormula || ''} onChange={e => updateShutterItem(key, i, 'cuttingFormula', e.target.value)} style={{ width: '120px' }} placeholder="Ex: L-10" /></td>
+                            {key !== 'kits' && key !== 'moteurs' && <td><input className="input" value={item.cuttingFormula || ''} onChange={e => updateShutterItem(key, i, 'cuttingFormula', e.target.value)} style={{ width: '120px' }} placeholder="Ex: L-10" /></td>}
+                            {key === 'moteurs' && <td><input className="input" value={item.compatibilityFormula || ''} onChange={e => updateShutterItem(key, i, 'compatibilityFormula', e.target.value)} style={{ width: '120px' }} placeholder="Ex: L < 1500" /></td>}
                             <td>
                               <select className="input" value={item.priceUnit} onChange={e => updateShutterItem(key, i, 'priceUnit', e.target.value)} style={{ width: '90px' }}>
                                 <option>ML</option>
@@ -2326,7 +2339,7 @@ const AdminDashboard = ({ data, setData }) => {
                           </tr>
                         ))}
                         <tr>
-                          <td colSpan={key === 'glissieres' ? 15 : (key === 'caissons' ? 10 : 9)}>
+                          <td colSpan={key === 'glissieres' ? 15 : (key === 'moteurs' ? 7 : (key === 'kits' ? 6 : (key === 'caissons' ? 10 : 9)))}>
                             <button className="btn btn-secondary" onClick={() => addShutterItem(key)} style={{ width: '100%', marginTop: '0.4rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
                               <Plus size={16} /> Ajouter
                             </button>

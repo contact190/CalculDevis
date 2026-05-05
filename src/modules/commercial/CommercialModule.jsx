@@ -852,6 +852,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                   { key: 'lameFinaleId', label: 'Lame Finale', items: database.shutterComponents?.lameFinales || [] },
                   { key: 'glissiereId', label: 'Glissière', items: database.shutterComponents?.glissieres || [] },
                   { key: 'axeId', label: 'Axe', items: database.shutterComponents?.axes || [] },
+                  { key: 'moteurId', label: 'Moteur', items: database.shutterComponents?.moteurs || [] },
                   { key: 'kitId', label: 'Kit Manœuvre', items: database.shutterComponents?.kits || [] }
                 ].map(({ key, label, items }) => {
 
@@ -925,12 +926,25 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
 
                       {/* Special Option: Couvre Joint (Only shown once, e.g. next to caisson) */}
                       {key === 'caissonId' && (
-                        <div className="form-group" style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '0.5rem' }}>
-                          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, color: '#1e40af', background: '#eff6ff', padding: '0.4rem 0.75rem', borderRadius: '0.4rem', border: '1px solid #bfdbfe', width: '100%' }}>
-                            <input type="checkbox" checked={config.shutterConfig?.hasCouvreJoint || false}
-                              onChange={e => toggleCouvreJoint(e.target.checked)} />
-                            Pose avec Couvre-Joint (-3mm L)
-                          </label>
+                        <div className="form-group">
+                          <label className="label" style={{ fontSize: '0.8rem' }}>Type de pose (Réduction)</label>
+                          <select 
+                            className="input" 
+                            value={config.shutterConfig?.couvreJointType || (config.shutterConfig?.hasCouvreJoint ? 'total' : 'none')}
+                            onChange={e => setConfig(prev => ({ 
+                              ...prev, 
+                              shutterConfig: { 
+                                ...(prev.shutterConfig || {}), 
+                                couvreJointType: e.target.value,
+                                hasCouvreJoint: e.target.value !== 'none'
+                              } 
+                            }))}
+                            style={{ background: '#eff6ff', color: '#1e40af', fontWeight: 600, border: '1px solid #bfdbfe' }}
+                          >
+                            <option value="none">Sans réduction</option>
+                            <option value="half">1 côté pose avec CJ (-1.5 mm)</option>
+                            <option value="total">Pose avec Couvre-Joint (-3mm L)</option>
+                          </select>
                         </div>
                       )}
                       {key === 'lameId' && effectiveItem?.hasBaguette && (

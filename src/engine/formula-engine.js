@@ -586,13 +586,26 @@ export class FormulaEngine {
 
     // Rule: Couvre Joint reduction ONLY on the caisson length
     let itemScopeL = L;
-    if (key === 'caissonId' && config.shutterConfig?.hasCouvreJoint) {
-      itemScopeL -= 3;
+    if (key === 'caissonId') {
+      const cjType = config.shutterConfig?.couvreJointType;
+      if (cjType === 'total') {
+        itemScopeL -= 3;
+      } else if (cjType === 'half') {
+        itemScopeL -= 1.5;
+      } else if (config.shutterConfig?.hasCouvreJoint) {
+        itemScopeL -= 3;
+      }
     }
 
     const evalScope = { ...vars, L: itemScopeL, H: effectiveH, HC, HT: HT || (H + HC) };
 
-    // 1. Calculate Piece Length (Dimension de coupe)
+    // 1. Compatibility Check (Standalone Logic V3.3)
+    if (item.compatibilityFormula) {
+      const isCompatible = this.evaluate(item.compatibilityFormula, evalScope, `Compatibilité ${item.name}`);
+      if (!isCompatible) return;
+    }
+
+    // 2. Calculate Piece Length (Dimension de coupe)
     let itemLength = 0;
     if (item.cuttingFormula) {
       itemLength = this.evaluate(item.cuttingFormula, evalScope);
@@ -690,6 +703,11 @@ export class FormulaEngine {
     // 6. Process Add-ons
     if (item.addOns && Array.isArray(item.addOns)) {
       item.addOns.forEach(addon => {
+        // Compatibility Check for Add-on
+        if (addon.compatibilityFormula) {
+          const isCompatible = this.evaluate(addon.compatibilityFormula, evalScope, `Compatibilité Add-on ${addon.name}`);
+          if (!isCompatible) return;
+        }
         const addonQty = this.evaluate(addon.formula || '1', evalScope);
         if (addonQty > 0) {
           const addonPrice = addon.price || 0;
@@ -968,23 +986,24 @@ export class FormulaEngine {
     let accessories = [];
     let glasses = [];
 
-    // FIX: Only enter compound mode if explicitly enabled by compoundType
-    if (config.compoundType && config.compoundType !== 'none') {
-      const compRes = this.calculateCompoundBOM(config, L, windowH, totalH, initialL);
-      profiles = compRes.profiles;
-      accessories = compRes.accessories;
-      glasses = compRes.glasses;
-    } else if (config.useCustomLayout && config.customLayout && config.customLayout.cols) {
-      const gridResults = this.calculateGridBOM(config.customLayout, L, windowH, config, totalH, initialL, totalH);
-      profiles = gridResults.profiles;
-      accessories = gridResults.accessories;
-      glasses = gridResults.glasses;
-    } else {
-      const res = this.calculateComponentBOM(config, L, windowH, config.compositionId, glassId, config.optionalSides, totalH, initialL, totalH);
-      profiles = res.profiles;
-      accessories = res.accessories;
-      if (res.gasket) accessories.push(res.gasket);
-      if (res.glass) glasses.push(res.glass);
+    if (!isOnlyShutter) {
+      if (config.compoundType && config.compoundType !== 'none') {
+        const compRes = this.calculateCompoundBOM(config, L, windowH, totalH, initialL);
+        profiles = compRes.profiles;
+        accessories = compRes.accessories;
+        glasses = compRes.glasses;
+      } else if (config.useCustomLayout && config.customLayout && config.customLayout.cols) {
+        const gridResults = this.calculateGridBOM(config.customLayout, L, windowH, config, totalH, initialL, totalH);
+        profiles = gridResults.profiles;
+        accessories = gridResults.accessories;
+        glasses = gridResults.glasses;
+      } else {
+        const res = this.calculateComponentBOM(config, L, windowH, config.compositionId, glassId, config.optionalSides, totalH, initialL, totalH);
+        profiles = res.profiles;
+        accessories = res.accessories;
+        if (res.gasket) accessories.push(res.gasket);
+        if (res.glass) glasses.push(res.glass);
+      }
     }
 
     // 5. Précadre Filter: Remove only chevilles if pre-frame installation is selected
@@ -997,7 +1016,7 @@ export class FormulaEngine {
     }
 
     // 6. Global Options & Variantes processing on the accumulated accessories
-    if (config.selectedOptions && config.selectedOptions.length > 0) {
+    if (!isOnlyShutter && config.selectedOptions && config.selectedOptions.length > 0) {
       config.selectedOptions.forEach(optId => {
         const option = this.db.options?.find(o => o.id === optId);
         if (option) {
@@ -1030,7 +1049,7 @@ export class FormulaEngine {
     }
 
     // 6. Volet Roulant
-    let shutterL = config.shutterOverrides?.customLV || L;
+    let shutterL = config.shutterOverrides?.customLV || initialL;
     let shutterH_val = isOnlyShutter ? H : windowH;
     
     if (!isOnlyShutter && config.compoundType && config.compoundType !== 'none' && config.compoundConfig?.shutterMode === 'opening_only') {
