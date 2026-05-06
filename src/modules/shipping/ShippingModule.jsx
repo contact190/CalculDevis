@@ -36,7 +36,39 @@ const ShippingModule = ({ data, setData }) => {
             const status = selectedOrder.unitStatuses?.[unitId] || 'Produit';
             const storageZoneId = selectedOrder.unitStorageZones?.[unitId];
             const zone = storageZones.find(z => z.id === storageZoneId);
+
+            // Determine if this specific instance has a shutter and its details
+            let hasShutter = false;
+            let shutterInfo = 'SANS VOLET';
+            let offset = 0;
+            const shutterOverridden = (m.shutterList || []).length > 0;
             
+            if (shutterOverridden) {
+              (m.shutterList || []).forEach(sh => {
+                const sQty = Number(sh.qty) || 0;
+                if (i >= offset && i < offset + sQty) {
+                  hasShutter = true;
+                  const caisson = sh.overrides?.caissonId || item.config.shutterConfig?.caissonId;
+                  const kit = sh.overrides?.kitId || item.config.shutterConfig?.kitId;
+                  
+                  const caissonName = data.shutterComponents?.caissons?.find(c => c.id === caisson)?.name || caisson || '';
+                  const kitName = data.shutterComponents?.kits?.find(k => k.id === kit)?.name || kit || '';
+                  
+                  shutterInfo = `${caissonName} ${kitName}`.trim() || 'AVEC VOLET';
+                }
+                offset += sQty;
+              });
+            } else if (item.config.shutterConfig?.active) {
+              hasShutter = true;
+              const caisson = item.config.shutterConfig?.caissonId;
+              const kit = item.config.shutterConfig?.kitId;
+              
+              const caissonName = data.shutterComponents?.caissons?.find(c => c.id === caisson)?.name || caisson || '';
+              const kitName = data.shutterComponents?.kits?.find(k => k.id === kit)?.name || kit || '';
+              
+              shutterInfo = `${caissonName} ${kitName}`.trim() || 'AVEC VOLET';
+            }
+
             units.push({
               id: unitId,
               orderId: selectedOrder.id,
@@ -49,7 +81,8 @@ const ShippingModule = ({ data, setData }) => {
               label: item.label,
               dimensions: `${m.L} x ${m.H}`,
               status: status,
-              shutter: m.shutterList?.[i] ? 'Oui' : 'Non',
+              shutter: hasShutter ? 'Oui' : 'Non',
+              shutterInfo: shutterInfo,
               storageZoneId: storageZoneId,
               storageZone: zone?.name || ''
             });
@@ -212,7 +245,6 @@ const ShippingModule = ({ data, setData }) => {
       doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(0,0,0);
       doc.text(`Type : ${unit.label}`, 5, 87);
       doc.text(`Cotes : ${unit.dimensions} mm`, 5, 93);
-      doc.text(`Volet : ${unit.shutter === 'Oui' ? 'AVEC VOLET' : 'SANS VOLET'}`, 5, 99);
       
       // Section 4 : QR CODE (VRAI CODE SCANNABLE)
       doc.setLineWidth(0.4);
