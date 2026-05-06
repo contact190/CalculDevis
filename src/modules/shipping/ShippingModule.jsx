@@ -1,13 +1,16 @@
 import React, { useState, useMemo } from 'react';
-import { Truck, Package, QrCode, CheckCircle, AlertTriangle, XCircle, Download, Search, Plus, Trash2, ArrowLeft, ClipboardCheck, UserCheck, ShieldCheck, Layers, Wrench, FileText } from 'lucide-react';
+import { Truck, Package, QrCode, CheckCircle, AlertTriangle, XCircle, Download, Search, Plus, Trash2, ArrowLeft, ClipboardCheck, UserCheck, ShieldCheck, Layers, Wrench, FileText, MapPin } from 'lucide-react';
 import jsPDF from 'jspdf';
 
 const ShippingModule = ({ data, setData }) => {
   const [selectedOrderId, setSelectedOrderId] = useState(null);
-  const [selectedBatchIds, setSelectedBatchIds] = useState(new Set()); // Multiple batches selection
-  const [activeView, setActiveView] = useState('list'); // 'list' | 'details' | 'scanner'
+  const [selectedBatchIds, setSelectedBatchIds] = useState(new Set());
+  const [activeView, setActiveView] = useState('list'); // 'list' | 'details' | 'scanner' | 'zones'
   const [scanningMode, setScanningMode] = useState(null); // 'loading' | 'unloading' | 'installing'
+  const [newZoneName, setNewZoneName] = useState('');
+  const [selectedUnitIds, setSelectedUnitIds] = useState(new Set());
   
+  const storageZones = data.storageZones || [];
   const shippableOrders = useMemo(() => {
     return (data.orders || []).filter(order => order.batches && order.batches.length > 0);
   }, [data.orders]);
@@ -30,6 +33,9 @@ const ShippingModule = ({ data, setData }) => {
             const unitId = `${selectedOrder.id}-${batch.id}-${item.id}-${m.id}-${i}`;
             const name = m.instanceNames?.[i] || `${item.label} #${i + 1}`;
             const status = selectedOrder.unitStatuses?.[unitId] || 'Produit';
+            const storageZoneId = selectedOrder.unitStorageZones?.[unitId];
+            const zone = storageZones.find(z => z.id === storageZoneId);
+            
             units.push({
               id: unitId,
               orderId: selectedOrder.id,
@@ -41,7 +47,9 @@ const ShippingModule = ({ data, setData }) => {
               label: item.label,
               dimensions: `${m.L} x ${m.H}`,
               status: status,
-              shutter: m.shutterList?.[i] ? 'Oui' : 'Non'
+              shutter: m.shutterList?.[i] ? 'Oui' : 'Non',
+              storageZoneId: storageZoneId,
+              storageZone: zone?.name || ''
             });
           }
         });
@@ -61,6 +69,49 @@ const ShippingModule = ({ data, setData }) => {
       order.unitStatuses = statuses;
       orders[oIdx] = order;
       return { ...prev, orders };
+    });
+  };
+
+  const handleUpdateUnitZone = (unitId, zoneId) => {
+    setData(prev => {
+      const orders = [...(prev.orders || [])];
+      const oIdx = orders.findIndex(o => o.id === selectedOrderId);
+      if (oIdx === -1) return prev;
+      const order = { ...orders[oIdx] };
+      const zones = { ...(order.unitStorageZones || {}) };
+      if (!zoneId) delete zones[unitId];
+      else zones[unitId] = zoneId;
+      order.unitStorageZones = zones;
+      orders[oIdx] = order;
+      return { ...prev, orders };
+    });
+  };
+
+  const handleBulkUpdateZone = (zoneId) => {
+    setData(prev => {
+      const orders = [...(prev.orders || [])];
+      const oIdx = orders.findIndex(o => o.id === selectedOrderId);
+      if (oIdx === -1) return prev;
+      const order = { ...orders[oIdx] };
+      const zones = { ...(order.unitStorageZones || {}) };
+      
+      selectedUnitIds.forEach(unitId => {
+        if (!zoneId) delete zones[unitId];
+        else zones[unitId] = zoneId;
+      });
+      
+      order.unitStorageZones = zones;
+      orders[oIdx] = order;
+      return { ...prev, orders };
+    });
+    setSelectedUnitIds(new Set());
+  };
+
+  const toggleUnitSelection = (id) => {
+    setSelectedUnitIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
     });
   };
 
@@ -141,13 +192,21 @@ const ShippingModule = ({ data, setData }) => {
       doc.setFontSize(28); doc.setFont('helvetica', 'bold');
       doc.text(unit.name, 50, 65, { align: 'center' });
       
-      doc.line(5, 75, 95, 75);
+      // Nouvelle Section : ZONE DE STOCKAGE
+      doc.setFillColor(241, 245, 249);
+      doc.rect(5, 70, 90, 8, 'F');
+      doc.setFontSize(10);
+      doc.setTextColor(30, 41, 59);
+      doc.text(`ZONE DE STOCKAGE : ${unit.storageZone || 'À ASSIGNER'}`, 50, 76, { align: 'center' });
+      
+      doc.setLineWidth(0.3);
+      doc.line(5, 80, 95, 80);
       
       // Section 3 : Détails Techniques
       doc.setFontSize(10); doc.setFont('helvetica', 'normal');
-      doc.text(`Type : ${unit.label}`, 5, 85);
-      doc.text(`Cotes : ${unit.dimensions} mm`, 5, 92);
-      doc.text(`Volet : ${unit.shutter === 'Oui' ? 'AVEC VOLET' : 'SANS VOLET'}`, 5, 99);
+      doc.text(`Type : ${unit.label}`, 5, 87);
+      doc.text(`Cotes : ${unit.dimensions} mm`, 5, 94);
+      doc.text(`Volet : ${unit.shutter === 'Oui' ? 'AVEC VOLET' : 'SANS VOLET'}`, 5, 101);
       
       // Section 4 : QR CODE (VRAI CODE SCANNABLE)
       doc.setLineWidth(0.5);
@@ -313,7 +372,27 @@ const ShippingModule = ({ data, setData }) => {
 
             <div className="glass shadow-md" style={{ padding: '1.5rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                <h3 style={{ margin: 0, fontWeight: 700 }}>Contrôle par Scanner</h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <h3 style={{ margin: 0, fontWeight: 700 }}>Contrôle par Scanner</h3>
+                  {selectedUnitIds.size > 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: '#eff6ff', padding: '0.4rem 1rem', borderRadius: '0.75rem', border: '1px solid #bfdbfe' }}>
+                      <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1e40af' }}>{selectedUnitIds.size} sélectionné(s) :</span>
+                      <select 
+                        className="input" 
+                        style={{ padding: '0.2rem', fontSize: '0.8rem', width: 'auto', minWidth: '150px' }}
+                        onChange={(e) => handleBulkUpdateZone(e.target.value)}
+                        value=""
+                      >
+                        <option value="" disabled>Assigner à une Zone...</option>
+                        {storageZones.map(z => (
+                          <option key={z.id} value={z.id}>{z.name}</option>
+                        ))}
+                        <option value="none">-- Retirer Zone --</option>
+                      </select>
+                      <button onClick={() => setSelectedUnitIds(new Set())} className="btn btn-secondary" style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem' }}>Annuler</button>
+                    </div>
+                  )}
+                </div>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                    <button onClick={() => { setScanningMode('loading'); setActiveView('scanner'); }} className="btn btn-secondary" style={{ background: scanningMode === 'loading' ? '#3b82f6' : 'white', color: scanningMode === 'loading' ? 'white' : 'inherit' }}><Truck size={14} /> Chargement</button>
                    <button onClick={() => { setScanningMode('unloading'); setActiveView('scanner'); }} className="btn btn-secondary" style={{ background: scanningMode === 'unloading' ? '#10b981' : 'white', color: scanningMode === 'unloading' ? 'white' : 'inherit' }}><UserCheck size={14} /> Livraison</button>
@@ -321,13 +400,61 @@ const ShippingModule = ({ data, setData }) => {
                 </div>
               </div>
               <table className="data-table">
-                <thead><tr><th>Unité</th><th>Repère</th><th>Produit</th><th>Statut Actuel</th><th>Actions</th></tr></thead>
+                <thead>
+                  <tr>
+                    <th style={{ width: '40px' }}>
+                      <input 
+                        type="checkbox" 
+                        checked={selectedUnitIds.size === allUnits.length && allUnits.length > 0} 
+                        onChange={(e) => {
+                          if (e.target.checked) setSelectedUnitIds(new Set(allUnits.map(u => u.id)));
+                          else setSelectedUnitIds(new Set());
+                        }}
+                      />
+                    </th>
+                    <th>Unité</th><th>Repère</th><th>Produit</th><th>Zone Stockage</th><th>Statut Actuel</th><th>Actions</th></tr>
+                </thead>
                 <tbody>
                   {allUnits.map(unit => (
-                    <tr key={unit.id}>
+                    <tr key={unit.id} style={{ background: selectedUnitIds.has(unit.id) ? '#f0f9ff' : 'transparent' }}>
+                      <td>
+                        <input 
+                          type="checkbox" 
+                          checked={selectedUnitIds.has(unit.id)} 
+                          onChange={() => toggleUnitSelection(unit.id)}
+                        />
+                      </td>
                       <td style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{unit.id.split('-').pop()}</td>
-                      <td style={{ fontWeight: 700 }}>{unit.name}</td>
+                      <td 
+                        style={{ fontWeight: 700, cursor: 'pointer', color: '#1e40af' }} 
+                        onClick={() => {
+                          const samePosteIds = allUnits.filter(u => u.name === unit.name).map(u => u.id);
+                          setSelectedUnitIds(prev => {
+                            const next = new Set(prev);
+                            const allAlreadySelected = samePosteIds.every(id => next.has(id));
+                            if (allAlreadySelected) samePosteIds.forEach(id => next.delete(id));
+                            else samePosteIds.forEach(id => next.add(id));
+                            return next;
+                          });
+                        }}
+                        title="Sélectionner tous les éléments de ce repère"
+                      >
+                        {unit.name}
+                      </td>
                       <td>{unit.label}</td>
+                      <td>
+                        <select 
+                          className="input" 
+                          style={{ padding: '0.2rem', fontSize: '0.75rem', width: 'auto' }}
+                          value={unit.storageZoneId || ''}
+                          onChange={(e) => handleUpdateUnitZone(unit.id, e.target.value)}
+                        >
+                          <option value="">-- Non assignée --</option>
+                          {storageZones.map(z => (
+                            <option key={z.id} value={z.id}>{z.name}</option>
+                          ))}
+                        </select>
+                      </td>
                       <td><span style={{ padding: '0.3rem 0.7rem', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 700, 
                         background: unit.status === 'Posé' ? '#ede9fe' : (unit.status === 'Livré' ? '#d1fae5' : (unit.status === 'Chargé' ? '#dbeafe' : '#fef3c7')),
                         color: unit.status === 'Posé' ? '#5b21b6' : (unit.status === 'Livré' ? '#065f46' : (unit.status === 'Chargé' ? '#1e40af' : '#92400e')) }}>{unit.status}</span></td>
@@ -364,11 +491,86 @@ const ShippingModule = ({ data, setData }) => {
     );
   }
 
+  if (activeView === 'zones') {
+    return (
+      <div className="animate-fade-in">
+        <header style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
+          <button onClick={() => setActiveView('list')} className="btn" style={{ padding: '0.5rem' }}>
+            <ArrowLeft size={18} />
+          </button>
+          <div>
+            <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: 0 }}>Gestion des Zones de Stockage</h1>
+            <p style={{ color: '#64748b', margin: 0 }}>Configurez les emplacements dans l'atelier pour les fenêtres finies</p>
+          </div>
+        </header>
+        
+        <div className="glass shadow-md" style={{ padding: '2rem', maxWidth: '600px' }}>
+          <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem' }}>
+            <input 
+              type="text" 
+              className="input" 
+              placeholder="Nom de la nouvelle zone (ex: Rack A, Zone 1...)"
+              value={newZoneName}
+              onChange={(e) => setNewZoneName(e.target.value)}
+              style={{ flex: 1 }}
+            />
+            <button 
+              className="btn btn-primary"
+              onClick={() => {
+                if (!newZoneName.trim()) return;
+                const newZone = { id: `Z-${Date.now()}`, name: newZoneName.trim() };
+                setData(prev => ({ ...prev, storageZones: [...(prev.storageZones || []), newZone] }));
+                setNewZoneName('');
+              }}
+            >
+              <Plus size={18} /> Ajouter
+            </button>
+          </div>
+
+          <div>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem' }}>Zones Existantes</h3>
+            {storageZones.length === 0 ? (
+              <p style={{ color: '#94a3b8', fontStyle: 'italic' }}>Aucune zone configurée.</p>
+            ) : (
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {storageZones.map(zone => (
+                  <li key={zone.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', background: '#f8fafc', borderRadius: '0.5rem', border: '1px solid #e2e8f0' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <MapPin size={18} color="#3b82f6" />
+                      <span style={{ fontWeight: 600, color: '#1e293b' }}>{zone.name}</span>
+                    </div>
+                    <button 
+                      className="btn btn-secondary" 
+                      style={{ padding: '0.4rem', color: '#ef4444' }}
+                      onClick={() => {
+                        if (confirm(`Supprimer la zone "${zone.name}" ?`)) {
+                          setData(prev => ({ ...prev, storageZones: (prev.storageZones || []).filter(z => z.id !== zone.id) }));
+                        }
+                      }}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="animate-fade-in">
-      <header style={{ marginBottom: '2rem' }}>
-        <h1 style={{ fontSize: '1.875rem', fontWeight: 700, color: '#1e293b' }}>Suivi Expédition & Pose</h1>
-        <p style={{ color: '#64748b' }}>Traçabilité totale de l'atelier jusqu'à la fixation finale.</p>
+      <header style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <h1 style={{ fontSize: '1.875rem', fontWeight: 700, color: '#1e293b' }}>Suivi Expédition & Pose</h1>
+          <p style={{ color: '#64748b' }}>Traçabilité totale de l'atelier jusqu'à la fixation finale.</p>
+        </div>
+        <button onClick={() => setActiveView('zones')} className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <MapPin size={18} />
+          Zones de Stockage
+        </button>
       </header>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '1.5rem' }}>
         {shippableOrders.map(order => {
