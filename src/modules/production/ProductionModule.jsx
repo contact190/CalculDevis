@@ -2510,8 +2510,12 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
           allBarsFlat.forEach((bar) => {
             const nameLower = (bar.profileName || '').toLowerCase();
             const profIdLower = (bar.profId || '').toLowerCase();
+            // Exclure les parcloses, couvre-joints ET composants du volet (lame, coulisse, caisson)
             if (nameLower.includes('parclose') || nameLower.includes('couvre') || 
-                nameLower.includes('cj') || profIdLower.includes('cj')) return;
+                nameLower.includes('cj') || profIdLower.includes('cj') ||
+                nameLower.includes('volet') || nameLower.includes('lame') || 
+                nameLower.includes('caisson') || nameLower.includes('coulisse') ||
+                profIdLower.includes('vol') || profIdLower.includes('lam') || profIdLower.includes('coul')) return;
 
             bar.pieces.forEach((piece) => {
               const col = currentLabel % cols; const row = Math.floor(currentLabel / cols) % rows;
