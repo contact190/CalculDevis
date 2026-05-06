@@ -279,9 +279,13 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
 
   const purchasingGlass = useMemo(() => {
     const map = {};
-    activeConfigs.forEach(({ config: cfg, qty: cfgQty }) => {
+    activeConfigs.forEach((entry) => {
+      const cfg = entry.config;
+      const cfgQty = entry.qty || 1;
       const colorInfo = database.colors?.find(c => c.id === cfg.colorId);
       const colorName = colorInfo?.name || cfg.colorId || 'Standard';
+      const groupLabels = entry.allLabels?.filter(Boolean).join(', ') || entry.label;
+
       try {
         const b = engine.calculateBOM(cfg, []);
         (b.glassDetails || []).forEach(g => {
@@ -289,14 +293,26 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
           const h = Math.round(g.height || 0);
           const mapKey = `${g.id}|${colorName}-${w}-${h}`;
           if (!map[mapKey]) {
-            map[mapKey] = { ...g, width: w, height: h, count: (g.qty || 1) * cfgQty, colorName };
+            map[mapKey] = { 
+              ...g, 
+              width: w, 
+              height: h, 
+              count: (g.qty || 1) * cfgQty, 
+              colorName,
+              labels: new Set(groupLabels ? [groupLabels] : [])
+            };
           } else {
             map[mapKey].count += (g.qty || 1) * cfgQty;
+            if (groupLabels) map[mapKey].labels.add(groupLabels);
           }
         });
       } catch (e) { console.warn(e); }
     });
-    return Object.values(map).map(item => ({...item, baseId: item.id}));
+    return Object.values(map).map(item => ({
+      ...item, 
+      baseId: item.id,
+      combinedLabels: Array.from(item.labels || []).join(', ')
+    }));
   }, [activeConfigs, engine, database.colors]);
 
 
@@ -1634,12 +1650,31 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                     doc.setTextColor(30, 41, 59);
                     purchasingGlass.forEach(g => {
                       const name = String(g.name || 'Vitrage');
+                      const posteText = g.combinedLabels ? `Postes: ${g.combinedLabels}` : '';
                       const lines = doc.splitTextToSize(name, 60);
-                      const rowHeight = lines.length * 5 + 3;
+                      let rowHeight = lines.length * 5 + 3;
+
+                      if (posteText) {
+                         const posteLines = doc.splitTextToSize(posteText, 60);
+                         rowHeight += posteLines.length * 4 + 2;
+                      }
 
                       if (y + rowHeight > 280) { doc.addPage(); y = 20; }
 
                       doc.text(lines, 15, y);
+                      let currentY = y + lines.length * 5 - 1;
+                      
+                      if (posteText) {
+                         doc.setFont('helvetica', 'italic');
+                         doc.setFontSize(8);
+                         doc.setTextColor(100, 116, 139);
+                         const posteLines = doc.splitTextToSize(posteText, 60);
+                         doc.text(posteLines, 15, currentY);
+                         doc.setFont('helvetica', 'normal');
+                         doc.setFontSize(11);
+                         doc.setTextColor(30, 41, 59);
+                      }
+
                       doc.text(`${g.width} mm`, 80, y);
                       doc.text(`${g.height} mm`, 110, y);
                       doc.text(g.count.toString(), 140, y);
