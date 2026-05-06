@@ -182,49 +182,50 @@ const ShippingModule = ({ data, setData }) => {
       const cName = (selectedOrder.clientName).toUpperCase();
       doc.setFontSize(16); doc.text(cName, 5, 29);
       
-      doc.setFontSize(10);
+      doc.setFontSize(9); doc.setFont('helvetica', 'normal');
       doc.text(`CMD N° : ${selectedOrder.id}`, 5, 38);
-      doc.text(`LOT : ${unit.batchId}`, 45, 38);
-      doc.setTextColor(37, 99, 235);
-      doc.text(`ÉTAGE : ${unit.floor || '---'}`, 75, 38);
+      doc.text(`LOT : ${unit.batchId}`, 40, 38);
+      doc.setTextColor(37, 99, 235); doc.setFont('helvetica', 'bold');
+      doc.text(`ÉTAGE : ${unit.floor || '---'}`, 72, 38);
       doc.setTextColor(0, 0, 0);
       
       doc.setLineWidth(0.3);
       doc.line(5, 42, 95, 42);
       
       // Section 2 : REPERE (Très Gros)
-      doc.setFontSize(12); doc.text('REPÈRE / EMPLACEMENT :', 5, 50);
-      doc.setFontSize(28); doc.setFont('helvetica', 'bold');
-      doc.text(unit.name, 50, 65, { align: 'center' });
+      doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+      doc.text('REPÈRE / EMPLACEMENT :', 5, 50);
+      doc.setFontSize(26);
+      doc.text(unit.name, 50, 64, { align: 'center' });
       
       // Nouvelle Section : ZONE DE STOCKAGE
       doc.setFillColor(241, 245, 249);
-      doc.rect(5, 70, 90, 8, 'F');
+      doc.rect(5, 69, 90, 8, 'F');
       doc.setFontSize(10);
       doc.setTextColor(30, 41, 59);
-      doc.text(`ZONE DE STOCKAGE : ${unit.storageZone || 'À ASSIGNER'}`, 50, 76, { align: 'center' });
+      doc.text(`ZONE DE STOCKAGE : ${unit.storageZone || 'À ASSIGNER'}`, 50, 75, { align: 'center' });
       
       doc.setLineWidth(0.3);
       doc.line(5, 80, 95, 80);
       
       // Section 3 : Détails Techniques
-      doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(0,0,0);
       doc.text(`Type : ${unit.label}`, 5, 87);
-      doc.text(`Cotes : ${unit.dimensions} mm`, 5, 94);
-      doc.text(`Volet : ${unit.shutter === 'Oui' ? 'AVEC VOLET' : 'SANS VOLET'}`, 5, 101);
+      doc.text(`Cotes : ${unit.dimensions} mm`, 5, 93);
+      doc.text(`Volet : ${unit.shutter === 'Oui' ? 'AVEC VOLET' : 'SANS VOLET'}`, 5, 99);
       
       // Section 4 : QR CODE (VRAI CODE SCANNABLE)
-      doc.setLineWidth(0.5);
-      doc.rect(25, 105, 50, 35); // Cadre pour le scan
-      doc.setFontSize(8);
-      doc.text('SCANNEZ POUR VALIDER (CHARGEMENT/LIVRAISON)', 50, 103, { align: 'center' });
+      doc.setLineWidth(0.4);
+      doc.rect(25, 108, 50, 34); // Cadre pour le scan
+      doc.setFontSize(7.5); doc.setFont('helvetica', 'bold');
+      doc.text('SCANNEZ POUR VALIDER (CHARGEMENT/LIVRAISON)', 50, 106, { align: 'center' });
       
       const qrDataUrl = await getQrDataUrl(unit.id);
-      doc.addImage(qrDataUrl, 'PNG', 35, 108, 30, 30);
+      doc.addImage(qrDataUrl, 'PNG', 35, 110, 30, 30);
       
       doc.setTextColor(0, 0, 0);
-      doc.setFontSize(8); doc.setFont('helvetica', 'bold');
-      doc.text(unit.id, 50, 143, { align: 'center', charSpace: 1 });
+      doc.setFontSize(7); doc.setFont('helvetica', 'bold');
+      doc.text(unit.id, 50, 146, { align: 'center', charSpace: 0.5 });
     }
     
     doc.save(`Bordereaux_Logistique_${selectedOrder.id}.pdf`);
