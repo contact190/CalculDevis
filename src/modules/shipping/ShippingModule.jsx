@@ -559,6 +559,35 @@ const ShippingModule = ({ data, setData }) => {
              </div>
            </div>
         )}
+
+        {/* SHUTTER DETAILS POPUP */}
+        {viewingShutter && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
+            <div className="glass shadow-2xl" style={{ background: 'white', padding: '2rem', borderRadius: '1rem', width: '400px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>Détails du Volet</h3>
+                <button onClick={() => setViewingShutter(null)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#64748b' }}><XCircle size={24} /></button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div className="glass" style={{ padding: '1rem', background: '#f8fafc' }}>
+                  <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.8rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Produit / Emplacement</p>
+                  <p style={{ margin: 0, fontWeight: 700 }}>{viewingShutter.name} ({viewingShutter.label})</p>
+                </div>
+                <div className="glass" style={{ padding: '1rem', background: '#fffbeb', border: '1px solid #fef3c7' }}>
+                  <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.8rem', color: '#b45309', fontWeight: 700, textTransform: 'uppercase' }}>Configuration Volet</p>
+                  <p style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#92400e' }}>{viewingShutter.shutterInfo}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setViewingShutter(null)}
+                className="btn btn-primary" 
+                style={{ width: '100%', marginTop: '1.5rem' }}
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
