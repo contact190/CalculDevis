@@ -7,6 +7,7 @@ import AdminDashboard from './modules/admin/AdminDashboard';
 import ClientsModule from './modules/clients/ClientsModule';
 import OrdersModule from './modules/orders/OrdersModule';
 import ShippingModule from './modules/shipping/ShippingModule';
+import InstallerPortal from './modules/shipping/InstallerPortal';
 import { DEFAULT_DATA } from './data/default-data';
 import { syncDatabase } from './utils/supabaseClient';
 
@@ -275,6 +276,20 @@ function App() {
     { id: 'clients', label: 'Clients', icon: Users },
     { id: 'admin', label: 'Administration', icon: Settings },
   ];
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const isInstallerMode = urlParams.get('mode') === 'installer';
+  const installerOrderId = urlParams.get('orderId');
+
+  if (isInstallerMode && installerOrderId) {
+    return (
+      <InstallerPortal 
+        data={database} 
+        setData={setDatabase} 
+        orderId={installerOrderId} 
+      />
+    );
+  }
 
   return (
     <div className="app-container">

@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { Truck, Package, QrCode, CheckCircle, AlertTriangle, XCircle, Download, Search, Plus, Trash2, ArrowLeft, ClipboardCheck, UserCheck, ShieldCheck, Layers, Wrench, FileText, MapPin } from 'lucide-react';
+import { Truck, Package, QrCode, CheckCircle, AlertTriangle, XCircle, Download, Search, Plus, Trash2, ArrowLeft, ClipboardCheck, UserCheck, ShieldCheck, Layers, Wrench, FileText, MapPin, Share2 } from 'lucide-react';
 import jsPDF from 'jspdf';
 
+// Module version: 1.0.1 - Logistic & Installation Tracking
 const ShippingModule = ({ data, setData }) => {
   const [selectedOrderId, setSelectedOrderId] = useState(null);
   const [selectedBatchIds, setSelectedBatchIds] = useState(new Set());
@@ -10,6 +11,7 @@ const ShippingModule = ({ data, setData }) => {
   const [newZoneName, setNewZoneName] = useState('');
   const [selectedUnitIds, setSelectedUnitIds] = useState(new Set());
   const [viewingShutter, setViewingShutter] = useState(null); // unit object
+  const [showInstallerQr, setShowInstallerQr] = useState(null); // orderId or null
   
   const storageZones = data.storageZones || [];
   const shippableOrders = useMemo(() => {
@@ -370,9 +372,20 @@ const ShippingModule = ({ data, setData }) => {
             <p style={{ color: '#64748b', margin: 0 }}>Chargement, Livraison et Pose</p>
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.75rem' }}>
-             <button onClick={generatePackingLabels} className="btn btn-secondary" disabled={allUnits.length === 0}><QrCode size={16} /> Étiquettes</button>
-             <button onClick={generateInstallationSheet} className="btn btn-secondary" disabled={allUnits.length === 0}><FileText size={16} /> Fiche de Pose</button>
-             <button onClick={generateDeliveryNote} className="btn btn-primary" disabled={allUnits.length === 0}><Download size={16} /> Bon de Livraison (BL)</button>
+              <button onClick={generatePackingLabels} className="btn btn-secondary" disabled={allUnits.length === 0}><QrCode size={16} /> Étiquettes</button>
+              <button onClick={generateInstallationSheet} className="btn btn-secondary" disabled={allUnits.length === 0}><FileText size={16} /> Fiche de Pose</button>
+              <button 
+                onClick={() => {
+                  const url = `${window.location.origin}${window.location.pathname}?mode=installer&orderId=${selectedOrder.id}`;
+                  setShowInstallerQr(url);
+                  navigator.clipboard.writeText(url);
+                }}
+                className="btn btn-secondary"
+                style={{ color: '#8b5cf6', borderColor: '#ddd6fe' }}
+              >
+                <Share2 size={16} /> Lien Poseur
+              </button>
+              <button onClick={generateDeliveryNote} className="btn btn-primary" disabled={allUnits.length === 0}><Download size={16} /> Bon de Livraison (BL)</button>
           </div>
         </header>
 
@@ -582,6 +595,34 @@ const ShippingModule = ({ data, setData }) => {
                 onClick={() => setViewingShutter(null)}
                 className="btn btn-primary" 
                 style={{ width: '100%', marginTop: '1.5rem' }}
+              >
+              Fermer
+            </button>
+          </div>
+        </div>
+      )}
+
+        {/* INSTALLER QR MODAL */}
+        {showInstallerQr && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)' }}>
+            <div className="glass shadow-2xl" style={{ background: 'white', padding: '2.5rem', borderRadius: '1.5rem', width: '400px', textAlign: 'center' }}>
+              <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, marginBottom: '0.5rem' }}>Accès Portail Poseur</h3>
+              <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '1.5rem' }}>Scannez ce code avec un téléphone pour ouvrir l'interface de suivi de pose.</p>
+              
+              <div style={{ background: '#f8fafc', padding: '1.5rem', borderRadius: '1rem', border: '1px dashed #cbd5e1', marginBottom: '1.5rem', display: 'grid', placeItems: 'center' }}>
+                <img 
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(showInstallerQr)}`} 
+                  alt="QR Code Poseur"
+                  style={{ width: '250px', height: '250px', borderRadius: '8px' }}
+                />
+              </div>
+              
+              <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '1.5rem' }}>Lien également copié dans le presse-papier.</p>
+              
+              <button 
+                onClick={() => setShowInstallerQr(null)}
+                className="btn btn-primary"
+                style={{ width: '100%' }}
               >
                 Fermer
               </button>
