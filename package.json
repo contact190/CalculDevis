@@ -21,6 +21,7 @@
     "@types/three": "^0.183.1",
     "html2canvas": "^1.4.1",
     "html2pdf.js": "^0.14.0",
+    "html5-qrcode": "^2.3.8",
     "jspdf": "^4.2.1",
     "lucide-react": "^1.7.0",
     "mathjs": "^15.1.1",

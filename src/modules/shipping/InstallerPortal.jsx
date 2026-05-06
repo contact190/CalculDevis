@@ -1,10 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { Truck, Wrench, CheckCircle, ArrowLeft, QrCode, Camera, Package, UserCheck, ShieldCheck } from 'lucide-react';
+import QRScanner from './QRScanner';
 
 const InstallerPortal = ({ data, setData, orderId }) => {
   const [view, setView] = useState('menu'); // 'menu', 'delivery', 'installation'
   const [selectedUnits, setSelectedUnits] = useState(new Set());
   const [scannedId, setScannedId] = useState('');
+  const [showScanner, setShowScanner] = useState(false);
   const [installationPhotos, setInstallationPhotos] = useState({}); // { unitId: dataUrl }
 
   const order = useMemo(() => {
@@ -193,9 +195,25 @@ const InstallerPortal = ({ data, setData, orderId }) => {
             value={scannedId}
             onChange={e => setScannedId(e.target.value)}
           />
-          <button className="btn btn-secondary" style={{ padding: '0.5rem' }}><QrCode size={24} /></button>
+          <button 
+            onClick={() => setShowScanner(true)}
+            className="btn btn-secondary" 
+            style={{ padding: '0.5rem', background: '#8b5cf6', color: 'white' }}
+          >
+            <QrCode size={24} />
+          </button>
         </div>
       </div>
+
+      {showScanner && (
+        <QRScanner 
+          onScan={(text) => {
+            setScannedId(text);
+            setShowScanner(false);
+          }}
+          onClose={() => setShowScanner(false)}
+        />
+      )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         {installableUnits.filter(u => !scannedId || u.id.includes(scannedId)).map(unit => (

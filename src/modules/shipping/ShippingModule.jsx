@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Truck, Package, QrCode, CheckCircle, AlertTriangle, XCircle, Download, Search, Plus, Trash2, ArrowLeft, ClipboardCheck, UserCheck, ShieldCheck, Layers, Wrench, FileText, MapPin, Share2 } from 'lucide-react';
 import jsPDF from 'jspdf';
+import QRScanner from './QRScanner';
 
 // Module version: 1.0.1 - Logistic & Installation Tracking
 const ShippingModule = ({ data, setData }) => {
@@ -12,6 +13,7 @@ const ShippingModule = ({ data, setData }) => {
   const [selectedUnitIds, setSelectedUnitIds] = useState(new Set());
   const [viewingShutter, setViewingShutter] = useState(null); // unit object
   const [showInstallerQr, setShowInstallerQr] = useState(null); // orderId or null
+  const [showScanner, setShowScanner] = useState(false);
   
   const storageZones = data.storageZones || [];
   const shippableOrders = useMemo(() => {
@@ -567,9 +569,18 @@ const ShippingModule = ({ data, setData }) => {
                 <input autoFocus placeholder="Scanner le code..." className="input" style={{ textAlign: 'center', fontSize: '1.25rem', fontWeight: 700, padding: '1rem' }} onKeyDown={(e) => { if (e.key === 'Enter') { handleScanUnit(e.target.value); e.target.value = ''; } }} />
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '2rem' }}>
                   <button onClick={() => setActiveView('details')} className="btn btn-secondary">Terminer</button>
-                  <button onClick={() => { const pending = allUnits.find(u => scanningMode === 'loading' ? u.status === 'Produit' : (scanningMode === 'unloading' ? u.status === 'Chargé' : u.status === 'Livré')); if (pending) handleScanUnit(pending.id); }} className="btn btn-primary">Simuler Scan</button>
+                  <button onClick={() => setShowScanner(true)} className="btn btn-primary">Ouvrir Caméra</button>
                 </div>
              </div>
+             {showScanner && (
+               <QRScanner 
+                 onScan={(text) => {
+                   handleScanUnit(text);
+                   setShowScanner(false);
+                 }}
+                 onClose={() => setShowScanner(false)}
+               />
+             )}
            </div>
         )}
 
