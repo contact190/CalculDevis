@@ -301,11 +301,13 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
               height: h, 
               count: (g.qty || 1) * cfgQty, 
               colorName,
-              labels: new Set(groupLabels ? [groupLabels] : [])
+              labels: new Set(groupLabels ? [groupLabels] : []),
+              windowRefs: new Set([entry.label || '—'])
             };
           } else {
             map[mapKey].count += (g.qty || 1) * cfgQty;
             if (groupLabels) map[mapKey].labels.add(groupLabels);
+            if (entry.label) map[mapKey].windowRefs.add(entry.label);
           }
         });
       } catch (e) { console.warn(e); }
@@ -313,7 +315,8 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
     return Object.values(map).map(item => ({
       ...item, 
       baseId: item.id,
-      combinedLabels: Array.from(item.labels || []).join(', ')
+      combinedLabels: Array.from(item.labels || []).join(', '),
+      combinedRefs: Array.from(item.windowRefs || []).join(', ')
     }));
   }, [activeConfigs, engine, database.colors]);
 
@@ -1633,15 +1636,16 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                       doc.text(`Client Final: ${database.clients?.find(c => c.id === activeQuote?.clientId)?.nom || '—'}`, 120, 55);
                       doc.text(`Date: ${new Date().toLocaleDateString()}`, 120, 60);
 
-                      let y = 95;
-                      doc.setFontSize(11); doc.setFillColor(30, 41, 59); doc.rect(10, y-6, 190, 7, 'F');
+                      let headerY = 95;
+                      doc.setFontSize(11); doc.setFillColor(30, 41, 59); doc.rect(10, headerY-6, 190, 7, 'F');
                       doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold');
-                      doc.text("Désignation", 15, y);
-                      doc.text("Largeur", 80, y);
-                      doc.text("Hauteur", 110, y);
-                      doc.text("Qté", 140, y);
-                      doc.text("Surface (m2)", 160, y);
-                      return y + 10;
+                      doc.text("Désignation", 15, headerY);
+                      doc.text("Réf.", 68, headerY);
+                      doc.text("Largeur", 88, headerY);
+                      doc.text("Hauteur", 115, headerY);
+                      doc.text("Qté", 145, headerY);
+                      doc.text("Surface (m2)", 165, headerY);
+                      return headerY + 10;
                     };
 
                     const renderRows = (glassList, startY) => {
@@ -1650,11 +1654,11 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                       glassList.forEach(g => {
                         const name = String(g.name || 'Vitrage');
                         const posteText = g.combinedLabels ? `Postes: ${g.combinedLabels}` : '';
-                        const lines = doc.splitTextToSize(name, 60);
+                        const lines = doc.splitTextToSize(name, 50);
                         let rowHeight = lines.length * 5 + 3;
 
                         if (posteText) {
-                           const posteLines = doc.splitTextToSize(posteText, 60);
+                           const posteLines = doc.splitTextToSize(posteText, 50);
                            rowHeight += posteLines.length * 4 + 2;
                         }
 
@@ -1665,15 +1669,18 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                         
                         if (posteText) {
                            doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(100, 116, 139);
-                           const posteLines = doc.splitTextToSize(posteText, 60);
+                           const posteLines = doc.splitTextToSize(posteText, 50);
                            doc.text(posteLines, 15, currentY);
-                           doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(30, 41, 59);
+                           doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(30, 41, 59);
                         }
 
-                        doc.text(`${g.width} mm`, 80, y);
-                        doc.text(`${g.height} mm`, 110, y);
-                        doc.text(g.count.toString(), 140, y);
-                        doc.text((g.area || 0).toFixed(3), 160, y);
+                        doc.setFontSize(9);
+                        doc.text(String(g.combinedRefs || '—').substring(0, 15), 68, y);
+                        doc.setFontSize(10);
+                        doc.text(`${g.width} mm`, 88, y);
+                        doc.text(`${g.height} mm`, 115, y);
+                        doc.text(g.count.toString(), 145, y);
+                        doc.text((g.area || 0).toFixed(3), 165, y);
                         y += rowHeight;
                       });
                       return y;
@@ -2041,24 +2048,26 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
             <div className="table-responsive">
               <table className="data-table">
                 <thead>
-                  <tr>
-                    <th>Référence</th>
-                    <th>Finition</th>
-                    <th>Désignation</th>
-                    <th>Dimensions (L x H)</th>
-                    <th>Quantité</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {purchasingGlass.map((g, i) => (
-                    <tr key={`ag-${i}`}>
-                      <td data-label="Réf." style={{ color: '#64748b', fontSize: '0.75rem', fontFamily: 'monospace' }}>{g.baseId || g.id}</td>
-                      <td data-label="Finition" style={{ fontSize: '0.85rem' }}>{g.colorName || 'Standard'}</td>
-                      <td data-label="Nom" style={{ fontWeight: 600 }}>{g.name}</td>
-                      <td data-label="Dim." style={{ fontWeight: 500 }}>{g.width} x {g.height} mm</td>
-                      <td data-label="Qté" style={{ color: '#06b6d4', fontWeight: 700 }}>{g.count}u</td>
+                    <tr>
+                      <th>Référence</th>
+                      <th>Finition</th>
+                      <th>Désignation</th>
+                      <th>Réf. Fenêtre</th>
+                      <th>Dimensions (L x H)</th>
+                      <th>Quantité</th>
                     </tr>
-                  ))}
+                  </thead>
+                  <tbody>
+                    {purchasingGlass.map((g, i) => (
+                      <tr key={`ag-${i}`}>
+                        <td data-label="Réf." style={{ color: '#64748b', fontSize: '0.75rem', fontFamily: 'monospace' }}>{g.baseId || g.id}</td>
+                        <td data-label="Finition" style={{ fontSize: '0.85rem' }}>{g.colorName || 'Standard'}</td>
+                        <td data-label="Nom" style={{ fontWeight: 600 }}>{g.name}</td>
+                        <td data-label="Réf. Fen.">{g.combinedRefs || '—'}</td>
+                        <td data-label="Dim." style={{ fontWeight: 500 }}>{g.width} x {g.height} mm</td>
+                        <td data-label="Qté" style={{ color: '#06b6d4', fontWeight: 700 }}>{g.count}u</td>
+                      </tr>
+                    ))}
                   {purchasingGlass.length === 0 && <tr><td colSpan="5">Aucun vitrage détaillé trouvé.</td></tr>}
                 </tbody>
               </table>
