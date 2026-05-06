@@ -46,6 +46,9 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
   const [confirmText, setConfirmText] = useState('');
   const [namingMeasure, setNamingMeasure] = useState(null); // { itemIdx, mId, qty, names: [], floors: [] }
   const [shutterMeasure, setShutterMeasure] = useState(null); // { itemIdx, mId, shutters: [] }
+  const [showSituationModal, setShowSituationModal] = useState(false);
+  const [situationRemarks, setSituationRemarks] = useState({}); // { itemId: string }
+  const [situationSelection, setSituationSelection] = useState(new Set()); // Set of item IDs to include
   
   // Jumelage (Couplage) states
   const [jumelageGroups, setJumelageGroups] = useState([]);
@@ -527,6 +530,120 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
     doc.save(`Proforma_${selectedOrder.id}.pdf`);
   };
 
+  const generateSituationPDF = () => {
+    if (!selectedOrder) return;
+    const client = data?.clients?.find(c => c.id === selectedOrder.clientId);
+    const doc = new jsPDF({ format: 'a4' });
+    const pw = doc.internal.pageSize.getWidth();
+    let y = 15;
+
+    // Header Branding
+    if (quoteSettings?.logoBase64) {
+      try { doc.addImage(quoteSettings.logoBase64, 'PNG', 15, y, 35, 20); } catch (e) {}
+    }
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold');
+    doc.text(quoteSettings?.companyName || 'MA SOCIETE', 55, y + 5);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+    doc.text(quoteSettings?.companyAddress || '', 55, y + 10);
+    doc.text(`${quoteSettings?.companyPhone || ''} ${quoteSettings?.companyEmail ? ' | ' + quoteSettings.companyEmail : ''}`, 55, y + 15);
+    y += 25;
+
+    // Title
+    doc.setFontSize(16); doc.setFont('helvetica', 'bold');
+    doc.setTextColor(37, 99, 235);
+    doc.text('ÉTAT DE SITUATION DE COMMANDE', pw / 2, y, { align: 'center' });
+    doc.setTextColor(0, 0, 0); y += 12;
+
+    doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+    doc.text(`Commande N°: ${selectedOrder.id}`, 15, y);
+    doc.text(`Date : ${new Date().toLocaleDateString('fr-FR')}`, pw - 15, y, { align: 'right' });
+    y += 6;
+    doc.text(`Client Final : ${client?.nom || 'Non spécifié'}`, 15, y);
+    y += 10;
+
+    // --- SECTION 1: PRODUCTION LANCÉE ---
+    doc.setFont('helvetica', 'bold'); doc.setFillColor(240, 246, 255); doc.rect(15, y, pw - 30, 8, 'F');
+    doc.text('1. ÉLÉMENTS EN COURS DE FABRICATION / LANCÉS', 20, y + 5.5);
+    y += 12;
+
+    doc.setFontSize(8); doc.text('Produit', 15, y);
+    doc.text('Dim. Devis', 70, y);
+    doc.text('Dim. Réelles', 100, y);
+    doc.text('Écart (+/-)', 135, y);
+    doc.text('Qté', 185, y, { align: 'right' });
+    y += 2; doc.line(15, y, pw - 15, y); y += 5;
+
+    doc.setFont('helvetica', 'normal');
+    let hasLaunched = false;
+    selectedOrder.items.forEach(item => {
+      if (!situationSelection.has(item.id)) return;
+      
+      const batchesWithItem = (selectedOrder.batches || []).filter(b => b.items?.some(bi => bi.id === item.id));
+      batchesWithItem.forEach(batch => {
+        const batchItem = batch.items.find(bi => bi.id === item.id);
+        (batchItem.measurements || []).forEach(m => {
+          if (m.qty <= 0) return;
+          hasLaunched = true;
+          doc.text(item.label, 15, y);
+          doc.text(`${item.config.L}x${item.config.H}`, 70, y);
+          doc.setFont('helvetica', 'bold');
+          doc.text(`${m.L}x${m.H}`, 100, y);
+          
+          const diffL = m.L - item.config.L;
+          const diffH = m.H - item.config.H;
+          doc.setTextColor(diffL === 0 && diffH === 0 ? 100 : (diffL > 0 || diffH > 0 ? 16 : 220), 0, 0);
+          doc.text(`${diffL > 0 ? '+' : ''}${diffL} / ${diffH > 0 ? '+' : ''}${diffH}`, 135, y);
+          doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'normal');
+          doc.text(String(m.qty), 185, y, { align: 'right' });
+          y += 6;
+          if (y > 270) { doc.addPage(); y = 15; }
+        });
+      });
+    });
+    if (!hasLaunched) { doc.text('Aucun élément lancé pour cette sélection.', 15, y); y += 6; }
+
+    y += 10;
+    // --- SECTION 2: RESTE À PRODUIRE ---
+    doc.setFont('helvetica', 'bold'); doc.setFillColor(255, 247, 237); doc.rect(15, y, pw - 30, 8, 'F');
+    doc.text('2. ÉLÉMENTS RESTANTS (EN ATTENTE DE LANCEMENT)', 20, y + 5.5);
+    y += 12;
+
+    doc.setFontSize(8); doc.text('Produit', 15, y);
+    doc.text('Dim. Devis', 70, y);
+    doc.text('Reste (Qté)', 110, y);
+    doc.text('Motif / Observation', 140, y);
+    y += 2; doc.line(15, y, pw - 15, y); y += 5;
+
+    doc.setFont('helvetica', 'normal');
+    selectedOrder.items.forEach(item => {
+      if (!situationSelection.has(item.id)) return;
+      const stats = (selectedOrder.batches || []).reduce((sum, b) => {
+        const bi = b.items?.find(x => x.id === item.id);
+        return sum + (bi?.measurements || []).reduce((s, m) => s + m.qty, 0);
+      }, 0);
+      const remaining = (item.qty || 1) - stats;
+      if (remaining > 0) {
+        doc.text(item.label, 15, y);
+        doc.text(`${item.config.L}x${item.config.H}`, 70, y);
+        doc.setFont('helvetica', 'bold'); doc.text(String(remaining), 110, y); doc.setFont('helvetica', 'normal');
+        
+        const remark = situationRemarks[item.id] || "En attente de validation technique / cotes.";
+        const splitRemark = doc.splitTextToSize(remark, 55);
+        doc.text(splitRemark, 140, y);
+        y += Math.max(6, splitRemark.length * 4);
+        if (y > 270) { doc.addPage(); y = 15; }
+      }
+    });
+
+    y += 20;
+    doc.setFontSize(10);
+    doc.text('Ce document est un état de situation provisoire de la production.', 15, y);
+    y += 30;
+    doc.setFont('helvetica', 'bold'); doc.text('Visa Client', 15, y); doc.text('Visa Atelier', pw - 60, y);
+
+    doc.save(`Etat_Commande_${selectedOrder.id}.pdf`);
+  };
+
   if (selectedOrderId && selectedOrder) {
     const client = data?.clients?.find(c => c.id === selectedOrder.clientId);
     
@@ -541,6 +658,16 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
             <p style={{ color: '#64748b', margin: 0 }}>Basé sur le devis {selectedOrder.quoteNumber} | Client: {client?.nom || 'Inconnu'}</p>
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.75rem' }}>
+             <button 
+               onClick={() => {
+                 setSituationSelection(new Set(selectedOrder.items.map(i => i.id)));
+                 setShowSituationModal(true);
+               }}
+               className="btn btn-secondary" 
+               style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'white' }}
+             >
+               <FileText size={16} color="#3b82f6" /> État de Situation
+             </button>
              <span style={{ padding: '0.4rem 0.8rem', background: '#e0f2fe', color: '#0369a1', borderRadius: '999px', fontSize: '0.8rem', fontWeight: 600 }}>
                Statut: {selectedOrder.status}
              </span>
@@ -1116,6 +1243,94 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                   style={{ minWidth: '150px' }}
                 >
                   Valider pour cette fenêtre
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* SITUATION MODAL */}
+        {showSituationModal && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)' }}>
+            <div className="glass shadow-2xl" style={{ background: 'white', padding: '2.5rem', borderRadius: '1.5rem', width: '850px', maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 800 }}>Générer l'État de Situation</h3>
+                  <p style={{ color: '#64748b', margin: 0 }}>Sélectionnez les éléments à inclure et ajoutez vos remarques pour le client.</p>
+                </div>
+                <button onClick={() => setShowSituationModal(false)} className="btn btn-secondary" style={{ padding: '0.5rem' }}>
+                  <Trash2 size={20} />
+                </button>
+              </div>
+
+              <div className="table-responsive" style={{ marginBottom: '2rem' }}>
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: '40px' }}>Inclure</th>
+                      <th>Produit</th>
+                      <th>Devis</th>
+                      <th>Lancé</th>
+                      <th>Reste</th>
+                      <th>Remarque (si reste)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedOrder.items.map(item => {
+                      const launched = (selectedOrder.batches || []).reduce((sum, b) => {
+                        const bi = b.items?.find(x => x.id === item.id);
+                        return sum + (bi?.measurements || []).reduce((s, m) => s + m.qty, 0);
+                      }, 0);
+                      const remaining = (item.qty || 1) - launched;
+                      
+                      return (
+                        <tr key={item.id}>
+                          <td>
+                            <input 
+                              type="checkbox" 
+                              checked={situationSelection.has(item.id)}
+                              onChange={() => {
+                                const next = new Set(situationSelection);
+                                if (next.has(item.id)) next.delete(item.id); else next.add(item.id);
+                                setSituationSelection(next);
+                              }}
+                              style={{ width: '20px', height: '20px' }}
+                            />
+                          </td>
+                          <td style={{ fontWeight: 700 }}>{item.label}</td>
+                          <td style={{ textAlign: 'center' }}>{item.qty || 1}</td>
+                          <td style={{ textAlign: 'center', color: '#10b981', fontWeight: 700 }}>{launched}</td>
+                          <td style={{ textAlign: 'center', color: remaining > 0 ? '#f59e0b' : '#94a3b8', fontWeight: 700 }}>{remaining}</td>
+                          <td>
+                            {remaining > 0 && (
+                              <input 
+                                className="input" 
+                                placeholder="Pourquoi pas encore lancé ?" 
+                                style={{ fontSize: '0.8rem', padding: '0.3rem 0.6rem' }}
+                                value={situationRemarks[item.id] || ''}
+                                onChange={e => setSituationRemarks({ ...situationRemarks, [item.id]: e.target.value })}
+                              />
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+                <button onClick={() => setShowSituationModal(false)} className="btn btn-secondary">Annuler</button>
+                <button 
+                  onClick={() => {
+                    generateSituationPDF();
+                    setShowSituationModal(false);
+                  }} 
+                  className="btn btn-primary"
+                  style={{ minWidth: '200px', background: '#3b82f6' }}
+                  disabled={situationSelection.size === 0}
+                >
+                  Générer le Document PDF
                 </button>
               </div>
             </div>
