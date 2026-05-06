@@ -564,7 +564,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         ...(b.shutters || [])
           .filter(s => {
              const unit = (s.priceUnit || '').toUpperCase().trim();
-             return unit !== 'ML' && unit !== 'JOINT';
+             return unit !== 'ML' && unit !== 'JOINT' && unit !== 'UNITÉ' && unit !== 'UNITE' && unit !== 'UNIT';
           })
           .map(s => {
              const unit = (s.priceUnit || '').toUpperCase().trim();
