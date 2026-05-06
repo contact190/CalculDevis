@@ -1607,81 +1607,94 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                 <button 
                   onClick={() => {
                     const doc = new jsPDF();
-                    // --- HEADER: Company Info & Logo ---
-                    if (companyInfo.logo) {
-                       try { doc.addImage(companyInfo.logo, 'PNG', 10, 10, 30, 30); } catch(e) {}
-                    }
-                    doc.setFontSize(14);
-                    doc.setTextColor(30, 41, 59);
-                    doc.text(companyInfo.name.toUpperCase(), 10, companyInfo.logo ? 45 : 20);
-                    doc.setFontSize(8);
-                    doc.setTextColor(100, 116, 139);
-                    doc.text(companyInfo.address, 10, companyInfo.logo ? 50 : 25);
-                    doc.text(`${companyInfo.phone} | ${companyInfo.email}`, 10, companyInfo.logo ? 54 : 29);
                     
-                    if (companyInfo.rc || companyInfo.nif) {
-                       doc.setFontSize(7);
-                       doc.text(`RC: ${companyInfo.rc} | NIF: ${companyInfo.nif} | NIS: ${companyInfo.nis} | AI: ${companyInfo.ai}`, 10, companyInfo.logo ? 59 : 34);
-                    }
-
-                    doc.setFontSize(20);
-                    doc.text("BON DE COMMANDE VITRAGE", 105, 75, { align: 'center' });
-                    
-                    doc.setDrawColor(226, 232, 240);
-                    doc.line(10, 80, 200, 80);
-
-                    // --- INFO SIDEBAR ---
-                    doc.setFontSize(10);
-                    doc.setTextColor(100, 116, 139);
-                    doc.text(`Chantier: ${activeQuote?.number || 'Non spécifié'}`, 120, 50);
-                    doc.text(`Client Final: ${database.clients?.find(c => c.id === activeQuote?.clientId)?.nom || '—'}`, 120, 55);
-                    doc.text(`Date: ${new Date().toLocaleDateString()}`, 120, 60);
-                    
-                    let y = 95;
-                    doc.setFontSize(11);
-                    doc.setFillColor(30, 41, 59);
-                    doc.rect(10, y-6, 190, 7, 'F');
-                    doc.setTextColor(255, 255, 255);
-                    doc.text("Désignation", 15, y);
-                    doc.text("Largeur", 80, y);
-                    doc.text("Hauteur", 110, y);
-                    doc.text("Qté", 140, y);
-                    doc.text("Surface (m2)", 160, y);
-                    
-                    y += 10;
-                    doc.setTextColor(30, 41, 59);
-                    purchasingGlass.forEach(g => {
-                      const name = String(g.name || 'Vitrage');
-                      const posteText = g.combinedLabels ? `Postes: ${g.combinedLabels}` : '';
-                      const lines = doc.splitTextToSize(name, 60);
-                      let rowHeight = lines.length * 5 + 3;
-
-                      if (posteText) {
-                         const posteLines = doc.splitTextToSize(posteText, 60);
-                         rowHeight += posteLines.length * 4 + 2;
+                    const renderHeader = (isSummary, compName = '') => {
+                      if (companyInfo.logo) {
+                         try { doc.addImage(companyInfo.logo, 'PNG', 10, 10, 30, 30); } catch(e) {}
                       }
-
-                      if (y + rowHeight > 280) { doc.addPage(); y = 20; }
-
-                      doc.text(lines, 15, y);
-                      let currentY = y + lines.length * 5 - 1;
+                      doc.setFontSize(14); doc.setTextColor(30, 41, 59); doc.setFont('helvetica', 'bold');
+                      doc.text(companyInfo.name.toUpperCase(), 10, companyInfo.logo ? 45 : 20);
+                      doc.setFontSize(8); doc.setTextColor(100, 116, 139); doc.setFont('helvetica', 'normal');
+                      doc.text(companyInfo.address, 10, companyInfo.logo ? 50 : 25);
+                      doc.text(`${companyInfo.phone} | ${companyInfo.email}`, 10, companyInfo.logo ? 54 : 29);
                       
-                      if (posteText) {
-                         doc.setFont('helvetica', 'italic');
-                         doc.setFontSize(8);
-                         doc.setTextColor(100, 116, 139);
-                         const posteLines = doc.splitTextToSize(posteText, 60);
-                         doc.text(posteLines, 15, currentY);
-                         doc.setFont('helvetica', 'normal');
-                         doc.setFontSize(11);
-                         doc.setTextColor(30, 41, 59);
+                      if (companyInfo.rc || companyInfo.nif) {
+                         doc.setFontSize(7);
+                         doc.text(`RC: ${companyInfo.rc} | NIF: ${companyInfo.nif} | NIS: ${companyInfo.nis} | AI: ${companyInfo.ai}`, 10, companyInfo.logo ? 59 : 34);
                       }
 
-                      doc.text(`${g.width} mm`, 80, y);
-                      doc.text(`${g.height} mm`, 110, y);
-                      doc.text(g.count.toString(), 140, y);
-                      doc.text((g.area || 0).toFixed(3), 160, y);
-                      y += rowHeight;
+                      doc.setFontSize(18); doc.setTextColor(30, 41, 59); doc.setFont('helvetica', 'bold');
+                      doc.text(isSummary ? "BON DE COMMANDE VITRAGE (RÉCAPITULATIF)" : `VITRAGE : ${compName}`, 105, 75, { align: 'center' });
+                      
+                      doc.setDrawColor(226, 232, 240); doc.line(10, 80, 200, 80);
+
+                      doc.setFontSize(10); doc.setTextColor(100, 116, 139); doc.setFont('helvetica', 'normal');
+                      doc.text(`Chantier: ${activeQuote?.number || 'Non spécifié'}`, 120, 50);
+                      doc.text(`Client Final: ${database.clients?.find(c => c.id === activeQuote?.clientId)?.nom || '—'}`, 120, 55);
+                      doc.text(`Date: ${new Date().toLocaleDateString()}`, 120, 60);
+
+                      let y = 95;
+                      doc.setFontSize(11); doc.setFillColor(30, 41, 59); doc.rect(10, y-6, 190, 7, 'F');
+                      doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold');
+                      doc.text("Désignation", 15, y);
+                      doc.text("Largeur", 80, y);
+                      doc.text("Hauteur", 110, y);
+                      doc.text("Qté", 140, y);
+                      doc.text("Surface (m2)", 160, y);
+                      return y + 10;
+                    };
+
+                    const renderRows = (glassList, startY) => {
+                      let y = startY;
+                      doc.setTextColor(30, 41, 59); doc.setFont('helvetica', 'normal');
+                      glassList.forEach(g => {
+                        const name = String(g.name || 'Vitrage');
+                        const posteText = g.combinedLabels ? `Postes: ${g.combinedLabels}` : '';
+                        const lines = doc.splitTextToSize(name, 60);
+                        let rowHeight = lines.length * 5 + 3;
+
+                        if (posteText) {
+                           const posteLines = doc.splitTextToSize(posteText, 60);
+                           rowHeight += posteLines.length * 4 + 2;
+                        }
+
+                        if (y + rowHeight > 280) { doc.addPage(); y = 20; }
+
+                        doc.text(lines, 15, y);
+                        let currentY = y + lines.length * 5 - 1;
+                        
+                        if (posteText) {
+                           doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(100, 116, 139);
+                           const posteLines = doc.splitTextToSize(posteText, 60);
+                           doc.text(posteLines, 15, currentY);
+                           doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(30, 41, 59);
+                        }
+
+                        doc.text(`${g.width} mm`, 80, y);
+                        doc.text(`${g.height} mm`, 110, y);
+                        doc.text(g.count.toString(), 140, y);
+                        doc.text((g.area || 0).toFixed(3), 160, y);
+                        y += rowHeight;
+                      });
+                      return y;
+                    };
+
+                    // --- 1. PAGE 1: RÉCAPITULATIF GLOBAL ---
+                    let currentY = renderHeader(true);
+                    renderRows(purchasingGlass, currentY);
+
+                    // --- 2. PAGES SUIVANTES: GROUPÉ PAR TYPE DE VITRAGE (Compo technique) ---
+                    const glassByType = {};
+                    purchasingGlass.forEach(g => {
+                      const typeName = g.name || 'Vitrage';
+                      if (!glassByType[typeName]) glassByType[typeName] = [];
+                      glassByType[typeName].push(g);
+                    });
+
+                    Object.entries(glassByType).forEach(([typeName, glassList]) => {
+                      doc.addPage();
+                      let y = renderHeader(false, typeName);
+                      renderRows(glassList, y);
                     });
                     
                     doc.save(`Commande_Vitrage_${activeQuote?.number || 'Chantier'}.pdf`);
