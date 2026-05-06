@@ -784,10 +784,10 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         
         // Headers for this category
         doc.setFontSize(7);
-        doc.text("Photo", 55, currentY + 5);
+        if (isOpening) doc.text("Photo", 55, currentY + 5);
         doc.text("Désignation", 75, currentY + 5);
         doc.text("Longueur", 135, currentY + 5);
-        doc.text("Coupe", 160, currentY + 5);
+        if (isOpening) doc.text("Coupe", 160, currentY + 5);
         doc.text("Qté", 188, currentY + 5);
         
         currentY += 15; // Increased space to avoid overlap with header
@@ -823,19 +823,21 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
             doc.text(`${p.id}`, 22, currentY);
             
             // Photo column
-            if (photo) {
-              try {
-                let format = 'JPEG';
-                if (photo.includes('png')) format = 'PNG';
-                else if (photo.includes('webp')) format = 'WEBP';
-                doc.addImage(photo, format, 53, currentY - 5, 12, 10);
-              } catch(e) {
-                doc.setDrawColor(240, 240, 240);
-                doc.rect(53, currentY - 5, 12, 10);
+            if (isOpening) {
+              if (photo) {
+                try {
+                  let format = 'JPEG';
+                  if (photo.includes('png')) format = 'PNG';
+                  else if (photo.includes('webp')) format = 'WEBP';
+                  doc.addImage(photo, format, 53, currentY - 5, 12, 10);
+                } catch(e) {
+                  doc.setDrawColor(240, 240, 240);
+                  doc.rect(53, currentY - 5, 12, 10);
+                }
+              } else {
+                 doc.setDrawColor(240, 240, 240);
+                 doc.rect(53, currentY - 5, 12, 10);
               }
-            } else {
-               doc.setDrawColor(240, 240, 240);
-               doc.rect(53, currentY - 5, 12, 10);
             }
 
             doc.setFontSize(8);
@@ -846,9 +848,11 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
             if (p.length) {
               doc.text(`${Math.round(p.length)} mm`, 135, currentY);
               doc.setFont('helvetica', 'normal');
-              doc.text(cutType, 160, currentY);
-              // Visual Cut
-              drawCutVisual(doc, 168, currentY - 3, 15, 5, cutType);
+              if (isOpening) {
+                doc.text(cutType, 160, currentY);
+                // Visual Cut
+                drawCutVisual(doc, 168, currentY - 3, 15, 5, cutType);
+              }
             } else {
               doc.text(`1 unité`, 135, currentY);
             }
