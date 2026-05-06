@@ -14,7 +14,12 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
     // Clear canvas
     ctx.clearRect(0, 0, width, height);
     
-    const { L, H, compositionId, optionalSides = {}, isOnlyShutter } = config;
+    const { L, H, compositionId, isOnlyShutter } = config;
+    const sides = config.optionalSides || {};
+    // Show all 4 sides by default when none are explicitly configured
+    const optionalSides = (sides.top || sides.bottom || sides.left || sides.right)
+      ? sides
+      : { top: true, bottom: true, left: true, right: true };
     if (!L || !H) return;
 
     const margin = 80;
@@ -44,54 +49,15 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
     ctx.lineWidth = 2;
     ctx.lineJoin = 'round';
 
-    // 0. Draw Caisson (Shutter Box)
-    if (caissonH > 0) {
-      ctx.fillStyle = '#e2e8f0'; // Slate 200
-      ctx.fillRect(offsetX, offsetY, dW, dCaissonH);
-      ctx.strokeRect(offsetX, offsetY, dW, dCaissonH);
-      
-      // Control Position indication
-      const kitId = config.shutterConfig?.kitId;
-      const controlPos = config.shutterConfig?.controlPosition || 'Droite';
-      const isLeft = controlPos === 'Gauche';
-      
-      if (kitId === 'KIT-MOTE') {
-         // Motor: small circle (blue)
-         ctx.beginPath();
-         ctx.arc(isLeft ? offsetX + 10 : offsetX + dW - 10, offsetY + dCaissonH/2, 5, 0, Math.PI*2);
-         ctx.fillStyle = '#3b82f6';
-         ctx.fill();
-         ctx.stroke();
-      } else if (kitId === 'KIT-SANG' || kitId === 'KIT-MANI') {
-         // Strap/Crank: small vertical line representing the output
-         ctx.lineWidth = 3;
-         ctx.strokeStyle = '#64748b';
-         ctx.beginPath();
-         const lineX = isLeft ? offsetX + 5 : offsetX + dW - 5;
-         ctx.moveTo(lineX, offsetY + dCaissonH/2);
-         ctx.lineTo(lineX, offsetY + dCaissonH + 20); // Extends down slightly
-         ctx.stroke();
-         ctx.lineWidth = 2;
-      }
-
-      // Write HC
-      ctx.fillStyle = '#475569';
-      ctx.font = 'bold 10px Inter, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(`H.C : ${caissonH} mm`, offsetX + dW/2, offsetY + dCaissonH/2 + 4);
-    }
-    
-    // Window part starts AFTER total caisson
+    // Window part starts AFTER caisson
     const winOffsetY = offsetY + dCaissonH;
-    const dH = dH_window; // For compatibility with rest of code
-    
-    // 0. Draw Architraves (Couvre-joints optionnels) around the ENTIRE assembly (Caisson + Window)
-    const cjW = 40 * scale; 
+    const dH = dH_window;
+
+    // 1. Draw Couvre-joints FIRST (layer behind everything)
+    const cjW = 40 * scale;
     ctx.fillStyle = '#f1f5f9';
     const oldStroke = ctx.strokeStyle;
     ctx.strokeStyle = '#cbd5e1';
-    
-    // We use offsetY (top of everything) and dH_total (total height including caisson)
     if (optionalSides.top) {
       ctx.fillRect(offsetX - cjW, offsetY - cjW, dW + cjW * 2, cjW);
       ctx.strokeRect(offsetX - cjW, offsetY - cjW, dW + cjW * 2, cjW);
@@ -112,8 +78,37 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
       ctx.fillRect(offsetX + dW, startY, cjW, totalLen);
       ctx.strokeRect(offsetX + dW, startY, cjW, totalLen);
     }
-
     ctx.strokeStyle = oldStroke;
+
+    // 2. Draw Caisson (Shutter Box) — on top of couvre-joints
+    if (caissonH > 0) {
+      ctx.fillStyle = '#e2e8f0';
+      ctx.fillRect(offsetX, offsetY, dW, dCaissonH);
+      ctx.strokeRect(offsetX, offsetY, dW, dCaissonH);
+      const kitId = config.shutterConfig?.kitId;
+      const controlPos = config.shutterConfig?.controlPosition || 'Droite';
+      const isLeft = controlPos === 'Gauche';
+      if (kitId === 'KIT-MOTE') {
+         ctx.beginPath();
+         ctx.arc(isLeft ? offsetX + 10 : offsetX + dW - 10, offsetY + dCaissonH/2, 5, 0, Math.PI*2);
+         ctx.fillStyle = '#3b82f6';
+         ctx.fill();
+         ctx.stroke();
+      } else if (kitId === 'KIT-SANG' || kitId === 'KIT-MANI') {
+         ctx.lineWidth = 3;
+         ctx.strokeStyle = '#64748b';
+         ctx.beginPath();
+         const lineX = isLeft ? offsetX + 5 : offsetX + dW - 5;
+         ctx.moveTo(lineX, offsetY + dCaissonH/2);
+         ctx.lineTo(lineX, offsetY + dCaissonH + 20);
+         ctx.stroke();
+         ctx.lineWidth = 2;
+      }
+      ctx.fillStyle = '#475569';
+      ctx.font = 'bold 10px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(`H.C : ${caissonH} mm`, offsetX + dW/2, offsetY + dCaissonH/2 + 4);
+    }
 
     const drawJoinery = (x, y, w, h, compId) => {
       const comp = database.compositions?.find(c => c.id === compId);
