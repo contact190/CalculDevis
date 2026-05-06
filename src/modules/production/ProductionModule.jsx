@@ -195,6 +195,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
           }));
           
           const pRef = (database.profiles || []).find(x => x.id === p.id);
+          const unitPrice = pRef ? (pRef.weightPerM * pRef.pricePerKg) : 0;
           
           if (!map[mapKey]) {
             map[mapKey] = { 
@@ -206,7 +207,8 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
               colorId: cfg.colorId,
               baseId: p.id,
               image: pRef?.image,
-              technicalDrawing: pRef?.technicalDrawing
+              technicalDrawing: pRef?.technicalDrawing,
+              unitPrice
             };
           } else {
             map[mapKey].totalMeasure += measure;
@@ -261,8 +263,11 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         items.forEach(a => {
           const mapKey = `${a.id}|${colorName}`;
           const displayName = a.name ? `${a.name} ${a.label ? `[${a.label}]` : ''}` : (a.label || '');
+          const aRef = (database.accessories || []).find(x => x.id === a.id);
+          const unitPrice = aRef?.price || 0;
+          
           if (!map[mapKey]) {
-            map[mapKey] = { ...a, originalNames: new Set([displayName]), totalMeasure: (a.totalMeasure || 0) * cfgQty, totalQty: (a.qty || 0) * cfgQty, colorName };
+            map[mapKey] = { ...a, originalNames: new Set([displayName]), totalMeasure: (a.totalMeasure || 0) * cfgQty, totalQty: (a.qty || 0) * cfgQty, colorName, unitPrice };
           } else {
             map[mapKey].totalMeasure += (a.totalMeasure || 0) * cfgQty;
             map[mapKey].totalQty += (a.qty || 0) * cfgQty;
@@ -294,6 +299,9 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
           const w = Math.round(g.width || 0);
           const h = Math.round(g.height || 0);
           const mapKey = `${g.id}|${colorName}-${w}-${h}`;
+          const gRef = (database.glass || []).find(x => x.id === g.id);
+          const unitPrice = gRef?.pricePerM2 || 0;
+          
           if (!map[mapKey]) {
             map[mapKey] = { 
               ...g, 
@@ -302,7 +310,8 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
               count: (g.qty || 1) * cfgQty, 
               colorName,
               labels: new Set(groupLabels ? [groupLabels] : []),
-              windowRefs: new Set([entry.label || '—'])
+              windowRefs: new Set([entry.label || '—']),
+              unitPrice
             };
           } else {
             map[mapKey].count += (g.qty || 1) * cfgQty;
@@ -1709,21 +1718,40 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                   className="btn"
                   style={{ background: '#06b6d4', color: 'white', fontWeight: 700, fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
                 >
-                  <Layers size={15} /> Bon Vitrage
+                  <Layers size={15} /> Bon Vitrage (PDF)
                 </button>
 
                 <button 
                   onClick={() => {
+                    let csv = "Reference;Designation;Finition;Dimensions;Quantite;Unite\n";
+                    purchasingGlass.forEach(g => {
+                      csv += `${g.baseId || g.id};${g.name};${g.colorName};${g.width}x${g.height};${g.count};U\n`;
+                    });
+                    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                    const link = document.createElement("a");
+                    link.href = URL.createObjectURL(blob);
+                    link.setAttribute("download", `Commande_Vitrage_${activeQuote?.number || 'Chantier'}.csv`);
+                    link.click();
+                  }}
+                  className="btn"
+                  style={{ background: '#0891b2', color: 'white', fontWeight: 700, fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                >
+                  <FileSpreadsheet size={15} /> Bon Vitrage (CSV)
+                </button>
+
+                <button 
+                  onClick={() => {
+                    const q = (v) => `"${String(v || "").replace(/"/g, '""').replace(/;/g, ',')}"`;
                     let csv = "Reference;Designation;Finition;Quantite;Unite\n";
                     displayProfiles.forEach(p => {
                       const bLength = barLengths[p._barKey || p.baseId || p.id] || 6400;
                       const qty = Math.ceil(p.totalMeasure / bLength);
-                      csv += `${p.id.split('|')[0]};${p.name};${p.colorName};${qty};Barres\n`;
+                      csv += `${q(p.baseId || p.id.split('|')[0])};${q(p.name || p.combinedName)};${q(p.colorName || 'Std')};${qty};Barres\n`;
                     });
                     purchasingAccessories.forEach(a => {
                       const isMl = ['M', 'ML', 'JOINT'].includes((a.unit || '').toUpperCase());
                       const qty = isMl ? (a.totalMeasure/1000).toFixed(2) : a.totalQty;
-                      csv += `${a.id.split('|')[0]};${a.combinedName};${a.colorName};${qty};${a.unit || 'U'}\n`;
+                      csv += `${q(a.baseId || a.id.split('|')[0])};${q(a.combinedName)};${q(a.colorName || 'Std')};${qty};${q(a.unit || 'U')}\n`;
                     });
                     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
                     const link = document.createElement("a");
