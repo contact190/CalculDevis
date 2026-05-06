@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Package, Scissors, Download, CheckCircle, Barcode, ShoppingCart, Layers, Edit2, Link2, Link2Off, Plus, QrCode, Trash2, ArrowLeft, FileText, FileSpreadsheet, RefreshCw, Info } from 'lucide-react';
+import { Package, Scissors, Download, CheckCircle, Barcode, ShoppingCart, Layers, Edit2, Link2, Link2Off, Plus, QrCode, Trash2, ArrowLeft, FileText, FileSpreadsheet, RefreshCw, Info, ChevronDown, ChevronUp } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { FormulaEngine } from '../../engine/formula-engine';
 import { DEFAULT_DATA } from '../../data/default-data';
@@ -47,6 +47,8 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
     ai: '',
     logo: '' // URL or DataURI
   });
+  
+  const [isKitSummaryCollapsed, setIsKitSummaryCollapsed] = useState(false);
   
   const toggleProformaSelection = (id) => {
     setProformaSelection(prev => {
@@ -2741,52 +2743,59 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
             </div>
 
             <div className="glass shadow-md" style={{ borderLeft: '4px solid #10b981' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.5rem' }}>
+              <div 
+                style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: isKitSummaryCollapsed ? '0' : '1.5rem', cursor: 'pointer', userSelect: 'none' }}
+                onClick={() => setIsKitSummaryCollapsed(!isKitSummaryCollapsed)}
+              >
                 <Package size={20} color="#10b981" />
-                <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Suivi des Kits (Fenêtres)</h2>
+                <h2 style={{ fontSize: '1.125rem', fontWeight: 600, flex: 1 }}>Suivi des Kits (Fenêtres)</h2>
+                {isKitSummaryCollapsed ? <ChevronDown size={20} color="#64748b" /> : <ChevronUp size={20} color="#64748b" />}
               </div>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-                  <thead>
-                    <tr style={{ textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>
-                      <th style={{ padding: '0.75rem' }}>Fenêtre</th>
-                      <th style={{ padding: '0.75rem' }}>Nb Pièces</th>
-                      <th style={{ padding: '0.75rem' }}>Emplacements (Chariot/Case)</th>
-                      <th style={{ padding: '0.75rem' }}>Statut</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Object.values(windowSummary).map((win, i) => {
-                      const locations = Array.from(win.slots).sort();
-                      return (
-                        <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                          <td style={{ padding: '0.75rem', fontWeight: 700 }}>{win.label}</td>
-                          <td style={{ padding: '0.75rem' }}>{win.pieces.length}</td>
-                          <td style={{ padding: '0.75rem' }}>
-                            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                              {locations.map(loc => (
-                                <span key={loc} style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px', fontSize: '0.75rem', border: '1px solid #e2e8f0' }}>{loc}</span>
-                              ))}
-                            </div>
-                          </td>
-                          <td style={{ padding: '0.75rem' }}>
-                            <span style={{ 
-                              background: locations.length <= 2 ? '#d1fae5' : '#fef3c7', 
-                              color: locations.length <= 2 ? '#065f46' : '#92400e',
-                              padding: '0.25rem 0.75rem',
-                              borderRadius: '999px',
-                              fontSize: '0.75rem',
-                              fontWeight: 700
-                            }}>
-                              {locations.length <= 2 ? '⚡ Kit Optimisé' : '📦 Kit Dispersé'}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              
+              {!isKitSummaryCollapsed && (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                    <thead>
+                      <tr style={{ textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>
+                        <th style={{ padding: '0.75rem' }}>Fenêtre</th>
+                        <th style={{ padding: '0.75rem' }}>Nb Pièces</th>
+                        <th style={{ padding: '0.75rem' }}>Emplacements (Chariot/Case)</th>
+                        <th style={{ padding: '0.75rem' }}>Statut</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.values(windowSummary).map((win, i) => {
+                        const locations = Array.from(win.slots).sort();
+                        return (
+                          <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                            <td style={{ padding: '0.75rem', fontWeight: 700 }}>{win.label}</td>
+                            <td style={{ padding: '0.75rem' }}>{win.pieces.length}</td>
+                            <td style={{ padding: '0.75rem' }}>
+                              <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                                {locations.map(loc => (
+                                  <span key={loc} style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px', fontSize: '0.75rem', border: '1px solid #e2e8f0' }}>{loc}</span>
+                                ))}
+                              </div>
+                            </td>
+                            <td style={{ padding: '0.75rem' }}>
+                              <span style={{ 
+                                background: locations.length <= 2 ? '#d1fae5' : '#fef3c7', 
+                                color: locations.length <= 2 ? '#065f46' : '#92400e',
+                                padding: '0.25rem 0.75rem',
+                                borderRadius: '999px',
+                                fontSize: '0.75rem',
+                                fontWeight: 700
+                              }}>
+                                {locations.length <= 2 ? '⚡ Kit Optimisé' : '📦 Kit Dispersé'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
 
             <div className="glass shadow-md" style={{ borderLeft: '4px solid #f59e0b' }}>
