@@ -9,6 +9,7 @@ const ShippingModule = ({ data, setData }) => {
   const [scanningMode, setScanningMode] = useState(null); // 'loading' | 'unloading' | 'installing'
   const [newZoneName, setNewZoneName] = useState('');
   const [selectedUnitIds, setSelectedUnitIds] = useState(new Set());
+  const [viewingShutter, setViewingShutter] = useState(null); // unit object
   
   const storageZones = data.storageZones || [];
   const shippableOrders = useMemo(() => {
@@ -58,7 +59,7 @@ const ShippingModule = ({ data, setData }) => {
                 }
                 offset += sQty;
               });
-            } else if (item.config.shutterConfig?.active) {
+            } else if (item.config.hasShutter) {
               hasShutter = true;
               const caisson = item.config.shutterConfig?.caissonId;
               const kit = item.config.shutterConfig?.kitId;
@@ -245,6 +246,9 @@ const ShippingModule = ({ data, setData }) => {
       doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(0,0,0);
       doc.text(`Type : ${unit.label}`, 5, 87);
       doc.text(`Cotes : ${unit.dimensions} mm`, 5, 93);
+      if (unit.shutter === 'Oui') {
+        doc.text(`Volet : ${unit.shutterInfo}`, 5, 99);
+      }
       
       // Section 4 : QR CODE (VRAI CODE SCANNABLE)
       doc.setLineWidth(0.4);
@@ -450,7 +454,7 @@ const ShippingModule = ({ data, setData }) => {
                         }}
                       />
                     </th>
-                    <th>Unité</th><th>Repère</th><th>Étage</th><th>Produit</th><th>Zone Stockage</th><th>Statut Actuel</th><th>Actions</th></tr>
+                    <th>Unité</th><th>Repère</th><th>Étage</th><th>Volet</th><th>Produit</th><th>Zone Stockage</th><th>Statut Actuel</th><th>Actions</th></tr>
                 </thead>
                 <tbody>
                   {allUnits.map(unit => (
@@ -495,6 +499,19 @@ const ShippingModule = ({ data, setData }) => {
                         title="Sélectionner tout cet étage"
                       >
                         {unit.floor || '---'}
+                      </td>
+                      <td>
+                        {unit.shutter === 'Oui' ? (
+                          <button 
+                            onClick={() => setViewingShutter(unit)}
+                            className="btn" 
+                            style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem', background: '#fef3c7', color: '#d97706', border: '1px solid #fde68a', fontWeight: 800 }}
+                          >
+                            OUI
+                          </button>
+                        ) : (
+                          <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>NON</span>
+                        )}
                       </td>
                       <td>{unit.label}</td>
                       <td>
@@ -649,6 +666,34 @@ const ShippingModule = ({ data, setData }) => {
           );
         })}
       </div>
+      {/* SHUTTER DETAILS POPUP */}
+      {viewingShutter && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
+          <div className="glass shadow-2xl" style={{ background: 'white', padding: '2rem', borderRadius: '1rem', width: '400px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>Détails du Volet</h3>
+              <button onClick={() => setViewingShutter(null)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#64748b' }}><XCircle size={24} /></button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div className="glass" style={{ padding: '1rem', background: '#f8fafc' }}>
+                <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.8rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Produit / Emplacement</p>
+                <p style={{ margin: 0, fontWeight: 700 }}>{viewingShutter.name} ({viewingShutter.label})</p>
+              </div>
+              <div className="glass" style={{ padding: '1rem', background: '#fffbeb', border: '1px solid #fef3c7' }}>
+                <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.8rem', color: '#b45309', fontWeight: 700, textTransform: 'uppercase' }}>Configuration Volet</p>
+                <p style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#92400e' }}>{viewingShutter.shutterInfo}</p>
+              </div>
+            </div>
+            <button 
+              onClick={() => setViewingShutter(null)}
+              className="btn btn-primary" 
+              style={{ width: '100%', marginTop: '1.5rem' }}
+            >
+              Fermer
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
