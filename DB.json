@@ -1,4 +1,4 @@
-export const DEFAULT_DATA = {
+{
   "glass": [
     {
       "id": "5/12/5",
@@ -43497,4 +43497,4 @@ export const DEFAULT_DATA = {
       "createdAt": "2026-05-05T14:29:03.283Z"
     }
   ]
-};
+}
