@@ -44,7 +44,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
   const [listView, setListView] = useState('active'); // 'active' | 'history'
   const [orderToDelete, setOrderToDelete] = useState(null);
   const [confirmText, setConfirmText] = useState('');
-  const [namingMeasure, setNamingMeasure] = useState(null); // { itemIdx, mId, qty, names: [] }
+  const [namingMeasure, setNamingMeasure] = useState(null); // { itemIdx, mId, qty, names: [], floors: [] }
   const [shutterMeasure, setShutterMeasure] = useState(null); // { itemIdx, mId, shutters: [] }
   
   // Jumelage (Couplage) states
@@ -621,14 +621,18 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                <button 
                                  onClick={() => {
                                    const currentNames = m.instanceNames || [];
+                                   const currentFloors = m.instanceFloors || [];
                                    const names = Array.from({ length: m.qty || 1 }).map((_, i) => currentNames[i] || '');
-                                   setNamingMeasure({ itemIdx: idx, mId: m.id, qty: m.qty || 1, names });
+                                   const floors = Array.from({ length: m.qty || 1 }).map((_, i) => currentFloors[i] || '');
+                                   setNamingMeasure({ itemIdx: idx, mId: m.id, qty: m.qty || 1, names, floors });
                                  }}
                                  className="btn btn-secondary"
                                  style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
                                >
                                  <FileText size={14} /> 
-                                 {m.instanceNames?.filter(Boolean).length > 0 ? `${m.instanceNames.filter(Boolean).length} nom(s)` : '+ Nom'}
+                                 {m.instanceNames?.filter(Boolean).length > 0 || m.instanceFloors?.filter(Boolean).length > 0 
+                                   ? `${m.instanceNames?.filter(Boolean).length || 0} nom(s) / ${m.instanceFloors?.filter(Boolean).length || 0} étage(s)` 
+                                   : '+ Nom / Étage'}
                                </button>
                              </td>
                              <td><input type="number" className="input" value={m.L} onChange={e => updateSiteMeasurement(idx, m.id, 'L', e.target.value)} style={{ minWidth: '100px' }} /></td>
@@ -925,20 +929,38 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)' }}>
             <div className="glass shadow-2xl" style={{ background: 'white', padding: '2rem', borderRadius: '1rem', width: '400px' }}>
               <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, marginBottom: '1.5rem' }}>Noms des Fenêtres ({namingMeasure.qty})</h3>
-              <div style={{ maxHeight: '60vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <div style={{ maxHeight: '60vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 {namingMeasure.names.map((name, i) => (
-                  <div key={i} className="form-group">
-                    <label className="label">Fenêtre {i + 1}</label>
-                    <input 
-                      className="input" 
-                      value={name} 
-                      onChange={e => {
-                        const newNames = [...namingMeasure.names];
-                        newNames[i] = e.target.value;
-                        setNamingMeasure({ ...namingMeasure, names: newNames });
-                      }} 
-                      placeholder={`Ex: Cuisine ${i+1}`}
-                    />
+                  <div key={i} className="glass" style={{ padding: '1rem', background: '#f8fafc' }}>
+                    <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', fontWeight: 700, color: '#64748b' }}>Fenêtre {i + 1} / {namingMeasure.qty}</p>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                      <div className="form-group">
+                        <label className="label" style={{ fontSize: '0.75rem' }}>Nom / Emplacement</label>
+                        <input 
+                          className="input" 
+                          value={name} 
+                          onChange={e => {
+                            const newNames = [...namingMeasure.names];
+                            newNames[i] = e.target.value;
+                            setNamingMeasure({ ...namingMeasure, names: newNames });
+                          }} 
+                          placeholder="Ex: Cuisine..."
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="label" style={{ fontSize: '0.75rem' }}>Étage</label>
+                        <input 
+                          className="input" 
+                          value={namingMeasure.floors[i] || ''} 
+                          onChange={e => {
+                            const newFloors = [...namingMeasure.floors];
+                            newFloors[i] = e.target.value;
+                            setNamingMeasure({ ...namingMeasure, floors: newFloors });
+                          }} 
+                          placeholder="Ex: RDC, 1er..."
+                        />
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -946,7 +968,16 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                 <button onClick={() => setNamingMeasure(null)} className="btn btn-secondary" style={{ flex: 1 }}>Annuler</button>
                 <button 
                   onClick={() => {
-                    updateSiteMeasurement(namingMeasure.itemIdx, namingMeasure.mId, 'instanceNames', namingMeasure.names);
+                    const updatedItems = [...selectedOrder.items];
+                    const itemIdx = namingMeasure.itemIdx;
+                    const mId = namingMeasure.mId;
+                    updatedItems[itemIdx] = {
+                      ...updatedItems[itemIdx],
+                      siteMeasurements: updatedItems[itemIdx].siteMeasurements.map(m => 
+                        m.id === mId ? { ...m, instanceNames: namingMeasure.names, instanceFloors: namingMeasure.floors } : m
+                      )
+                    };
+                    handleUpdateOrder({ ...selectedOrder, items: updatedItems });
                     setNamingMeasure(null);
                   }} 
                   className="btn btn-primary" 

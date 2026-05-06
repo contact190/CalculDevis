@@ -32,6 +32,7 @@ const ShippingModule = ({ data, setData }) => {
           for (let i = 0; i < m.qty; i++) {
             const unitId = `${selectedOrder.id}-${batch.id}-${item.id}-${m.id}-${i}`;
             const name = m.instanceNames?.[i] || `${item.label} #${i + 1}`;
+            const floor = m.instanceFloors?.[i] || '';
             const status = selectedOrder.unitStatuses?.[unitId] || 'Produit';
             const storageZoneId = selectedOrder.unitStorageZones?.[unitId];
             const zone = storageZones.find(z => z.id === storageZoneId);
@@ -44,6 +45,7 @@ const ShippingModule = ({ data, setData }) => {
               mId: m.id,
               index: i,
               name: name,
+              floor: floor,
               label: item.label,
               dimensions: `${m.L} x ${m.H}`,
               status: status,
@@ -182,7 +184,10 @@ const ShippingModule = ({ data, setData }) => {
       
       doc.setFontSize(10);
       doc.text(`CMD N° : ${selectedOrder.id}`, 5, 38);
-      doc.text(`LOT : ${unit.batchId}`, 60, 38);
+      doc.text(`LOT : ${unit.batchId}`, 45, 38);
+      doc.setTextColor(37, 99, 235);
+      doc.text(`ÉTAGE : ${unit.floor || '---'}`, 75, 38);
+      doc.setTextColor(0, 0, 0);
       
       doc.setLineWidth(0.3);
       doc.line(5, 42, 95, 42);
@@ -412,7 +417,7 @@ const ShippingModule = ({ data, setData }) => {
                         }}
                       />
                     </th>
-                    <th>Unité</th><th>Repère</th><th>Produit</th><th>Zone Stockage</th><th>Statut Actuel</th><th>Actions</th></tr>
+                    <th>Unité</th><th>Repère</th><th>Étage</th><th>Produit</th><th>Zone Stockage</th><th>Statut Actuel</th><th>Actions</th></tr>
                 </thead>
                 <tbody>
                   {allUnits.map(unit => (
@@ -440,6 +445,23 @@ const ShippingModule = ({ data, setData }) => {
                         title="Sélectionner tous les éléments de ce repère"
                       >
                         {unit.name}
+                      </td>
+                      <td 
+                        style={{ cursor: 'pointer', color: '#3b82f6', fontWeight: 600 }}
+                        onClick={() => {
+                          if (!unit.floor) return;
+                          const sameFloorIds = allUnits.filter(u => u.floor === unit.floor).map(u => u.id);
+                          setSelectedUnitIds(prev => {
+                            const next = new Set(prev);
+                            const allAlreadySelected = sameFloorIds.every(id => next.has(id));
+                            if (allAlreadySelected) sameFloorIds.forEach(id => next.delete(id));
+                            else sameFloorIds.forEach(id => next.add(id));
+                            return next;
+                          });
+                        }}
+                        title="Sélectionner tout cet étage"
+                      >
+                        {unit.floor || '---'}
                       </td>
                       <td>{unit.label}</td>
                       <td>
