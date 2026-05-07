@@ -492,107 +492,210 @@ const ShippingModule = ({ data, setData, refetchData }) => {
       if (dataUrl.startsWith('data:image/webp')) return 'WEBP';
       return 'JPEG';
     };
-    
-    doc.setFillColor(30, 41, 59); doc.rect(0, 0, pw, ph, 'F');
-    doc.setTextColor(255, 255, 255); doc.setFontSize(28); doc.setFont('helvetica', 'bold');
-    doc.text('ANALYSE DE PERFORMANCE POSE', pw / 2, ph / 3, { align: 'center' });
-    
-    const totalUnits = allUnits.length;
-    const finishedUnits = allUnits.filter(u => u.statusAlu === 'Fini' && u.statusVitrage === 'Fini').length;
-    const progress = totalUnits > 0 ? (finishedUnits / totalUnits) * 100 : 0;
-    
-    doc.setFontSize(14);
-    doc.text(`Avancement Global : ${progress.toFixed(1)}% | Unités : ${finishedUnits}/${totalUnits}`, pw / 2, ph / 3 + 20, { align: 'center' });
-    
-    // KPI Calculation
-    const installerStats = {};
-    const issuesFound = [];
-    
+
+    // --- PAGE 1: EXECUTIVE DASHBOARD ---
+    doc.setFillColor(15, 23, 42); doc.rect(0, 0, pw, 70, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(24); doc.setFont('helvetica', 'bold');
+    doc.text('AUDIT DE PERFORMANCE CHANTIER', 15, 30);
+    doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+    doc.text(`PROJET : ${selectedOrder.id} | CLIENT : ${selectedOrder.clientName}`, 15, 40);
+    doc.text(`GÉNÉRÉ LE : ${new Date().toLocaleString('fr-FR')}`, 15, 45);
+
+    // KPI Calc
+    const stats = {
+      total: allUnits.length,
+      done: allUnits.filter(u => u.statusAlu === 'Posé' || u.statusAlu === 'Fini').length,
+      vitDone: allUnits.filter(u => u.statusVitrage === 'Fini').length,
+      sav: 0,
+      totalTime: 0,
+      timeCount: 0
+    };
+
+    const installerMap = {};
+    const issues = [];
+
     allUnits.forEach(u => {
-      const events = timeline[u.id] || [];
-      events.forEach(ev => {
-        if (!installerStats[ev.user]) installerStats[ev.user] = { finished: 0, issues: 0, totalTime: 0, count: 0 };
-        if (ev.status === 'Posé' || ev.status === 'Fini') installerStats[ev.user].finished++;
-        if (ev.issue) {
-          installerStats[ev.user].issues++;
-          issuesFound.push({ unit: u.name, user: ev.user, issue: ev.issue, date: ev.date });
-        }
+      const events = [...(timeline[u.id] || [])].sort((a,b) => new Date(a.date) - new Date(b.date));
+      
+      events.forEach((ev, idx) => {
+        if (!installerMap[ev.user]) installerMap[ev.user] = { manut: 0, pose: 0, finit: 0, sav: 0, times: [] };
         
-        // Time tracking
-        if (ev.action === 'finish') {
-          const startEv = events.find(e => e.component === ev.component && e.action === 'start' && new Date(e.date) < new Date(ev.date));
-          if (startEv) {
-            const duration = (new Date(ev.date) - new Date(startEv.date)) / (1000 * 60); // in minutes
-            installerStats[ev.user].totalTime += duration;
-            installerStats[ev.user].count++;
+        if (ev.status === 'Manutention') installerMap[ev.user].manut++;
+        if (ev.status === 'Posé') installerMap[ev.user].pose++;
+        if (ev.status === 'Fini') installerMap[ev.user].finit++;
+        
+        if (ev.issue) {
+          stats.sav++;
+          installerMap[ev.user].sav++;
+          issues.push({ unit: u.name, user: ev.user, issue: ev.issue, date: ev.date });
+        }
+
+        // Duration based on previous event end time
+        if (idx > 0) {
+          const prevEv = events[idx - 1];
+          const diff = (new Date(ev.date) - new Date(prevEv.date)) / 60000;
+          if (diff > 0 && diff < 1440) { // Max 24h
+            installerMap[ev.user].times.push(diff);
           }
         }
       });
     });
 
-    doc.addPage(); doc.setTextColor(30, 41, 59);
-    doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.text('KPI - Performance Poseurs', 15, 20);
-    doc.setDrawColor(30, 41, 59); doc.line(15, 22, 50, 22);
-    
-    let kpiY = 35;
-    Object.entries(installerStats).forEach(([name, stats]) => {
-      doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.text(`Poseur : ${name}`, 15, kpiY);
-      doc.setFontSize(9); doc.setFont('helvetica', 'normal');
-      const avg = stats.count > 0 ? (stats.totalTime / stats.count).toFixed(1) : 'N/A';
-      doc.text(`Unités traitées: ${stats.finished}  |  Temps moyen/unité: ${avg} min  |  Signalements SAV: ${stats.issues}`, 15, kpiY + 5);
-      kpiY += 15;
+    // Drawing KPI Boxes
+    const drawBox = (x, y, w, h, label, value, color) => {
+      doc.setFillColor(248, 250, 252); doc.roundedRect(x, y, w, h, 2, 2, 'F');
+      doc.setDrawColor(226, 232, 240); doc.rect(x, y, w, h, 'S');
+      doc.setTextColor(100, 116, 139); doc.setFontSize(8); doc.text(label.toUpperCase(), x + 5, y + 8);
+      doc.setTextColor(color[0], color[1], color[2]); doc.setFontSize(16); doc.text(value, x + 5, y + 20);
+    };
+
+    let bx = 15;
+    const bw = (pw - 40) / 4;
+    drawBox(bx, 80, bw, 30, 'Unités Totales', `${stats.total}`, [30, 41, 59]);
+    drawBox(bx + bw + 3.3, 80, bw, 30, 'Taux Pose', `${((stats.done/stats.total)*100 || 0).toFixed(1)}%`, [139, 92, 246]);
+    drawBox(bx + (bw + 3.3)*2, 80, bw, 30, 'Taux Finition', `${((stats.vitDone/stats.total)*100 || 0).toFixed(1)}%`, [16, 185, 129]);
+    drawBox(bx + (bw + 3.3)*3, 80, bw, 30, 'Litiges SAV', `${stats.sav}`, [239, 68, 68]);
+
+    // Visual Chart: Workload distribution
+    doc.setTextColor(30, 41, 59); doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+    doc.text('DISTRIBUTION DE LA CHARGE DE TRAVAIL', 15, 125);
+    let chartY = 135;
+    Object.entries(installerMap).forEach(([name, data]) => {
+      const totalActions = data.manut + data.pose + data.finit;
+      if (totalActions === 0) return;
+      doc.setFontSize(8); doc.setTextColor(71, 85, 105); doc.text(name, 15, chartY + 5);
+      const fullW = pw - 60;
+      const mWS = (data.manut / stats.total) * fullW;
+      const pWS = (data.pose / stats.total) * fullW;
+      const fWS = (data.finit / stats.total) * fullW;
+      
+      doc.setFillColor(59, 130, 246, 0.2); doc.rect(45, chartY, mWS, 6, 'F'); // Manut
+      doc.setFillColor(139, 92, 246, 0.2); doc.rect(45 + mWS, chartY, pWS, 6, 'F'); // Pose
+      doc.setFillColor(16, 185, 129, 0.2); doc.rect(45 + mWS + pWS, chartY, fWS, 6, 'F'); // Finit
+      chartY += 10;
     });
 
-    if (issuesFound.length > 0) {
-      doc.addPage(); doc.setFontSize(16); doc.setFont('helvetica', 'bold'); doc.text('Registre des Non-Conformités (SAV)', 15, 20);
-      let issueY = 35;
-      issuesFound.forEach(iss => {
-        doc.setFontSize(9); doc.setFont('helvetica', 'normal');
-        doc.text(`${new Date(iss.date).toLocaleDateString()} - ${iss.unit} : ${iss.issue} (Reporté par ${iss.user})`, 15, issueY);
-        issueY += 7;
+    // --- PAGE 2: INSTALLER ANALYSIS ---
+    doc.addPage();
+    doc.setTextColor(30, 41, 59); doc.setFontSize(18); doc.setFont('helvetica', 'bold');
+    doc.text('ANALYSE DÉTAILLÉE PAR INTERVENANT', 15, 25);
+    doc.setDrawColor(30, 41, 59); doc.line(15, 28, 40, 28);
+
+    let ty = 45;
+    doc.setFontSize(8); doc.setFillColor(241, 245, 249); doc.rect(15, ty - 7, pw - 30, 10, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.text('NOM DU POSEUR', 18, ty);
+    doc.text('MANUT.', 65, ty);
+    doc.text('POSE ALU', 85, ty);
+    doc.text('FINITION', 110, ty);
+    doc.text('T. MOYEN', 135, ty);
+    doc.text('SAV', 160, ty);
+    doc.text('SCORE Q.', 180, ty);
+
+    ty += 12;
+    Object.entries(installerMap).forEach(([name, data]) => {
+      doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+      doc.text(name, 18, ty);
+      doc.text(`${data.manut}`, 65, ty);
+      doc.text(`${data.pose}`, 85, ty);
+      doc.text(`${data.finit}`, 110, ty);
+      const avg = data.times.length > 0 ? (data.times.reduce((a,b)=>a+b,0)/data.times.length).toFixed(1) + 'm' : '---';
+      doc.text(avg, 135, ty);
+      doc.text(`${data.sav}`, 160, ty);
+      const score = Math.max(0, 100 - (data.sav * 10)).toFixed(0) + '%';
+      doc.setTextColor(data.sav > 2 ? 220 : 0, data.sav > 2 ? 0 : 150, 0);
+      doc.text(score, 180, ty);
+      doc.setTextColor(30, 41, 59);
+      doc.setDrawColor(241, 245, 249); doc.line(15, ty + 4, pw - 15, ty + 4);
+      ty += 12;
+      if (ty > ph - 20) { doc.addPage(); ty = 30; }
+    });
+
+    if (issues.length > 0) {
+      doc.addPage();
+      doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.text('REGISTRE DES NON-CONFORMITÉS', 15, 25);
+      let iy = 45;
+      issues.forEach(iss => {
+        doc.setFillColor(254, 242, 242); doc.roundedRect(15, iy, pw - 30, 15, 1, 1, 'F');
+        doc.setFontSize(9); doc.setTextColor(185, 28, 28); doc.setFont('helvetica', 'bold');
+        doc.text(`${iss.unit} : ${iss.issue}`, 20, iy + 6);
+        doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(153, 27, 27);
+        doc.text(`Signalé par ${iss.user} le ${new Date(iss.date).toLocaleString()}`, 20, iy + 11);
+        iy += 18;
+        if (iy > ph - 20) { doc.addPage(); iy = 25; }
       });
     }
 
-    doc.addPage(); doc.setTextColor(30, 41, 59);
-    let y = 20; doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.text('Traçabilité Détaillée & Cycle de Vie', 15, y);
-    doc.line(15, y + 2, 40, y + 2);
-    y += 15;
+    // --- PAGE 3+: UNIT DRILL-DOWN ---
+    doc.addPage();
+    let uy = 20;
+    doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 41, 59);
+    doc.text('AUDIT DÉTAILLÉ PAR PRODUIT', 15, uy);
+    doc.line(15, uy + 2, 40, uy + 2);
+    uy += 20;
 
     allUnits.forEach((unit) => {
       const events = timeline[unit.id] || [];
       const photo = photos[unit.id];
+      const boxH = Math.max(60, 25 + (events.length * 6) + (photo ? 50 : 0));
 
-      const photoH = photo ? 55 : 0;
-      const eventsH = (events.length * 5) + 12;
-      const boxH = 15 + eventsH + photoH;
+      if (uy + boxH > ph - 20) { doc.addPage(); uy = 20; }
 
-      if (y + boxH > ph - 20) { doc.addPage(); y = 20; }
+      // Card Container
+      doc.setDrawColor(226, 232, 240); doc.setFillColor(255, 255, 255);
+      doc.roundedRect(15, uy, pw - 30, boxH, 2, 2, 'FD');
 
-      doc.setDrawColor(226, 232, 240); doc.setFillColor(252, 253, 255);
-      doc.roundedRect(15, y, pw - 30, boxH, 1, 1, 'FD');
-      
-      doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 41, 59);
-      doc.text(`${unit.name} — ${unit.label}`, 20, y + 8);
-      
-      let evY = y + 15;
-      doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(71, 85, 105);
-      events.forEach(ev => {
-        const timeStr = ev.action === 'start' ? ' [DÉBUT]' : ev.action === 'finish' ? ' [FIN]' : ev.action === 'issue' ? ' [SAV]' : '';
-        doc.text(`[${new Date(ev.date).toLocaleString('fr-FR')}] ${ev.status}${timeStr} (${ev.component}) — ${ev.user}`, 22, evY);
-        evY += 5;
+      // Left Info Bar
+      doc.setFillColor(30, 41, 59); doc.rect(15, uy, 2, boxH, 'F');
+
+      // Header
+      doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 41, 59);
+      doc.text(`${unit.name} | ${unit.label}`, 22, uy + 10);
+      doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 116, 139);
+      doc.text(`${unit.dimensions} mm | Étage: ${unit.floor || 'N/A'} | Zone: ${unit.zoneName || 'Non zoné'}`, 22, uy + 15);
+
+      // Specs callout
+      if (unit.shutterInfo) {
+        doc.setFillColor(239, 246, 255); doc.roundedRect(pw - 85, uy + 5, 65, 12, 1, 1, 'F');
+        doc.setTextColor(30, 64, 175); doc.setFontSize(7); doc.text('CONFIG VOLET', pw - 80, uy + 9);
+        doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.text(unit.shutterInfo, pw - 80, uy + 14);
+      }
+
+      // Timeline Visual
+      let ey = uy + 25;
+      doc.setFontSize(7.5); doc.setTextColor(51, 65, 85);
+      const sortedEvents = [...events].sort((a,b) => new Date(a.date) - new Date(b.date));
+      sortedEvents.forEach((ev, idx) => {
+        doc.setDrawColor(203, 213, 225);
+        if (idx < sortedEvents.length - 1) doc.line(25, ey + 2, 25, ey + 6);
+        doc.setFillColor(idx === sortedEvents.length - 1 ? 59 : 203, idx === sortedEvents.length - 1 ? 130 : 213, idx === sortedEvents.length - 1 ? 246 : 225);
+        doc.circle(25, ey, 1, 'F');
+        
+        let durStr = "";
+        if (idx > 0) {
+          const diff = (new Date(ev.date) - new Date(sortedEvents[idx-1].date)) / 60000;
+          if (diff > 0 && diff < 1440) durStr = ` (+${diff.toFixed(0)} min)`;
+        }
+        
+        const typeTag = ev.action === 'start' ? ' [DÉBUT]' : ev.action === 'finish' ? ' [FIN]' : ev.action === 'issue' ? ' [SAV]' : '';
+        doc.setFont('helvetica', idx === sortedEvents.length - 1 ? 'bold' : 'normal');
+        doc.text(`${new Date(ev.date).toLocaleTimeString('fr-FR')} - ${ev.status}${typeTag}${durStr} — par ${ev.user}`, 30, ey + 1);
+        ey += 6;
       });
 
+      // Photo
       if (photo) {
         try {
           const fmt = getImgFormat(photo);
-          doc.addImage(photo, fmt, 22, evY + 2, 60, 45);
-        } catch (e) { console.error(e); }
+          doc.addImage(photo, fmt, 22, ey + 5, 55, 40);
+        } catch (e) {}
       }
-      
-      y += boxH + 8;
+
+      uy += boxH + 10;
     });
 
-    doc.save(`Rapport_Performance_V2_${selectedOrder.id}.pdf`);
+    doc.save(`RAPPORT_AUDIT_V3_${selectedOrder.id}.pdf`);
   };
 
   const generateDeliveryNote = (type = 'ALU') => {
