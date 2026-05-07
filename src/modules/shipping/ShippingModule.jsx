@@ -16,6 +16,8 @@ const ShippingModule = ({ data, setData, refetchData }) => {
   const [showInstallerQr, setShowInstallerQr] = useState(null); // orderId or null
   const [showScanner, setShowScanner] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [showTeamManager, setShowTeamManager] = useState(false);
+  const [newInstallerName, setNewInstallerName] = useState('');
 
   const handleRefresh = async () => {
     setIsSyncing(true);
@@ -56,7 +58,7 @@ const ShippingModule = ({ data, setData, refetchData }) => {
             const unitId = `${selectedOrder.id}-${batch.id}-${item.id}-${m.id}-${i}`;
             const name = m.instanceNames?.[i] || `${item.label} #${i + 1}`;
             const floor = m.instanceFloors?.[i] || '';
-            const status = selectedOrder.unitStatuses?.[unitId] || 'Produit';
+            const dualStatus = selectedOrder.unitStatusesDual?.[unitId] || { alu: 'Produit', vitrage: 'Produit' };
             const storageZoneId = selectedOrder.unitStorageZones?.[unitId];
             const zone = storageZones.find(z => z.id === storageZoneId);
 
@@ -103,7 +105,8 @@ const ShippingModule = ({ data, setData, refetchData }) => {
               floor: floor,
               label: item.label,
               dimensions: `${m.L} x ${m.H}`,
-              status: status,
+              statusAlu: dualStatus.alu,
+              statusVitrage: dualStatus.vitrage,
               shutter: hasShutter ? 'Oui' : 'Non',
               shutterInfo: shutterInfo,
               storageZoneId: storageZoneId,
@@ -116,15 +119,56 @@ const ShippingModule = ({ data, setData, refetchData }) => {
     return units;
   }, [selectedOrder, selectedBatchIds]);
 
-  const handleUpdateUnitStatus = (unitId, newStatus) => {
+  const handleUpdateUnitStatusDual = (unitId, component, newStatus, userName = 'ADMIN') => {
     setData(prev => {
       const orders = [...(prev.orders || [])];
       const oIdx = orders.findIndex(o => o.id === selectedOrderId);
       if (oIdx === -1) return prev;
       const order = { ...orders[oIdx] };
-      const statuses = { ...(order.unitStatuses || {}) };
-      statuses[unitId] = newStatus;
-      order.unitStatuses = statuses;
+      const dualStatuses = { ...(order.unitStatusesDual || {}) };
+      const current = dualStatuses[unitId] || { alu: 'Produit', vitrage: 'Produit' };
+      
+      const event = {
+        date: new Date().toISOString(),
+        user: userName,
+        component: component,
+        status: newStatus
+      };
+
+      if (component === 'both') {
+        current.alu = newStatus;
+        current.vitrage = newStatus;
+      } else {
+        current[component] = newStatus;
+      }
+      
+      const timeline = { ...(order.unitTimeline || {}) };
+      if (!timeline[unitId]) timeline[unitId] = [];
+      timeline[unitId].push(event);
+
+      dualStatuses[unitId] = { ...current };
+      order.unitStatusesDual = dualStatuses;
+      order.unitTimeline = timeline;
+      orders[oIdx] = order;
+      return { ...prev, orders };
+    });
+  };
+
+  const handleUpdateTeam = (name, action = 'add') => {
+    setData(prev => {
+      const orders = [...(prev.orders || [])];
+      const oIdx = orders.findIndex(o => o.id === selectedOrderId);
+      if (oIdx === -1) return prev;
+      const order = { ...orders[oIdx] };
+      const team = [...(order.installers || [])];
+      
+      if (action === 'add' && name && !team.includes(name)) team.push(name);
+      if (action === 'remove') {
+        const idx = team.indexOf(name);
+        if (idx > -1) team.splice(idx, 1);
+      }
+      
+      order.installers = team;
       orders[oIdx] = order;
       return { ...prev, orders };
     });
@@ -173,25 +217,15 @@ const ShippingModule = ({ data, setData, refetchData }) => {
     });
   };
 
-  const handleScanUnit = (id) => {
+   const handleScanUnit = (id, component = 'alu') => {
     const unit = allUnits.find(u => u.id === id);
     if (!unit) {
       alert("ERREUR : Code inconnu ou lot non sélectionné !");
       return 'error';
     }
-    if (scanningMode === 'loading') {
-      if (unit.status === 'Chargé') { alert("ATTENTION : Déjà chargé !"); return 'warning'; }
-      handleUpdateUnitStatus(id, 'Chargé');
-      return 'success';
-    }
-    if (scanningMode === 'unloading') {
-      handleUpdateUnitStatus(id, 'Livré');
-      return 'success';
-    }
-    if (scanningMode === 'installing') {
-      handleUpdateUnitStatus(id, 'Posé');
-      return 'success';
-    }
+    const targetStatus = scanningMode === 'loading' ? 'Chargé' : (scanningMode === 'unloading' ? 'Livré' : 'Posé');
+    handleUpdateUnitStatusDual(id, component, targetStatus);
+    return 'success';
   };
 
   const generatePackingLabels = async () => {
@@ -335,100 +369,63 @@ const ShippingModule = ({ data, setData, refetchData }) => {
     doc.text('Validation Chef d\'Équipe', 15, y);
     doc.text('Visa Client', pw - 40, y);
     
-    doc.save(`Fiche_Pose_${selectedOrder.id}.pdf`);
-  };
-
-  const generateInstallationReport = () => {
+    doc.save(`Fiche_Pose_${selectedOrder.id}.   const generateInstallationReport = () => {
     const doc = new jsPDF();
     const pw = doc.internal.pageSize.getWidth();
     const ph = doc.internal.pageSize.getHeight();
     const photos = selectedOrder.unitInstallationPhotos || {};
+    const timeline = selectedOrder.unitTimeline || {};
     
     // Page de Garde
-    doc.setFillColor(30, 41, 59);
-    doc.rect(0, 0, pw, ph, 'F');
-    
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(28); doc.setFont('helvetica', 'bold');
-    doc.text('RAPPORT D\'ÉTAT DE POSE', pw / 2, ph / 3, { align: 'center' });
-    
+    doc.setFillColor(30, 41, 59); doc.rect(0, 0, pw, ph, 'F');
+    doc.setTextColor(255, 255, 255); doc.setFontSize(28); doc.setFont('helvetica', 'bold');
+    doc.text('RAPPORT DE PERFORMANCE', pw / 2, ph / 3, { align: 'center' });
     doc.setFontSize(16); doc.setFont('helvetica', 'normal');
     doc.text(`CLIENT : ${selectedOrder.clientName}`, pw / 2, ph / 3 + 20, { align: 'center' });
-    doc.text(`COMMANDE : ${selectedOrder.id}`, pw / 2, ph / 3 + 32, { align: 'center' });
-    doc.text(`DATE : ${new Date().toLocaleDateString()}`, pw / 2, ph / 3 + 44, { align: 'center' });
+    doc.text(`PROJET : ${selectedOrder.id}`, pw / 2, ph / 3 + 30, { align: 'center' });
     
-    doc.setDrawColor(255, 255, 255); doc.setLineWidth(1);
-    doc.line(pw / 2 - 40, ph / 3 + 55, pw / 2 + 40, ph / 3 + 55);
+    const totalUnits = allUnits.length;
+    const finishedUnits = allUnits.filter(u => u.statusAlu === 'Fini' && u.statusVitrage === 'Fini').length;
+    const progress = totalUnits > 0 ? (finishedUnits / totalUnits) * 100 : 0;
+    
+    doc.setFontSize(14);
+    doc.text(`Avancement Global : ${progress.toFixed(1)}%`, pw / 2, ph / 3 + 50, { align: 'center' });
 
-    // Liste des unités
-    doc.addPage();
-    doc.setTextColor(30, 41, 59);
-    
-    let y = 20;
-    doc.setFontSize(18); doc.setFont('helvetica', 'bold');
-    doc.text('Synthèse des Installations', 15, y);
+    // Détails par unité
+    doc.addPage(); doc.setTextColor(30, 41, 59);
+    let y = 20; doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.text('Historique des Unités', 15, y);
     y += 15;
 
-    allUnits.forEach((unit, index) => {
-      if (y > ph - 60) {
-        doc.addPage();
-        y = 20;
-      }
-
+    allUnits.forEach((unit) => {
+      if (y > ph - 60) { doc.addPage(); y = 20; }
+      const events = timeline[unit.id] || [];
       const photo = photos[unit.id];
-      const isInstalled = unit.status === 'Posé';
 
-      doc.setDrawColor(226, 232, 240);
-      doc.setLineWidth(0.5);
-      doc.rect(15, y, pw - 30, photo ? 85 : 30);
+      doc.setDrawColor(226, 232, 240); doc.rect(15, y, pw - 30, 40 + (events.length * 5));
+      doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.text(`${unit.name} (${unit.label})`, 20, y + 10);
+      doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+      doc.text(`Status: Alu[${unit.statusAlu}] | Vitrage[${unit.statusVitrage}]`, 20, y + 17);
       
-      doc.setFontSize(12); doc.setFont('helvetica', 'bold');
-      doc.text(`${unit.name} (${unit.label})`, 20, y + 10);
-      
-      doc.setFontSize(10); doc.setFont('helvetica', 'normal');
-      doc.text(`Dimensions: ${unit.dimensions} mm | Étage: ${unit.floor || 'N/A'}`, 20, y + 17);
-      
-      // Status Badge
-      if (isInstalled) {
-        doc.setFillColor(16, 185, 129);
-        doc.rect(pw - 55, y + 4, 35, 8, 'F');
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(9); doc.setFont('helvetica', 'bold');
-        doc.text('INSTALLÉ', pw - 37.5, y + 9.5, { align: 'center' });
-      } else {
-        doc.setFillColor(245, 158, 11);
-        doc.rect(pw - 55, y + 4, 35, 8, 'F');
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(9); doc.setFont('helvetica', 'bold');
-        doc.text(unit.status.toUpperCase(), pw - 37.5, y + 9.5, { align: 'center' });
-      }
+      let evY = y + 25;
+      doc.setFontSize(8); doc.setTextColor(100);
+      events.forEach(ev => {
+        doc.text(`${new Date(ev.date).toLocaleString()} : ${ev.status} (${ev.component}) par ${ev.user}`, 22, evY);
+        evY += 5;
+      });
       
       doc.setTextColor(30, 41, 59);
-
-      if (photo) {
-        try {
-          doc.addImage(photo, 'JPEG', 20, y + 25, 50, 50);
-          doc.setFontSize(9); doc.setFont('helvetica', 'italic');
-          doc.text('Photo de validation poseur', 75, y + 35);
-        } catch (e) {
-          doc.text('[Erreur affichage photo]', 20, y + 30);
-        }
-        y += 95;
-      } else {
-        doc.setFontSize(9); doc.setFont('helvetica', 'italic'); doc.setTextColor(148, 163, 184);
-        doc.text('Aucune photo disponible pour cette unité.', 20, y + 24);
-        y += 40;
-      }
+      y = evY + 10;
     });
 
-    doc.save(`Rapport_Pose_${selectedOrder.id}.pdf`);
+    doc.save(`Rapport_Performance_${selectedOrder.id}.pdf`);
+  };r.id}.pdf`);
   };
 
-  const generateDeliveryNote = () => {
+  const generateDeliveryNote = (type = 'ALU') => {
     const doc = new jsPDF();
     const pw = doc.internal.pageSize.getWidth();
     doc.setFontSize(22); doc.setFont('helvetica', 'bold');
-    doc.text('BON DE LIVRAISON', pw / 2, 20, { align: 'center' });
+    doc.text(`BON DE LIVRAISON : ${type}`, pw / 2, 20, { align: 'center' });
     doc.setFontSize(12); doc.setFont('helvetica', 'normal');
     doc.text(`Date: ${new Date().toLocaleDateString()}`, 15, 35);
     doc.text(`Commande N°: ${selectedOrder.id}`, 15, 42);
@@ -436,28 +433,44 @@ const ShippingModule = ({ data, setData, refetchData }) => {
     doc.line(15, 55, pw - 15, 55);
     let y = 65;
     doc.setFont('helvetica', 'bold');
-    doc.text('Qté', 15, y); doc.text('Désignation Produit', 30, y); doc.text('Repère', 120, y); doc.text('Statut', 180, y);
+    doc.text('Qté', 15, y); doc.text('Produit', 30, y); doc.text('Repère', 120, y); doc.text('Statut', 180, y);
     y += 5; doc.line(15, y, pw - 15, y); y += 8;
     doc.setFont('helvetica', 'normal');
     allUnits.forEach(u => {
+      const status = type === 'ALU' ? u.statusAlu : u.statusVitrage;
       doc.text('1', 15, y); doc.text(u.label.substring(0, 35), 30, y); doc.text(u.name, 120, y);
-      doc.text(u.status === 'Livré' || u.status === 'Posé' ? 'REÇU' : '---', 180, y);
+      doc.text(status !== 'Produit' ? 'LIVRÉ' : '---', 180, y);
       y += 8; if (y > 270) { doc.addPage(); y = 20; }
     });
-    y += 20; doc.setFont('helvetica', 'bold');
-    doc.text('Date et Signature Client (Précédée de "Bon pour réception")', 15, y);
-    doc.rect(15, y + 5, 180, 40);
-    doc.save(`BL_${selectedOrder.id}.pdf`);
+
+    setData(prev => {
+      const orders = [...(prev.orders || [])];
+      const oIdx = orders.findIndex(o => o.id === selectedOrderId);
+      if (oIdx === -1) return prev;
+      const order = { ...orders[oIdx] };
+      const blDates = { ...(order.blDates || {}) };
+      blDates[type] = new Date().toISOString();
+      order.blDates = blDates;
+      orders[oIdx] = order;
+      return { ...prev, orders };
+    });
+
+    doc.save(`BL_${type}_${selectedOrder.id}.pdf`);
   };
 
   if (selectedOrderId && activeView !== 'list') {
-    const stats = {
-      total: allUnits.length,
-      produit: allUnits.filter(u => u.status === 'Produit').length,
-      chargé: allUnits.filter(u => u.status === 'Chargé').length,
-      livré: allUnits.filter(u => u.status === 'Livré').length,
-      posé: allUnits.filter(u => u.status === 'Posé').length
-    };
+     const stats = {
+       total: allUnits.length,
+       alu: {
+         livré: allUnits.filter(u => u.statusAlu === 'Livré').length,
+         posé: allUnits.filter(u => u.statusAlu === 'Posé').length,
+         fini: allUnits.filter(u => u.statusAlu === 'Fini').length
+       },
+       vit: {
+         livré: allUnits.filter(u => u.statusVitrage === 'Livré').length,
+         fini: allUnits.filter(u => u.statusVitrage === 'Fini').length
+       }
+     };
 
     const toggleBatchSelection = (id) => {
       setSelectedBatchIds(prev => {
@@ -489,18 +502,21 @@ const ShippingModule = ({ data, setData, refetchData }) => {
               <button onClick={generatePackingLabels} className="btn btn-secondary" disabled={allUnits.length === 0}><QrCode size={16} /> Étiquettes</button>
               <button onClick={generateInstallationSheet} className="btn btn-secondary" disabled={allUnits.length === 0}><FileText size={16} /> Fiche de Pose</button>
               <button onClick={generateInstallationReport} className="btn btn-secondary" style={{ color: '#10b981', borderColor: '#a7f3d0' }} disabled={allUnits.length === 0}><Camera size={16} /> Rapport d'État</button>
-              <button 
-                onClick={() => {
-                  const url = `${window.location.origin}${window.location.pathname}?mode=installer&orderId=${selectedOrder.id}`;
-                  setShowInstallerQr(url);
-                  navigator.clipboard.writeText(url);
-                }}
-                className="btn btn-secondary"
-                style={{ color: '#8b5cf6', borderColor: '#ddd6fe' }}
-              >
-                <Share2 size={16} /> Lien Poseur
-              </button>
-              <button onClick={generateDeliveryNote} className="btn btn-primary" disabled={allUnits.length === 0}><Download size={16} /> Bon de Livraison (BL)</button>
+              <button onClick={() => {
+                   const url = `${window.location.origin}${window.location.pathname}?mode=installer&orderId=${selectedOrder.id}`;
+                   setShowInstallerQr(url);
+                   navigator.clipboard.writeText(url);
+                 }}
+                 className="btn btn-secondary"
+                 style={{ color: '#8b5cf6', borderColor: '#ddd6fe' }}
+               >
+                 <Share2 size={16} /> Lien Poseur
+               </button>
+               <button onClick={() => setShowTeamManager(true)} className="btn btn-secondary" style={{ color: '#0ea5e9', borderColor: '#bae6fd' }}><UserCheck size={16} /> Équipe</button>
+               <div style={{ borderLeft: '1px solid #e2e8f0', marginLeft: '0.5rem', paddingLeft: '0.75rem', display: 'flex', gap: '0.5rem' }}>
+                 <button onClick={() => generateDeliveryNote('ALU')} className="btn btn-primary" style={{ background: '#1e293b' }} disabled={allUnits.length === 0}>BL Alu</button>
+                 <button onClick={() => generateDeliveryNote('VITRAGE')} className="btn btn-primary" style={{ background: '#3b82f6' }} disabled={allUnits.length === 0}>BL Vitrage</button>
+               </div>
           </div>
         </header>
 
@@ -525,20 +541,20 @@ const ShippingModule = ({ data, setData, refetchData }) => {
           </div>
         ) : (
           <>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '1rem', marginBottom: '2rem' }}>
-              {[
-                { label: 'Total', val: stats.total, color: '#1e293b', icon: Package },
-                { label: 'Prêts', val: stats.produit, color: '#f59e0b', icon: ClipboardCheck },
-                { label: 'Chargés', val: stats.chargé, color: '#3b82f6', icon: Truck },
-                { label: 'Livrés', val: stats.livré, color: '#10b981', icon: UserCheck },
-                { label: 'Posés', val: stats.posé, color: '#8b5cf6', icon: Wrench },
-              ].map((s, i) => (
-                <div key={i} className="glass" style={{ padding: '1rem', borderBottom: `4px solid ${s.color}` }}>
-                  <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>{s.label}</p>
-                  <p style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: s.color }}>{s.val}</p>
-                </div>
-              ))}
-            </div>
+             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '1rem', marginBottom: '2rem' }}>
+               {[
+                 { label: 'Total', val: stats.total, color: '#1e293b', icon: Package },
+                 { label: 'Alu Livrés', val: stats.alu.livré, color: '#1e293b', icon: Truck },
+                 { label: 'Vit. Livrés', val: stats.vit.livré, color: '#3b82f6', icon: Truck },
+                 { label: 'Alu Posés', val: stats.alu.posé, color: '#8b5cf6', icon: Wrench },
+                 { label: 'Fini (Total)', val: stats.alu.fini, color: '#10b981', icon: CheckCircle },
+               ].map((s, i) => (
+                 <div key={i} className="glass" style={{ padding: '1rem', borderBottom: `4px solid ${s.color}` }}>
+                   <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>{s.label}</p>
+                   <p style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: s.color }}>{s.val}</p>
+                 </div>
+               ))}
+             </div>
 
             <div className="glass shadow-md" style={{ padding: '1.5rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
@@ -655,17 +671,20 @@ const ShippingModule = ({ data, setData, refetchData }) => {
                           ))}
                         </select>
                       </td>
-                      <td><span style={{ padding: '0.3rem 0.7rem', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 700, 
-                        background: unit.status === 'Posé' ? '#ede9fe' : (unit.status === 'Livré' ? '#d1fae5' : (unit.status === 'Chargé' ? '#dbeafe' : '#fef3c7')),
-                        color: unit.status === 'Posé' ? '#5b21b6' : (unit.status === 'Livré' ? '#065f46' : (unit.status === 'Chargé' ? '#1e40af' : '#92400e')) }}>{unit.status}</span></td>
                       <td>
-                        <div style={{ display: 'flex', gap: '0.3rem' }}>
-                          <button onClick={() => handleUpdateUnitStatus(unit.id, 'Chargé')} className="btn btn-secondary" style={{ padding: '0.2rem' }} title="Charger"><Truck size={14} /></button>
-                          <button onClick={() => handleUpdateUnitStatus(unit.id, 'Livré')} className="btn btn-secondary" style={{ padding: '0.2rem' }} title="Livrer"><UserCheck size={14} /></button>
-                          <button onClick={() => handleUpdateUnitStatus(unit.id, 'Posé')} className="btn btn-secondary" style={{ padding: '0.2rem' }} title="Poser"><Wrench size={14} /></button>
-                          <button onClick={() => handleUpdateUnitStatus(unit.id, 'Produit')} className="btn btn-secondary" style={{ padding: '0.2rem' }}><Trash2 size={14} /></button>
-                        </div>
-                      </td>
+                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                           <span style={{ padding: '0.1rem 0.5rem', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 800, background: unit.statusAlu === 'Produit' ? '#f1f5f9' : '#dcfce7', color: unit.statusAlu === 'Produit' ? '#64748b' : '#166534' }}>ALU: {unit.statusAlu}</span>
+                           <span style={{ padding: '0.1rem 0.5rem', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 800, background: unit.statusVitrage === 'Produit' ? '#f1f5f9' : '#dbeafe', color: unit.statusVitrage === 'Produit' ? '#64748b' : '#1e40af' }}>VIT: {unit.statusVitrage}</span>
+                         </div>
+                       </td>
+                       <td>
+                         <div style={{ display: 'flex', gap: '0.3rem' }}>
+                           <button onClick={() => handleUpdateUnitStatusDual(unit.id, 'alu', 'Livré')} className="btn btn-secondary" style={{ padding: '0.2rem' }} title="Livrer Alu"><Truck size={12} /></button>
+                           <button onClick={() => handleUpdateUnitStatusDual(unit.id, 'vitrage', 'Livré')} className="btn btn-secondary" style={{ padding: '0.2rem', color: '#3b82f6' }} title="Livrer Vitrage"><Truck size={12} /></button>
+                           <button onClick={() => handleUpdateUnitStatusDual(unit.id, 'alu', 'Posé')} className="btn btn-secondary" style={{ padding: '0.2rem' }} title="Poser Alu"><Wrench size={12} /></button>
+                           <button onClick={() => handleUpdateUnitStatusDual(unit.id, 'both', 'Fini')} className="btn btn-secondary" style={{ padding: '0.2rem', color: '#10b981' }} title="Terminer"><CheckCircle size={12} /></button>
+                         </div>
+                       </td>
                     </tr>
                   ))}
                 </tbody>
@@ -750,6 +769,27 @@ const ShippingModule = ({ data, setData, refetchData }) => {
               >
                 Fermer
               </button>
+            </div>
+          </div>
+        )}
+
+        {showTeamManager && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div className="glass shadow-2xl" style={{ background: 'white', padding: '2rem', borderRadius: '1.5rem', width: '450px' }}>
+              <h3 style={{ fontWeight: 800, marginBottom: '1.5rem' }}>Gérer l'Équipe de Pose</h3>
+              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
+                <input className="input" placeholder="Nom du poseur..." value={newInstallerName} onChange={e => setNewInstallerName(e.target.value)} />
+                <button className="btn btn-primary" onClick={() => { handleUpdateTeam(newInstallerName, 'add'); setNewInstallerName(''); }}>Ajouter</button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '300px', overflowY: 'auto' }}>
+                {(selectedOrder.installers || []).map(name => (
+                  <div key={name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem', background: '#f8fafc', borderRadius: '0.75rem' }}>
+                    <span style={{ fontWeight: 700 }}>{name}</span>
+                    <button onClick={() => handleUpdateTeam(name, 'remove')} style={{ color: '#ef4444' }}><Trash2 size={16} /></button>
+                  </div>
+                ))}
+              </div>
+              <button onClick={() => setShowTeamManager(false)} className="btn btn-secondary" style={{ width: '100%', marginTop: '1.5rem' }}>Fermer</button>
             </div>
           </div>
         )}
