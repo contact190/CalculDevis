@@ -369,7 +369,10 @@ const ShippingModule = ({ data, setData, refetchData }) => {
     doc.text('Validation Chef d\'Équipe', 15, y);
     doc.text('Visa Client', pw - 40, y);
     
-    doc.save(`Fiche_Pose_${selectedOrder.id}.   const generateInstallationReport = () => {
+    doc.save(`Fiche_Pose_${selectedOrder.id}.pdf`);
+  };
+
+  const generateInstallationReport = () => {
     const doc = new jsPDF();
     const pw = doc.internal.pageSize.getWidth();
     const ph = doc.internal.pageSize.getHeight();
@@ -418,7 +421,6 @@ const ShippingModule = ({ data, setData, refetchData }) => {
     });
 
     doc.save(`Rapport_Performance_${selectedOrder.id}.pdf`);
-  };r.id}.pdf`);
   };
 
   const generateDeliveryNote = (type = 'ALU') => {
