@@ -18,7 +18,8 @@ const ShippingModule = ({ data, setData, refetchData }) => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [showTeamManager, setShowTeamManager] = useState(false);
   const [newInstallerName, setNewInstallerName] = useState('');
-
+  const [globalRemark, setGlobalRemark] = useState('');
+  const [unitRemarks, setUnitRemarks] = useState({});
   const handleRefresh = async () => {
     setIsSyncing(true);
     try {
@@ -46,6 +47,13 @@ const ShippingModule = ({ data, setData, refetchData }) => {
     const client = (data.clients || []).find(c => c.id === order.clientId);
     return { ...order, clientName: order.clientName || client?.nom || 'CLIENT INCONNU' };
   }, [data.orders, data.clients, selectedOrderId]);
+
+  // Sync remarks when selectedOrder changes
+  React.useEffect(() => {
+    if (selectedOrder?.unitRemarks) {
+      setUnitRemarks(selectedOrder.unitRemarks);
+    }
+  }, [selectedOrder?.id]);
 
   const allUnits = useMemo(() => {
     if (!selectedOrder) return [];
@@ -107,7 +115,7 @@ const ShippingModule = ({ data, setData, refetchData }) => {
               dimensions: `${m.L} x ${m.H}`,
               statusAlu: dualStatus.alu,
               statusVitrage: dualStatus.vitrage,
-              shutter: hasShutter ? 'Oui' : 'Non',
+              hasShutter: hasShutter,
               shutterInfo: shutterInfo,
               storageZoneId: storageZoneId,
               storageZone: zone?.name || ''
@@ -118,6 +126,21 @@ const ShippingModule = ({ data, setData, refetchData }) => {
     });
     return units;
   }, [selectedOrder, selectedBatchIds]);
+
+  const handleUpdateUnitRemark = (unitId, remark) => {
+    setData(prev => {
+      const orders = [...(prev.orders || [])];
+      const oIdx = orders.findIndex(o => o.id === selectedOrderId);
+      if (oIdx === -1) return prev;
+      const o = { ...orders[oIdx] };
+      const remarks = { ...(o.unitRemarks || {}) };
+      remarks[unitId] = remark;
+      o.unitRemarks = remarks;
+      orders[oIdx] = o;
+      setUnitRemarks(remarks);
+      return { ...prev, orders };
+    });
+  };
 
   const handleUpdateUnitStatusDual = (unitId, component, newStatus, userName = 'ADMIN') => {
     setData(prev => {
@@ -323,56 +346,7 @@ const ShippingModule = ({ data, setData, refetchData }) => {
     doc.save(`Bordereaux_Logistique_${selectedOrder.id}.pdf`);
   };
 
-  const generateInstallationSheet = () => {
-    const doc = new jsPDF();
-    const pw = doc.internal.pageSize.getWidth();
-    
-    // Header
-    doc.setFillColor(248, 250, 252);
-    doc.rect(0, 0, pw, 40, 'F');
-    doc.setFontSize(22); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 41, 59);
-    doc.text('FICHE DE POSE', pw / 2, 20, { align: 'center' });
-    doc.setFontSize(10); doc.text('DOCUMENT DE TRAVAIL TERRAIN', pw / 2, 28, { align: 'center' });
-    
-    doc.setTextColor(0,0,0); doc.setFontSize(11); doc.setFont('helvetica', 'normal');
-    doc.text(`Client : ${selectedOrder.clientName}`, 15, 50);
-    doc.text(`Commande N° : ${selectedOrder.id}`, 15, 57);
-    doc.text(`Date Impression : ${new Date().toLocaleDateString()}`, pw - 15, 50, { align: 'right' });
-    
-    doc.line(15, 65, pw - 15, 65);
-    
-    let y = 75;
-    // Table Header
-    doc.setFont('helvetica', 'bold');
-    doc.text('A poser', 15, y);
-    doc.text('Repère / Emplacement', 35, y);
-    doc.text('Dimensions', 110, y);
-    doc.text('Observations / Remarques', 150, y);
-    
-    y += 4; doc.line(15, y, pw - 15, y); y += 8;
-    
-    doc.setFont('helvetica', 'normal');
-    allUnits.forEach(u => {
-      // Checkbox
-      doc.rect(18, y - 4, 5, 5); 
-      
-      doc.text(u.name, 35, y);
-      doc.text(u.dimensions, 110, y);
-      doc.setDrawColor(200); doc.line(150, y, pw - 15, y); doc.setDrawColor(0);
-      
-      y += 10;
-      if (y > 270) { doc.addPage(); y = 20; }
-    });
-    
-    y += 20;
-    doc.setFont('helvetica', 'bold');
-    doc.text('Validation Chef d\'Équipe', 15, y);
-    doc.text('Visa Client', pw - 40, y);
-    
-    doc.save(`Fiche_Pose_${selectedOrder.id}.pdf`);
-  };
-
-  const generateInstallationReport = () => {
+  const generateStatusReport = () => {
     const doc = new jsPDF();
     const pw = doc.internal.pageSize.getWidth();
     const ph = doc.internal.pageSize.getHeight();
@@ -382,42 +356,97 @@ const ShippingModule = ({ data, setData, refetchData }) => {
     // Page de Garde
     doc.setFillColor(30, 41, 59); doc.rect(0, 0, pw, ph, 'F');
     doc.setTextColor(255, 255, 255); doc.setFontSize(28); doc.setFont('helvetica', 'bold');
-    doc.text('RAPPORT DE PERFORMANCE', pw / 2, ph / 3, { align: 'center' });
-    doc.setFontSize(16); doc.setFont('helvetica', 'normal');
+    doc.text('ÉTAT D\'AVANCEMENT CHANTIER', pw / 2, ph / 3, { align: 'center' });
+    doc.setFontSize(14); doc.setFont('helvetica', 'normal');
     doc.text(`CLIENT : ${selectedOrder.clientName}`, pw / 2, ph / 3 + 20, { align: 'center' });
-    doc.text(`PROJET : ${selectedOrder.id}`, pw / 2, ph / 3 + 30, { align: 'center' });
+    doc.text(`Rapport généré le : ${new Date().toLocaleDateString()}`, pw / 2, ph / 3 + 30, { align: 'center' });
+    
+    if (globalRemark) {
+      doc.addPage(); doc.setTextColor(30, 41, 59);
+      doc.setFontSize(16); doc.setFont('helvetica', 'bold'); doc.text('Remarques du Chargé d\'Affaires', 15, 30);
+      doc.setFontSize(11); doc.setFont('helvetica', 'normal');
+      const splitRemark = doc.splitTextToSize(globalRemark, pw - 30);
+      doc.text(splitRemark, 15, 45);
+    }
+
+    doc.addPage(); doc.setTextColor(30, 41, 59);
+    let y = 20; doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.text('Détails des Produits & Validation', 15, y);
+    y += 15;
+
+    allUnits.forEach((unit) => {
+      if (y > ph - 100) { doc.addPage(); y = 20; }
+      const photo = photos[unit.id];
+      const events = timeline[unit.id] || [];
+      const remark = unitRemarks[unit.id];
+      
+      const findDate = (status) => {
+        const ev = events.find(e => e.status === status);
+        return ev ? new Date(ev.date).toLocaleDateString() : '---';
+      };
+
+      doc.setDrawColor(226, 232, 240); 
+      const boxH = photo ? 95 : 55;
+      doc.rect(15, y, pw - 30, boxH);
+      
+      doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.text(`${unit.name} (${unit.label})`, 20, y + 10);
+      
+      doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(100);
+      doc.text(`Livraison: ${findDate('Livré')} | Manutention: ${findDate('Manutention')} | Finition: ${findDate('Fini')}`, 20, y + 18);
+      
+      if (remark) {
+        doc.setTextColor(30, 41, 59); doc.setFont('helvetica', 'italic');
+        doc.text(`Note: ${remark}`, 20, y + 25);
+      }
+
+      if (photo) {
+        try { doc.addImage(photo, 'JPEG', 20, y + 30, 60, 60); } catch (e) {}
+      }
+      
+      doc.setTextColor(30, 41, 59);
+      y += boxH + 10;
+    });
+    doc.save(`Etat_Chantier_${selectedOrder.id}.pdf`);
+  };
+
+  const generatePerformanceReport = () => {
+    const doc = new jsPDF();
+    const pw = doc.internal.pageSize.getWidth();
+    const ph = doc.internal.pageSize.getHeight();
+    const timeline = selectedOrder.unitTimeline || {};
+    
+    doc.setFillColor(30, 41, 59); doc.rect(0, 0, pw, ph, 'F');
+    doc.setTextColor(255, 255, 255); doc.setFontSize(28); doc.setFont('helvetica', 'bold');
+    doc.text('ANALYSE DE PERFORMANCE POSE', pw / 2, ph / 3, { align: 'center' });
     
     const totalUnits = allUnits.length;
     const finishedUnits = allUnits.filter(u => u.statusAlu === 'Fini' && u.statusVitrage === 'Fini').length;
     const progress = totalUnits > 0 ? (finishedUnits / totalUnits) * 100 : 0;
     
     doc.setFontSize(14);
-    doc.text(`Avancement Global : ${progress.toFixed(1)}%`, pw / 2, ph / 3 + 50, { align: 'center' });
+    doc.text(`Avancement : ${progress.toFixed(1)}% | Unités : ${finishedUnits}/${totalUnits}`, pw / 2, ph / 3 + 20, { align: 'center' });
+    if (selectedOrder.blDates?.ALU) doc.text(`Date BL Alu : ${new Date(selectedOrder.blDates.ALU).toLocaleDateString()}`, pw/2, ph/3 + 35, {align: 'center'});
 
-    // Détails par unité
     doc.addPage(); doc.setTextColor(30, 41, 59);
-    let y = 20; doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.text('Historique des Unités', 15, y);
+    let y = 20; doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.text('Traçabilité Détaillée A-Z', 15, y);
     y += 15;
 
     allUnits.forEach((unit) => {
       if (y > ph - 60) { doc.addPage(); y = 20; }
       const events = timeline[unit.id] || [];
-      const photo = photos[unit.id];
 
-      doc.setDrawColor(226, 232, 240); doc.rect(15, y, pw - 30, 40 + (events.length * 5));
-      doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.text(`${unit.name} (${unit.label})`, 20, y + 10);
-      doc.setFontSize(9); doc.setFont('helvetica', 'normal');
-      doc.text(`Status: Alu[${unit.statusAlu}] | Vitrage[${unit.statusVitrage}]`, 20, y + 17);
+      doc.setDrawColor(226, 232, 240); 
+      const boxH = 25 + (events.length * 6);
+      doc.rect(15, y, pw - 30, boxH);
+      doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.text(`${unit.name} - ${unit.label}`, 20, y + 8);
       
-      let evY = y + 25;
-      doc.setFontSize(8); doc.setTextColor(100);
+      let evY = y + 16;
+      doc.setFontSize(8); doc.setFont('helvetica', 'normal');
       events.forEach(ev => {
-        doc.text(`${new Date(ev.date).toLocaleString()} : ${ev.status} (${ev.component}) par ${ev.user}`, 22, evY);
-        evY += 5;
+        doc.text(`${new Date(ev.date).toLocaleString()} : ${ev.status} (${ev.component}) - Resp: ${ev.user}`, 22, evY);
+        evY += 6;
       });
       
-      doc.setTextColor(30, 41, 59);
-      y = evY + 10;
+      y += boxH + 10;
     });
 
     doc.save(`Rapport_Performance_${selectedOrder.id}.pdf`);
@@ -502,8 +531,8 @@ const ShippingModule = ({ data, setData, refetchData }) => {
                 <RefreshCw size={18} />
               </button>
               <button onClick={generatePackingLabels} className="btn btn-secondary" disabled={allUnits.length === 0}><QrCode size={16} /> Étiquettes</button>
-              <button onClick={generateInstallationSheet} className="btn btn-secondary" disabled={allUnits.length === 0}><FileText size={16} /> Fiche de Pose</button>
-              <button onClick={generateInstallationReport} className="btn btn-secondary" style={{ color: '#10b981', borderColor: '#a7f3d0' }} disabled={allUnits.length === 0}><Camera size={16} /> Rapport d'État</button>
+              <button onClick={generateStatusReport} className="btn btn-secondary" style={{ color: '#10b981', borderColor: '#a7f3d0' }} disabled={allUnits.length === 0}><Camera size={16} /> Rapport d'État</button>
+              <button onClick={generatePerformanceReport} className="btn btn-secondary" style={{ color: '#f59e0b', borderColor: '#fef3c7' }} disabled={allUnits.length === 0}><FileText size={16} /> Rapport Performance</button>
               <button onClick={() => {
                    const url = `${window.location.origin}${window.location.pathname}?mode=installer&orderId=${selectedOrder.id}`;
                    setShowInstallerQr(url);
@@ -521,6 +550,23 @@ const ShippingModule = ({ data, setData, refetchData }) => {
                </div>
           </div>
         </header>
+
+        <div className="glass" style={{ padding: '1rem', marginBottom: '1.5rem', background: '#f8fafc', display: 'flex', gap: '1rem', alignItems: 'center' }}>
+            <div style={{ flex: 1 }}>
+              <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.85rem', fontWeight: 700 }}>REMARQUES GÉNÉRALES POUR LE CLIENT</p>
+              <textarea 
+                className="input" 
+                placeholder="Écrivez ici vos remarques globales sur l'avancement du chantier..."
+                value={globalRemark}
+                onChange={e => setGlobalRemark(e.target.value)}
+                style={{ width: '100%', height: '60px', fontSize: '0.85rem' }}
+              />
+            </div>
+            <div style={{ width: '200px', fontSize: '0.75rem', color: '#64748b' }}>
+              <p>Ces remarques apparaîtront sur la première page du Rapport d'État Client.</p>
+              <p style={{ marginTop: '0.5rem' }}>Astuce: Utilisez les "Notes" par unité dans le tableau ci-dessous pour des précisions spécifiques.</p>
+            </div>
+         </div>
 
         <div className="glass" style={{ padding: '1rem', marginBottom: '1.5rem', background: '#f8fafc' }}>
           <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', fontWeight: 700, color: '#475569' }}><Layers size={14} /> SÉLECTION DES LOTS :</p>
@@ -600,7 +646,8 @@ const ShippingModule = ({ data, setData, refetchData }) => {
                         }}
                       />
                     </th>
-                    <th>Unité</th><th>Repère</th><th>Étage</th><th>Volet</th><th>Produit</th><th>Zone Stockage</th><th>Statut Actuel</th><th>Actions</th></tr>
+                    <th>Unité</th><th>Repère</th><th>Étage</th><th>Volet</th><th>Produit</th><th>Remarques</th><th>Zone Stockage</th><th>Statut Actuel</th><th>Actions</th>
+                  </tr>
                 </thead>
                 <tbody>
                   {allUnits.map(unit => (
@@ -647,7 +694,7 @@ const ShippingModule = ({ data, setData, refetchData }) => {
                         {unit.floor || '---'}
                       </td>
                       <td>
-                        {unit.shutter === 'Oui' ? (
+                        {unit.hasShutter ? (
                           <button 
                             onClick={() => setViewingShutter(unit)}
                             className="btn" 
@@ -660,6 +707,15 @@ const ShippingModule = ({ data, setData, refetchData }) => {
                         )}
                       </td>
                       <td>{unit.label}</td>
+                      <td>
+                        <input 
+                          className="input" 
+                          style={{ padding: '0.2rem', fontSize: '0.75rem', width: '120px' }}
+                          placeholder="Note..."
+                          value={unitRemarks[unit.id] || ''}
+                          onChange={(e) => handleUpdateUnitRemark(unit.id, e.target.value)}
+                        />
+                      </td>
                       <td>
                         <select 
                           className="input" 
