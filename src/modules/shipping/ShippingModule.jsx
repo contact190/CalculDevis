@@ -48,12 +48,13 @@ const ShippingModule = ({ data, setData, refetchData }) => {
     return { ...order, clientName: order.clientName || client?.nom || 'CLIENT INCONNU' };
   }, [data.orders, data.clients, selectedOrderId]);
 
-  // Sync remarks when selectedOrder changes
+  // Sync remarks when selectedOrder changes or data updates
   React.useEffect(() => {
-    if (selectedOrder?.unitRemarks) {
-      setUnitRemarks(selectedOrder.unitRemarks);
+    if (selectedOrder) {
+      setGlobalRemark(selectedOrder.globalRemark || '');
+      setUnitRemarks(selectedOrder.unitRemarks || {});
     }
-  }, [selectedOrder?.id]);
+  }, [selectedOrder?.id, selectedOrder?.globalRemark, selectedOrder?.unitRemarks]);
 
   const allUnits = useMemo(() => {
     if (!selectedOrder) return [];
@@ -353,59 +354,125 @@ const ShippingModule = ({ data, setData, refetchData }) => {
     const photos = selectedOrder.unitInstallationPhotos || {};
     const timeline = selectedOrder.unitTimeline || {};
     
+    console.log('[PDF Debug] Order:', selectedOrder.id);
+    console.log('[PDF Debug] Timeline Keys:', Object.keys(timeline));
+    console.log('[PDF Debug] Photo Keys:', Object.keys(photos));
+
+    const getImgFormat = (dataUrl) => {
+      if (!dataUrl) return 'JPEG';
+      if (dataUrl.startsWith('data:image/png')) return 'PNG';
+      if (dataUrl.startsWith('data:image/webp')) return 'WEBP';
+      return 'JPEG';
+    };
+    
     // Page de Garde
     doc.setFillColor(30, 41, 59); doc.rect(0, 0, pw, ph, 'F');
     doc.setTextColor(255, 255, 255); doc.setFontSize(28); doc.setFont('helvetica', 'bold');
     doc.text('ÉTAT D\'AVANCEMENT CHANTIER', pw / 2, ph / 3, { align: 'center' });
     doc.setFontSize(14); doc.setFont('helvetica', 'normal');
-    doc.text(`CLIENT : ${selectedOrder.clientName}`, pw / 2, ph / 3 + 20, { align: 'center' });
-    doc.text(`Rapport généré le : ${new Date().toLocaleDateString()}`, pw / 2, ph / 3 + 30, { align: 'center' });
+    doc.text(`COMMANDE : ${selectedOrder.id}`, pw / 2, ph / 3 + 15, { align: 'center' });
+    doc.text(`CLIENT : ${selectedOrder.clientName}`, pw / 2, ph / 3 + 25, { align: 'center' });
+    doc.text(`Rapport généré le : ${new Date().toLocaleDateString('fr-FR')}`, pw / 2, ph / 3 + 35, { align: 'center' });
     
     if (globalRemark) {
       doc.addPage(); doc.setTextColor(30, 41, 59);
-      doc.setFontSize(16); doc.setFont('helvetica', 'bold'); doc.text('Remarques du Chargé d\'Affaires', 15, 30);
-      doc.setFontSize(11); doc.setFont('helvetica', 'normal');
+      doc.setFontSize(16); doc.setFont('helvetica', 'bold'); doc.text('Remarques Générales du Chantier', 15, 30);
+      doc.setDrawColor(226, 232, 240); doc.line(15, 35, 60, 35);
+      doc.setFontSize(11); doc.setFont('helvetica', 'normal'); doc.setTextColor(71, 85, 105);
       const splitRemark = doc.splitTextToSize(globalRemark, pw - 30);
       doc.text(splitRemark, 15, 45);
     }
 
-    doc.addPage(); doc.setTextColor(30, 41, 59);
-    let y = 20; doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.text('Détails des Produits & Validation', 15, y);
+    doc.addPage();
+    let y = 20; 
+    doc.setTextColor(30, 41, 59); doc.setFontSize(18); doc.setFont('helvetica', 'bold'); 
+    doc.text('Détails des Produits & Suivi Site', 15, y);
+    doc.setDrawColor(59, 130, 246); doc.setLineWidth(1); doc.line(15, y + 2, 40, y + 2);
     y += 15;
 
     allUnits.forEach((unit) => {
-      if (y > ph - 100) { doc.addPage(); y = 20; }
-      const photo = photos[unit.id];
-      const events = timeline[unit.id] || [];
-      const remark = unitRemarks[unit.id];
+      // Normalize ID lookup
+      const normalizedId = unit.id.trim();
+      const photo = photos[normalizedId] || photos[unit.id];
+      const events = timeline[normalizedId] || timeline[unit.id] || [];
+      const remark = unitRemarks[normalizedId] || unitRemarks[unit.id];
       
       const findDate = (status) => {
-        const ev = events.find(e => e.status === status);
-        return ev ? new Date(ev.date).toLocaleDateString() : '---';
+        let ev = [...events].reverse().find(e => e.status === status);
+        // Fallback: If status is Fini but no Fini event, use the latest event as date
+        if (!ev && status === 'Fini' && (unit.statusAlu === 'Fini' || unit.statusAlu === 'Posé')) {
+          ev = events[events.length - 1];
+        }
+        return ev ? new Date(ev.date).toLocaleDateString('fr-FR') : '---';
       };
 
-      doc.setDrawColor(226, 232, 240); 
-      const boxH = photo ? 95 : 55;
-      doc.rect(15, y, pw - 30, boxH);
+      // Layout calculations
+      const photoH = photo ? 75 : 0;
+      const infoH = 45; // Base height for text info
+      const remarkH = remark ? (doc.splitTextToSize(remark, pw - 40).length * 5) + 5 : 0;
+      const boxH = infoH + remarkH + photoH;
+
+      if (y + boxH > ph - 20) { doc.addPage(); y = 20; }
+
+      doc.setDrawColor(226, 232, 240);
+      doc.setFillColor(255, 255, 255);
+      doc.setLineWidth(0.1);
+      doc.roundedRect(15, y, pw - 30, boxH, 2, 2, 'FD');
       
-      doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.text(`${unit.name} (${unit.label})`, 20, y + 10);
+      // Header: Unit Name & Dimensions
+      doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 41, 59);
+      doc.text(`${unit.name} — ${unit.label}`, 20, y + 10);
+      doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 116, 139);
+      doc.text(`Dimensions: ${unit.dimensions} mm  |  Étage: ${unit.floor || 'N/A'}`, 20, y + 16);
+
+      // Status Badges
+      const isFini = unit.statusAlu === 'Fini' && unit.statusVitrage === 'Fini';
+      const statusColor = isFini ? '#10b981' : (unit.statusAlu === 'Posé' ? '#8b5cf6' : '#3b82f6');
+      doc.setFillColor(statusColor);
+      doc.roundedRect(20, y + 20, 30, 6, 1, 1, 'F');
+      doc.setTextColor(255, 255, 255); doc.setFontSize(7); doc.setFont('helvetica', 'bold');
+      doc.text(`ALU: ${unit.statusAlu}`, 35, y + 24.5, { align: 'center' });
       
-      doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(100);
-      doc.text(`Livraison: ${findDate('Livré')} | Manutention: ${findDate('Manutention')} | Finition: ${findDate('Fini')}`, 20, y + 18);
-      
+      doc.setFillColor(unit.statusVitrage === 'Fini' ? '#10b981' : '#3b82f6');
+      doc.roundedRect(55, y + 20, 30, 6, 1, 1, 'F');
+      doc.text(`VIT: ${unit.statusVitrage}`, 70, y + 24.5, { align: 'center' });
+
+      // Shutter Info
+      doc.setTextColor(100, 116, 139); doc.setFont('helvetica', 'normal');
+      doc.text(`Volet: ${unit.shutterInfo}`, 95, y + 24.5);
+
+      // Timeline Dates
+      doc.setFontSize(8); doc.setTextColor(71, 85, 105);
+      doc.text(`• Livraison: ${findDate('Livré')}`, 20, y + 33);
+      doc.text(`• Manutention: ${findDate('Manutention')}`, 70, y + 33);
+      doc.text(`• Finition: ${findDate('Fini')}`, 120, y + 33);
+
+      let contentY = y + 42;
+
+      // Remark
       if (remark) {
-        doc.setTextColor(30, 41, 59); doc.setFont('helvetica', 'italic');
-        doc.text(`Note: ${remark}`, 20, y + 25);
+        doc.setFont('helvetica', 'italic'); doc.setTextColor(100, 116, 139);
+        const splitRemark = doc.splitTextToSize(`Note terrain: ${remark}`, pw - 40);
+        doc.text(splitRemark, 20, contentY);
+        contentY += (splitRemark.length * 5) + 2;
       }
 
+      // Photo
       if (photo) {
-        try { doc.addImage(photo, 'JPEG', 20, y + 30, 60, 60); } catch (e) {}
+        try {
+          const fmt = getImgFormat(photo);
+          doc.addImage(photo, fmt, 20, contentY, 80, 65);
+        } catch (e) {
+          console.error('jsPDF addImage error:', e);
+          doc.setFont('helvetica', 'italic'); doc.setTextColor(239, 68, 68);
+          doc.text('[Erreur affichage photo]', 20, contentY + 5);
+        }
       }
-      
+
       doc.setTextColor(30, 41, 59);
-      y += boxH + 10;
+      y += boxH + 8;
     });
-    doc.save(`Etat_Chantier_${selectedOrder.id}.pdf`);
+    doc.save(`Rapport_Etat_Chantier_${selectedOrder.id}.pdf`);
   };
 
   const generatePerformanceReport = () => {
@@ -413,6 +480,14 @@ const ShippingModule = ({ data, setData, refetchData }) => {
     const pw = doc.internal.pageSize.getWidth();
     const ph = doc.internal.pageSize.getHeight();
     const timeline = selectedOrder.unitTimeline || {};
+    const photos = selectedOrder.unitInstallationPhotos || {};
+
+    const getImgFormat = (dataUrl) => {
+      if (!dataUrl) return 'JPEG';
+      if (dataUrl.startsWith('data:image/png')) return 'PNG';
+      if (dataUrl.startsWith('data:image/webp')) return 'WEBP';
+      return 'JPEG';
+    };
     
     doc.setFillColor(30, 41, 59); doc.rect(0, 0, pw, ph, 'F');
     doc.setTextColor(255, 255, 255); doc.setFontSize(28); doc.setFont('helvetica', 'bold');
@@ -428,25 +503,43 @@ const ShippingModule = ({ data, setData, refetchData }) => {
 
     doc.addPage(); doc.setTextColor(30, 41, 59);
     let y = 20; doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.text('Traçabilité Détaillée A-Z', 15, y);
+    doc.setDrawColor(30, 41, 59); doc.line(15, y + 2, 40, y + 2);
     y += 15;
 
     allUnits.forEach((unit) => {
-      if (y > ph - 60) { doc.addPage(); y = 20; }
       const events = timeline[unit.id] || [];
+      const photo = photos[unit.id];
+
+      const photoH = photo ? 55 : 0;
+      const eventsH = (events.length * 5) + 10;
+      const boxH = 15 + eventsH + photoH;
+
+      if (y + boxH > ph - 20) { doc.addPage(); y = 20; }
 
       doc.setDrawColor(226, 232, 240); 
-      const boxH = 25 + (events.length * 6);
-      doc.rect(15, y, pw - 30, boxH);
-      doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.text(`${unit.name} - ${unit.label}`, 20, y + 8);
+      doc.setFillColor(252, 253, 255);
+      doc.roundedRect(15, y, pw - 30, boxH, 1, 1, 'FD');
       
-      let evY = y + 16;
-      doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 41, 59);
+      doc.text(`${unit.name} — ${unit.label}`, 20, y + 8);
+      
+      let evY = y + 15;
+      doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(71, 85, 105);
       events.forEach(ev => {
-        doc.text(`${new Date(ev.date).toLocaleString()} : ${ev.status} (${ev.component}) - Resp: ${ev.user}`, 22, evY);
-        evY += 6;
+        doc.text(`[${new Date(ev.date).toLocaleString('fr-FR')}] ${ev.status} (${ev.component}) — Opérateur: ${ev.user}`, 22, evY);
+        evY += 5;
       });
+
+      if (photo) {
+        try {
+          const fmt = getImgFormat(photo);
+          doc.addImage(photo, fmt, 22, evY + 2, 60, 45);
+        } catch (e) {
+          console.error('jsPDF Performance Report Image Error:', e);
+        }
+      }
       
-      y += boxH + 10;
+      y += boxH + 8;
     });
 
     doc.save(`Rapport_Performance_${selectedOrder.id}.pdf`);
@@ -1055,6 +1148,21 @@ const ShippingModule = ({ data, setData, refetchData }) => {
           </div>
         </div>
       )}
+      {/* Debug Inspector */}
+      <details style={{ marginTop: '4rem', fontSize: '0.65rem', opacity: 0.3, padding: '1rem', borderTop: '1px dashed #e2e8f0' }}>
+        <summary style={{ cursor: 'pointer' }}>Données de Diagnostic (Debug)</summary>
+        <pre style={{ maxHeight: '200px', overflow: 'auto', marginTop: '1rem', background: '#f8fafc', padding: '0.5rem', borderRadius: '0.5rem' }}>
+          {JSON.stringify({ 
+            ordersCount: data.orders?.length,
+            selectedOrder: selectedOrder ? {
+              id: selectedOrder.id,
+              timelineUnits: Object.keys(selectedOrder.unitTimeline || {}).length,
+              photoUnits: Object.keys(selectedOrder.unitInstallationPhotos || {}).length,
+              dualStatusCount: Object.keys(selectedOrder.unitStatusesDual || {}).length
+            } : 'None'
+          }, null, 2)}
+        </pre>
+      </details>
     </div>
   );
 };
