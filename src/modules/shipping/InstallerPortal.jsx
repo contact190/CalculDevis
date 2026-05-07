@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Truck, Wrench, CheckCircle, ArrowLeft, QrCode, Camera, Package, UserCheck, ShieldCheck, ClipboardList } from 'lucide-react';
+import { Truck, Wrench, CheckCircle, ArrowLeft, QrCode, Camera, Package, UserCheck, ShieldCheck, ClipboardList, MessageSquare, Send, X } from 'lucide-react';
 import QRScanner from './QRScanner';
 
 const InstallerPortal = ({ data, setData, orderId }) => {
@@ -9,6 +9,8 @@ const InstallerPortal = ({ data, setData, orderId }) => {
   const [showScanner, setShowScanner] = useState(false);
   const [activeTab, setActiveTab] = useState('alu'); // 'alu' or 'vitrage' for delivery/manut
   const [currentInstaller, setCurrentInstaller] = useState(sessionStorage.getItem('installer_name') || '');
+  const [noteText, setNoteText] = useState('');
+  const [noteImage, setNoteImage] = useState(null);
 
   const order = useMemo(() => {
     return (data.orders || []).find(o => o.id === orderId);
@@ -74,6 +76,29 @@ const InstallerPortal = ({ data, setData, orderId }) => {
       orders[oIdx] = o;
       return { ...prev, orders };
     });
+  };
+
+  const handleSendFieldNote = () => {
+    if (!noteText.trim() && !noteImage) return;
+    setData(prev => {
+      const orders = [...(prev.orders || [])];
+      const oIdx = orders.findIndex(o => o.id === orderId);
+      if (oIdx === -1) return prev;
+      const o = { ...orders[oIdx] };
+      const notes = [...(o.fieldNotes || [])];
+      notes.push({
+        id: `note-${Date.now()}`,
+        date: new Date().toISOString(),
+        author: currentInstaller || 'Externe',
+        text: noteText.trim(),
+        image: noteImage || null
+      });
+      o.fieldNotes = notes;
+      orders[oIdx] = o;
+      return { ...prev, orders };
+    });
+    setNoteText('');
+    setNoteImage(null);
   };
 
   const handleSavePhoto = (unitId, photoData) => {
@@ -166,6 +191,23 @@ const InstallerPortal = ({ data, setData, orderId }) => {
             <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#5b21b6' }}>3. POSE & FINITION</h3>
             <p style={{ margin: 0, fontSize: '0.75rem', color: '#8b5cf6' }}>Installer et valider</p>
           </div>
+        </button>
+
+        <button 
+          onClick={() => setView('journal')}
+          className="glass" 
+          style={{ padding: '1.25rem', display: 'flex', alignItems: 'center', gap: '1rem', border: '1.5px solid #f59e0b', background: '#fffbeb', borderRadius: '1rem' }}
+        >
+          <MessageSquare size={24} style={{ color: '#f59e0b' }} />
+          <div style={{ textAlign: 'left', flex: 1 }}>
+            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#92400e' }}>4. JOURNAL CHANTIER</h3>
+            <p style={{ margin: 0, fontSize: '0.75rem', color: '#f59e0b' }}>Signaler problèmes & photos</p>
+          </div>
+          {(order.fieldNotes || []).length > 0 && (
+            <span style={{ background: '#f59e0b', color: 'white', borderRadius: '50%', width: 28, height: 28, display: 'grid', placeItems: 'center', fontSize: '0.8rem', fontWeight: 800, flexShrink: 0 }}>
+              {(order.fieldNotes || []).length}
+            </span>
+          )}
         </button>
       </div>
 
@@ -335,6 +377,86 @@ const InstallerPortal = ({ data, setData, orderId }) => {
     </div>
   );
 
+  const renderJournal = () => (
+    <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+      <header style={{ padding: '1rem', display: 'flex', alignItems: 'center', gap: '1rem', background: 'white', borderBottom: '2px solid #fef3c7', position: 'sticky', top: 0, zIndex: 10 }}>
+        <button onClick={() => setView('menu')} className="btn" style={{ padding: '0.5rem' }}><ArrowLeft size={20} /></button>
+        <div style={{ flex: 1 }}>
+          <h2 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800 }}>Journal de Chantier</h2>
+          <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748b' }}>Commande: {order.id}</p>
+        </div>
+        <div style={{ background: '#fef3c7', borderRadius: '0.5rem', padding: '0.25rem 0.75rem', fontSize: '0.75rem', fontWeight: 700, color: '#92400e' }}>
+          {(order.fieldNotes || []).length} message(s)
+        </div>
+      </header>
+
+      {/* Feed */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem', background: '#f8fafc' }}>
+        {(order.fieldNotes || []).length === 0 ? (
+          <div style={{ textAlign: 'center', opacity: 0.4, marginTop: '5rem' }}>
+            <MessageSquare size={56} style={{ margin: '0 auto 1rem', display: 'block' }} />
+            <p style={{ fontWeight: 600 }}>Aucun message</p>
+            <p style={{ fontSize: '0.85rem' }}>Envoyez le premier rapport de chantier</p>
+          </div>
+        ) : (
+          [...(order.fieldNotes || [])].reverse().map(note => (
+            <div key={note.id} style={{ background: 'white', borderRadius: '1rem', padding: '1rem', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', borderLeft: '4px solid #f59e0b' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <span style={{ fontWeight: 800, fontSize: '0.9rem', color: '#1e293b' }}>{note.author}</span>
+                <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{new Date(note.date).toLocaleString('fr-FR')}</span>
+              </div>
+              {note.text && <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.95rem', lineHeight: '1.5' }}>{note.text}</p>}
+              {note.image && (
+                <img src={note.image} alt="Photo chantier" style={{ width: '100%', borderRadius: '0.75rem', maxHeight: '250px', objectFit: 'cover' }} />
+              )}
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Composer */}
+      <div style={{ padding: '1rem', background: 'white', borderTop: '2px solid #e2e8f0' }}>
+        {noteImage && (
+          <div style={{ position: 'relative', display: 'inline-block', marginBottom: '0.75rem' }}>
+            <img src={noteImage} alt="preview" style={{ width: '80px', height: '60px', objectFit: 'cover', borderRadius: '0.5rem' }} />
+            <button onClick={() => setNoteImage(null)} style={{ position: 'absolute', top: -8, right: -8, background: '#ef4444', color: 'white', border: 'none', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', display: 'grid', placeItems: 'center' }}>
+              <X size={12} />
+            </button>
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end' }}>
+          <textarea
+            className="input"
+            placeholder="Signaler un problème, une remarque..."
+            value={noteText}
+            onChange={e => setNoteText(e.target.value)}
+            style={{ flex: 1, resize: 'none', minHeight: '48px', maxHeight: '120px', padding: '0.75rem' }}
+            rows={2}
+          />
+          <label className="btn btn-secondary" style={{ padding: '0.75rem', cursor: 'pointer', flexShrink: 0, height: '48px', display: 'grid', placeItems: 'center' }}>
+            <Camera size={20} />
+            <input type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={e => {
+              const file = e.target.files[0];
+              if (file) {
+                const reader = new FileReader();
+                reader.onload = ev => setNoteImage(ev.target.result);
+                reader.readAsDataURL(file);
+              }
+            }} />
+          </label>
+          <button
+            onClick={handleSendFieldNote}
+            disabled={!noteText.trim() && !noteImage}
+            className="btn btn-primary"
+            style={{ padding: '0.75rem', flexShrink: 0, height: '48px', background: '#f59e0b', display: 'grid', placeItems: 'center' }}
+          >
+            <Send size={20} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div style={{ minHeight: '100vh', background: '#f1f5f9', color: '#1e293b', fontFamily: 'Inter, sans-serif' }}>
       <div style={{ maxWidth: '600px', margin: '0 auto', background: '#f1f5f9', minHeight: '100vh' }}>
@@ -342,6 +464,7 @@ const InstallerPortal = ({ data, setData, orderId }) => {
         {view === 'delivery' && renderDelivery()}
         {view === 'manutention' && renderManutention()}
         {view === 'installation' && renderInstallation()}
+        {view === 'journal' && renderJournal()}
       </div>
     </div>
   );

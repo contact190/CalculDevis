@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Truck, Package, QrCode, CheckCircle, AlertTriangle, XCircle, Download, Search, Plus, Trash2, ArrowLeft, ClipboardCheck, UserCheck, ShieldCheck, Layers, Wrench, FileText, MapPin, Share2, Camera, RefreshCw } from 'lucide-react';
+import { Truck, Package, QrCode, CheckCircle, AlertTriangle, XCircle, Download, Search, Plus, Trash2, ArrowLeft, ClipboardCheck, UserCheck, ShieldCheck, Layers, Wrench, FileText, MapPin, Share2, Camera, RefreshCw, MessageSquare, Trash } from 'lucide-react';
 import { syncDatabase } from '../../utils/supabaseClient';
 import jsPDF from 'jspdf';
 import QRScanner from './QRScanner';
@@ -750,6 +750,75 @@ const ShippingModule = ({ data, setData, refetchData }) => {
             </div>
           </>
         )}
+
+        {/* JOURNAL DE CHANTIER - Messages temps réel poseurs */}
+        <div className="glass shadow-md" style={{ padding: '1.5rem', marginTop: '2rem', borderTop: '3px solid #f59e0b' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <MessageSquare size={20} color="#f59e0b" />
+              <h3 style={{ margin: 0, fontWeight: 800, fontSize: '1.05rem' }}>Journal de Chantier (Terrain)</h3>
+              {(selectedOrder.fieldNotes || []).length > 0 && (
+                <span style={{ background: '#fef3c7', color: '#92400e', borderRadius: '999px', padding: '0.1rem 0.6rem', fontSize: '0.75rem', fontWeight: 800 }}>
+                  {(selectedOrder.fieldNotes || []).length} message(s)
+                </span>
+              )}
+            </div>
+            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Envoyé par les poseurs sur le terrain</span>
+          </div>
+
+          {(selectedOrder.fieldNotes || []).length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '2.5rem', opacity: 0.4 }}>
+              <MessageSquare size={40} style={{ margin: '0 auto 1rem', display: 'block' }} />
+              <p style={{ fontWeight: 600 }}>Aucun message terrain pour l&apos;instant</p>
+              <p style={{ fontSize: '0.8rem' }}>Les poseurs peuvent envoyer des rapports via l&apos;interface Poseur</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '500px', overflowY: 'auto' }}>
+              {[...(selectedOrder.fieldNotes || [])].reverse().map(note => (
+                <div key={note.id} style={{ background: '#fffbeb', borderRadius: '0.75rem', padding: '1rem', border: '1px solid #fde68a', position: 'relative' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <div style={{ width: 32, height: 32, background: '#f59e0b', borderRadius: '50%', display: 'grid', placeItems: 'center', color: 'white', fontWeight: 800, fontSize: '0.8rem', flexShrink: 0 }}>
+                        {(note.author || 'E').charAt(0).toUpperCase()}
+                      </div>
+                      <span style={{ fontWeight: 800, fontSize: '0.9rem', color: '#1e293b' }}>{note.author}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{new Date(note.date).toLocaleString('fr-FR')}</span>
+                      <button
+                        onClick={() => {
+                          if (!confirm('Supprimer ce message ?')) return;
+                          setData(prev => {
+                            const orders = [...(prev.orders || [])];
+                            const oIdx = orders.findIndex(o => o.id === selectedOrderId);
+                            if (oIdx === -1) return prev;
+                            const o = { ...orders[oIdx] };
+                            o.fieldNotes = (o.fieldNotes || []).filter(n => n.id !== note.id);
+                            orders[oIdx] = o;
+                            return { ...prev, orders };
+                          });
+                        }}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: '0.25rem', opacity: 0.6 }}
+                        title="Supprimer"
+                      >
+                        <Trash size={14} />
+                      </button>
+                    </div>
+                  </div>
+                  {note.text && <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.95rem', lineHeight: '1.5', color: '#1e293b' }}>{note.text}</p>}
+                  {note.image && (
+                    <img
+                      src={note.image}
+                      alt="Photo chantier"
+                      style={{ width: '100%', maxWidth: '400px', borderRadius: '0.75rem', maxHeight: '300px', objectFit: 'cover', cursor: 'pointer' }}
+                      onClick={() => window.open(note.image, '_blank')}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         {activeView === 'scanner' && (
            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(10px)' }}>
