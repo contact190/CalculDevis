@@ -20,6 +20,8 @@ const ShippingModule = ({ data, setData, refetchData }) => {
   const [newInstallerName, setNewInstallerName] = useState('');
   const [globalRemark, setGlobalRemark] = useState('');
   const [unitRemarks, setUnitRemarks] = useState({});
+  const [showPVModal, setShowPVModal] = useState(false);
+  const [pvSelectedFloors, setPvSelectedFloors] = useState(new Set());
   const handleRefresh = async () => {
     setIsSyncing(true);
     try {
@@ -698,6 +700,79 @@ const ShippingModule = ({ data, setData, refetchData }) => {
     doc.save(`RAPPORT_AUDIT_V3_${selectedOrder.id}.pdf`);
   };
 
+  const generatePVReception = () => {
+    const doc = new jsPDF();
+    const pw = doc.internal.pageSize.getWidth();
+    const ph = doc.internal.pageSize.getHeight();
+
+    // Filter units: Selected Floors AND (Alu Fini + Vitrage Fini)
+    const filteredUnits = allUnits.filter(u => 
+      pvSelectedFloors.has(u.floor || 'N/A') && 
+      (u.statusAlu === 'Posé' || u.statusAlu === 'Fini') && 
+      u.statusVitrage === 'Fini'
+    );
+
+    if (filteredUnits.length === 0) {
+      alert("Aucune unité terminée (Alu + Vitrage) n'a été trouvée pour les étages sélectionnés.");
+      return;
+    }
+
+    // Header
+    doc.setFillColor(30, 41, 59); doc.rect(0, 0, pw, 50, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(22); doc.setFont('helvetica', 'bold');
+    doc.text('PROCÈS-VERBAL DE RÉCEPTION', 15, 25);
+    doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+    doc.text(`CHANTIER : ${selectedOrder.id} | CLIENT : ${selectedOrder.clientName}`, 15, 35);
+    doc.text(`DATE : ${new Date().toLocaleDateString('fr-FR')} | ÉTAGES : ${Array.from(pvSelectedFloors).join(', ')}`, 15, 40);
+
+    let y = 65;
+    doc.setTextColor(30, 41, 59);
+    doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+    doc.text('LISTE DES OUVRAGES RÉCEPTIONNÉS', 15, y);
+    doc.line(15, y + 2, 45, y + 2);
+    y += 15;
+
+    // Table Header
+    doc.setFillColor(241, 245, 249); doc.rect(15, y - 7, pw - 30, 10, 'F');
+    doc.setFontSize(9); doc.text('UNITÉ', 20, y);
+    doc.text('TYPE / DIMENSIONS', 60, y);
+    doc.text('ÉTAGE', 130, y);
+    doc.text('STATUT', 165, y);
+    y += 10;
+
+    filteredUnits.forEach(u => {
+      doc.setFont('helvetica', 'normal');
+      doc.text(u.name, 20, y);
+      doc.text(`${u.label} (${u.dimensions}mm)`, 60, y);
+      doc.text(u.floor || 'N/A', 130, y);
+      doc.setTextColor(16, 185, 129); doc.setFont('helvetica', 'bold');
+      doc.text('TERMINÉ', 165, y);
+      doc.setTextColor(30, 41, 59);
+      doc.setDrawColor(241, 245, 249); doc.line(15, y + 4, pw - 15, y + 4);
+      y += 12;
+      if (y > ph - 80) { doc.addPage(); y = 30; }
+    });
+
+    // Signature Area
+    y = Math.max(y + 20, ph - 60);
+    doc.setDrawColor(203, 213, 225);
+    doc.rect(15, y, 85, 40, 'S');
+    doc.rect(pw - 100, y, 85, 40, 'S');
+    
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold');
+    doc.text('POUR L\'ENTREPRISE', 20, y + 8);
+    doc.text('POUR LE CLIENT (BON POUR ACCORD)', pw - 95, y + 8);
+    
+    doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 116, 139);
+    doc.text('Fait à ....................................... le .........................', 20, y + 35);
+    doc.text('Signature et cachet', 20, y + 20);
+    doc.text('Signature du client', pw - 95, y + 20);
+
+    doc.save(`PV_RECEPTION_${selectedOrder.id}_${new Date().getTime()}.pdf`);
+    setShowPVModal(false);
+  };
+
   const generateDeliveryNote = (type = 'ALU') => {
     const doc = new jsPDF();
     const pw = doc.internal.pageSize.getWidth();
@@ -757,6 +832,8 @@ const ShippingModule = ({ data, setData, refetchData }) => {
       });
     };
 
+    const uniqueFloors = Array.from(new Set(allUnits.map(u => u.floor || 'N/A'))).sort();
+
     return (
       <div className="animate-fade-in">
         <header style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
@@ -768,6 +845,13 @@ const ShippingModule = ({ data, setData, refetchData }) => {
             <p style={{ color: '#64748b', margin: 0 }}>Chargement, Livraison et Pose</p>
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.75rem' }}>
+              <button 
+                onClick={() => setShowPVModal(true)}
+                className="btn btn-secondary"
+                style={{ background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a', fontWeight: 700 }}
+              >
+                <ClipboardCheck size={16} /> PV Réception
+              </button>
               <button 
                 onClick={handleRefresh} 
                 className={`btn ${isSyncing ? 'animate-spin' : ''}`} 
@@ -1163,6 +1247,76 @@ const ShippingModule = ({ data, setData, refetchData }) => {
                 ))}
               </div>
               <button onClick={() => setShowTeamManager(false)} className="btn btn-secondary" style={{ width: '100%', marginTop: '1.5rem' }}>Fermer</button>
+            </div>
+          </div>
+        )}
+
+        {/* PV RECEPTION MODAL */}
+        {showPVModal && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.7)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(10px)' }}>
+            <div className="glass shadow-2xl animate-scale-up" style={{ background: 'white', padding: '2.5rem', borderRadius: '2rem', width: '450px' }}>
+              <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+                <div style={{ width: '60px', height: '60px', background: '#fffbeb', borderRadius: '50%', display: 'grid', placeItems: 'center', margin: '0 auto 1rem' }}>
+                  <ClipboardCheck size={32} color="#b45309" />
+                </div>
+                <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 900, color: '#0f172a' }}>Générer PV de Réception</h2>
+                <p style={{ color: '#64748b', fontSize: '0.9rem', marginTop: '0.5rem' }}>Sélectionnez les étages à inclure dans le procès-verbal.</p>
+              </div>
+
+              <div style={{ marginBottom: '2rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Choix des Étages</label>
+                  <button 
+                    onClick={() => {
+                      if (pvSelectedFloors.size === uniqueFloors.length) setPvSelectedFloors(new Set());
+                      else setPvSelectedFloors(new Set(uniqueFloors));
+                    }}
+                    className="btn" style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', background: '#f1f5f9' }}
+                  >
+                    {pvSelectedFloors.size === uniqueFloors.length ? 'Tout désélectionner' : 'Tout sélectionner'}
+                  </button>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', maxHeight: '200px', overflowY: 'auto', padding: '0.5rem' }}>
+                  {uniqueFloors.map(floor => (
+                    <label key={floor} style={{ 
+                      display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', 
+                      background: pvSelectedFloors.has(floor) ? '#fffbeb' : '#f8fafc', 
+                      borderRadius: '0.75rem', border: `2px solid ${pvSelectedFloors.has(floor) ? '#fde68a' : 'transparent'}`,
+                      cursor: 'pointer', transition: 'all 0.2s ease'
+                    }}>
+                      <input 
+                        type="checkbox" 
+                        checked={pvSelectedFloors.has(floor)} 
+                        onChange={() => setPvSelectedFloors(prev => {
+                          const next = new Set(prev);
+                          if (next.has(floor)) next.delete(floor); else next.add(floor);
+                          return next;
+                        })}
+                        style={{ width: '18px', height: '18px' }}
+                      />
+                      <span style={{ fontWeight: 700, fontSize: '0.9rem', color: pvSelectedFloors.has(floor) ? '#92400e' : '#475569' }}>
+                        {floor === '' || floor === 'N/A' ? 'Non spécifié' : `Étage ${floor}`}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <button 
+                  onClick={() => setShowPVModal(false)}
+                  className="btn btn-secondary" style={{ flex: 1, padding: '1rem' }}
+                >
+                  Annuler
+                </button>
+                <button 
+                  onClick={generatePVReception}
+                  disabled={pvSelectedFloors.size === 0}
+                  className="btn btn-primary" style={{ flex: 2, padding: '1rem', background: '#b45309', border: 'none', boxShadow: '0 4px 12px rgba(180, 83, 9, 0.2)' }}
+                >
+                  Générer le PDF
+                </button>
+              </div>
             </div>
           </div>
         )}
