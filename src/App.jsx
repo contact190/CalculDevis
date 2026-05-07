@@ -219,8 +219,12 @@ function App() {
     networkMode: 'offlineFirst',
   });
 
+  const refetchData = () => {
+    queryClient.invalidateQueries({ queryKey: ['database'] });
+  };
+
   React.useEffect(() => {
-    if (cloudDb && database === DEFAULT_DATA) {
+    if (cloudDb) {
       setDatabase(cloudDb);
       setLastSyncTime(new Date());
     }
@@ -287,6 +291,7 @@ function App() {
         data={database} 
         setData={setDatabase} 
         orderId={installerOrderId} 
+        refetchData={refetchData}
       />
     );
   }
@@ -406,6 +411,7 @@ function App() {
           <ShippingModule 
             data={database}
             setData={setDatabase}
+            refetchData={refetchData}
           />
         )}
         {activeTab === 'admin' && (

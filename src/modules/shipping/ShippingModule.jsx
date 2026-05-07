@@ -5,7 +5,7 @@ import jsPDF from 'jspdf';
 import QRScanner from './QRScanner';
 
 // Module version: 1.0.1 - Logistic & Installation Tracking
-const ShippingModule = ({ data, setData }) => {
+const ShippingModule = ({ data, setData, refetchData }) => {
   const [selectedOrderId, setSelectedOrderId] = useState(null);
   const [selectedBatchIds, setSelectedBatchIds] = useState(new Set());
   const [activeView, setActiveView] = useState('list'); // 'list' | 'details' | 'scanner' | 'zones'
@@ -20,14 +20,16 @@ const ShippingModule = ({ data, setData }) => {
   const handleRefresh = async () => {
     setIsSyncing(true);
     try {
-      const freshData = await syncDatabase.load();
-      if (freshData) {
-        setData(freshData);
+      if (refetchData) {
+        await refetchData();
+      } else {
+        const freshData = await syncDatabase.load();
+        if (freshData) setData(freshData);
       }
     } catch (e) {
       console.error("Refresh failed:", e);
     } finally {
-      setIsSyncing(false);
+      setTimeout(() => setIsSyncing(false), 500);
     }
   };
   
