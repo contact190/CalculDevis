@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { Truck, Package, QrCode, CheckCircle, AlertTriangle, XCircle, Download, Search, Plus, Trash2, ArrowLeft, ClipboardCheck, UserCheck, ShieldCheck, Layers, Wrench, FileText, MapPin, Share2, Camera } from 'lucide-react';
+import { Truck, Package, QrCode, CheckCircle, AlertTriangle, XCircle, Download, Search, Plus, Trash2, ArrowLeft, ClipboardCheck, UserCheck, ShieldCheck, Layers, Wrench, FileText, MapPin, Share2, Camera, RefreshCw } from 'lucide-react';
+import { syncDatabase } from '../../utils/supabaseClient';
 import jsPDF from 'jspdf';
 import QRScanner from './QRScanner';
 
@@ -14,6 +15,21 @@ const ShippingModule = ({ data, setData }) => {
   const [viewingShutter, setViewingShutter] = useState(null); // unit object
   const [showInstallerQr, setShowInstallerQr] = useState(null); // orderId or null
   const [showScanner, setShowScanner] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleRefresh = async () => {
+    setIsSyncing(true);
+    try {
+      const freshData = await syncDatabase.load();
+      if (freshData) {
+        setData(freshData);
+      }
+    } catch (e) {
+      console.error("Refresh failed:", e);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
   
   const storageZones = data.storageZones || [];
   const shippableOrders = useMemo(() => {
@@ -460,6 +476,14 @@ const ShippingModule = ({ data, setData }) => {
             <p style={{ color: '#64748b', margin: 0 }}>Chargement, Livraison et Pose</p>
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.75rem' }}>
+              <button 
+                onClick={handleRefresh} 
+                className={`btn ${isSyncing ? 'animate-spin' : ''}`} 
+                style={{ padding: '0.5rem', background: '#f8fafc', color: '#64748b' }}
+                title="Actualiser les données du terrain"
+              >
+                <RefreshCw size={18} />
+              </button>
               <button onClick={generatePackingLabels} className="btn btn-secondary" disabled={allUnits.length === 0}><QrCode size={16} /> Étiquettes</button>
               <button onClick={generateInstallationSheet} className="btn btn-secondary" disabled={allUnits.length === 0}><FileText size={16} /> Fiche de Pose</button>
               <button onClick={generateInstallationReport} className="btn btn-secondary" style={{ color: '#10b981', borderColor: '#a7f3d0' }} disabled={allUnits.length === 0}><Camera size={16} /> Rapport d'État</button>
