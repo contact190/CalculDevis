@@ -7,7 +7,6 @@ const InstallerPortal = ({ data, setData, orderId }) => {
   const [selectedUnits, setSelectedUnits] = useState(new Set());
   const [scannedId, setScannedId] = useState('');
   const [showScanner, setShowScanner] = useState(false);
-  const [installationPhotos, setInstallationPhotos] = useState({}); // { unitId: dataUrl }
 
   const order = useMemo(() => {
     return (data.orders || []).find(o => o.id === orderId);
@@ -49,6 +48,22 @@ const InstallerPortal = ({ data, setData, orderId }) => {
       return { ...prev, orders };
     });
   };
+
+  const handleSavePhoto = (unitId, photoData) => {
+    setData(prev => {
+      const orders = [...(prev.orders || [])];
+      const oIdx = orders.findIndex(o => o.id === orderId);
+      if (oIdx === -1) return prev;
+      const o = { ...orders[oIdx] };
+      const photos = { ...(o.unitInstallationPhotos || {}) };
+      photos[unitId] = photoData;
+      o.unitInstallationPhotos = photos;
+      orders[oIdx] = o;
+      return { ...prev, orders };
+    });
+  };
+
+  const installationPhotos = order?.unitInstallationPhotos || {};
 
   const shippableUnits = units.filter(u => u.status === 'Chargé');
   const installableUnits = units.filter(u => u.status === 'Livré');
@@ -216,7 +231,33 @@ const InstallerPortal = ({ data, setData, orderId }) => {
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-        {installableUnits.filter(u => !scannedId || u.id.includes(scannedId)).map(unit => (
+        {scannedId && !units.find(u => u.id === scannedId) && (
+          <div className="glass" style={{ padding: '1.5rem', background: '#fee2e2', border: '1px solid #fecaca', textAlign: 'center' }}>
+            <p style={{ margin: 0, fontWeight: 700, color: '#991b1b' }}>Code inconnu : {scannedId}</p>
+            <button onClick={() => setScannedId('')} style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#ef4444', textDecoration: 'underline', background: 'none', border: 'none' }}>Effacer</button>
+          </div>
+        )}
+
+        {scannedId && units.find(u => u.id === scannedId && u.status === 'Posé') && (
+          <div className="glass" style={{ padding: '1.5rem', background: '#d1fae5', border: '1px solid #6ee7b7', textAlign: 'center' }}>
+             <CheckCircle size={32} color="#10b981" style={{ margin: '0 auto 0.5rem' }} />
+             <p style={{ margin: 0, fontWeight: 800, color: '#065f46' }}>FENÊTRE DÉJÀ POSÉE</p>
+             <p style={{ margin: 0, fontSize: '0.85rem', color: '#059669' }}>{units.find(u => u.id === scannedId).name}</p>
+             <button onClick={() => setScannedId('')} className="btn" style={{ marginTop: '1rem', background: 'white' }}>Scanner une autre</button>
+          </div>
+        )}
+
+        {scannedId && units.find(u => u.id === scannedId && u.status !== 'Livré' && u.status !== 'Posé') && (
+          <div className="glass" style={{ padding: '1.5rem', background: '#fffbeb', border: '1px solid #fde68a', textAlign: 'center' }}>
+             <Package size={32} color="#d97706" style={{ margin: '0 auto 0.5rem' }} />
+             <p style={{ margin: 0, fontWeight: 800, color: '#92400e' }}>ATTENTION : STATUT INCOHÉRENT</p>
+             <p style={{ margin: 0, fontSize: '0.85rem', color: '#b45309' }}>Cette fenêtre n'est pas encore marquée comme "LIVRÉE".</p>
+             <p style={{ margin: '0.2rem 0', fontSize: '0.8rem' }}>Statut actuel : <strong>{units.find(u => u.id === scannedId).status}</strong></p>
+             <button onClick={() => setScannedId('')} className="btn" style={{ marginTop: '1rem', background: 'white' }}>OK</button>
+          </div>
+        )}
+
+        {installableUnits.filter(u => !scannedId || u.id === scannedId).map(unit => (
           <div key={unit.id} className="glass shadow-sm" style={{ padding: '1.25rem', background: 'white' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
                <div>
@@ -243,7 +284,7 @@ const InstallerPortal = ({ data, setData, orderId }) => {
                     if (file) {
                       const reader = new FileReader();
                       reader.onload = (ev) => {
-                        setInstallationPhotos({ ...installationPhotos, [unit.id]: ev.target.result });
+                        handleSavePhoto(unit.id, ev.target.result);
                       };
                       reader.readAsDataURL(file);
                     }
@@ -253,6 +294,7 @@ const InstallerPortal = ({ data, setData, orderId }) => {
               <button 
                 onClick={() => {
                   handleUpdateStatus([unit.id], 'Posé');
+                  setScannedId(''); // Clear search after validation
                   alert(`${unit.name} marqué comme POSÉ !`);
                 }}
                 className="btn btn-primary" 

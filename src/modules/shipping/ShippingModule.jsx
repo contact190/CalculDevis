@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Truck, Package, QrCode, CheckCircle, AlertTriangle, XCircle, Download, Search, Plus, Trash2, ArrowLeft, ClipboardCheck, UserCheck, ShieldCheck, Layers, Wrench, FileText, MapPin, Share2 } from 'lucide-react';
+import { Truck, Package, QrCode, CheckCircle, AlertTriangle, XCircle, Download, Search, Plus, Trash2, ArrowLeft, ClipboardCheck, UserCheck, ShieldCheck, Layers, Wrench, FileText, MapPin, Share2, Camera } from 'lucide-react';
 import jsPDF from 'jspdf';
 import QRScanner from './QRScanner';
 
@@ -320,6 +320,92 @@ const ShippingModule = ({ data, setData }) => {
     doc.save(`Fiche_Pose_${selectedOrder.id}.pdf`);
   };
 
+  const generateInstallationReport = () => {
+    const doc = new jsPDF();
+    const pw = doc.internal.pageSize.getWidth();
+    const ph = doc.internal.pageSize.getHeight();
+    const photos = selectedOrder.unitInstallationPhotos || {};
+    
+    // Page de Garde
+    doc.setFillColor(30, 41, 59);
+    doc.rect(0, 0, pw, ph, 'F');
+    
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(28); doc.setFont('helvetica', 'bold');
+    doc.text('RAPPORT D\'ÉTAT DE POSE', pw / 2, ph / 3, { align: 'center' });
+    
+    doc.setFontSize(16); doc.setFont('helvetica', 'normal');
+    doc.text(`CLIENT : ${selectedOrder.clientName}`, pw / 2, ph / 3 + 20, { align: 'center' });
+    doc.text(`COMMANDE : ${selectedOrder.id}`, pw / 2, ph / 3 + 32, { align: 'center' });
+    doc.text(`DATE : ${new Date().toLocaleDateString()}`, pw / 2, ph / 3 + 44, { align: 'center' });
+    
+    doc.setDrawColor(255, 255, 255); doc.setLineWidth(1);
+    doc.line(pw / 2 - 40, ph / 3 + 55, pw / 2 + 40, ph / 3 + 55);
+
+    // Liste des unités
+    doc.addPage();
+    doc.setTextColor(30, 41, 59);
+    
+    let y = 20;
+    doc.setFontSize(18); doc.setFont('helvetica', 'bold');
+    doc.text('Synthèse des Installations', 15, y);
+    y += 15;
+
+    allUnits.forEach((unit, index) => {
+      if (y > ph - 60) {
+        doc.addPage();
+        y = 20;
+      }
+
+      const photo = photos[unit.id];
+      const isInstalled = unit.status === 'Posé';
+
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.5);
+      doc.rect(15, y, pw - 30, photo ? 85 : 30);
+      
+      doc.setFontSize(12); doc.setFont('helvetica', 'bold');
+      doc.text(`${unit.name} (${unit.label})`, 20, y + 10);
+      
+      doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+      doc.text(`Dimensions: ${unit.dimensions} mm | Étage: ${unit.floor || 'N/A'}`, 20, y + 17);
+      
+      // Status Badge
+      if (isInstalled) {
+        doc.setFillColor(16, 185, 129);
+        doc.rect(pw - 55, y + 4, 35, 8, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(9); doc.setFont('helvetica', 'bold');
+        doc.text('INSTALLÉ', pw - 37.5, y + 9.5, { align: 'center' });
+      } else {
+        doc.setFillColor(245, 158, 11);
+        doc.rect(pw - 55, y + 4, 35, 8, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(9); doc.setFont('helvetica', 'bold');
+        doc.text(unit.status.toUpperCase(), pw - 37.5, y + 9.5, { align: 'center' });
+      }
+      
+      doc.setTextColor(30, 41, 59);
+
+      if (photo) {
+        try {
+          doc.addImage(photo, 'JPEG', 20, y + 25, 50, 50);
+          doc.setFontSize(9); doc.setFont('helvetica', 'italic');
+          doc.text('Photo de validation poseur', 75, y + 35);
+        } catch (e) {
+          doc.text('[Erreur affichage photo]', 20, y + 30);
+        }
+        y += 95;
+      } else {
+        doc.setFontSize(9); doc.setFont('helvetica', 'italic'); doc.setTextColor(148, 163, 184);
+        doc.text('Aucune photo disponible pour cette unité.', 20, y + 24);
+        y += 40;
+      }
+    });
+
+    doc.save(`Rapport_Pose_${selectedOrder.id}.pdf`);
+  };
+
   const generateDeliveryNote = () => {
     const doc = new jsPDF();
     const pw = doc.internal.pageSize.getWidth();
@@ -376,6 +462,7 @@ const ShippingModule = ({ data, setData }) => {
           <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.75rem' }}>
               <button onClick={generatePackingLabels} className="btn btn-secondary" disabled={allUnits.length === 0}><QrCode size={16} /> Étiquettes</button>
               <button onClick={generateInstallationSheet} className="btn btn-secondary" disabled={allUnits.length === 0}><FileText size={16} /> Fiche de Pose</button>
+              <button onClick={generateInstallationReport} className="btn btn-secondary" style={{ color: '#10b981', borderColor: '#a7f3d0' }} disabled={allUnits.length === 0}><Camera size={16} /> Rapport d'État</button>
               <button 
                 onClick={() => {
                   const url = `${window.location.origin}${window.location.pathname}?mode=installer&orderId=${selectedOrder.id}`;
