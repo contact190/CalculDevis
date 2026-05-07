@@ -23,6 +23,7 @@ const ShippingModule = ({ data, setData, refetchData }) => {
   const [showPVModal, setShowPVModal] = useState(false);
   const [pvSelectedFloors, setPvSelectedFloors] = useState(new Set());
   const [senderEmail, setSenderEmail] = useState('contact@entreprise.com');
+  const [companyName, setCompanyName] = useState('ALU DESIGN'); // Nom par défaut
   const [recipientEmail, setRecipientEmail] = useState('');
   const [sendByEmail, setSendByEmail] = useState(false);
   const handleRefresh = async () => {
@@ -789,6 +790,8 @@ const ShippingModule = ({ data, setData, refetchData }) => {
           await invokeFunction('send-pv-email', {
             sender: senderEmail,
             recipient: recipientEmail,
+            companyName: companyName,
+            clientName: selectedOrder.clientName,
             orderId: selectedOrder.id,
             pdfBase64: pdfBase64
           });
@@ -1346,6 +1349,10 @@ const ShippingModule = ({ data, setData, refetchData }) => {
                     <div>
                       <label style={{ fontSize: '0.7rem', fontWeight: 800, color: '#64748b', display: 'block', marginBottom: '0.25rem' }}>EMAIL D'ENVOI (LE VÔTRE)</label>
                       <input className="input" type="email" value={senderEmail} onChange={e => setSenderEmail(e.target.value)} style={{ padding: '0.5rem', fontSize: '0.85rem' }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '0.7rem', fontWeight: 800, color: '#64748b', display: 'block', marginBottom: '0.25rem' }}>NOM DE VOTRE ENTREPRISE</label>
+                      <input className="input" type="text" placeholder="Ex: ALU DESIGN" value={companyName} onChange={e => setCompanyName(e.target.value)} style={{ padding: '0.5rem', fontSize: '0.85rem' }} />
                     </div>
                     <div>
                       <label style={{ fontSize: '0.7rem', fontWeight: 800, color: '#64748b', display: 'block', marginBottom: '0.25rem' }}>EMAIL DU CLIENT (DESTINATAIRE)</label>

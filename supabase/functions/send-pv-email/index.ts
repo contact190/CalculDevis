@@ -15,23 +15,31 @@ serve(async (req) => {
   }
 
   try {
-    const { sender, recipient, pdfBase64, orderId } = await req.json()
+    const { sender, recipient, companyName, clientName, pdfBase64, orderId } = await req.json()
 
     console.log(`Sending email for order ${orderId} to ${recipient}`)
 
     const data = await resend.emails.send({
-      from: `Notification Chantier <onboarding@resend.dev>`, // À personnaliser plus tard
+      from: `${companyName} <onboarding@resend.dev>`, 
       to: [recipient],
-      subject: `PV de Réception - Chantier ${orderId}`,
+      subject: `PV de Réception - ${clientName}`,
       html: `
-        <div style="font-family: sans-serif; line-height: 1.5; color: #333;">
-          <h2>PV de Réception de Chantier</h2>
-          <p>Bonjour,</p>
-          <p>Veuillez trouver ci-joint le Procès-Verbal de réception pour le chantier <strong>${orderId}</strong>.</p>
-          <p>Ce document atteste de la fin des travaux et de la conformité des menuiseries installées.</p>
-          <br/>
-          <p>Cordialement,</p>
-          <p><em>L'équipe Logistique</em></p>
+        <div style="font-family: sans-serif; line-height: 1.6; color: #1a202c; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
+          <div style="background: #1e293b; padding: 24px; color: white; text-align: center;">
+            <h1 style="margin: 0; font-size: 20px;">Procès-Verbal de Réception</h1>
+          </div>
+          <div style="padding: 32px; background: white;">
+            <p>Bonjour <strong>${clientName}</strong>,</p>
+            <p>Nous avons le plaisir de vous informer que les travaux sur votre chantier <strong>${orderId}</strong> sont terminés.</p>
+            <p>Veuillez trouver ci-joint votre Procès-Verbal de réception, attestant de la conformité des menuiseries installées.</p>
+            <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #e2e8f0;">
+              <p style="margin: 0; color: #64748b; font-size: 14px;">Cordialement,</p>
+              <p style="margin: 4px 0 0 0; font-weight: 800; font-size: 16px; color: #1e293b;">L'équipe ${companyName}</p>
+            </div>
+          </div>
+          <div style="background: #f8fafc; padding: 16px; text-align: center; fontSize: 12px; color: #94a3b8;">
+            Document généré automatiquement par le portail logistique ${companyName}
+          </div>
         </div>
       `,
       attachments: [
