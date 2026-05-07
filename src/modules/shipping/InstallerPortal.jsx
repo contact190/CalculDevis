@@ -78,6 +78,27 @@ const InstallerPortal = ({ data, setData, orderId }) => {
     });
   };
 
+  const compressImage = (dataUrl, maxWidth = 800, quality = 0.65) => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.src = dataUrl;
+    });
+  };
+
   const handleSendFieldNote = () => {
     if (!noteText.trim() && !noteImage) return;
     setData(prev => {
@@ -344,11 +365,14 @@ const InstallerPortal = ({ data, setData, orderId }) => {
                 <span style={{ fontSize: '0.85rem' }}>{installationPhotos[unit.id] ? 'Photo OK' : 'Photo Pose'}</span>
                 <input 
                   type="file" accept="image/*" capture="environment" style={{ display: 'none' }} 
-                  onChange={e => {
+                  onChange={async e => {
                     const file = e.target.files[0];
                     if (file) {
                       const reader = new FileReader();
-                      reader.onload = (ev) => handleSavePhoto(unit.id, ev.target.result);
+                      reader.onload = async (ev) => {
+                        const compressed = await compressImage(ev.target.result, 800, 0.65);
+                        handleSavePhoto(unit.id, compressed);
+                      };
                       reader.readAsDataURL(file);
                     }
                   }}
@@ -435,11 +459,14 @@ const InstallerPortal = ({ data, setData, orderId }) => {
           />
           <label className="btn btn-secondary" style={{ padding: '0.75rem', cursor: 'pointer', flexShrink: 0, height: '48px', display: 'grid', placeItems: 'center' }}>
             <Camera size={20} />
-            <input type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={e => {
+            <input type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={async e => {
               const file = e.target.files[0];
               if (file) {
                 const reader = new FileReader();
-                reader.onload = ev => setNoteImage(ev.target.result);
+                reader.onload = async ev => {
+                  const compressed = await compressImage(ev.target.result, 800, 0.65);
+                  setNoteImage(compressed);
+                };
                 reader.readAsDataURL(file);
               }
             }} />
