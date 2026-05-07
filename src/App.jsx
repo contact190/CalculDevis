@@ -244,6 +244,22 @@ function App() {
     networkMode: 'offlineFirst',
   });
 
+  const [isOnline, setIsOnline] = React.useState(navigator.onLine);
+
+  React.useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      refetchData(); // Refresh data when connection returns
+    };
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
   React.useEffect(() => {
     if (database === DEFAULT_DATA) return;
     
@@ -292,6 +308,8 @@ function App() {
         setData={setDatabase} 
         orderId={installerOrderId} 
         refetchData={refetchData}
+        isOnline={isOnline}
+        isSyncing={syncMutation.isPending}
       />
     );
   }

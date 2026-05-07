@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { Truck, Wrench, CheckCircle, ArrowLeft, QrCode, Camera, Package, UserCheck, ShieldCheck, ClipboardList, MessageSquare, Send, X } from 'lucide-react';
+import { Truck, Wrench, CheckCircle, ArrowLeft, QrCode, Camera, Package, UserCheck, ShieldCheck, ClipboardList, MessageSquare, Send, X, RefreshCw, AlertTriangle } from 'lucide-react';
 import QRScanner from './QRScanner';
 
-const InstallerPortal = ({ data, setData, orderId }) => {
+const InstallerPortal = ({ data, setData, orderId, refetchData, isOnline, isSyncing }) => {
   const [view, setView] = useState('menu'); // 'menu', 'delivery', 'manutention', 'installation'
   const [selectedUnits, setSelectedUnits] = useState(new Set());
   const [scannedId, setScannedId] = useState('');
@@ -41,7 +41,7 @@ const InstallerPortal = ({ data, setData, orderId }) => {
     return list;
   }, [order]);
 
-  const handleUpdateStatusDual = (unitIds, component, newStatus) => {
+  const handleUpdateStatusDual = (unitIds, component, newStatus, actionType = 'finish', issueType = null) => {
     setData(prev => {
       const orders = [...(prev.orders || [])];
       const oIdx = orders.findIndex(o => o.id === orderId);
@@ -54,17 +54,24 @@ const InstallerPortal = ({ data, setData, orderId }) => {
         date: new Date().toISOString(),
         user: currentInstaller || 'EXTERNE',
         component: component,
-        status: newStatus
+        status: newStatus,
+        action: actionType,
+        issue: issueType
       };
 
       unitIds.forEach(id => { 
         const current = dualStatuses[id] || { alu: 'Produit', vitrage: 'Produit' };
-        if (component === 'both') {
-          current.alu = newStatus;
-          current.vitrage = newStatus;
-        } else {
-          current[component] = newStatus;
+        
+        // Only update the main status if it's a 'finish' action
+        if (actionType === 'finish') {
+          if (component === 'both') {
+            current.alu = newStatus;
+            current.vitrage = newStatus;
+          } else {
+            current[component] = newStatus;
+          }
         }
+        
         dualStatuses[id] = { ...current };
         
         if (!timeline[id]) timeline[id] = [];
@@ -172,6 +179,17 @@ const InstallerPortal = ({ data, setData, orderId }) => {
   const renderMenu = () => (
     <div className="animate-fade-in" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       <header style={{ textAlign: 'center', marginBottom: '1rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+          <div style={{ padding: '0.3rem 0.6rem', borderRadius: '20px', fontSize: '0.65rem', fontWeight: 800, background: isOnline ? '#dcfce7' : '#fee2e2', color: isOnline ? '#166534' : '#991b1b', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+            <div style={{ width: 6, height: 6, borderRadius: '50%', background: isOnline ? '#22c55e' : '#ef4444' }} />
+            {isOnline ? 'CONNECTÉ' : 'MODE HORS-LIGNE'}
+          </div>
+          {isSyncing && (
+            <div style={{ padding: '0.3rem 0.6rem', borderRadius: '20px', fontSize: '0.65rem', fontWeight: 800, background: '#eff6ff', color: '#1e40af', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+              <RefreshCw size={10} className="animate-spin" /> SYNCHRONISATION...
+            </div>
+          )}
+        </div>
         <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: 0 }}>Portail Poseur</h1>
         <p style={{ color: '#64748b', margin: '0.2rem 0' }}>Commande: <strong>{order.id}</strong></p>
         <p style={{ color: '#64748b', fontSize: '0.9rem' }}>Poseur: {currentInstaller || 'Externe'}</p>
@@ -271,12 +289,24 @@ const InstallerPortal = ({ data, setData, orderId }) => {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {unitsToDeliver.filter(u => !scannedId || u.id === scannedId).map(unit => (
-            <div key={unit.id} style={{ padding: '1rem', background: 'white', borderRadius: '1rem', border: '2px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <p style={{ margin: 0, fontWeight: 800 }}>{unit.name}</p>
-                <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>{unit.label}</p>
+            <div key={unit.id} style={{ padding: '1rem', background: 'white', borderRadius: '1rem', border: '2px solid #e2e8f0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                <div>
+                  <p style={{ margin: 0, fontWeight: 800 }}>{unit.name}</p>
+                  <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>{unit.label}</p>
+                </div>
+                <button onClick={() => { handleUpdateStatusDual([unit.id], activeTab, 'Livré'); setScannedId(''); }} className="btn btn-primary" style={{ padding: '0.5rem 1rem', fontSize: '0.8rem' }}>RÉCEPTIONNER</button>
               </div>
-              <button onClick={() => { handleUpdateStatusDual([unit.id], activeTab, 'Livré'); setScannedId(''); }} className="btn btn-primary" style={{ padding: '0.5rem 1rem', fontSize: '0.8rem' }}>RÉCEPTIONNER</button>
+              <button 
+                onClick={() => {
+                  const reason = prompt("Type de problème à la réception (Casse, Manquant, Autre) :");
+                  if (reason) handleUpdateStatusDual([unit.id], activeTab, 'PROBLÈME LIVRAISON', 'issue', reason);
+                }}
+                className="btn" 
+                style={{ width: '100%', fontSize: '0.7rem', color: '#ef4444', borderColor: '#fecaca', background: '#fef2f2', padding: '0.4rem' }}
+              >
+                <AlertTriangle size={12} /> SIGNALER PROBLÈME
+              </button>
             </div>
           ))}
         </div>
@@ -316,12 +346,24 @@ const InstallerPortal = ({ data, setData, orderId }) => {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {unitsToManut.filter(u => !scannedId || u.id === scannedId).map(unit => (
-            <div key={unit.id} style={{ padding: '1rem', background: 'white', borderRadius: '1rem', border: '2px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <p style={{ margin: 0, fontWeight: 800 }}>{unit.name}</p>
-                <p style={{ margin: 0, fontSize: '0.8rem', color: '#10b981', fontWeight: 700 }}>ÉTAGE: {unit.floor || 'N/A'}</p>
+            <div key={unit.id} style={{ padding: '1rem', background: 'white', borderRadius: '1rem', border: '2px solid #e2e8f0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                <div>
+                  <p style={{ margin: 0, fontWeight: 800 }}>{unit.name}</p>
+                  <p style={{ margin: 0, fontSize: '0.8rem', color: '#10b981', fontWeight: 700 }}>ÉTAGE: {unit.floor || 'N/A'}</p>
+                </div>
+                <button onClick={() => { handleUpdateStatusDual([unit.id], activeTab, 'Manutention'); setScannedId(''); }} className="btn btn-primary" style={{ padding: '0.5rem 1rem', fontSize: '0.8rem', background: '#10b981' }}>À L'ÉTAGE</button>
               </div>
-              <button onClick={() => { handleUpdateStatusDual([unit.id], activeTab, 'Manutention'); setScannedId(''); }} className="btn btn-primary" style={{ padding: '0.5rem 1rem', fontSize: '0.8rem', background: '#10b981' }}>À L'ÉTAGE</button>
+              <button 
+                onClick={() => {
+                  const reason = prompt("Problème durant la manutention (Casse, Rayure, Difficulté accès) :");
+                  if (reason) handleUpdateStatusDual([unit.id], activeTab, 'PROBLÈME MANUTENTION', 'issue', reason);
+                }}
+                className="btn" 
+                style={{ width: '100%', fontSize: '0.7rem', color: '#ef4444', borderColor: '#fecaca', background: '#fef2f2', padding: '0.4rem' }}
+              >
+                <AlertTriangle size={12} /> SIGNALER PROBLÈME
+              </button>
             </div>
           ))}
         </div>
@@ -359,13 +401,45 @@ const InstallerPortal = ({ data, setData, orderId }) => {
                </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
-              <label className="btn btn-secondary" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', cursor: 'pointer', background: installationPhotos[unit.id] ? '#d1fae5' : 'white' }}>
-                <Camera size={18} />
-                <span style={{ fontSize: '0.85rem' }}>{installationPhotos[unit.id] ? 'Photo OK' : 'Photo Pose'}</span>
-                <input 
-                  type="file" accept="image/*" capture="environment" style={{ display: 'none' }} 
-                  onChange={async e => {
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginTop: '1rem' }}>
+              <div className="glass" style={{ padding: '0.75rem', background: '#f8fafc' }}>
+                <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.7rem', fontWeight: 700, color: '#64748b' }}>POSE ALU</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {unit.statusAlu === 'Posé' || unit.statusAlu === 'Fini' ? (
+                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#10b981' }}>✓ POSÉ</span>
+                  ) : (
+                    <button 
+                      onClick={() => handleUpdateStatusDual([unit.id], 'alu', 'Posé', 'finish')}
+                      className="btn btn-primary" style={{ background: '#8b5cf6', fontSize: '0.8rem', padding: '0.5rem' }}
+                    >
+                      VALIDER POSE
+                    </button>
+                  )}
+                </div>
+              </div>
+              
+              <div className="glass" style={{ padding: '0.75rem', background: '#f8fafc' }}>
+                <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.7rem', fontWeight: 700, color: '#64748b' }}>VITRAGE / FINITION</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {unit.statusVitrage === 'Fini' ? (
+                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#10b981' }}>✓ FINI</span>
+                  ) : (
+                    <button 
+                      onClick={() => handleUpdateStatusDual([unit.id], 'vitrage', 'Fini', 'finish')}
+                      className="btn btn-primary" style={{ background: '#10b981', fontSize: '0.8rem', padding: '0.5rem' }}
+                      disabled={unit.statusAlu !== 'Posé' && unit.statusAlu !== 'Fini'}
+                    >
+                      VALIDER FINITION
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem' }}>
+              <label className="btn btn-secondary" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', cursor: 'pointer', background: installationPhotos[unit.id] ? '#d1fae5' : 'white', fontSize: '0.75rem', padding: '0.5rem' }}>
+                <Camera size={14} /> {installationPhotos[unit.id] ? 'Photo OK' : 'Photo Pose'}
+                <input type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={async e => {
                     const file = e.target.files[0];
                     if (file) {
                       const reader = new FileReader();
@@ -375,24 +449,17 @@ const InstallerPortal = ({ data, setData, orderId }) => {
                       };
                       reader.readAsDataURL(file);
                     }
-                  }}
-                />
+                  }} />
               </label>
               <button 
                 onClick={() => {
-                  if (unit.statusAlu !== 'Posé' && unit.statusAlu !== 'Fini') {
-                    handleUpdateStatusDual([unit.id], 'alu', 'Posé');
-                    alert("Châssis Alu marqué comme POSÉ !");
-                  } else {
-                    handleUpdateStatusDual([unit.id], 'both', 'Fini');
-                    alert("Fenêtre marquée comme FINIE !");
-                  }
-                  setScannedId('');
+                  const reason = prompt("Type de problème (Casse, Rayure, Erreur Mesure, Autre) :");
+                  if (reason) handleUpdateStatusDual([unit.id], 'both', 'SIGNALÉ', 'issue', reason);
                 }}
-                className="btn btn-primary" 
-                style={{ flex: 1, background: '#8b5cf6' }}
+                className="btn" 
+                style={{ flex: 1, fontSize: '0.75rem', color: '#ef4444', borderColor: '#fecaca', background: '#fef2f2' }}
               >
-                {unit.statusAlu === 'Posé' ? 'TERMINER (VITRAGE)' : 'VALIDER POSE ALU'}
+                <AlertTriangle size={14} /> SIGNALER PROBLÈME
               </button>
             </div>
           </div>

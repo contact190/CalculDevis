@@ -143,7 +143,7 @@ const ShippingModule = ({ data, setData, refetchData }) => {
     });
   };
 
-  const handleUpdateUnitStatusDual = (unitId, component, newStatus, userName = 'ADMIN') => {
+  const handleUpdateUnitStatusDual = (unitId, component, newStatus, userName = 'ADMIN', actionType = 'finish', issueType = null) => {
     setData(prev => {
       const orders = [...(prev.orders || [])];
       const oIdx = orders.findIndex(o => o.id === selectedOrderId);
@@ -156,14 +156,18 @@ const ShippingModule = ({ data, setData, refetchData }) => {
         date: new Date().toISOString(),
         user: userName,
         component: component,
-        status: newStatus
+        status: newStatus,
+        action: actionType,
+        issue: issueType
       };
 
-      if (component === 'both') {
-        current.alu = newStatus;
-        current.vitrage = newStatus;
-      } else {
-        current[component] = newStatus;
+      if (actionType === 'finish') {
+        if (component === 'both') {
+          current.alu = newStatus;
+          current.vitrage = newStatus;
+        } else {
+          current[component] = newStatus;
+        }
       }
       
       const timeline = { ...(order.unitTimeline || {}) };
@@ -498,12 +502,60 @@ const ShippingModule = ({ data, setData, refetchData }) => {
     const progress = totalUnits > 0 ? (finishedUnits / totalUnits) * 100 : 0;
     
     doc.setFontSize(14);
-    doc.text(`Avancement : ${progress.toFixed(1)}% | Unités : ${finishedUnits}/${totalUnits}`, pw / 2, ph / 3 + 20, { align: 'center' });
-    if (selectedOrder.blDates?.ALU) doc.text(`Date BL Alu : ${new Date(selectedOrder.blDates.ALU).toLocaleDateString()}`, pw/2, ph/3 + 35, {align: 'center'});
+    doc.text(`Avancement Global : ${progress.toFixed(1)}% | Unités : ${finishedUnits}/${totalUnits}`, pw / 2, ph / 3 + 20, { align: 'center' });
+    
+    // KPI Calculation
+    const installerStats = {};
+    const issuesFound = [];
+    
+    allUnits.forEach(u => {
+      const events = timeline[u.id] || [];
+      events.forEach(ev => {
+        if (!installerStats[ev.user]) installerStats[ev.user] = { finished: 0, issues: 0, totalTime: 0, count: 0 };
+        if (ev.status === 'Posé' || ev.status === 'Fini') installerStats[ev.user].finished++;
+        if (ev.issue) {
+          installerStats[ev.user].issues++;
+          issuesFound.push({ unit: u.name, user: ev.user, issue: ev.issue, date: ev.date });
+        }
+        
+        // Time tracking
+        if (ev.action === 'finish') {
+          const startEv = events.find(e => e.component === ev.component && e.action === 'start' && new Date(e.date) < new Date(ev.date));
+          if (startEv) {
+            const duration = (new Date(ev.date) - new Date(startEv.date)) / (1000 * 60); // in minutes
+            installerStats[ev.user].totalTime += duration;
+            installerStats[ev.user].count++;
+          }
+        }
+      });
+    });
 
     doc.addPage(); doc.setTextColor(30, 41, 59);
-    let y = 20; doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.text('Traçabilité Détaillée A-Z', 15, y);
-    doc.setDrawColor(30, 41, 59); doc.line(15, y + 2, 40, y + 2);
+    doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.text('KPI - Performance Poseurs', 15, 20);
+    doc.setDrawColor(30, 41, 59); doc.line(15, 22, 50, 22);
+    
+    let kpiY = 35;
+    Object.entries(installerStats).forEach(([name, stats]) => {
+      doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.text(`Poseur : ${name}`, 15, kpiY);
+      doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+      const avg = stats.count > 0 ? (stats.totalTime / stats.count).toFixed(1) : 'N/A';
+      doc.text(`Unités traitées: ${stats.finished}  |  Temps moyen/unité: ${avg} min  |  Signalements SAV: ${stats.issues}`, 15, kpiY + 5);
+      kpiY += 15;
+    });
+
+    if (issuesFound.length > 0) {
+      doc.addPage(); doc.setFontSize(16); doc.setFont('helvetica', 'bold'); doc.text('Registre des Non-Conformités (SAV)', 15, 20);
+      let issueY = 35;
+      issuesFound.forEach(iss => {
+        doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+        doc.text(`${new Date(iss.date).toLocaleDateString()} - ${iss.unit} : ${iss.issue} (Reporté par ${iss.user})`, 15, issueY);
+        issueY += 7;
+      });
+    }
+
+    doc.addPage(); doc.setTextColor(30, 41, 59);
+    let y = 20; doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.text('Traçabilité Détaillée & Cycle de Vie', 15, y);
+    doc.line(15, y + 2, 40, y + 2);
     y += 15;
 
     allUnits.forEach((unit) => {
@@ -511,13 +563,12 @@ const ShippingModule = ({ data, setData, refetchData }) => {
       const photo = photos[unit.id];
 
       const photoH = photo ? 55 : 0;
-      const eventsH = (events.length * 5) + 10;
+      const eventsH = (events.length * 5) + 12;
       const boxH = 15 + eventsH + photoH;
 
       if (y + boxH > ph - 20) { doc.addPage(); y = 20; }
 
-      doc.setDrawColor(226, 232, 240); 
-      doc.setFillColor(252, 253, 255);
+      doc.setDrawColor(226, 232, 240); doc.setFillColor(252, 253, 255);
       doc.roundedRect(15, y, pw - 30, boxH, 1, 1, 'FD');
       
       doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 41, 59);
@@ -526,7 +577,8 @@ const ShippingModule = ({ data, setData, refetchData }) => {
       let evY = y + 15;
       doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(71, 85, 105);
       events.forEach(ev => {
-        doc.text(`[${new Date(ev.date).toLocaleString('fr-FR')}] ${ev.status} (${ev.component}) — Opérateur: ${ev.user}`, 22, evY);
+        const timeStr = ev.action === 'start' ? ' [DÉBUT]' : ev.action === 'finish' ? ' [FIN]' : ev.action === 'issue' ? ' [SAV]' : '';
+        doc.text(`[${new Date(ev.date).toLocaleString('fr-FR')}] ${ev.status}${timeStr} (${ev.component}) — ${ev.user}`, 22, evY);
         evY += 5;
       });
 
@@ -534,15 +586,13 @@ const ShippingModule = ({ data, setData, refetchData }) => {
         try {
           const fmt = getImgFormat(photo);
           doc.addImage(photo, fmt, 22, evY + 2, 60, 45);
-        } catch (e) {
-          console.error('jsPDF Performance Report Image Error:', e);
-        }
+        } catch (e) { console.error(e); }
       }
       
       y += boxH + 8;
     });
 
-    doc.save(`Rapport_Performance_${selectedOrder.id}.pdf`);
+    doc.save(`Rapport_Performance_V2_${selectedOrder.id}.pdf`);
   };
 
   const generateDeliveryNote = (type = 'ALU') => {
@@ -1104,17 +1154,41 @@ const ShippingModule = ({ data, setData, refetchData }) => {
             (b.items || []).forEach(i => acc.total += (i.measurements || []).reduce((s, m) => s + m.qty, 0));
             return acc;
           }, { total: 0 });
-          const loaded = Object.values(order.unitStatuses || {}).filter(s => s === 'Chargé' || s === 'Livré' || s === 'Posé').length;
-          const progress = stats.total > 0 ? (loaded / stats.total) * 100 : 0;
+          
+          const aluDone = Object.values(order.unitStatusesDual || {}).filter(s => s.alu === 'Posé' || s.alu === 'Fini').length;
+          const vitDone = Object.values(order.unitStatusesDual || {}).filter(s => s.vitrage === 'Fini').length;
+          
+          const progressAlu = stats.total > 0 ? (aluDone / stats.total) * 100 : 0;
+          const progressVit = stats.total > 0 ? (vitDone / stats.total) * 100 : 0;
+          const globalProgress = (progressAlu + progressVit) / 2;
+
           return (
             <div key={order.id} className="glass shadow-md card-hover" style={{ padding: '1.5rem', cursor: 'pointer' }} onClick={() => { setSelectedOrderId(order.id); setActiveView('details'); }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
                 <div style={{ width: '48px', height: '48px', background: '#eff6ff', color: '#3b82f6', borderRadius: '12px', display: 'grid', placeItems: 'center' }}><Truck size={24} /></div>
-                <span style={{ padding: '0.3rem 0.75rem', background: progress === 100 ? '#d1fae5' : '#fef3c7', color: progress === 100 ? '#065f46' : '#92400e', borderRadius: '999px', fontSize: '0.7rem', fontWeight: 700 }}>{progress === 100 ? 'PRÊT' : 'EN COURS'}</span>
+                <span style={{ padding: '0.3rem 0.75rem', background: globalProgress === 100 ? '#d1fae5' : '#fef3c7', color: globalProgress === 100 ? '#065f46' : '#92400e', borderRadius: '999px', fontSize: '0.7rem', fontWeight: 700 }}>{globalProgress === 100 ? 'PRÊT' : 'EN COURS'}</span>
               </div>
               <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800 }}>{order.id} - {order.clientName}</h3>
-              <div style={{ width: '100%', height: '8px', background: '#f1f5f9', borderRadius: '4px', overflow: 'hidden', marginTop: '1rem' }}>
-                <div style={{ width: `${progress}%`, height: '100%', background: progress === 100 ? '#10b981' : '#3b82f6', transition: 'width 0.4s ease' }}></div>
+              
+              <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: '0.25rem' }}>
+                    <span>POSE ALU</span>
+                    <span>{progressAlu.toFixed(0)}%</span>
+                  </div>
+                  <div style={{ width: '100%', height: '6px', background: '#f1f5f9', borderRadius: '3px', overflow: 'hidden' }}>
+                    <div style={{ width: `${progressAlu}%`, height: '100%', background: '#8b5cf6', transition: 'width 0.4s ease' }}></div>
+                  </div>
+                </div>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: '0.25rem' }}>
+                    <span>VITRAGE / FINI</span>
+                    <span>{progressVit.toFixed(0)}%</span>
+                  </div>
+                  <div style={{ width: '100%', height: '6px', background: '#f1f5f9', borderRadius: '3px', overflow: 'hidden' }}>
+                    <div style={{ width: `${progressVit}%`, height: '100%', background: '#10b981', transition: 'width 0.4s ease' }}></div>
+                  </div>
+                </div>
               </div>
             </div>
           );
