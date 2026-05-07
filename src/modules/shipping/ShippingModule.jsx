@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Truck, Package, QrCode, CheckCircle, AlertTriangle, XCircle, Download, Search, Plus, Trash2, ArrowLeft, ClipboardCheck, UserCheck, ShieldCheck, Layers, Wrench, FileText, MapPin, Share2, Camera, RefreshCw, MessageSquare, Trash } from 'lucide-react';
-import { syncDatabase } from '../../utils/supabaseClient';
+import { syncDatabase, invokeFunction } from '../../utils/supabaseClient';
 import jsPDF from 'jspdf';
 import QRScanner from './QRScanner';
 
@@ -22,6 +22,9 @@ const ShippingModule = ({ data, setData, refetchData }) => {
   const [unitRemarks, setUnitRemarks] = useState({});
   const [showPVModal, setShowPVModal] = useState(false);
   const [pvSelectedFloors, setPvSelectedFloors] = useState(new Set());
+  const [senderEmail, setSenderEmail] = useState('contact@entreprise.com');
+  const [recipientEmail, setRecipientEmail] = useState('');
+  const [sendByEmail, setSendByEmail] = useState(false);
   const handleRefresh = async () => {
     setIsSyncing(true);
     try {
@@ -770,6 +773,36 @@ const ShippingModule = ({ data, setData, refetchData }) => {
     doc.text('Signature du client', pw - 95, y + 20);
 
     doc.save(`PV_RECEPTION_${selectedOrder.id}_${new Date().getTime()}.pdf`);
+    
+    // Automatic Email Sending (API Call to Supabase Function)
+    if (sendByEmail) {
+      if (!recipientEmail || !recipientEmail.includes('@')) {
+        alert("Veuillez entrer une adresse email client valide.");
+        return;
+      }
+      
+      const sendEmail = async () => {
+        try {
+          console.log(`[Email Service] Envoi du PV à ${recipientEmail}...`);
+          const pdfBase64 = doc.output('datauristring').split(',')[1];
+          
+          await invokeFunction('send-pv-email', {
+            sender: senderEmail,
+            recipient: recipientEmail,
+            orderId: selectedOrder.id,
+            pdfBase64: pdfBase64
+          });
+          
+          alert(`📧 PV de Réception envoyé avec succès à ${recipientEmail}`);
+        } catch (error) {
+          console.error("Erreur envoi email:", error);
+          alert("Erreur lors de l'envoi de l'email. Vérifiez la configuration de la fonction Supabase.");
+        }
+      };
+
+      sendEmail();
+    }
+
     setShowPVModal(false);
   };
 
@@ -1300,6 +1333,26 @@ const ShippingModule = ({ data, setData, refetchData }) => {
                     </label>
                   ))}
                 </div>
+              </div>
+
+              <div style={{ padding: '1rem', background: '#f8fafc', borderRadius: '1rem', border: '1px solid #e2e8f0', marginBottom: '2rem' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', marginBottom: '1rem' }}>
+                  <input type="checkbox" checked={sendByEmail} onChange={e => setSendByEmail(e.target.checked)} style={{ width: '18px', height: '18px' }} />
+                  <span style={{ fontWeight: 800, fontSize: '0.9rem', color: '#0f172a' }}>Envoyer automatiquement par email</span>
+                </label>
+                
+                {sendByEmail && (
+                  <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    <div>
+                      <label style={{ fontSize: '0.7rem', fontWeight: 800, color: '#64748b', display: 'block', marginBottom: '0.25rem' }}>EMAIL D'ENVOI (LE VÔTRE)</label>
+                      <input className="input" type="email" value={senderEmail} onChange={e => setSenderEmail(e.target.value)} style={{ padding: '0.5rem', fontSize: '0.85rem' }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '0.7rem', fontWeight: 800, color: '#64748b', display: 'block', marginBottom: '0.25rem' }}>EMAIL DU CLIENT (DESTINATAIRE)</label>
+                      <input className="input" type="email" placeholder="client@email.com" value={recipientEmail} onChange={e => setRecipientEmail(e.target.value)} style={{ padding: '0.5rem', fontSize: '0.85rem' }} />
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div style={{ display: 'flex', gap: '1rem' }}>

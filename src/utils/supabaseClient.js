@@ -25,6 +25,21 @@ export const supabaseFetch = async (endpoint, options = {}) => {
   }
 };
 
+export const invokeFunction = async (name, payload) => {
+  const url = `${SUPABASE_URL}/functions/v1/${name}`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) throw new Error(`Function Error: ${response.status}`);
+  return response.json();
+};
+
 export const syncDatabase = {
   async load() {
     try {
