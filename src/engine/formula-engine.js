@@ -1149,6 +1149,8 @@ export class FormulaEngine {
       HC: config.shutterOverrides?.customHC || shutterHeight, 
       HT: H,
       caissonSize: 0,
+      lameWidth: 0,
+      area: 0,
       axeSize: 0,
       kitId: config.shutterConfig?.kitId,
       caissonId: config.shutterConfig?.caissonId,
@@ -1166,6 +1168,11 @@ export class FormulaEngine {
     if (vars.axeId) {
       const a = (sc.axes || []).find(x => x.id === vars.axeId);
       if (a) vars.axeSize = parseFloat(a.diameter) || parseFloat((a.name || "").match(/\d+/)?.[0]) || 0;
+    }
+    vars.area = (vars.L * vars.H) / 1000000;
+    if (vars.lameId) {
+      const l = (sc.lames || []).find(x => x.id === vars.lameId);
+      if (l) vars.lameWidth = parseFloat(l.lameWidth) || 0;
     }
     const shutterPack = [];
     if (config.hasShutter && config.shutterConfig && this.db.shutterComponents) {

@@ -2410,8 +2410,8 @@ const AdminDashboard = ({ data, setData }) => {
                               <FormulaInput 
                                 value={item.formula || '1'} 
                                 onChange={val => updateShutterItem(key, i, 'formula', val)} 
-                                variables={['L', 'H', 'HC']}
-                                placeholder="Ex: ceil(H/39)"
+                                variables={['L', 'H', 'HC', 'lameWidth', 'caissonSize', 'area']}
+                                placeholder="Ex: ceil(H/lameWidth)"
                               />
                             </td>
                             {key !== 'kits' && key !== 'moteurs' && (
@@ -2419,7 +2419,7 @@ const AdminDashboard = ({ data, setData }) => {
                                 <FormulaInput 
                                   value={item.cuttingFormula || ''} 
                                   onChange={val => updateShutterItem(key, i, 'cuttingFormula', val)} 
-                                  variables={['L', 'H', 'HC']}
+                                  variables={['L', 'H', 'HC', 'lameWidth', 'caissonSize', 'area']}
                                   placeholder="Ex: L-10"
                                 />
                               </td>
