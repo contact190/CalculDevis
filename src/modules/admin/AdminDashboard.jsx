@@ -880,7 +880,7 @@ const AdminDashboard = ({ data, setData }) => {
                       </tr>
                     ))}
                     <tr>
-                      <td colSpan="7">
+                      <td colSpan="10">
                         <button className="btn btn-secondary" style={{ width: '100%', padding: '1rem', fontWeight: 'bold' }} onClick={() => {
                           const newAddons = [...(currentItem.addOns || []), { name: 'Nouvel add-on', formula: '1', compatibilityFormula: '', price: 0, unit: 'Unité' }];
                           if (editingAddonItem.isShutter) {
@@ -1227,6 +1227,7 @@ const AdminDashboard = ({ data, setData }) => {
                     <th>Composition</th>
                     <th>Spécification</th>
                     <th>Épaisseur (mm)</th>
+                    <th title="kg/m²">Poids (kg/m²)</th>
                     <th>Prix Achat (m²)</th>
                     <th>Actions</th>
                   </tr>
@@ -1269,6 +1270,7 @@ const AdminDashboard = ({ data, setData }) => {
                       <td data-label="Comp."><input className="input" value={g.composition} onChange={e => handleUpdateItem('glass', g.id, 'composition', e.target.value, idx)} style={{ width: '100px' }} /></td>
                       <td data-label="Spec."><input className="input" value={g.specification || 'Standard'} onChange={e => handleUpdateItem('glass', g.id, 'specification', e.target.value, idx)} style={{ width: '120px' }} /></td>
                       <td data-label="Ep. (mm)"><input className="input" type="number" value={g.thickness} onChange={e => handleUpdateItem('glass', g.id, 'thickness', e.target.value, idx)} style={{ width: '80px' }} /></td>
+                      <td data-label="Poids (kg/m²)"><input className="input" type="number" step="0.1" value={g.weightPerM2 ?? 10} onChange={e => handleUpdateItem('glass', g.id, 'weightPerM2', e.target.value, idx)} style={{ width: '90px' }} /></td>
                       <td data-label="Prix/m2"><input className="input" type="number" value={g.pricePerM2} onChange={e => handleUpdateItem('glass', g.id, 'pricePerM2', e.target.value, idx)} style={{ width: '100px' }} /></td>
                       <td data-label="Actions"><button className="btn" onClick={() => handleDeleteItem('glass', g.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button></td>
                     </tr>
