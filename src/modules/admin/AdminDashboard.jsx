@@ -1351,6 +1351,7 @@ const AdminDashboard = ({ data, setData }) => {
                             <th>Unité</th>
                             <th>Côté</th>
                             <th>Prix (DZD)</th>
+                            <th>Compatibilité</th>
                             <th>Gammes</th>
                             <th>Actions</th>
                           </tr>
@@ -1410,6 +1411,14 @@ const AdminDashboard = ({ data, setData }) => {
                                    </select>
                                  </td>
                                  <td><input type="number" className="input" value={acc.price} onChange={e => handleUpdateItem('accessories', acc.id, 'price', e.target.value, idx)} style={{ width: '80px' }} /></td>
+                                 <td>
+                                   <FormulaInput
+                                     value={acc.compatibilityFormula || ''}
+                                     onChange={val => handleUpdateItem('accessories', acc.id, 'compatibilityFormula', val)}
+                                     variables={['L', 'H']}
+                                     placeholder="Ex: L >= 600"
+                                   />
+                                 </td>
                                  <td><MultiSelectRange selectedIds={acc.rangeIds || []} allRanges={data.ranges} onChange={newR => handleUpdateItem('accessories', acc.id, 'rangeIds', newR, idx)} /></td>
                                  <td style={{ display: 'flex', gap: '0.2rem' }}>
                                    <button className="btn" onClick={() => setEditingAddonItem({ item: acc, family: 'accessories', idx })} title="Add-ons"><Layers size={16} /></button>
@@ -1443,6 +1452,7 @@ const AdminDashboard = ({ data, setData }) => {
                             <th>Unité</th>
                             <th>Côté</th>
                             <th>Prix (DZD)</th>
+                            <th>Compatibilité</th>
                             <th>Gammes</th>
                             <th>Actions</th>
                           </tr>
@@ -1504,7 +1514,15 @@ const AdminDashboard = ({ data, setData }) => {
                                   </select>
                                 </td>
                                 <td><input type="number" className="input" value={acc.price} onChange={e => handleUpdateItem('accessories', acc.id, 'price', e.target.value, idx)} style={{ width: '70px' }} /></td>
-                                <td><MultiSelectRange selectedIds={acc.rangeIds || []} allRanges={data.ranges} onChange={newR => handleUpdateItem('accessories', acc.id, 'rangeIds', newR, idx)} /></td>
+                                 <td>
+                                   <FormulaInput
+                                     value={acc.compatibilityFormula || ''}
+                                     onChange={val => handleUpdateItem('accessories', acc.id, 'compatibilityFormula', val)}
+                                     variables={['L', 'H']}
+                                     placeholder="Ex: L >= 600"
+                                   />
+                                 </td>
+                                 <td><MultiSelectRange selectedIds={acc.rangeIds || []} allRanges={data.ranges} onChange={newR => handleUpdateItem('accessories', acc.id, 'rangeIds', newR, idx)} /></td>
                                 <td style={{ display: 'flex', gap: '0.3rem' }}>
                                   <button className="btn" onClick={() => setEditingAddonItem({ item: acc, family: 'accessories', idx })} title="Add-ons" style={{ color: '#6366f1' }}><Layers size={16} /></button>
                                   <button className="btn" onClick={() => handleDuplicateItem('accessories', acc)} style={{ color: '#6366f1' }}><Copy size={16} /></button>

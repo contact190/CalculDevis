@@ -236,10 +236,22 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
   const availableOptions = (database.options || []).filter(o => {
     if (!(o.rangeIds || []).includes(currentComp?.rangeId)) return false;
     const acc = database.accessories?.find(a => a.id === o.addAccessoryId);
-    if (acc && acc.side && acc.side !== 'both') {
-       const dir = (config.openingDirection || '').toLowerCase();
-       if (acc.side === 'gauche' && !dir.includes('gauch')) return false;
-       if (acc.side === 'droit' && !dir.includes('droit')) return false;
+    if (acc) {
+      if (acc.side && acc.side !== 'both') {
+        const dir = (config.openingDirection || '').toLowerCase();
+        if (acc.side === 'gauche' && !dir.includes('gauch')) return false;
+        if (acc.side === 'droit' && !dir.includes('droit')) return false;
+      }
+      // New: Compatibility formula check for accessories
+      if (acc.compatibilityFormula && acc.compatibilityFormula.trim() !== '') {
+        try {
+          // eslint-disable-next-line no-new-func
+          const fn = new Function('L', 'H', `return (${acc.compatibilityFormula});`);
+          if (!fn(config.L || 0, config.H || 0)) return false;
+        } catch (e) {
+          console.warn(`[Accessory Compatibility] Formula error for "${acc.name}":`, e.message);
+        }
+      }
     }
     return true;
   }) || [];
