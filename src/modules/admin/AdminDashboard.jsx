@@ -2361,8 +2361,8 @@ const AdminDashboard = ({ data, setData }) => {
                                   <FormulaInput
                                     value={item.compatibilityFormula || ''}
                                     onChange={val => updateShutterItem(key, i, 'compatibilityFormula', val)}
-                                    variables={key === 'caissons' ? ['L', 'H', 'lameWidth'] : ['L', 'H', 'lameWidth']}
-                                    placeholder={key === 'caissons' ? "Ex: lameWidth<=43 && L<=1500" : "Ex: L>=2000"}
+                                    variables={['L', 'H', 'lameWidth', 'caissonSize', 'area']}
+                                    placeholder={key === 'caissons' ? "Ex: lameWidth<=43 && L<=1500" : "Ex: caissonSize == 155"}
                                   />
                                   <div style={{ fontSize: '0.6rem', color: '#94a3b8', marginTop: '2px' }}>Laisser vide = toujours valide</div>
                                 </td>
@@ -2447,8 +2447,8 @@ const AdminDashboard = ({ data, setData }) => {
                                 <FormulaInput 
                                   value={item.compatibilityFormula || ''} 
                                   onChange={val => updateShutterItem(key, i, 'compatibilityFormula', val)} 
-                                  variables={['L', 'H', 'HC', 'lameWidth']}
-                                  placeholder={key === 'moteurs' ? "Ex: L < 1500" : "Ex: lameWidth <= 43"}
+                                  variables={['L', 'H', 'HC', 'lameWidth', 'caissonSize', 'area']}
+                                  placeholder={key === 'moteurs' ? "Ex: L < 1500" : "Ex: caissonSize == 200"}
                                 />
                                 <div style={{ fontSize: '0.6rem', color: '#94a3b8', marginTop: '2px' }}>Laisser vide = toujours valide</div>
                               </td>
