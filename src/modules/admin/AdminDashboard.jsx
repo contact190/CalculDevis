@@ -2324,6 +2324,7 @@ const AdminDashboard = ({ data, setData }) => {
                           {key === 'moteurs' && <th>Formule Compatibilité</th>}
                           {key === 'caissons' && <th title="Variables: L, lameWidth">Formule Compatibilité</th>}
                           {key === 'lames' && <th title="Largeur de la lame en mm">Largeur Lame (mm)</th>}
+                          {key === 'extras' && <th title="Variables: L, H, lameWidth">Formule Compatibilité</th>}
                           <th>Unité</th>
                           <th>Prix (DZD)</th>
                           <th>Add-ons (JSON)</th>
@@ -2342,8 +2343,8 @@ const AdminDashboard = ({ data, setData }) => {
                                   <FormulaInput
                                     value={item.compatibilityFormula || ''}
                                     onChange={val => updateShutterItem(key, i, 'compatibilityFormula', val)}
-                                    variables={['L', 'H', 'lameWidth']}
-                                    placeholder="Ex: lameWidth<=43 && L<=1500"
+                                    variables={key === 'caissons' ? ['L', 'H', 'lameWidth'] : ['L', 'H', 'lameWidth']}
+                                    placeholder={key === 'caissons' ? "Ex: lameWidth<=43 && L<=1500" : "Ex: L>=2000"}
                                   />
                                   <div style={{ fontSize: '0.6rem', color: '#94a3b8', marginTop: '2px' }}>Laisser vide = toujours valide</div>
                                 </td>
@@ -2423,14 +2424,15 @@ const AdminDashboard = ({ data, setData }) => {
                                 />
                               </td>
                             )}
-                            {key === 'moteurs' && (
+                            {(key === 'moteurs' || key === 'extras') && (
                               <td>
                                 <FormulaInput 
                                   value={item.compatibilityFormula || ''} 
                                   onChange={val => updateShutterItem(key, i, 'compatibilityFormula', val)} 
-                                  variables={['L', 'H', 'HC']}
-                                  placeholder="Ex: L < 1500"
+                                  variables={['L', 'H', 'HC', 'lameWidth']}
+                                  placeholder={key === 'moteurs' ? "Ex: L < 1500" : "Ex: lameWidth <= 43"}
                                 />
+                                <div style={{ fontSize: '0.6rem', color: '#94a3b8', marginTop: '2px' }}>Laisser vide = toujours valide</div>
                               </td>
                             )}
                             <td>

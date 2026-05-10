@@ -888,6 +888,27 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                     });
                   }
 
+                  // Apply compatibility formula for extras
+                  if (key === 'extraId' || key === 'extras') {
+                    const L = config.L || 0;
+                    const H = config.H || 0;
+                    const selectedLame = (database.shutterComponents?.lames || []).find(l => l.id === config.shutterConfig?.lameId);
+                    const lameWidth = parseFloat(selectedLame?.lameWidth) || 0;
+
+                    filteredItems = filteredItems.filter(extra => {
+                      const formula = extra.compatibilityFormula;
+                      if (!formula || formula.trim() === '') return true;
+                      try {
+                        // eslint-disable-next-line no-new-func
+                        const fn = new Function('L', 'H', 'lameWidth', `return (${formula});`);
+                        return fn(L, H, lameWidth);
+                      } catch (e) {
+                        console.warn(`[Extra Compatibility] Formula error for "${extra.name}":`, e.message);
+                        return true;
+                      }
+                    });
+                  }
+
                   const handleShutterChange = (val) => {
                     setConfig(prev => ({ 
                       ...prev, 
