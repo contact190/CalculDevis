@@ -866,6 +866,27 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                       // Show items for this range OR universal items (no rangeId)
                       filteredItems = filteredItems.filter(i => !i.rangeId || i.rangeId === currentComp.rangeId);
                   }
+                  
+                  // Apply compatibility formula for lames
+                  if (key === 'lameId') {
+                    const L = config.L || 0;
+                    const selectedCaisson = (database.shutterComponents?.caissons || []).find(c => c.id === config.shutterConfig?.caissonId);
+                    const caissonSize = selectedCaisson?.size || 0;
+                    
+                    filteredItems = filteredItems.filter(lame => {
+                      const formula = lame.compatibilityFormula;
+                      if (!formula || formula.trim() === '') return true; // No formula = always compatible
+                      try {
+                        // Safe evaluation of the formula
+                        // eslint-disable-next-line no-new-func
+                        const fn = new Function('L', 'caissonSize', `return (${formula});`);
+                        return fn(L, caissonSize);
+                      } catch (e) {
+                        console.warn(`[Lame Compatibility] Formula error for "${lame.name}":`, e.message);
+                        return true; // On error, show the item
+                      }
+                    });
+                  }
 
                   const handleShutterChange = (val) => {
                     setConfig(prev => ({ 

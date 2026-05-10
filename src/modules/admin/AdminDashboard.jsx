@@ -2320,6 +2320,7 @@ const AdminDashboard = ({ data, setData }) => {
                           <th>Formule Quantité (Nb)</th>
                           {key !== 'kits' && key !== 'moteurs' && <th>Formule Dimension (L/H)</th>}
                           {key === 'moteurs' && <th>Formule Compatibilité</th>}
+                          {key === 'lames' && <th title="Condition: L, caissonSize">Formule Compatibilité</th>}
                           <th>Unité</th>
                           <th>Prix (DZD)</th>
                           <th>Add-ons (JSON)</th>
@@ -2342,6 +2343,15 @@ const AdminDashboard = ({ data, setData }) => {
                                   <input type="checkbox" checked={item.hasBaguette || false} onChange={e => updateShutterItem(key, i, 'hasBaguette', e.target.checked)} />
                                 </td>
                                 <td><input className="input" type="number" step="0.01" value={item.baguettePrice || 0} onChange={e => updateShutterItem(key, i, 'baguettePrice', e.target.value)} style={{ width: '90px' }} /></td>
+                                <td>
+                                  <FormulaInput
+                                    value={item.compatibilityFormula || ''}
+                                    onChange={val => updateShutterItem(key, i, 'compatibilityFormula', val)}
+                                    variables={['L', 'caissonSize']}
+                                    placeholder="Ex: L<=1500 && (caissonSize==155||caissonSize==185||caissonSize==200)"
+                                  />
+                                  <div style={{ fontSize: '0.6rem', color: '#94a3b8', marginTop: '2px' }}>Laisser vide = toujours valide</div>
+                                </td>
                               </>
                             )}
                             {key === 'glissieres' && (

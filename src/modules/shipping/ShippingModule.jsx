@@ -786,12 +786,14 @@ const ShippingModule = ({ data, setData, refetchData }) => {
         try {
           console.log(`[Email Service] Envoi du PV à ${recipientEmail}...`);
           const pdfBase64 = doc.output('datauristring').split(',')[1];
+          const floorsStr = Array.from(pvSelectedFloors).join(', ');
           
           await invokeFunction('send-pv-email', {
             sender: senderEmail,
             recipient: recipientEmail,
             companyName: companyName,
             clientName: selectedOrder.clientName,
+            floors: floorsStr,
             orderId: selectedOrder.id,
             pdfBase64: pdfBase64
           });
