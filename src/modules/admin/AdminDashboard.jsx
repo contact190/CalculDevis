@@ -2322,7 +2322,8 @@ const AdminDashboard = ({ data, setData }) => {
                           <th>Formule Quantité (Nb)</th>
                           {key !== 'kits' && key !== 'moteurs' && <th>Formule Dimension (L/H)</th>}
                           {key === 'moteurs' && <th>Formule Compatibilité</th>}
-                          {key === 'lames' && <th title="Condition: L, caissonSize">Formule Compatibilité</th>}
+                          {key === 'caissons' && <th title="Variables: L, lameWidth">Formule Compatibilité</th>}
+                          {key === 'lames' && <th title="Largeur de la lame en mm">Largeur Lame (mm)</th>}
                           <th>Unité</th>
                           <th>Prix (DZD)</th>
                           <th>Add-ons (JSON)</th>
@@ -2337,6 +2338,15 @@ const AdminDashboard = ({ data, setData }) => {
                               <>
                                 <td><input className="input" type="number" value={item.size || 0} onChange={e => updateShutterItem(key, i, 'size', e.target.value)} style={{ width: '80px' }} /></td>
                                 <td><input className="input" type="number" value={item.height || 0} onChange={e => updateShutterItem(key, i, 'height', e.target.value)} style={{ width: '80px' }} /></td>
+                                <td>
+                                  <FormulaInput
+                                    value={item.compatibilityFormula || ''}
+                                    onChange={val => updateShutterItem(key, i, 'compatibilityFormula', val)}
+                                    variables={['L', 'H', 'lameWidth']}
+                                    placeholder="Ex: lameWidth<=43 && L<=1500"
+                                  />
+                                  <div style={{ fontSize: '0.6rem', color: '#94a3b8', marginTop: '2px' }}>Laisser vide = toujours valide</div>
+                                </td>
                               </>
                             )}
                             {key === 'lames' && (
@@ -2346,13 +2356,16 @@ const AdminDashboard = ({ data, setData }) => {
                                 </td>
                                 <td><input className="input" type="number" step="0.01" value={item.baguettePrice || 0} onChange={e => updateShutterItem(key, i, 'baguettePrice', e.target.value)} style={{ width: '90px' }} /></td>
                                 <td>
-                                  <FormulaInput
-                                    value={item.compatibilityFormula || ''}
-                                    onChange={val => updateShutterItem(key, i, 'compatibilityFormula', val)}
-                                    variables={['L', 'caissonSize']}
-                                    placeholder="Ex: L<=1500 && (caissonSize==155||caissonSize==185||caissonSize==200)"
+                                  <input
+                                    className="input"
+                                    type="number"
+                                    step="1"
+                                    value={item.lameWidth || ''}
+                                    onChange={e => updateShutterItem(key, i, 'lameWidth', e.target.value)}
+                                    placeholder="Ex: 43"
+                                    style={{ width: '80px' }}
                                   />
-                                  <div style={{ fontSize: '0.6rem', color: '#94a3b8', marginTop: '2px' }}>Laisser vide = toujours valide</div>
+                                  <div style={{ fontSize: '0.6rem', color: '#94a3b8', marginTop: '2px' }}>mm (utilisé pour les caissons)</div>
                                 </td>
                               </>
                             )}

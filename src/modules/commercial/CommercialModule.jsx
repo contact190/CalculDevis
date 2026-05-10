@@ -867,23 +867,23 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                       filteredItems = filteredItems.filter(i => !i.rangeId || i.rangeId === currentComp.rangeId);
                   }
                   
-                  // Apply compatibility formula for lames
-                  if (key === 'lameId') {
+                  // Apply compatibility formula for caissons (based on L and lameWidth of selected lame)
+                  if (key === 'caissonId') {
                     const L = config.L || 0;
-                    const selectedCaisson = (database.shutterComponents?.caissons || []).find(c => c.id === config.shutterConfig?.caissonId);
-                    const caissonSize = selectedCaisson?.size || 0;
+                    const H = config.H || 0;
+                    const selectedLame = (database.shutterComponents?.lames || []).find(l => l.id === config.shutterConfig?.lameId);
+                    const lameWidth = parseFloat(selectedLame?.lameWidth) || 0;
                     
-                    filteredItems = filteredItems.filter(lame => {
-                      const formula = lame.compatibilityFormula;
-                      if (!formula || formula.trim() === '') return true; // No formula = always compatible
+                    filteredItems = filteredItems.filter(caisson => {
+                      const formula = caisson.compatibilityFormula;
+                      if (!formula || formula.trim() === '') return true;
                       try {
-                        // Safe evaluation of the formula
                         // eslint-disable-next-line no-new-func
-                        const fn = new Function('L', 'caissonSize', `return (${formula});`);
-                        return fn(L, caissonSize);
+                        const fn = new Function('L', 'H', 'lameWidth', `return (${formula});`);
+                        return fn(L, H, lameWidth);
                       } catch (e) {
-                        console.warn(`[Lame Compatibility] Formula error for "${lame.name}":`, e.message);
-                        return true; // On error, show the item
+                        console.warn(`[Caisson Compatibility] Formula error for "${caisson.name}":`, e.message);
+                        return true;
                       }
                     });
                   }
