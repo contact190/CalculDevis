@@ -342,6 +342,16 @@ export class FormulaEngine {
       } else if (el.type === 'accessory') {
         const aRef = (this.db.accessories || []).find(a => a.id === el.id);
         if (aRef) {
+          // Compatibility Check
+          if (aRef.compatibilityFormula && aRef.compatibilityFormula.trim() !== '') {
+            try {
+              const ok = this.evaluate(aRef.compatibilityFormula, currentScope);
+              if (!ok) return; // Skip incompatible accessory
+            } catch (e) {
+              console.warn(`[FormulaEngine] Compatibility error for accessory ${aRef.id}:`, e.message);
+            }
+          }
+
           const unitUpper = (aRef.unit || '').toUpperCase();
           const isLinear = ['M', 'ML', 'JOINT'].includes(unitUpper);
           const finalQty = isLinear ? (qty / 1000) : qty;
@@ -1108,6 +1118,15 @@ export class FormulaEngine {
           if (option.addAccessoryId) {
             const addRef = (this.db.accessories || []).find(a => a.id === option.addAccessoryId);
             if (addRef) {
+              // Compatibility Check
+              if (addRef.compatibilityFormula && addRef.compatibilityFormula.trim() !== '') {
+                try {
+                  const ok = this.evaluate(addRef.compatibilityFormula, { L, H });
+                  if (!ok) return; // Skip incompatible option accessory
+                } catch (e) {
+                  console.warn(`[FormulaEngine] Option compatibility error for ${addRef.id}:`, e.message);
+                }
+              }
               const optionSide = config.optionSides?.[optId] || 'both';
               const sideFactor = (optionSide === 'gauche' || optionSide === 'droit') ? 0.5 : 1.0;
               
