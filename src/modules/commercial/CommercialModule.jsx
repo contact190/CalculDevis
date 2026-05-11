@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Calculator, Package, Settings, FileText, Info, LayoutGrid, Plus, Edit2, Trash2, Copy, ArrowLeft, Save, ChevronDown, ChevronUp, Building2, Phone, Mail, MapPin, Calendar, Clock, GitCompare, Search, Layers } from 'lucide-react';
+import { Calculator, Package, Settings, FileText, Info, LayoutGrid, Plus, Edit2, Trash2, Copy, ArrowLeft, Save, ChevronDown, ChevronUp, Building2, Phone, Mail, MapPin, Calendar, Clock, GitCompare, Search, Layers, AlertTriangle } from 'lucide-react';
 import { FormulaEngine } from '../../engine/formula-engine';
 import JoineryCanvas from '../../components/shared/JoineryCanvas';
 import LayoutComposer, { defaultLayout, rescaleTree } from '../../components/shared/LayoutComposer';
@@ -890,11 +890,46 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                       const formula = caisson.compatibilityFormula;
                       if (!formula || formula.trim() === '') return true;
                       try {
-                        // eslint-disable-next-line no-new-func
-                        const fn = new Function('L', 'H', 'lameWidth', `return (${formula});`);
-                        return fn(L, H, lameWidth);
+                        const scope = { L, H, area: (L * H) / 1000000 };
+                        return engine.evaluate(formula, scope);
                       } catch (e) {
                         console.warn(`[Caisson Compatibility] Formula error for "${caisson.name}":`, e.message);
+                        return true;
+                      }
+                    });
+                  }
+
+                  // Apply compatibility formula for lames
+                  if (key === 'lameId') {
+                    const L = config.L || 0;
+                    const H = config.H || 0;
+                    
+                    filteredItems = filteredItems.filter(lame => {
+                      const formula = lame.compatibilityFormula;
+                      if (!formula || formula.trim() === '') return true;
+                      try {
+                        const scope = { L, H, area: (L * H) / 1000000 };
+                        return engine.evaluate(formula, scope);
+                      } catch (e) {
+                        console.warn(`[Lame Compatibility] Formula error for "${lame.name}":`, e.message);
+                        return true;
+                      }
+                    });
+                  }
+
+                  // Apply compatibility formula for motors
+                  if (key === 'moteurId') {
+                    const L = config.L || 0;
+                    const H = config.H || 0;
+                    
+                    filteredItems = filteredItems.filter(moteur => {
+                      const formula = moteur.compatibilityFormula;
+                      if (!formula || formula.trim() === '') return true;
+                      try {
+                        const scope = { L, H, area: (L * H) / 1000000 };
+                        return engine.evaluate(formula, scope);
+                      } catch (e) {
+                        console.warn(`[Motor Compatibility] Formula error for "${moteur.name}":`, e.message);
                         return true;
                       }
                     });
@@ -911,9 +946,8 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                       const formula = extra.compatibilityFormula;
                       if (!formula || formula.trim() === '') return true;
                       try {
-                        // eslint-disable-next-line no-new-func
-                        const fn = new Function('L', 'H', 'lameWidth', `return (${formula});`);
-                        return fn(L, H, lameWidth);
+                        const scope = { L, H, lameWidth, area: (L * H) / 1000000 };
+                        return engine.evaluate(formula, scope);
                       } catch (e) {
                         console.warn(`[Extra Compatibility] Formula error for "${extra.name}":`, e.message);
                         return true;
@@ -981,6 +1015,41 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                           {filteredItems.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
                         </select>
                       </div>
+
+                      {/* Technical Alert for Lames */}
+                      {key === 'lameId' && effectiveItem && (effectiveItem.technicalAlert || "").trim() !== "" && (
+                        <div style={{ gridColumn: 'span 2', marginTop: '-0.5rem', marginBottom: '0.5rem' }}>
+                          {(() => {
+                             try {
+                               const L = config.L || 0;
+                               const H = config.H || 0;
+                               const alertFormula = effectiveItem.technicalAlert;
+                               
+                               // If it's a simple string (no special characters), just show it
+                               if (!alertFormula.includes('(') && !alertFormula.includes('if') && !alertFormula.includes('<') && !alertFormula.includes('>')) {
+                                  return (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', background: '#fff7ed', border: '1px solid #ffedd5', borderRadius: '0.4rem', color: '#c2410c', fontSize: '0.75rem', fontWeight: 600 }}>
+                                      <AlertTriangle size={14} /> {alertFormula}
+                                    </div>
+                                  );
+                               }
+
+                               const alertMsg = engine.evaluate(alertFormula, { L, H });
+                               
+                               if (alertMsg && String(alertMsg).trim() !== '' && alertMsg !== true && alertMsg !== false) {
+                                 return (
+                                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', background: '#fff7ed', border: '1px solid #ffedd5', borderRadius: '0.4rem', color: '#c2410c', fontSize: '0.75rem', fontWeight: 600 }}>
+                                     <AlertTriangle size={14} /> {String(alertMsg)}
+                                   </div>
+                                 );
+                               }
+                             } catch(e) {
+                               console.warn("[Alert Eval Error]", e);
+                             }
+                             return null;
+                          })()}
+                        </div>
+                      )}
 
                       {/* Special Option: Couvre Joint (Only shown once, e.g. next to caisson) */}
                       {key === 'caissonId' && (
@@ -1790,7 +1859,19 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
           descLines.push(`Volet Roulant :`);
           if (caisson) descLines.push(`  Caisson : ${caisson.name}`);
           if (glissiere) descLines.push(`  Glissière : ${glissiere.name}`);
-          if (lame) descLines.push(`  Lame : ${lame.name}`);
+          if (lame) {
+            descLines.push(`  Lame : ${lame.name}`);
+            if (lame.technicalAlert && lame.technicalAlert.trim() !== '') {
+              try {
+                const alertMsg = engine.evaluate(lame.technicalAlert, { L: cfg.L || 0, H: cfg.H || 0 });
+                if (alertMsg && String(alertMsg).trim() !== '') {
+                  descLines.push(`[ALERTE TECHNIQUE] : ${String(alertMsg)}`);
+                }
+              } catch (e) {
+                console.warn("[PDF Alert] Eval error:", e.message);
+              }
+            }
+          }
           if (axe) descLines.push(`  Axe : ${axe.name}`);
           if (kit) descLines.push(`  Kit : ${kit.name}`);
         }
@@ -1841,12 +1922,24 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
         doc.setFont('helvetica', 'normal');
 
         descLines.forEach(line => {
-          const isBoldLabel = line === 'Volet Roulant :';
-          if (isBoldLabel) {
+          if (line.startsWith('[ALERTE TECHNIQUE]')) {
+            doc.setTextColor(234, 88, 12); // Orange #ea580c
             doc.setFont('helvetica', 'bold');
+            const lines = doc.splitTextToSize(line, 60); // Wrap if too long
+            lines.forEach((l, i) => {
+              doc.text(l, descX, descY);
+              if (i < lines.length - 1) descY += lineHeight;
+            });
+            doc.setTextColor(0, 0, 0);
+            doc.setFont('helvetica', 'normal');
+          } else {
+            const isBoldLabel = line === 'Volet Roulant :';
+            if (isBoldLabel) {
+              doc.setFont('helvetica', 'bold');
+            }
+            doc.text(line, descX, descY);
+            doc.setFont('helvetica', 'normal');
           }
-          doc.text(line, descX, descY);
-          doc.setFont('helvetica', 'normal');
           descY += lineHeight;
         });
 

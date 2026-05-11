@@ -2305,12 +2305,7 @@ const AdminDashboard = ({ data, setData }) => {
                               <th>Hauteur (mm)</th>
                             </>
                           )}
-                          {key === 'lames' && (
-                            <>
-                              <th>Baguette (Oui)</th>
-                              <th>Prix Baguette (ML)</th>
-                            </>
-                          )}
+
                           {key === 'glissieres' && (
                             <>
                               <th>Gamme</th>
@@ -2334,15 +2329,29 @@ const AdminDashboard = ({ data, setData }) => {
                             </>
                           ) : null}
 
+                          {key === 'lames' && (
+                            <>
+                              <th>Baguette?</th>
+                              <th>Prix Baguette</th>
+                              <th title="Largeur de la lame en mm">Largeur Lame (mm)</th>
+                            </>
+                          )}
+
                           {!['extras', 'moteurs', 'kits'].includes(key) && <th>Lg Barre (mm)</th>}
                           {!['extras', 'moteurs', 'kits'].includes(key) && <th>Seuil Chute</th>}
 
                           <th>Formule Quantité (Nb)</th>
                           {key !== 'kits' && key !== 'moteurs' && <th>Formule Dimension (L/H)</th>}
+
                           {key === 'moteurs' && <th>Formule Compatibilité</th>}
                           {key === 'caissons' && <th title="Variables: L, lameWidth">Formule Compatibilité</th>}
-                          {key === 'lames' && <th title="Largeur de la lame en mm">Largeur Lame (mm)</th>}
-                          {key === 'extras' && <th title="Variables: L, H, lameWidth">Formule Compatibilité</th>}
+                          {key === 'lames' && (
+                            <>
+                              <th>Compatibilité</th>
+                              <th>Alerte Technique</th>
+                            </>
+                          )}
+                          {key === 'extras' && <th title="Variables: L, H, lameWidth, area, caissonSize">Formule Compatibilité</th>}
                           <th>Unité</th>
                           <th>Prix (DZD)</th>
                           <th>Add-ons (JSON)</th>
@@ -2441,6 +2450,26 @@ const AdminDashboard = ({ data, setData }) => {
                                   placeholder="Ex: L-10"
                                 />
                               </td>
+                            )}
+                            {key === 'lames' && (
+                              <>
+                                <td>
+                                  <FormulaInput 
+                                    value={item.compatibilityFormula || ''} 
+                                    onChange={val => updateShutterItem(key, i, 'compatibilityFormula', val)} 
+                                    variables={['L', 'H', 'HC', 'lameWidth', 'caissonSize', 'area']}
+                                    placeholder="Ex: L <= 2500"
+                                  />
+                                </td>
+                                <td>
+                                  <FormulaInput 
+                                    value={item.technicalAlert || ''} 
+                                    onChange={val => updateShutterItem(key, i, 'technicalAlert', val)} 
+                                    variables={['L', 'H']}
+                                    placeholder='Ex: if(L > 2200, "Attention...", "")'
+                                  />
+                                </td>
+                              </>
                             )}
                             {(key === 'moteurs' || key === 'extras') && (
                               <td>
