@@ -2298,6 +2298,7 @@ const AdminDashboard = ({ data, setData }) => {
                       <table className="data-table" style={{ minWidth: key === 'glissieres' ? '1200px' : '100%', marginBottom: 0 }}>
                       <thead>
                         <tr>
+                          <th>Référence</th>
                           <th>Désignation</th>
                           {key === 'caissons' && (
                             <>
@@ -2352,7 +2353,7 @@ const AdminDashboard = ({ data, setData }) => {
                               <th>Alerte Technique</th>
                             </>
                           )}
-                          {key === 'extras' && <th title="Variables: L, H, lameWidth, area, caissonSize">Formule Compatibilité</th>}
+                          {key === 'extras' && <th title="Variables: L, H, lameWidth, area, caissonSize, totalWeight, liftingWeight">Formule Compatibilité</th>}
                           <th>Unité</th>
                           <th>Prix (DZD)</th>
                           <th>Add-ons (JSON)</th>
@@ -2362,6 +2363,7 @@ const AdminDashboard = ({ data, setData }) => {
                       <tbody>
                         {(data.shutterComponents?.[key] || []).map((item, i) => (
                           <tr key={item.id} style={item._isNew ? { background: '#dcfce7', transition: 'background 1s' } : {}}>
+                             <td><input className="input" value={item.reference || ''} onChange={e => updateShutterItem(key, i, 'reference', e.target.value)} style={{ width: '100px' }} placeholder="Réf" /></td>
                              <td><input className="input" value={item.name} onChange={e => updateShutterItem(key, i, 'name', e.target.value)} style={{ width: '180px' }} /></td>
                             {key === 'caissons' && (
                               <>
@@ -2470,7 +2472,7 @@ const AdminDashboard = ({ data, setData }) => {
                                   <FormulaInput 
                                     value={item.compatibilityFormula || ''} 
                                     onChange={val => updateShutterItem(key, i, 'compatibilityFormula', val)} 
-                                    variables={['L', 'H', 'HC', 'lameWidth', 'caissonSize', 'area']}
+                                    variables={['L', 'H', 'HC', 'lameWidth', 'caissonSize', 'area', 'totalWeight', 'liftingWeight', 'axeDiameter']}
                                     placeholder={key === 'axes' ? "Ex: L < 2500" : "Ex: L <= 2500"}
                                   />
                                 </td>
@@ -2489,7 +2491,7 @@ const AdminDashboard = ({ data, setData }) => {
                                 <FormulaInput 
                                   value={item.compatibilityFormula || ''} 
                                   onChange={val => updateShutterItem(key, i, 'compatibilityFormula', val)} 
-                                  variables={['L', 'H', 'HC', 'lameWidth', 'caissonSize', 'area']}
+                                  variables={['L', 'H', 'HC', 'lameWidth', 'caissonSize', 'area', 'totalWeight', 'liftingWeight', 'axeDiameter']}
                                   placeholder={key === 'moteurs' ? "Ex: L < 1500" : "Ex: caissonSize == 200"}
                                 />
                                 <div style={{ fontSize: '0.6rem', color: '#94a3b8', marginTop: '2px' }}>Laisser vide = toujours valide</div>

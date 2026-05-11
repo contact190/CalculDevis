@@ -862,6 +862,19 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
 
         {config.hasShutter && database.shutterComponents && (
               <div style={{ marginTop: '1rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div style={{ gridColumn: 'span 2', marginBottom: '0.5rem' }}>
+                   <label className="label" style={{ fontSize: '0.8rem', fontWeight: 600, color: '#475569' }}>Référence / Repère du Volet</label>
+                   <input 
+                     className="input" 
+                     value={config.shutterConfig?.reference || ''} 
+                     onChange={e => setConfig(prev => ({ 
+                       ...prev, 
+                       shutterConfig: { ...(prev.shutterConfig || {}), reference: e.target.value } 
+                     }))} 
+                     placeholder="Ex: Salon, Fenêtre 1..."
+                     style={{ border: '1px solid #94a3b8', background: '#f8fafc' }}
+                   />
+                </div>
                 {[
                   { key: 'caissonId', label: 'Caisson', items: database.shutterComponents?.caissons || [] },
                   { key: 'axeId', label: 'Axe', items: database.shutterComponents?.axes || [] },
@@ -934,11 +947,21 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                     const area = (L * H) / 1000000;
                     const totalWeight = area * weightPerM2;
 
+                    // Lifting weight logic based on axle diameter
+                    const selectedAxeId = config.shutterConfig?.axeId;
+                    const axes = database.shutterComponents?.axes || [];
+                    const selectedAxe = axes.find(a => a.id === selectedAxeId) || axes[0];
+                    const axeDiameter = selectedAxe ? parseFloat(selectedAxe.diameter) || 0 : 0;
+
+                    const liftingWeight = axeDiameter === 40 
+                      ? (totalWeight) / 2 
+                      : (totalWeight) / 1.5;
+
                     filteredItems = filteredItems.filter(moteur => {
                       const formula = moteur.compatibilityFormula;
                       if (!formula || formula.trim() === '') return true;
                       try {
-                        const scope = { L, H, area, totalWeight, weightPerM2 };
+                        const scope = { L, H, area, totalWeight, weightPerM2, liftingWeight, axeDiameter };
                         return engine.evaluate(formula, scope);
                       } catch (e) {
                         console.warn(`[Motor Compatibility] Formula error for "${moteur.name}":`, e.message);
@@ -1050,6 +1073,35 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                           {filteredItems.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
                         </select>
                       </div>
+
+                      {/* Weight Info Display for Lames */}
+                      {key === 'lameId' && (
+                        <div style={{ gridColumn: 'span 2', marginTop: '-0.5rem', marginBottom: '0.5rem' }}>
+                          {(() => {
+                            const L = config.L || 0;
+                            const H = config.H || 0;
+                            const area = (L * H) / 1000000;
+                            const selectedAxeId = config.shutterConfig?.axeId;
+                            const axes = database.shutterComponents?.axes || [];
+                            const selectedAxe = axes.find(a => a.id === selectedAxeId) || axes[0];
+                            const axeDiameter = selectedAxe ? parseFloat(selectedAxe.diameter) || 0 : 0;
+                            
+                            const selectedLameId = config.shutterConfig?.lameId;
+                            const lames = database.shutterComponents?.lames || [];
+                            const selectedLame = lames.find(l => l.id === selectedLameId);
+                            const weightPerM2 = parseFloat(selectedLame?.weightPerM2) || 0;
+                            const totalWeight = area * weightPerM2;
+
+                            const liftingWeight = axeDiameter === 40 ? totalWeight / 2 : totalWeight / 1.5;
+                            
+                            return (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', color: '#64748b', background: '#f8fafc', padding: '0.3rem 0.6rem', borderRadius: '0.3rem', border: '1px solid #e2e8f0', width: 'fit-content' }}>
+                                <span style={{ fontWeight: 700, color: '#334155' }}>⚖️ Charge de levage :</span> {liftingWeight.toFixed(2)} kg (Axe {axeDiameter})
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      )}
 
                       {/* Technical Alert for Lames & Axes */}
                       {(key === 'lameId' || key === 'axeId') && effectiveItem && (effectiveItem.technicalAlert || "").trim() !== "" && (
