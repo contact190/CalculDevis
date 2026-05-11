@@ -2334,6 +2334,7 @@ const AdminDashboard = ({ data, setData }) => {
                               <th>Baguette?</th>
                               <th>Prix Baguette</th>
                               <th title="Largeur de la lame en mm">Largeur Lame (mm)</th>
+                              <th title="Poids au m² en kg">Poids (kg/m²)</th>
                             </>
                           )}
 
@@ -2394,6 +2395,18 @@ const AdminDashboard = ({ data, setData }) => {
                                     style={{ width: '80px' }}
                                   />
                                   <div style={{ fontSize: '0.6rem', color: '#94a3b8', marginTop: '2px' }}>mm (utilisé pour les caissons)</div>
+                                </td>
+                                <td>
+                                  <input
+                                    className="input"
+                                    type="number"
+                                    step="0.1"
+                                    value={item.weightPerM2 || ''}
+                                    onChange={e => updateShutterItem(key, i, 'weightPerM2', e.target.value)}
+                                    placeholder="Ex: 3.5"
+                                    style={{ width: '80px' }}
+                                  />
+                                  <div style={{ fontSize: '0.6rem', color: '#94a3b8', marginTop: '2px' }}>kg/m²</div>
                                 </td>
                               </>
                             )}

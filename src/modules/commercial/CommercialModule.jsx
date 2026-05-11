@@ -912,7 +912,10 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                       const formula = lame.compatibilityFormula;
                       if (!formula || formula.trim() === '') return true;
                       try {
-                        const scope = { L, H, area: (L * H) / 1000000, axeDiameter };
+                        const area = (L * H) / 1000000;
+                        const weightPerM2 = parseFloat(lame.weightPerM2) || 0;
+                        const totalWeight = area * weightPerM2;
+                        const scope = { L, H, area, axeDiameter, weightPerM2, totalWeight };
                         return engine.evaluate(formula, scope);
                       } catch (e) {
                         console.warn(`[Lame Compatibility] Formula error for "${lame.name}":`, e.message);
@@ -926,11 +929,16 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                     const L = config.L || 0;
                     const H = config.H || 0;
                     
+                    const selectedLame = (database.shutterComponents?.lames || []).find(l => l.id === config.shutterConfig?.lameId);
+                    const weightPerM2 = parseFloat(selectedLame?.weightPerM2) || 0;
+                    const area = (L * H) / 1000000;
+                    const totalWeight = area * weightPerM2;
+
                     filteredItems = filteredItems.filter(moteur => {
                       const formula = moteur.compatibilityFormula;
                       if (!formula || formula.trim() === '') return true;
                       try {
-                        const scope = { L, H, area: (L * H) / 1000000 };
+                        const scope = { L, H, area, totalWeight, weightPerM2 };
                         return engine.evaluate(formula, scope);
                       } catch (e) {
                         console.warn(`[Motor Compatibility] Formula error for "${moteur.name}":`, e.message);
@@ -944,11 +952,16 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                     const L = config.L || 0;
                     const H = config.H || 0;
                     
+                    const selectedLame = (database.shutterComponents?.lames || []).find(l => l.id === config.shutterConfig?.lameId);
+                    const weightPerM2 = parseFloat(selectedLame?.weightPerM2) || 0;
+                    const area = (L * H) / 1000000;
+                    const totalWeight = area * weightPerM2;
+
                     filteredItems = filteredItems.filter(axe => {
                       const formula = axe.compatibilityFormula;
                       if (!formula || formula.trim() === '') return true;
                       try {
-                        const scope = { L, H, area: (L * H) / 1000000 };
+                        const scope = { L, H, area, totalWeight, weightPerM2 };
                         return engine.evaluate(formula, scope);
                       } catch (e) {
                         console.warn(`[Axe Compatibility] Formula error for "${axe.name}":`, e.message);
