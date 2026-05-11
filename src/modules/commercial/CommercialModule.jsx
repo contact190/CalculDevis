@@ -2005,7 +2005,8 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
           const area = ((cfg.L || 0) * (cfg.H || 0)) / 1000000;
           const weightPerM2 = parseFloat(lame?.weightPerM2) || 0;
           const lameWidth = parseFloat(lame?.lameWidth) || 0;
-          const totalWeight = area * weightPerM2;
+          const apronItem = item.priceData?.bom?.shutters?.find(sh => sh.itemKey === 'lameId');
+          const totalWeight = apronItem?.totalWeight || (area * weightPerM2);
           const caissonSize = parseFloat(caisson?.size) || 0;
           const axeDiameter = parseFloat(axe?.diameter) || 0;
           const liftingWeight = axeDiameter === 40 ? totalWeight / 2 : totalWeight / 1.5;
