@@ -862,19 +862,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
 
         {config.hasShutter && database.shutterComponents && (
               <div style={{ marginTop: '1rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                <div style={{ gridColumn: 'span 2', marginBottom: '0.5rem' }}>
-                   <label className="label" style={{ fontSize: '0.8rem', fontWeight: 600, color: '#475569' }}>Référence / Repère du Volet</label>
-                   <input 
-                     className="input" 
-                     value={config.shutterConfig?.reference || ''} 
-                     onChange={e => setConfig(prev => ({ 
-                       ...prev, 
-                       shutterConfig: { ...(prev.shutterConfig || {}), reference: e.target.value } 
-                     }))} 
-                     placeholder="Ex: Salon, Fenêtre 1..."
-                     style={{ border: '1px solid #94a3b8', background: '#f8fafc' }}
-                   />
-                </div>
+
                 {[
                   { key: 'caissonId', label: 'Caisson', items: database.shutterComponents?.caissons || [] },
                   { key: 'axeId', label: 'Axe', items: database.shutterComponents?.axes || [] },
@@ -903,7 +891,8 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                       const formula = caisson.compatibilityFormula;
                       if (!formula || formula.trim() === '') return true;
                       try {
-                        const scope = { L, H, area: (L * H) / 1000000 };
+                        const area = (L * H) / 1000000;
+                        const scope = { L, H, area, lameWidth };
                         return engine.evaluate(formula, scope);
                       } catch (e) {
                         console.warn(`[Caisson Compatibility] Formula error for "${caisson.name}":`, e.message);
@@ -928,7 +917,8 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                         const area = (L * H) / 1000000;
                         const weightPerM2 = parseFloat(lame.weightPerM2) || 0;
                         const totalWeight = area * weightPerM2;
-                        const scope = { L, H, area, axeDiameter, weightPerM2, totalWeight };
+                        const lameWidth = parseFloat(lame.lameWidth) || 0;
+                        const scope = { L, H, area, axeDiameter, weightPerM2, totalWeight, lameWidth };
                         return engine.evaluate(formula, scope);
                       } catch (e) {
                         console.warn(`[Lame Compatibility] Formula error for "${lame.name}":`, e.message);
@@ -961,7 +951,8 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                       const formula = moteur.compatibilityFormula;
                       if (!formula || formula.trim() === '') return true;
                       try {
-                        const scope = { L, H, area, totalWeight, weightPerM2, liftingWeight, axeDiameter };
+                        const lameWidth = parseFloat(selectedLame?.lameWidth) || 0;
+                        const scope = { L, H, area, totalWeight, weightPerM2, liftingWeight, axeDiameter, lameWidth };
                         return engine.evaluate(formula, scope);
                       } catch (e) {
                         console.warn(`[Motor Compatibility] Formula error for "${moteur.name}":`, e.message);
@@ -984,10 +975,35 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                       const formula = axe.compatibilityFormula;
                       if (!formula || formula.trim() === '') return true;
                       try {
-                        const scope = { L, H, area, totalWeight, weightPerM2 };
+                        const lameWidth = parseFloat(selectedLame?.lameWidth) || 0;
+                        const scope = { L, H, area, totalWeight, weightPerM2, lameWidth };
                         return engine.evaluate(formula, scope);
                       } catch (e) {
                         console.warn(`[Axe Compatibility] Formula error for "${axe.name}":`, e.message);
+                        return true;
+                      }
+                    });
+                  }
+
+                  // Apply compatibility formula for kits
+                  if (key === 'kitId' || key === 'kits') {
+                    const L = config.L || 0;
+                    const H = config.H || 0;
+                    const area = (L * H) / 1000000;
+                    
+                    const selectedLame = (database.shutterComponents?.lames || []).find(l => l.id === config.shutterConfig?.lameId);
+                    const weightPerM2 = parseFloat(selectedLame?.weightPerM2) || 0;
+                    const totalWeight = area * weightPerM2;
+
+                    filteredItems = filteredItems.filter(kit => {
+                      const formula = kit.compatibilityFormula;
+                      if (!formula || formula.trim() === '') return true;
+                      try {
+                        const lameWidth = parseFloat(selectedLame?.lameWidth) || 0;
+                        const scope = { L, H, area, totalWeight, weightPerM2, lameWidth };
+                        return engine.evaluate(formula, scope);
+                      } catch (e) {
+                        console.warn(`[Kit Compatibility] Formula error for "${kit.name}":`, e.message);
                         return true;
                       }
                     });
@@ -1103,33 +1119,61 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                         </div>
                       )}
 
-                      {/* Technical Alert for Lames & Axes */}
-                      {(key === 'lameId' || key === 'axeId') && effectiveItem && (effectiveItem.technicalAlert || "").trim() !== "" && (
-                        <div style={{ gridColumn: 'span 2', marginTop: '-0.5rem', marginBottom: '0.5rem' }}>
+                      {/* Technical Alert for Shutter Components & Add-ons */}
+                      {(key === 'lameId' || key === 'axeId' || key === 'moteurId' || key === 'extraId' || key === 'extras' || key === 'kitId') && effectiveItem && (
+                        <div style={{ gridColumn: 'span 2', marginTop: '-0.5rem', marginBottom: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                           {(() => {
                              try {
                                const L = config.L || 0;
                                const H = config.H || 0;
-                               const alertFormula = effectiveItem.technicalAlert;
+                               const area = (L * H) / 1000000;
+                               const selectedLameId = config.shutterConfig?.lameId;
+                               const selectedLame = (database.shutterComponents?.lames || []).find(l => l.id === selectedLameId);
+                               const weightPerM2 = parseFloat(selectedLame?.weightPerM2) || 0;
+                               const lameWidth = parseFloat(selectedLame?.lameWidth) || 0;
+                               const totalWeight = area * weightPerM2;
                                
-                               // If it's a simple string (no special characters), just show it
-                               if (!alertFormula.includes('(') && !alertFormula.includes('if') && !alertFormula.includes('<') && !alertFormula.includes('>')) {
-                                  return (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', background: '#fff7ed', border: '1px solid #ffedd5', borderRadius: '0.4rem', color: '#c2410c', fontSize: '0.75rem', fontWeight: 600 }}>
-                                      <AlertTriangle size={14} /> {alertFormula}
-                                    </div>
-                                  );
+                               const selectedCaissonId = config.shutterConfig?.caissonId;
+                               const selectedCaisson = (database.shutterComponents?.caissons || []).find(c => c.id === selectedCaissonId);
+                               const caissonSize = parseFloat(selectedCaisson?.size) || 0;
+
+                               const selectedAxeId = config.shutterConfig?.axeId;
+                               const axes = database.shutterComponents?.axes || [];
+                               const selectedAxe = axes.find(a => a.id === selectedAxeId) || axes[0];
+                               const axeDiameter = selectedAxe ? parseFloat(selectedAxe.diameter) || 0 : 0;
+                               const liftingWeight = axeDiameter === 40 ? totalWeight / 2 : totalWeight / 1.5;
+                               
+                               const scope = { L, H, area, totalWeight, liftingWeight, axeDiameter, lameWidth, caissonSize };
+                               const alerts = [];
+
+                               // 1. Check main item alert
+                               if (effectiveItem.technicalAlert && effectiveItem.technicalAlert.trim() !== "") {
+                                 const alertMsg = engine.evaluate(effectiveItem.technicalAlert, scope);
+                                 if (alertMsg && String(alertMsg).trim() !== '' && alertMsg !== true && alertMsg !== false) {
+                                   alerts.push(String(alertMsg));
+                                 } else if (typeof alertMsg === 'string' && !effectiveItem.technicalAlert.includes('if') && alertMsg.trim() !== "") {
+                                   // Simple string fallback
+                                   alerts.push(alertMsg);
+                                 }
                                }
 
-                               const alertMsg = engine.evaluate(alertFormula, { L, H });
-                               
-                               if (alertMsg && String(alertMsg).trim() !== '' && alertMsg !== true && alertMsg !== false) {
-                                 return (
-                                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', background: '#fff7ed', border: '1px solid #ffedd5', borderRadius: '0.4rem', color: '#c2410c', fontSize: '0.75rem', fontWeight: 600 }}>
-                                     <AlertTriangle size={14} /> {String(alertMsg)}
-                                   </div>
-                                 );
-                               }
+                               // 2. Check Add-ons alerts
+                               (effectiveItem.addOns || []).forEach(addon => {
+                                 if (addon.technicalAlert && addon.technicalAlert.trim() !== "") {
+                                    const alertMsg = engine.evaluate(addon.technicalAlert, scope);
+                                    if (alertMsg && String(alertMsg).trim() !== '' && alertMsg !== true && alertMsg !== false) {
+                                      alerts.push(String(alertMsg));
+                                    }
+                                 }
+                               });
+
+                               if (alerts.length === 0) return null;
+
+                               return alerts.map((msg, i) => (
+                                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', background: '#fff7ed', border: '1px solid #ffedd5', borderRadius: '0.4rem', color: '#c2410c', fontSize: '0.75rem', fontWeight: 600 }}>
+                                   <AlertTriangle size={14} /> {msg}
+                                 </div>
+                               ));
                              } catch(e) {
                                console.warn("[Alert Eval Error]", e);
                              }
@@ -1943,36 +1987,69 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
           const lame = sc.lames?.find(l => l.id === (cfg.shutterConfig?.lameId));
           const kit = sc.kits?.find(k => k.id === (cfg.shutterConfig?.kitId));
           const axe = sc.axes?.find(a => a.id === (cfg.shutterConfig?.axeId));
+          const moteur = sc.moteurs?.find(m => m.id === (cfg.shutterConfig?.moteurId));
+          const extra = sc.extras?.find(e => e.id === (cfg.shutterConfig?.extraId));
+
+          const area = ((cfg.L || 0) * (cfg.H || 0)) / 1000000;
+          const weightPerM2 = parseFloat(lame?.weightPerM2) || 0;
+          const lameWidth = parseFloat(lame?.lameWidth) || 0;
+          const totalWeight = area * weightPerM2;
+          const caissonSize = parseFloat(caisson?.size) || 0;
+          const axeDiameter = parseFloat(axe?.diameter) || 0;
+          const liftingWeight = axeDiameter === 40 ? totalWeight / 2 : totalWeight / 1.5;
+          const scope = { L: cfg.L || 0, H: cfg.H || 0, area, totalWeight, liftingWeight, axeDiameter, lameWidth, caissonSize };
+
           descLines.push(`Volet Roulant :`);
           if (caisson) descLines.push(`  Caisson : ${caisson.name}`);
           if (glissiere) descLines.push(`  Glissière : ${glissiere.name}`);
-          if (lame) {
-            descLines.push(`  Lame : ${lame.name}`);
-            if (lame.technicalAlert && lame.technicalAlert.trim() !== '') {
+          
+          const processAlerts = (item) => {
+            if (!item) return;
+            if (item.technicalAlert && item.technicalAlert.trim() !== '') {
               try {
-                const alertMsg = engine.evaluate(lame.technicalAlert, { L: cfg.L || 0, H: cfg.H || 0 });
-                if (alertMsg && String(alertMsg).trim() !== '') {
+                const alertMsg = engine.evaluate(item.technicalAlert, scope);
+                if (alertMsg && String(alertMsg).trim() !== '' && alertMsg !== true && alertMsg !== false) {
                   descLines.push(`[ALERTE TECHNIQUE] : ${String(alertMsg)}`);
                 }
               } catch (e) {
                 console.warn("[PDF Alert] Eval error:", e.message);
               }
             }
+            // Add-ons alerts
+            (item.addOns || []).forEach(addon => {
+              if (addon.technicalAlert && addon.technicalAlert.trim() !== '') {
+                try {
+                  const alertMsg = engine.evaluate(addon.technicalAlert, scope);
+                  if (alertMsg && String(alertMsg).trim() !== '' && alertMsg !== true && alertMsg !== false) {
+                    descLines.push(`[ALERTE TECHNIQUE] : ${String(alertMsg)}`);
+                  }
+                } catch (e) {
+                  console.warn("[PDF Addon Alert] Eval error:", e.message);
+                }
+              }
+            });
+          };
+
+          if (lame) {
+            descLines.push(`  Lame : ${lame.name}`);
+            processAlerts(lame);
           }
           if (axe) {
             descLines.push(`  Axe : ${axe.name}`);
-            if (axe.technicalAlert && axe.technicalAlert.trim() !== '') {
-              try {
-                const alertMsg = engine.evaluate(axe.technicalAlert, { L: cfg.L || 0, H: cfg.H || 0 });
-                if (alertMsg && String(alertMsg).trim() !== '') {
-                  descLines.push(`[ALERTE TECHNIQUE] : ${String(alertMsg)}`);
-                }
-              } catch (e) {
-                console.warn("[PDF Axe Alert] Eval error:", e.message);
-              }
-            }
+            processAlerts(axe);
           }
-          if (kit) descLines.push(`  Kit : ${kit.name}`);
+          if (moteur) {
+            descLines.push(`  Moteur : ${moteur.name}`);
+            processAlerts(moteur);
+          }
+          if (extra) {
+            descLines.push(`  Option : ${extra.name}`);
+            processAlerts(extra);
+          }
+          if (kit) {
+            descLines.push(`  Kit : ${kit.name}`);
+            processAlerts(kit);
+          }
         }
 
         // Dynamic row height (5pt per line + padding)
