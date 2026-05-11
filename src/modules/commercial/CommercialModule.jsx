@@ -188,6 +188,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
     }
   }, [config, globalMargin]);
 
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     const newVal = (name === 'L' || name === 'H') ? (parseInt(value) || 0) : value;
@@ -1092,6 +1093,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                       <div className="form-group">
                         <label className="label" style={{ fontSize: '0.8rem' }}>{label}</label>
                         <select className="input" value={selectedItemId || ''} onChange={e => handleShutterChange(e.target.value)}>
+                          <option value="">-- Sélectionner --</option>
                           {key === 'glissiereId' && <option value="AUTO">-- Automatique (Kit) --</option>}
                           {filteredItems.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
                         </select>

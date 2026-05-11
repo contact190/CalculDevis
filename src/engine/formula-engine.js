@@ -1024,7 +1024,9 @@ export class FormulaEngine {
 
       if (gid === 'AUTO') {
         const kitId = config.shutterConfig.kitId;
-        const type = kitId === 'KIT-SANG' ? 'MONO' : (kitId === 'KIT-MOTE' ? 'PALA' : 'OTHER');
+        const selectedKit = (sc.kits || []).find(k => k.id === kitId);
+        const kitType = selectedKit?.type || 'SANGLE';
+        const type = kitType === 'MOTEUR' ? 'PALA' : (kitType === 'SANGLE' ? 'MONO' : 'OTHER');
         
         let compForRange = (config.compoundType && config.compoundType !== 'none' && config.compoundConfig?.parts?.length > 0)
           ? (this.db.compositions || []).find(c => c.id === (config.compoundConfig.parts.find(p => p.type === 'opening' && p.compositionId) || config.compoundConfig.parts[0])?.compositionId)
@@ -1191,8 +1193,18 @@ export class FormulaEngine {
     vars.area = (vars.L * vars.H) / 1000000;
     if (vars.lameId) {
       const l = (sc.lames || []).find(x => x.id === vars.lameId);
-      if (l) vars.lameWidth = parseFloat(l.lameWidth) || 0;
+      if (l) {
+        vars.lameWidth = parseFloat(l.lameWidth) || 0;
+        vars.weightPerM2 = parseFloat(l.weightPerM2) || 0;
+        vars.totalWeight = vars.area * vars.weightPerM2;
+      }
     }
+    // Calculate liftingWeight based on axeSize (diameter)
+    const axeDiameter = vars.axeSize || 0;
+    vars.axeDiameter = axeDiameter;
+    const totalWeight = vars.totalWeight || 0;
+    vars.liftingWeight = axeDiameter === 40 ? totalWeight / 2 : totalWeight / 1.5;
+
     const shutterPack = [];
     if (config.hasShutter && config.shutterConfig && this.db.shutterComponents) {
       const sc = this.db.shutterComponents;
@@ -1212,7 +1224,9 @@ export class FormulaEngine {
         // Resolve AUTO glissière
         if (key === 'glissiereId' && selectedId === 'AUTO') {
           const kitId = config.shutterConfig.kitId;
-          const type = kitId === 'KIT-SANG' ? 'MONO' : (kitId === 'KIT-MOTE' ? 'PALA' : 'OTHER');
+          const selectedKit = (this.db.shutterComponents?.kits || []).find(k => k.id === kitId);
+          const kitType = selectedKit?.type || 'SANGLE';
+          const type = kitType === 'MOTEUR' ? 'PALA' : (kitType === 'SANGLE' ? 'MONO' : 'OTHER');
           
           let compositionId = config.compositionId;
           if (!compositionId && config.compoundConfig?.parts) {
