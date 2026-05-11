@@ -939,6 +939,24 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                     });
                   }
 
+                  // Apply compatibility formula for axes
+                  if (key === 'axeId') {
+                    const L = config.L || 0;
+                    const H = config.H || 0;
+                    
+                    filteredItems = filteredItems.filter(axe => {
+                      const formula = axe.compatibilityFormula;
+                      if (!formula || formula.trim() === '') return true;
+                      try {
+                        const scope = { L, H, area: (L * H) / 1000000 };
+                        return engine.evaluate(formula, scope);
+                      } catch (e) {
+                        console.warn(`[Axe Compatibility] Formula error for "${axe.name}":`, e.message);
+                        return true;
+                      }
+                    });
+                  }
+
                   // Apply compatibility formula for extras
                   if (key === 'extraId' || key === 'extras') {
                     const L = config.L || 0;
@@ -1020,8 +1038,8 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                         </select>
                       </div>
 
-                      {/* Technical Alert for Lames */}
-                      {key === 'lameId' && effectiveItem && (effectiveItem.technicalAlert || "").trim() !== "" && (
+                      {/* Technical Alert for Lames & Axes */}
+                      {(key === 'lameId' || key === 'axeId') && effectiveItem && (effectiveItem.technicalAlert || "").trim() !== "" && (
                         <div style={{ gridColumn: 'span 2', marginTop: '-0.5rem', marginBottom: '0.5rem' }}>
                           {(() => {
                              try {
@@ -1876,7 +1894,19 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
               }
             }
           }
-          if (axe) descLines.push(`  Axe : ${axe.name}`);
+          if (axe) {
+            descLines.push(`  Axe : ${axe.name}`);
+            if (axe.technicalAlert && axe.technicalAlert.trim() !== '') {
+              try {
+                const alertMsg = engine.evaluate(axe.technicalAlert, { L: cfg.L || 0, H: cfg.H || 0 });
+                if (alertMsg && String(alertMsg).trim() !== '') {
+                  descLines.push(`[ALERTE TECHNIQUE] : ${String(alertMsg)}`);
+                }
+              } catch (e) {
+                console.warn("[PDF Axe Alert] Eval error:", e.message);
+              }
+            }
+          }
           if (kit) descLines.push(`  Kit : ${kit.name}`);
         }
 

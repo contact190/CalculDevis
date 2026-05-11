@@ -2345,7 +2345,7 @@ const AdminDashboard = ({ data, setData }) => {
 
                           {key === 'moteurs' && <th>Formule Compatibilité</th>}
                           {key === 'caissons' && <th title="Variables: L, lameWidth">Formule Compatibilité</th>}
-                          {key === 'lames' && (
+                          {(key === 'lames' || key === 'axes') && (
                             <>
                               <th>Compatibilité</th>
                               <th>Alerte Technique</th>
@@ -2451,14 +2451,14 @@ const AdminDashboard = ({ data, setData }) => {
                                 />
                               </td>
                             )}
-                            {key === 'lames' && (
+                            {(key === 'lames' || key === 'axes') && (
                               <>
                                 <td>
                                   <FormulaInput 
                                     value={item.compatibilityFormula || ''} 
                                     onChange={val => updateShutterItem(key, i, 'compatibilityFormula', val)} 
                                     variables={['L', 'H', 'HC', 'lameWidth', 'caissonSize', 'area']}
-                                    placeholder="Ex: L <= 2500"
+                                    placeholder={key === 'axes' ? "Ex: L < 2500" : "Ex: L <= 2500"}
                                   />
                                 </td>
                                 <td>
