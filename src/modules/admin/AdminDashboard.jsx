@@ -2319,6 +2319,7 @@ const AdminDashboard = ({ data, setData }) => {
                         <tr>
                           <th>Référence</th>
                           <th>Désignation</th>
+                          {key === 'kits' && <th>Type Kit</th>}
                           {key === 'caissons' && (
                             <>
                               <th>Taille (mm)</th>
@@ -2381,6 +2382,15 @@ const AdminDashboard = ({ data, setData }) => {
                           <tr key={item.id} style={item._isNew ? { background: '#dcfce7', transition: 'background 1s' } : {}}>
                              <td><input className="input" value={item.reference || ''} onChange={e => updateShutterItem(key, i, 'reference', e.target.value)} style={{ width: '100px' }} placeholder="Réf" /></td>
                              <td><input className="input" value={item.name} onChange={e => updateShutterItem(key, i, 'name', e.target.value)} style={{ width: '180px' }} /></td>
+                             {key === 'kits' && (
+                               <td>
+                                 <select className="input" value={item.type || 'SANGLE'} onChange={e => updateShutterItem(key, i, 'type', e.target.value)} style={{ width: '110px', fontSize: '0.8rem' }}>
+                                   <option value="SANGLE">Sangle</option>
+                                   <option value="MOTEUR">Moteur</option>
+                                   <option value="MANIVELLE">Manivelle</option>
+                                 </select>
+                               </td>
+                             )}
                             {key === 'caissons' && (
                               <>
                                 <td><input className="input" type="number" value={item.size || 0} onChange={e => updateShutterItem(key, i, 'size', e.target.value)} style={{ width: '80px' }} /></td>

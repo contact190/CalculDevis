@@ -872,6 +872,11 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                   { key: 'moteurId', label: 'Moteur', items: database.shutterComponents?.moteurs || [] },
                   { key: 'kitId', label: 'Kit Manœuvre', items: database.shutterComponents?.kits || [] }
                 ].map(({ key, label, items }) => {
+                  if (key === 'moteurId') {
+                    const selectedKitId = config.shutterConfig?.kitId;
+                    const selectedKit = (database.shutterComponents?.kits || []).find(k => k.id === selectedKitId);
+                    if (!selectedKit || selectedKit.type !== 'MOTEUR') return null;
+                  }
 
 
                   let filteredItems = items || [];
@@ -1058,7 +1063,9 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                     let id = selectedItemId;
                     if (id === 'AUTO') {
                       const kitId = config.shutterConfig?.kitId;
-                      const type = kitId === 'KIT-SANG' ? 'MONO' : (kitId === 'KIT-MOTE' ? 'PALA' : 'OTHER');
+                      const selectedKit = (database.shutterComponents?.kits || []).find(k => k.id === kitId);
+                      const kitType = selectedKit?.type || 'SANGLE';
+                      const type = kitType === 'MOTEUR' ? 'PALA' : (kitType === 'SANGLE' ? 'MONO' : 'OTHER');
                       const autoG = (database.shutterComponents?.glissieres || []).find(g => 
                         (!g.rangeId || !currentComp || g.rangeId === currentComp.rangeId) && 
                         g.shutterType === type
