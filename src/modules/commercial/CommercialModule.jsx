@@ -639,6 +639,23 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                          <option value="opening_only">Volet sur OUVERTURE uniquement</option>
                       </select>
                    </div>
+                   <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', height: '100%', paddingTop: '1.5rem' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 600, color: '#1e40af' }}>
+                        <input 
+                          type="checkbox" 
+                          checked={config.shutterConfig?.isDoubleShutter || false} 
+                          onChange={e => setConfig(prev => ({ 
+                            ...prev, 
+                            shutterConfig: { 
+                              ...(prev.shutterConfig || {}), 
+                              isDoubleShutter: e.target.checked 
+                            } 
+                          }))}
+                          style={{ width: '1.1rem', height: '1.1rem' }}
+                        />
+                        Volet Double (Séparé)
+                      </label>
+                   </div>
                 </div>
             </div>
           )}
@@ -832,6 +849,11 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                 onChange={e => setConfig(prev => ({ ...prev, shutterConfig: { ...(prev.shutterConfig || {}), isExistant: e.target.checked } }))} />
               Caisson Tunnel (Existant)
             </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 700, color: '#2563eb', padding: '0.2rem 0.5rem', background: '#dbeafe', borderRadius: '0.3rem' }}>
+              <input type="checkbox" checked={config.shutterConfig?.isDoubleShutter || false}
+                onChange={e => setConfig(prev => ({ ...prev, shutterConfig: { ...(prev.shutterConfig || {}), isDoubleShutter: e.target.checked } }))} />
+              ⚡ Volet Double (Séparé)
+            </label>
             
             {config.shutterConfig?.isStandalone && (
               <div style={{ display: 'flex', gap: '0.75rem', borderLeft: '2px solid #cbd5e1', paddingLeft: '0.75rem', flexWrap: 'wrap' }}>
@@ -880,7 +902,12 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                   }
 
 
-                  let filteredItems = items || [];
+                  let filteredItems = (items || []).filter(item => {
+                    const isDouble = config.shutterConfig?.isDoubleShutter || false;
+                    const usage = item.usageVolet || 'NORMAL';
+                    if (isDouble) return usage === 'DOUBLE' || usage === 'BOTH';
+                    return usage === 'NORMAL' || usage === 'BOTH';
+                  });
                   if (key === 'glissiereId' && currentComp?.rangeId) {
                       // Show items for this range OR universal items (no rangeId)
                       filteredItems = filteredItems.filter(i => !i.rangeId || i.rangeId === currentComp.rangeId);

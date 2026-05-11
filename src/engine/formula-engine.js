@@ -634,6 +634,16 @@ export class FormulaEngine {
     return { profiles, accessories, glasses };
   }
   processShutterComponent(item, vars, shutterPack, key = '', config = {}, errors = []) {
+    const isDouble = config.shutterConfig?.isDoubleShutter || false;
+    const usage = item.usageVolet || 'NORMAL';
+
+    // 0. Usage Filtering
+    if (isDouble) {
+      if (usage === 'NORMAL') return; // Normal item not allowed in double mode
+    } else {
+      if (usage === 'DOUBLE') return; // Double item not allowed in normal mode
+    }
+
     const { L, H, HC, HT } = vars;
     const barLength = parseFloat(item.barLength) || 6400;
     
@@ -656,16 +666,31 @@ export class FormulaEngine {
 
     const evalScope = { ...vars, L: itemScopeL, H: effectiveH, HC, HT: HT || (H + HC) };
 
-    // 1. Compatibility Check (Standalone Logic V3.3)
-    if (item.compatibilityFormula) {
+    // 1. Compatibility Check (Standalone Logic V3.3) - SKIP IF DOUBLE
+    if (!isDouble && item.compatibilityFormula) {
       const isCompatible = this.evaluate(item.compatibilityFormula, evalScope, `Compatibilité ${item.name}`);
       if (!isCompatible) return;
     }
 
+    // 1.5 Technical Alert Evaluation - SKIP IF DOUBLE
+    if (!isDouble && item.technicalAlert) {
+      try {
+        const alertMsg = this.evaluate(item.technicalAlert, evalScope, `Alerte ${item.name}`, errors);
+        if (alertMsg && String(alertMsg).trim() !== '' && alertMsg !== true && alertMsg !== false) {
+           // We could potentially collect alerts here too, but normally they are evaluated in the UI.
+           // However, evaluating them here ensures they are available for the PDF too if needed.
+        }
+      } catch(e) {
+        console.warn(`[Technical Alert Error] ${item.name}:`, e.message);
+      }
+    }
+
     // 2. Calculate Piece Length (Dimension de coupe)
     let itemLength = 0;
-    if (item.cuttingFormula) {
-      itemLength = this.evaluate(item.cuttingFormula, evalScope);
+    const cuttingFormulaToUse = (isDouble && item.doubleCuttingFormula) ? item.doubleCuttingFormula : item.cuttingFormula;
+    
+    if (cuttingFormulaToUse) {
+      itemLength = this.evaluate(cuttingFormulaToUse, evalScope);
     } else {
       if (key === 'caissonId' || key === 'axeId' || key === 'lameId' || key === 'lameFinaleId') {
         itemLength = itemScopeL;
@@ -675,7 +700,9 @@ export class FormulaEngine {
     }
 
     // 2. Calculate Piece Count (Nombre de pièces)
-    const pieceCount = this.evaluate(item.formula || '1', evalScope);
+    // Use doubleQtyFormula if in double mode and formula exists
+    const formulaToUse = (isDouble && item.doubleQtyFormula) ? item.doubleQtyFormula : (item.formula || '1');
+    const pieceCount = this.evaluate(formulaToUse, evalScope);
     if (pieceCount <= 0) return;
 
     // 3. Inclusion & Existing Checks (Standalone Logic V3.2)
@@ -755,7 +782,7 @@ export class FormulaEngine {
       barLength: barLength,
       price: itemPrice,
       priceUnit: item.priceUnit,
-      resolvedFormula: `${this.resolveFormula(item.formula || '1', evalScope)} x [${this.resolveFormula(item.cuttingFormula || 'L/H', evalScope)}]`,
+      resolvedFormula: `${this.resolveFormula(formulaToUse, evalScope)} x [${this.resolveFormula(item.cuttingFormula || (key === 'glissiereId' ? 'H' : 'L'), evalScope)}]`,
       usage: 'VOLET ROULANT',
       cost: finalCost
     });

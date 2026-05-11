@@ -2374,6 +2374,9 @@ const AdminDashboard = ({ data, setData }) => {
                           <th>Unité</th>
                           <th>Prix (DZD)</th>
                           <th>Add-ons (JSON)</th>
+                          <th>Usage Volet</th>
+                          <th>Formule Qté (Double)</th>
+                          <th>Formule Dim (Double)</th>
                           <th>Actions</th>
                         </tr>
                       </thead>
@@ -2547,6 +2550,33 @@ const AdminDashboard = ({ data, setData }) => {
                               <button className="base-btn btn-secondary" onClick={() => setEditingAddonItem({ family: key, idx: i, item, isShutter: true })} style={{ fontSize: '0.75rem', padding: '0.4rem 0.6rem' }}>
                                  🔧 Options ({item.addOns?.length || 0})
                               </button>
+                            </td>
+                            <td>
+                              <select className="input" value={item.usageVolet || 'NORMAL'} onChange={e => updateShutterItem(key, i, 'usageVolet', e.target.value)} style={{ width: '100px', fontSize: '0.8rem' }}>
+                                <option value="NORMAL">Normal</option>
+                                <option value="DOUBLE">Double</option>
+                                <option value="BOTH">Les deux</option>
+                              </select>
+                            </td>
+                            <td>
+                              {(item.usageVolet === 'BOTH' || item.usageVolet === 'DOUBLE') && (
+                                <FormulaInput 
+                                  value={item.doubleQtyFormula || ''} 
+                                  onChange={val => updateShutterItem(key, i, 'doubleQtyFormula', val)} 
+                                  variables={['L', 'H', 'HC', 'lameWidth', 'caissonSize', 'area', 'totalWeight', 'liftingWeight', 'axeDiameter']}
+                                  placeholder="Qté pour double"
+                                />
+                              )}
+                            </td>
+                            <td>
+                              {(item.usageVolet === 'BOTH' || item.usageVolet === 'DOUBLE') && (
+                                <FormulaInput 
+                                  value={item.doubleCuttingFormula || ''} 
+                                  onChange={val => updateShutterItem(key, i, 'doubleCuttingFormula', val)} 
+                                  variables={['L', 'H', 'HC', 'lameWidth', 'caissonSize', 'area', 'totalWeight', 'liftingWeight', 'axeDiameter']}
+                                  placeholder="Dim pour double"
+                                />
+                              )}
                             </td>
                             <td><button className="btn" onClick={() => deleteShutterItem(key, i)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button></td>
 
