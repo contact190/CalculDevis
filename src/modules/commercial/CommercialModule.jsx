@@ -1348,7 +1348,10 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
 
                   {priceData?.bom?.shutters?.map((s, i) => (
                     <tr key={`shutter-${i}`}>
-                      <td data-label="Composant" style={{ fontWeight: 600 }}>[Volet] {s.name}</td>
+                      <td data-label="Composant" style={{ fontWeight: 600 }}>
+                        [Volet] {s.name}
+                        {s.totalWeight > 0 && <span style={{ marginLeft: '0.5rem', color: '#0ea5e9', fontSize: '0.65rem' }}>(Poids: {s.totalWeight.toFixed(2)} kg)</span>}
+                      </td>
                       <td data-label="Source"><span style={{ fontSize: '0.6rem', padding: '0.1rem 0.4rem', background: '#f1f5f9', borderRadius: '1rem', color: '#64748b', whiteSpace: 'nowrap' }}>{s.source || 'Volet'}</span></td>
                       <td data-label="Formule" style={{ color: '#64748b', fontSize: '0.65rem' }}>{s.formula}</td>
                       <td data-label="Calcul" style={{ color: '#3b82f6', fontSize: '0.65rem' }}>{s.resolvedFormula || '-'}</td>
@@ -2040,7 +2043,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
           };
 
           if (lame) {
-            descLines.push(`  Lame : ${lame.name}`);
+            descLines.push(`  Lame : ${lame.name} (Poids: ${totalWeight.toFixed(2)} kg)`);
             processAlerts(lame);
           }
           if (axe) {

@@ -742,11 +742,14 @@ export class FormulaEngine {
       finalCost = pieceCount * itemPrice;
     }
 
+    const weight = (key === 'lameId') ? (vars.area * (parseFloat(item.weightPerM2) || 0)) : null;
+
     shutterPack.push({
       ...item,
       itemKey: key,
       name: displayName + nameSuffix,
       qty: pieceCount,
+      totalWeight: weight,
       totalMeasure: linearTotalMm, 
       length: itemLength,
       barLength: barLength,
