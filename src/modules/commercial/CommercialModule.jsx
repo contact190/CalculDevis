@@ -864,10 +864,10 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
               <div style={{ marginTop: '1rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                 {[
                   { key: 'caissonId', label: 'Caisson', items: database.shutterComponents?.caissons || [] },
+                  { key: 'axeId', label: 'Axe', items: database.shutterComponents?.axes || [] },
                   { key: 'lameId', label: 'Lame', items: database.shutterComponents?.lames || [] },
                   { key: 'lameFinaleId', label: 'Lame Finale', items: database.shutterComponents?.lameFinales || [] },
                   { key: 'glissiereId', label: 'Glissière', items: database.shutterComponents?.glissieres || [] },
-                  { key: 'axeId', label: 'Axe', items: database.shutterComponents?.axes || [] },
                   { key: 'moteurId', label: 'Moteur', items: database.shutterComponents?.moteurs || [] },
                   { key: 'kitId', label: 'Kit Manœuvre', items: database.shutterComponents?.kits || [] }
                 ].map(({ key, label, items }) => {
@@ -903,12 +903,16 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                   if (key === 'lameId') {
                     const L = config.L || 0;
                     const H = config.H || 0;
+                    const selectedAxeId = config.shutterConfig?.axeId;
+                    const axes = database.shutterComponents?.axes || [];
+                    const selectedAxe = axes.find(a => a.id === selectedAxeId) || axes[0]; // Fallback to first axe if none
+                    const axeDiameter = selectedAxe ? parseFloat(selectedAxe.diameter) || 0 : 0;
                     
                     filteredItems = filteredItems.filter(lame => {
                       const formula = lame.compatibilityFormula;
                       if (!formula || formula.trim() === '') return true;
                       try {
-                        const scope = { L, H, area: (L * H) / 1000000 };
+                        const scope = { L, H, area: (L * H) / 1000000, axeDiameter };
                         return engine.evaluate(formula, scope);
                       } catch (e) {
                         console.warn(`[Lame Compatibility] Formula error for "${lame.name}":`, e.message);
