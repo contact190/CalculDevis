@@ -2376,8 +2376,8 @@ const AdminDashboard = ({ data, setData }) => {
                           <th>Add-ons (JSON)</th>
                           <th>Usage Volet</th>
                           <th>Formule Qté (Double)</th>
-                          <th>Formule Dim (Double)</th>
-                          <th>Opt1 Double (Nom/Vals/Prix)</th>
+                          {!['kits', 'moteurs'].includes(key) && <th>Formule Dim (Double)</th>}
+                          {key === 'glissieres' && <th>Opt1 Double (Nom/Vals/Prix)</th>}
                           <th>Actions</th>
                         </tr>
                       </thead>
@@ -2569,8 +2569,8 @@ const AdminDashboard = ({ data, setData }) => {
                                 />
                                </div>
                              </td>
-                             <td>
-                               {key !== 'kits' && (
+                             {!['kits', 'moteurs'].includes(key) && (
+                               <td>
                                  <div style={{ opacity: (item.usageVolet === 'BOTH' || item.usageVolet === 'DOUBLE') ? 1 : 0.5 }}>
                                   <FormulaInput 
                                     value={item.doubleCuttingFormula || ''} 
@@ -2579,24 +2579,24 @@ const AdminDashboard = ({ data, setData }) => {
                                     placeholder="Dim pour double"
                                   />
                                  </div>
-                               )}
-                             </td>
-                             <td>
-                               {key === 'glissieres' && (
+                               </td>
+                             )}
+                             {key === 'glissieres' && (
+                               <td>
                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', opacity: (item.usageVolet === 'BOTH' || item.usageVolet === 'DOUBLE') ? 1 : 0.5 }}>
                                    <input className="input" value={item.doubleOpt1Label || ''} onChange={e => updateShutterItem(key, i, 'doubleOpt1Label', e.target.value)} style={{ width: '100px', fontSize: '0.65rem' }} placeholder="Nom Opt1" />
                                    <input className="input" value={item.doubleOpt1Values || ''} onChange={e => updateShutterItem(key, i, 'doubleOpt1Values', e.target.value)} style={{ width: '100px', fontSize: '0.65rem' }} placeholder="Valeurs (85, 120)" />
                                    <input className="input" value={item.doubleOpt1Prices || ''} onChange={e => updateShutterItem(key, i, 'doubleOpt1Prices', e.target.value)} style={{ width: '100px', fontSize: '0.65rem' }} placeholder="Prix (0, 200)" />
                                  </div>
-                               )}
-                             </td>
+                               </td>
+                             )}
                             <td><button className="btn" onClick={() => deleteShutterItem(key, i)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button></td>
 
 
                           </tr>
                         ))}
                         <tr>
-                          <td colSpan={key === 'glissieres' ? 15 : (key === 'moteurs' ? 7 : (key === 'kits' ? 6 : (key === 'caissons' ? 10 : 9)))}>
+                          <td colSpan={30}>
                             <button className="btn btn-secondary" onClick={() => addShutterItem(key)} style={{ width: '100%', marginTop: '0.4rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
                               <Plus size={16} /> Ajouter
                             </button>
