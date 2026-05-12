@@ -2570,14 +2570,16 @@ const AdminDashboard = ({ data, setData }) => {
                                </div>
                              </td>
                              <td>
-                               <div style={{ opacity: (item.usageVolet === 'BOTH' || item.usageVolet === 'DOUBLE') ? 1 : 0.5 }}>
-                                <FormulaInput 
-                                  value={item.doubleCuttingFormula || ''} 
-                                  onChange={val => updateShutterItem(key, i, 'doubleCuttingFormula', val)} 
-                                  variables={['L', 'H', 'HC', 'lameWidth', 'caissonSize', 'area', 'totalWeight', 'liftingWeight', 'axeDiameter', 'nb_moteurs']}
-                                  placeholder="Dim pour double"
-                                />
-                               </div>
+                               {key !== 'kits' && (
+                                 <div style={{ opacity: (item.usageVolet === 'BOTH' || item.usageVolet === 'DOUBLE') ? 1 : 0.5 }}>
+                                  <FormulaInput 
+                                    value={item.doubleCuttingFormula || ''} 
+                                    onChange={val => updateShutterItem(key, i, 'doubleCuttingFormula', val)} 
+                                    variables={['L', 'H', 'HC', 'lameWidth', 'caissonSize', 'area', 'totalWeight', 'liftingWeight', 'axeDiameter', 'nb_moteurs']}
+                                    placeholder="Dim pour double"
+                                  />
+                                 </div>
+                               )}
                              </td>
                              <td>
                                {key === 'glissieres' && (
