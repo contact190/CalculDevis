@@ -163,6 +163,42 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
   const [validation, setValidation] = useState({ valid: true });
   const [priceData, setPriceData] = useState(null);
   const [compareModalOpen, setCompareModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('tech');
+
+  const getDividerThickness = (cfg = config) => {
+    const isMulti = cfg.compoundType === 'fix_coulissant';
+    const divId = isMulti ? cfg.compoundConfig?.unionId : cfg.compoundConfig?.traverseId;
+    if (!divId || divId === 'AUTO') return isMulti ? 3 : 25;
+    const trv = (database.traverses || []).find(t => t.id === divId || t.profileId === divId);
+    if (trv?.thickness) return trv.thickness;
+    const prof = (database.profiles || []).find(p => p.id === (trv?.profileId || divId));
+    return prof?.thickness || (isMulti ? 3 : 25);
+  };
+
+  const syncCompoundParts = (prev, name, newVal) => {
+    const next = { ...prev, [name]: newVal };
+    if (!next.compoundConfig || !next.compoundConfig.parts) return next;
+    const isH = next.compoundConfig.orientation === 'horizontal';
+    const totalDim = isH ? next.L : next.H;
+    const divThick = getDividerThickness(next);
+    const parts = next.compoundConfig.parts;
+    const divQty = parts.length - 1;
+    const totalDivThick = divQty * divThick;
+
+    const newList = parts.map(p => ({ ...p }));
+    const fixeSum = newList.filter(p => p.type === 'fixe').reduce((s, p) => s + (isH ? (p.width || 0) : (p.height || 0)), 0);
+    const autoOpenDim = Math.max(0, totalDim - fixeSum - totalDivThick);
+
+    newList.forEach(p => {
+      if (p.type === 'opening') {
+        if (isH) p.width = autoOpenDim; else p.height = autoOpenDim;
+      } else {
+        if (isH) p.height = next.H; else p.width = next.L;
+      }
+    });
+    next.compoundConfig = { ...next.compoundConfig, parts: newList };
+    return next;
+  };
 
   useEffect(() => {
     // Standard initialization: Force default if nothing selected
@@ -202,6 +238,9 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
       }
       if ((name === 'L' || name === 'H') && prev.useCustomLayout && prev.customLayout) {
         next.customLayout = rescaleTree(prev.customLayout, name === 'L' ? newVal : prev.L, name === 'H' ? newVal : prev.H);
+      }
+      if ((name === 'L' || name === 'H') && prev.compoundType && prev.compoundType !== 'none') {
+        return syncCompoundParts(prev, name, newVal);
       }
       return next;
     });
@@ -369,7 +408,26 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                    </div>
                    <div className="form-group">
                       <label className="label">Orientation</label>
-                      <select className="input" value={config.compoundConfig?.orientation} onChange={e => setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, orientation: e.target.value } }))}>
+                      <select className="input" value={config.compoundConfig?.orientation} onChange={e => {
+                         const newOri = e.target.value;
+                         const isH = newOri === 'horizontal';
+                         const totalDim = isH ? config.L : config.H;
+                         const otherDim = isH ? config.H : config.L;
+                         const newList = config.compoundConfig.parts.map(p => ({
+                           ...p,
+                           ...(isH ? { height: otherDim } : { width: otherDim })
+                         }));
+                         const fixeSum = newList.filter(p => p.type === 'fixe').reduce((s, p) => s + (isH ? (p.width || 0) : (p.height || 0)), 0);
+                         const divThick = getDividerThickness();
+                         const divQty = config.compoundConfig.parts.length - 1;
+                         const totalDivThick = divQty * divThick;
+                         const autoOpenDim = Math.max(0, totalDim - fixeSum - totalDivThick);
+                         const finalList = newList.map(p => p.type === 'opening' 
+                            ? { ...p, ...(isH ? { width: autoOpenDim } : { height: autoOpenDim }) }
+                            : p
+                         );
+                         setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, orientation: newOri, parts: finalList } }));
+                       }}>
                         <option value="horizontal">Horizontal</option>
                         <option value="vertical">Vertical</option>
                       </select>
@@ -438,13 +496,36 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                                     <option value="fixe">Fixe</option>
                                     <option value="group">Groupe</option>
                                  </select>
-                                 <input type="number" className="input" style={{ width: '70px', fontSize: '0.8rem', padding: '0.3rem' }} value={config.compoundConfig.orientation === 'horizontal' ? part.width : part.height} onChange={e => {
-                                    const newList = [...config.compoundConfig.parts];
-                                    const val = parseInt(e.target.value) || 0;
-                                    if (config.compoundConfig.orientation === 'horizontal') newList[idx].width = val;
-                                    else newList[idx].height = val;
-                                    setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, parts: newList } }));
-                                 }} />
+                                  {part.type === 'opening' ? (
+                                    <input 
+                                      type="number" 
+                                      className="input" 
+                                      style={{ width: '70px', fontSize: '0.8rem', padding: '0.3rem', background: '#f0fdf4', color: '#15803d', fontWeight: 700, border: '1px solid #86efac' }} 
+                                      value={config.compoundConfig.orientation === 'horizontal' ? part.width : part.height} 
+                                      readOnly
+                                      title="Calculé automatiquement : Total - somme des Fixes"
+                                    />
+                                  ) : (
+                                    <input type="number" className="input" style={{ width: '70px', fontSize: '0.8rem', padding: '0.3rem' }} value={config.compoundConfig.orientation === 'horizontal' ? part.width : part.height} onChange={e => {
+                                       const val = parseInt(e.target.value) || 0;
+                                       const isH = config.compoundConfig.orientation === 'horizontal';
+                                       const totalDim = isH ? config.L : config.H;
+                                       const newList = config.compoundConfig.parts.map((p, i) => {
+                                          if (i === idx) return { ...p, ...(isH ? { width: val } : { height: val }) };
+                                          return p;
+                                       });
+                                       const fixeSum = newList.filter(p => p.type === 'fixe').reduce((s, p) => s + (isH ? (p.width || 0) : (p.height || 0)), 0);
+                                        const divThick = getDividerThickness();
+                                        const divQty = config.compoundConfig.parts.length - 1;
+                                        const totalDivThick = divQty * divThick;
+                                        const autoOpenDim = Math.max(0, totalDim - fixeSum - totalDivThick);
+                                       const finalList = newList.map(p => p.type === 'opening' 
+                                          ? { ...p, ...(isH ? { width: autoOpenDim } : { height: autoOpenDim }) }
+                                          : p
+                                       );
+                                       setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, parts: finalList } }));
+                                    }} />
+                                  )}
                               </div>
                            </div>
 
@@ -615,7 +696,10 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                       <label className="label">{config.compoundType === 'fix_coulissant' ? 'Profilé d\'UNION' : 'Profilé TRAVERSE (Division)'}</label>
                       <select className="input" value={config.compoundType === 'fix_coulissant' ? config.compoundConfig?.unionId : config.compoundConfig?.traverseId} onChange={e => {
                          const key = config.compoundType === 'fix_coulissant' ? 'unionId' : 'traverseId';
-                         setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, [key]: e.target.value } }));
+                         setConfig(prev => {
+                            const next = { ...prev, compoundConfig: { ...prev.compoundConfig, [key]: e.target.value } };
+                            return syncCompoundParts(next, 'L', next.L);
+                         });
                       }}>
                            {(database.traverses || []).filter(t => {
                               const normalize = (s) => (s || '').replace(/[-\s]+/g, '').toLowerCase();

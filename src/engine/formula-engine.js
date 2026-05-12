@@ -833,7 +833,7 @@ export class FormulaEngine {
             priceUnit: addon.unit || 'Unité',
             price: addonPrice,
             formula: formulaToUse,          // ← formule réellement utilisée (doubleFormula si dispo)
-            resolvedFormula: this.resolveFormula(formulaToUse, evalScope),
+            resolvedFormula: `${formulaToUse} = ${addonQty}`,
             cost: addonCost
           });
         }
@@ -935,7 +935,7 @@ export class FormulaEngine {
         } else {
             // Fallback 2: Check standard traverses for a match
             const trvEntry = (this.db.traverses || []).find(t => t.id === effectiveDivId || t.profileId === effectiveDivId);
-            divThick = trvEntry?.thickness || 25; // Default to 25 (user standard)
+            divThick = trvEntry?.thickness || (compoundType === 'fix_coulissant' ? 3 : 25);
         }
     }
 
@@ -973,8 +973,9 @@ export class FormulaEngine {
       });
 
       // 2. Adjust dimensions if they exceed available space (e.g. caisson deduction)
-      const available = (direction === 'horizontal' ? boxL : boxH);
-      // User requested NOT to deduct divider thickness from the available space for part calculation
+      // Deduct divider thickness from available space for part calculation
+      const divThickNum = Number(divThick || 0);
+      const available = (direction === 'horizontal' ? boxL : boxH) - (divQty * divThickNum);
       const totalRequested = items.reduce((sum, item) => sum + (direction === 'horizontal' ? item.rawL : item.rawH), 0);
 
       if (totalRequested > available + 0.1) {
@@ -1005,19 +1006,6 @@ export class FormulaEngine {
         
         let calcL = part.rawL;
         let calcH = part.rawH;
-
-        let inflation = (!isFirst) ? (divThick / 2) : 0;
-        const hasFixeInOriginal = partList.some(p => p.type === 'fixe');
-        if (hasFixeInOriginal) {
-            // If there's a fixed part, it absorbs the divider thickness
-            inflation = (part.type === 'fixe') ? divThick : 0;
-        }
-
-        if (direction === 'horizontal') {
-           calcL += inflation;
-        } else {
-           calcH += inflation;
-        }
 
         if (part.type === 'group' && part.subParts) {
            processPartList(part.subParts, calcL, calcH, direction === 'horizontal' ? 'vertical' : 'horizontal');

@@ -336,7 +336,7 @@ const ShippingModule = ({ data, setData, refetchData }) => {
       doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(0,0,0);
       doc.text(`Type : ${unit.label}`, 5, 87);
       doc.text(`Cotes : ${unit.dimensions} mm`, 5, 93);
-      if (unit.shutter === 'Oui') {
+      if (unit.hasShutter) {
         doc.text(`Volet : ${unit.shutterInfo}`, 5, 99);
       }
       
@@ -363,10 +363,6 @@ const ShippingModule = ({ data, setData, refetchData }) => {
     const ph = doc.internal.pageSize.getHeight();
     const photos = selectedOrder.unitInstallationPhotos || {};
     const timeline = selectedOrder.unitTimeline || {};
-    
-    console.log('[PDF Debug] Order:', selectedOrder.id);
-    console.log('[PDF Debug] Timeline Keys:', Object.keys(timeline));
-    console.log('[PDF Debug] Photo Keys:', Object.keys(photos));
 
     const getImgFormat = (dataUrl) => {
       if (!dataUrl) return 'JPEG';
