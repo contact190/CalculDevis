@@ -854,6 +854,21 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                 onChange={e => setConfig(prev => ({ ...prev, shutterConfig: { ...(prev.shutterConfig || {}), isDoubleShutter: e.target.checked } }))} />
               ⚡ Volet Double (Séparé)
             </label>
+
+            {config.shutterConfig?.isDoubleShutter && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginLeft: '0.5rem', borderLeft: '2px solid #3b82f6', paddingLeft: '0.75rem' }}>
+                <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#1e40af' }}>Nb Moteurs :</span>
+                <select 
+                  className="input" 
+                  value={config.shutterConfig?.motorCount || 2} 
+                  onChange={e => setConfig(prev => ({ ...prev, shutterConfig: { ...(prev.shutterConfig || {}), motorCount: parseInt(e.target.value) } }))}
+                  style={{ width: '100px', fontSize: '0.7rem', padding: '0.1rem 0.3rem', height: '24px', background: 'white', border: '1px solid #3b82f6' }}
+                >
+                  <option value={1}>1 Moteur</option>
+                  <option value={2}>2 Moteurs</option>
+                </select>
+              </div>
+            )}
             
             {config.shutterConfig?.isStandalone && (
               <div style={{ display: 'flex', gap: '0.75rem', borderLeft: '2px solid #cbd5e1', paddingLeft: '0.75rem', flexWrap: 'wrap' }}>

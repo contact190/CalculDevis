@@ -1212,7 +1212,8 @@ export class FormulaEngine {
       caissonId: config.shutterConfig?.caissonId,
       axeId: config.shutterConfig?.axeId,
       lameId: config.shutterConfig?.lameId,
-      openingDirection: config.openingDirection || 'gauche'
+      openingDirection: config.openingDirection || 'gauche',
+      nb_moteurs: config.shutterConfig?.isDoubleShutter ? (config.shutterConfig?.motorCount || 2) : 1
     };
     
     const sc = this.db.shutterComponents || {};
