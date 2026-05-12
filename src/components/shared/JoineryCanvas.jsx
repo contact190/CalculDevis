@@ -239,8 +239,9 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
 
     if (config.compoundType && config.compoundType !== 'none' && config.compoundConfig?.parts) {
       const { parts, orientation, unionId, traverseId } = config.compoundConfig;
-      const divRef = database.profiles.find(p => p.id === (config.compoundType === 'fix_coulissant' ? unionId : traverseId));
-      const thick = (divRef?.thickness || 20) * scale;
+      const isMulti = config.compoundType === 'fix_coulissant';
+      const divRef = database.profiles.find(p => p.id === (isMulti ? unionId : traverseId));
+      const thick = isMulti ? ((divRef?.thickness || 3) * scale) : 0;
       
       const drawPartList = (list, bx, by, bw, bh, dir) => {
         if (!list || !Array.isArray(list)) return;
