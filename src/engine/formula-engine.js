@@ -820,7 +820,8 @@ export class FormulaEngine {
           const isCompatible = this.evaluate(addon.compatibilityFormula, evalScope, `Compatibilité Add-on ${addon.name}`, errors);
           if (!isCompatible) return;
         }
-        const addonQty = this.evaluate(addon.formula || '1', evalScope, `Quantité Add-on ${addon.name}`, errors);
+        const formulaToUse = (isDouble && addon.doubleFormula) ? addon.doubleFormula : (addon.formula || '1');
+        const addonQty = this.evaluate(formulaToUse, evalScope, `Quantité Add-on ${addon.name}`, errors);
         if (addonQty > 0) {
           const addonPrice = addon.price || 0;
           const addonUnit = (addon.unit || 'Unité').toUpperCase();
@@ -831,7 +832,8 @@ export class FormulaEngine {
             qty: addonQty,
             priceUnit: addon.unit || 'Unité',
             price: addonPrice,
-            formula: addon.formula || '1',
+            formula: formulaToUse,          // ← formule réellement utilisée (doubleFormula si dispo)
+            resolvedFormula: this.resolveFormula(formulaToUse, evalScope),
             cost: addonCost
           });
         }

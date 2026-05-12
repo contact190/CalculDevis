@@ -765,7 +765,8 @@ const AdminDashboard = ({ data, setData }) => {
                     <tr>
                       <th>Nom de l'option</th>
                       <th>Lier à un article (Optionnel)</th>
-                      <th>Formule Qté (ex: 1)</th>
+                      <th>Formule Qté (Standard / Double si vide)</th>
+                      {(currentItem.usageVolet === 'BOTH' || currentItem.usageVolet === 'DOUBLE') && <th>Formule Qté (Double)</th>}
                       <th>Formule Compatibilité (Optionnel)</th>
                       <th>Alerte Technique (Optionnel)</th>
                       <th>Prix Unit. (DZD)</th>
@@ -828,9 +829,27 @@ const AdminDashboard = ({ data, setData }) => {
                                 handleUpdateItem(editingAddonItem.family, currentItem.id, 'addOns', newAddons, editingAddonItem.idx);
                               }
                             }} 
-                            variables={['L', 'H', 'area', 'totalWeight', 'liftingWeight', 'axeDiameter', 'lameWidth', 'caissonSize']}
+                            variables={['L', 'H', 'area', 'totalWeight', 'liftingWeight', 'axeDiameter', 'lameWidth', 'caissonSize', 'nb_moteurs']}
                           />
                         </td>
+                        {(currentItem.usageVolet === 'BOTH' || currentItem.usageVolet === 'DOUBLE') && (
+                          <td>
+                            <FormulaInput 
+                              value={addon.doubleFormula || ''} 
+                              onChange={val => {
+                                const newAddons = [...(currentItem.addOns || [])];
+                                newAddons[ai].doubleFormula = val;
+                                if (editingAddonItem.isShutter) {
+                                  updateShutterItem(editingAddonItem.family, editingAddonItem.idx, 'addOns', newAddons);
+                                } else {
+                                  handleUpdateItem(editingAddonItem.family, currentItem.id, 'addOns', newAddons, editingAddonItem.idx);
+                                }
+                              }} 
+                              placeholder="Qté Double (ex: 4 si 1 moteur par vantail)"
+                              variables={['L', 'H', 'area', 'totalWeight', 'liftingWeight', 'axeDiameter', 'lameWidth', 'caissonSize', 'nb_moteurs']}
+                            />
+                          </td>
+                        )}
                         <td>
                           <FormulaInput 
                             value={addon.compatibilityFormula || ''} 
