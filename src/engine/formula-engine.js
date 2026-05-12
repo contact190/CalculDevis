@@ -57,11 +57,25 @@ export class FormulaEngine {
   resolveFormula(formula, scope) {
     if (!formula || typeof formula !== 'string') return '';
     let resolved = formula;
-    if (scope.L !== undefined) resolved = resolved.replace(/L/g, Math.round(scope.L));
-    if (scope.HC !== undefined) resolved = resolved.replace(/HC/g, Math.round(scope.HC));
-    if (scope.H !== undefined) resolved = resolved.replace(/H/g, Math.round(scope.H));
-    if (scope.EPt !== undefined) resolved = resolved.replace(/EPt/g, Math.round(scope.EPt));
-    if (scope.Epd !== undefined) resolved = resolved.replace(/Epd/g, Math.round(scope.Epd));
+    
+    // Replace standard variables
+    const vars = {
+      'nb_moteurs': scope.nb_moteurs,
+      'L': scope.L !== undefined ? Math.round(scope.L) : undefined,
+      'H': scope.H !== undefined ? Math.round(scope.H) : undefined,
+      'HC': scope.HC !== undefined ? Math.round(scope.HC) : undefined,
+      'HT': scope.HT !== undefined ? Math.round(scope.HT) : undefined,
+      'EPt': scope.EPt !== undefined ? Math.round(scope.EPt) : undefined,
+      'Epd': scope.Epd !== undefined ? Math.round(scope.Epd) : undefined
+    };
+
+    Object.entries(vars).forEach(([key, val]) => {
+      if (val !== undefined) {
+        const regex = new RegExp('\\b' + key + '\\b', 'g');
+        resolved = resolved.replace(regex, val);
+      }
+    });
+
     return resolved;
   }
 
@@ -664,21 +678,27 @@ export class FormulaEngine {
       }
     }
 
-    const evalScope = { ...vars, L: itemScopeL, H: effectiveH, HC, HT: HT || (H + HC) };
+    const evalScope = { 
+      ...vars, 
+      L: itemScopeL, 
+      H: effectiveH, 
+      HC, 
+      HT: HT || (H + HC),
+      nb_moteurs: isDouble ? (config.shutterConfig?.motorCount || 2) : 1
+    };
 
-    // 1. Compatibility Check (Standalone Logic V3.3) - SKIP IF DOUBLE
-    if (!isDouble && item.compatibilityFormula) {
+    // 1. Compatibility Check (Standalone Logic V3.3)
+    if (item.compatibilityFormula) {
       const isCompatible = this.evaluate(item.compatibilityFormula, evalScope, `Compatibilité ${item.name}`);
       if (!isCompatible) return;
     }
 
-    // 1.5 Technical Alert Evaluation - SKIP IF DOUBLE
-    if (!isDouble && item.technicalAlert) {
+    // 1.5 Technical Alert Evaluation
+    if (item.technicalAlert) {
       try {
         const alertMsg = this.evaluate(item.technicalAlert, evalScope, `Alerte ${item.name}`, errors);
         if (alertMsg && String(alertMsg).trim() !== '' && alertMsg !== true && alertMsg !== false) {
-           // We could potentially collect alerts here too, but normally they are evaluated in the UI.
-           // However, evaluating them here ensures they are available for the PDF too if needed.
+           // Evaluated for use in BOM or reports
         }
       } catch(e) {
         console.warn(`[Technical Alert Error] ${item.name}:`, e.message);
