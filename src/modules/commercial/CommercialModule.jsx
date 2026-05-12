@@ -855,7 +855,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
               ⚡ Volet Double (Séparé)
             </label>
 
-            {config.shutterConfig?.isDoubleShutter && (
+            {config.shutterConfig?.isDoubleShutter && config.shutterConfig?.kitId?.startsWith('KIT-MOTE') && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginLeft: '0.5rem', borderLeft: '2px solid #3b82f6', paddingLeft: '0.75rem' }}>
                 <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#1e40af' }}>Nb Moteurs :</span>
                 <select 
