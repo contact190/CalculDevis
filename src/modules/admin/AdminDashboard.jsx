@@ -2560,34 +2560,36 @@ const AdminDashboard = ({ data, setData }) => {
                               </select>
                             </td>
                             <td>
-                               <div style={{ opacity: (item.usageVolet === 'BOTH' || item.usageVolet === 'DOUBLE') ? 1 : 0.5 }}>
-                                <FormulaInput 
-                                  value={item.doubleQtyFormula || ''} 
-                                  onChange={val => updateShutterItem(key, i, 'doubleQtyFormula', val)} 
-                                  variables={['L', 'H', 'HC', 'lameWidth', 'caissonSize', 'area', 'totalWeight', 'liftingWeight', 'axeDiameter', 'nb_moteurs']}
-                                  placeholder="Qté pour double"
-                                />
-                               </div>
+                               {item.usageVolet === 'BOTH' && (
+                                 <FormulaInput 
+                                   value={item.doubleQtyFormula || ''} 
+                                   onChange={val => updateShutterItem(key, i, 'doubleQtyFormula', val)} 
+                                   variables={['L', 'H', 'HC', 'lameWidth', 'caissonSize', 'area', 'totalWeight', 'liftingWeight', 'axeDiameter', 'nb_moteurs']}
+                                   placeholder="Qté pour double"
+                                 />
+                               )}
                              </td>
                              {!['kits', 'moteurs'].includes(key) && (
                                <td>
-                                 <div style={{ opacity: (item.usageVolet === 'BOTH' || item.usageVolet === 'DOUBLE') ? 1 : 0.5 }}>
-                                  <FormulaInput 
-                                    value={item.doubleCuttingFormula || ''} 
-                                    onChange={val => updateShutterItem(key, i, 'doubleCuttingFormula', val)} 
-                                    variables={['L', 'H', 'HC', 'lameWidth', 'caissonSize', 'area', 'totalWeight', 'liftingWeight', 'axeDiameter', 'nb_moteurs']}
-                                    placeholder="Dim pour double"
-                                  />
-                                 </div>
+                                 {item.usageVolet === 'BOTH' && (
+                                   <FormulaInput 
+                                     value={item.doubleCuttingFormula || ''} 
+                                     onChange={val => updateShutterItem(key, i, 'doubleCuttingFormula', val)} 
+                                     variables={['L', 'H', 'HC', 'lameWidth', 'caissonSize', 'area', 'totalWeight', 'liftingWeight', 'axeDiameter', 'nb_moteurs']}
+                                     placeholder="Dim pour double"
+                                   />
+                                 )}
                                </td>
                              )}
                              {key === 'glissieres' && (
                                <td>
-                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', opacity: (item.usageVolet === 'BOTH' || item.usageVolet === 'DOUBLE') ? 1 : 0.5 }}>
-                                   <input className="input" value={item.doubleOpt1Label || ''} onChange={e => updateShutterItem(key, i, 'doubleOpt1Label', e.target.value)} style={{ width: '100px', fontSize: '0.65rem' }} placeholder="Nom Opt1" />
-                                   <input className="input" value={item.doubleOpt1Values || ''} onChange={e => updateShutterItem(key, i, 'doubleOpt1Values', e.target.value)} style={{ width: '100px', fontSize: '0.65rem' }} placeholder="Valeurs (85, 120)" />
-                                   <input className="input" value={item.doubleOpt1Prices || ''} onChange={e => updateShutterItem(key, i, 'doubleOpt1Prices', e.target.value)} style={{ width: '100px', fontSize: '0.65rem' }} placeholder="Prix (0, 200)" />
-                                 </div>
+                                 {item.usageVolet === 'BOTH' && (
+                                   <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                     <input className="input" value={item.doubleOpt1Label || ''} onChange={e => updateShutterItem(key, i, 'doubleOpt1Label', e.target.value)} style={{ width: '100px', fontSize: '0.65rem' }} placeholder="Nom Opt1" />
+                                     <input className="input" value={item.doubleOpt1Values || ''} onChange={e => updateShutterItem(key, i, 'doubleOpt1Values', e.target.value)} style={{ width: '100px', fontSize: '0.65rem' }} placeholder="Valeurs (85, 120)" />
+                                     <input className="input" value={item.doubleOpt1Prices || ''} onChange={e => updateShutterItem(key, i, 'doubleOpt1Prices', e.target.value)} style={{ width: '100px', fontSize: '0.65rem' }} placeholder="Prix (0, 200)" />
+                                   </div>
+                                 )}
                                </td>
                              )}
                             <td><button className="btn" onClick={() => deleteShutterItem(key, i)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button></td>
