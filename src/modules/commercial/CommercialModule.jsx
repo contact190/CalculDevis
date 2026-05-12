@@ -1252,21 +1252,29 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                       )}
                       {key === 'glissiereId' && (
                         <>
-                          {effectiveItem?.opt1Label && (
-                            <div className="form-group">
-                              <label className="label" style={{ fontSize: '0.8rem' }}>{effectiveItem.opt1Label}</label>
-                              <select 
-                                className="input" 
-                                style={{ border: '2px solid #3b82f6', background: '#eff6ff' }}
-                                value={config.shutterConfig?.glissiereParams?.opt1 || effectiveItem.opt1Values?.split(',')[0]?.trim() || ''} 
-                                onChange={e => handleParamChange('opt1', e.target.value)}
-                              >
-                                {(effectiveItem.opt1Values || '').split(',').map(v => v.trim()).filter(Boolean).map(v => (
-                                  <option key={v} value={v}>{v} mm</option>
-                                ))}
-                              </select>
-                            </div>
-                          )}
+                          {(() => {
+                            const isDouble = config.shutterConfig?.isDoubleShutter || false;
+                            const opt1L = (isDouble && effectiveItem.doubleOpt1Label) ? effectiveItem.doubleOpt1Label : effectiveItem.opt1Label;
+                            const opt1V = (isDouble && effectiveItem.doubleOpt1Values) ? effectiveItem.doubleOpt1Values : effectiveItem.opt1Values;
+                            
+                            if (!opt1L) return null;
+
+                            return (
+                              <div className="form-group">
+                                <label className="label" style={{ fontSize: '0.8rem' }}>{opt1L}</label>
+                                <select 
+                                  className="input" 
+                                  style={{ border: '2px solid #3b82f6', background: '#eff6ff' }}
+                                  value={config.shutterConfig?.glissiereParams?.opt1 || opt1V?.split(',')[0]?.trim() || ''} 
+                                  onChange={e => handleParamChange('opt1', e.target.value)}
+                                >
+                                  {(opt1V || '').split(',').map(v => v.trim()).filter(Boolean).map(v => (
+                                    <option key={v} value={v}>{v} mm</option>
+                                  ))}
+                                </select>
+                              </div>
+                            );
+                          })()}
                           {effectiveItem?.opt2Label && (
                             <div className="form-group">
                               <label className="label" style={{ fontSize: '0.8rem' }}>{effectiveItem.opt2Label}</label>

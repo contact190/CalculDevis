@@ -729,9 +729,14 @@ export class FormulaEngine {
     if (key === 'glissiereId' && config.shutterConfig?.glissiereParams) {
       const params = config.shutterConfig.glissiereParams;
       const paramStrings = [];
-      if (item.opt1Label) {
-        const val = params.opt1 || item.opt1Values?.split(',')[0]?.trim();
-        if (val) paramStrings.push(`${item.opt1Label}: ${val}mm`);
+      
+      const opt1L = (isDouble && item.doubleOpt1Label) ? item.doubleOpt1Label : item.opt1Label;
+      const opt1V = (isDouble && item.doubleOpt1Values) ? item.doubleOpt1Values : item.opt1Values;
+      const opt1P = (isDouble && item.doubleOpt1Prices) ? item.doubleOpt1Prices : item.opt1Prices;
+
+      if (opt1L) {
+        const val = params.opt1 || opt1V?.split(',')[0]?.trim();
+        if (val) paramStrings.push(`${opt1L}: ${val}mm`);
       }
       if (item.opt2Label) {
         const val = params.opt2 || item.opt2Values?.split(',')[0]?.trim();
@@ -740,14 +745,14 @@ export class FormulaEngine {
       if (paramStrings.length > 0) displayName += ` (${paramStrings.join(', ')})`;
 
       // Option Plus-Values
-      if (item.opt1Values && item.opt1Prices) {
-        const vals = item.opt1Values.split(',').map(v => v.trim());
-        const prs = item.opt1Prices.split(',').map(p => parseFloat(p.trim()) || 0);
+      if (opt1V && opt1P) {
+        const vals = opt1V.split(',').map(v => v.trim());
+        const prs = opt1P.split(',').map(p => parseFloat(p.trim()) || 0);
         const selectedVal = params.opt1 || vals[0];
         const vIdx = vals.indexOf(selectedVal);
         if (vIdx !== -1 && prs[vIdx] !== undefined) itemPrice += prs[vIdx];
       }
-      if (item.opt2Values && item.opt2Prices) {
+      if (item.opt2Label && item.opt2Prices) {
         const vals = item.opt2Values.split(',').map(v => v.trim());
         const prs = item.opt2Prices.split(',').map(p => parseFloat(p.trim()) || 0);
         const selectedVal = params.opt2 || vals[0];

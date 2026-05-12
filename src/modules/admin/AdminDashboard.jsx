@@ -2377,6 +2377,7 @@ const AdminDashboard = ({ data, setData }) => {
                           <th>Usage Volet</th>
                           <th>Formule Qté (Double)</th>
                           <th>Formule Dim (Double)</th>
+                          <th>Opt1 Double (Nom/Vals/Prix)</th>
                           <th>Actions</th>
                         </tr>
                       </thead>
@@ -2576,6 +2577,15 @@ const AdminDashboard = ({ data, setData }) => {
                                   variables={['L', 'H', 'HC', 'lameWidth', 'caissonSize', 'area', 'totalWeight', 'liftingWeight', 'axeDiameter']}
                                   placeholder="Dim pour double"
                                 />
+                              )}
+                            </td>
+                            <td>
+                              {(key === 'glissieres' && (item.usageVolet === 'BOTH' || item.usageVolet === 'DOUBLE')) && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                  <input className="input" value={item.doubleOpt1Label || ''} onChange={e => updateShutterItem(key, i, 'doubleOpt1Label', e.target.value)} style={{ width: '100px', fontSize: '0.65rem' }} placeholder="Nom Opt1" />
+                                  <input className="input" value={item.doubleOpt1Values || ''} onChange={e => updateShutterItem(key, i, 'doubleOpt1Values', e.target.value)} style={{ width: '100px', fontSize: '0.65rem' }} placeholder="Valeurs (85, 120)" />
+                                  <input className="input" value={item.doubleOpt1Prices || ''} onChange={e => updateShutterItem(key, i, 'doubleOpt1Prices', e.target.value)} style={{ width: '100px', fontSize: '0.65rem' }} placeholder="Prix (0, 200)" />
+                                </div>
                               )}
                             </td>
                             <td><button className="btn" onClick={() => deleteShutterItem(key, i)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button></td>
