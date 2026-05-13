@@ -138,6 +138,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
         id: `MEAS-${Date.now()}-${i}-${Math.floor(Math.random()*1000)}`,
         L: item.config.L,
         H: item.config.H,
+        wallDepth: '',
         qty: 1,
         label: qtyCount > 1 ? `${item.label} ${i+1}` : ''
       });
@@ -587,7 +588,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
           doc.text(item.label, 15, y);
           doc.text(`${item.config.L}x${item.config.H}`, 70, y);
           doc.setFont('helvetica', 'bold');
-          doc.text(`${m.L}x${m.H}`, 100, y);
+          doc.text(`${m.L}x${m.H}${m.wallDepth ? ' (P:'+m.wallDepth+')' : ''}`, 100, y);
           
           const diffL = m.L - item.config.L;
           const diffH = m.H - item.config.H;
@@ -734,6 +735,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                         <th style={{ width: '150px' }}>Nom / Emplacement</th>
                         <th>Largeur (mm)</th>
                         <th>Hauteur (mm)</th>
+                        <th>Prof. Mur (mm)</th>
                         <th>Quantité</th>
                         <th style={{ width: '80px' }}>Volet</th>
                         <th style={{ width: '50px' }}>Actions</th>
@@ -762,9 +764,10 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                    : '+ Nom / Étage'}
                                </button>
                              </td>
-                             <td><input type="number" className="input" value={m.L} onChange={e => updateSiteMeasurement(idx, m.id, 'L', e.target.value)} style={{ minWidth: '100px' }} /></td>
-                             <td><input type="number" className="input" value={m.H} onChange={e => updateSiteMeasurement(idx, m.id, 'H', e.target.value)} style={{ minWidth: '100px' }} /></td>
-                             <td><input type="number" className="input" value={m.qty} onChange={e => updateSiteMeasurement(idx, m.id, 'qty', e.target.value)} style={{ minWidth: '80px' }} /></td>
+                             <td><input type="number" className="input" value={m.L} onChange={e => updateSiteMeasurement(idx, m.id, 'L', e.target.value)} style={{ minWidth: '90px' }} /></td>
+                             <td><input type="number" className="input" value={m.H} onChange={e => updateSiteMeasurement(idx, m.id, 'H', e.target.value)} style={{ minWidth: '90px' }} /></td>
+                             <td><input type="number" className="input" value={m.wallDepth || ''} onChange={e => updateSiteMeasurement(idx, m.id, 'wallDepth', e.target.value)} style={{ minWidth: '90px' }} placeholder="—" /></td>
+                             <td><input type="number" className="input" value={m.qty} onChange={e => updateSiteMeasurement(idx, m.id, 'qty', e.target.value)} style={{ minWidth: '70px' }} /></td>
                              <td style={{ textAlign: 'center' }}>
                                <button 
                                  onClick={() => {
@@ -791,7 +794,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                           </tr>
                           {item.config.compoundType && item.config.compoundType !== 'none' && (
                             <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
-                              <td colSpan="5" style={{ padding: '0.5rem 1rem' }}>
+                              <td colSpan="6" style={{ padding: '0.5rem 1rem' }}>
                                 <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
                                   <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Cotes des parties :</span>
                                   {(item.config.compoundConfig?.parts || []).map((p) => (

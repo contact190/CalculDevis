@@ -1232,6 +1232,7 @@ const AdminDashboard = ({ data, setData }) => {
                                 </td>
                                 <td><input type="number" className="input" value={p.weightPerM} onChange={e => handleUpdateItem('profiles', p.id, 'weightPerM', e.target.value, idx)} style={{ width: '60px' }} /></td>
                                 <td><input type="number" className="input" value={p.pricePerKg} onChange={e => handleUpdateItem('profiles', p.id, 'pricePerKg', e.target.value, idx)} style={{ width: '60px' }} /></td>
+                                <td><input type="number" className="input" value={p.pricePerBar || 0} onChange={e => handleUpdateItem('profiles', p.id, 'pricePerBar', e.target.value, idx)} style={{ width: '60px' }} /></td>
                                 <td><input type="number" className="input" value={p.thickness || 0} onChange={e => handleUpdateItem('profiles', p.id, 'thickness', e.target.value, idx)} style={{ width: '50px' }} /></td>
                                 <td><MultiSelectRange selectedIds={p.rangeIds || []} allRanges={data.ranges} onChange={newR => handleUpdateItem('profiles', p.id, 'rangeIds', newR, idx)} /></td>
                                 <td style={{ display: 'flex', gap: '0.2rem' }}>

@@ -167,12 +167,13 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
 
   const getDividerThickness = (cfg = config) => {
     const isMulti = cfg.compoundType === 'fix_coulissant';
-    const divId = isMulti ? cfg.compoundConfig?.unionId : cfg.compoundConfig?.traverseId;
-    if (!divId || divId === 'AUTO') return isMulti ? 3 : 25;
+    if (!isMulti) return 0; // Don't subtract for Divided Chassis (Traverses)
+    const divId = cfg.compoundConfig?.unionId;
+    if (!divId || divId === 'AUTO') return 3;
     const trv = (database.traverses || []).find(t => t.id === divId || t.profileId === divId);
     if (trv?.thickness) return trv.thickness;
     const prof = (database.profiles || []).find(p => p.id === (trv?.profileId || divId));
-    return prof?.thickness || (isMulti ? 3 : 25);
+    return prof?.thickness || 3;
   };
 
   const syncCompoundParts = (prev, name, newVal) => {

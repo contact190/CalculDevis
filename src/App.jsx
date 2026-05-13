@@ -39,6 +39,8 @@ const makeNewQuote = (settings) => ({
 function App() {
   const [activeTab, setActiveTab] = useState('commercial');
   const [lastSyncTime, setLastSyncTime] = useState(null);
+  const [syncError, setSyncError] = useState(null);
+  const [isCloudLoaded, setIsCloudLoaded] = useState(false);
   const queryClient = useQueryClient();
   
   const [database, setDatabase] = useState(DEFAULT_DATA);
@@ -227,8 +229,13 @@ function App() {
     if (cloudDb) {
       setDatabase(cloudDb);
       setLastSyncTime(new Date());
+      setIsCloudLoaded(true);
+      setSyncError(null);
+    } else if (!isInitialLoading) {
+      // If loading finished but no data came back from cloud
+      setIsCloudLoaded(false);
     }
-  }, [cloudDb]);
+  }, [cloudDb, isInitialLoading]);
 
   // 2. Mutation to Continuous Cloud Sync
   const syncMutation = useMutation({
@@ -263,13 +270,19 @@ function App() {
   React.useEffect(() => {
     if (database === DEFAULT_DATA) return;
     
-    // Auto-save to Cloud (debounced-ish via useEffect)
+    // IMPORTANT: If cloud failed to load, don't auto-save to prevent overwriting cloud with default/empty data
+    if (!isCloudLoaded && !isInitialLoading) {
+      console.warn("Cloud not loaded. Auto-save disabled to prevent data loss.");
+      return;
+    }
+
+    // Auto-save to Cloud (debounced)
     const timeout = setTimeout(() => {
       syncMutation.mutate(database);
-    }, 2000);
+    }, 3000);
 
     return () => clearTimeout(timeout);
-  }, [database]);
+  }, [database, isCloudLoaded, isInitialLoading]);
 
   React.useEffect(() => {
     if (!database.compositions || database.compositions.length === 0) return;
@@ -350,19 +363,31 @@ function App() {
         </nav>
 
         <div style={{ marginTop: 'auto', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '1rem', paddingBottom: '1rem' }}>
-           <div style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.75rem', borderRadius: '0.5rem', background: 'rgba(255,255,255,0.03)' }}>
-              <RefreshCw size={14} className={syncMutation.isPending || isInitialLoading ? "animate-spin" : ""} style={{ color: (syncMutation.isPending || isInitialLoading) ? '#3b82f6' : '#94a3b8' }} />
-              <div>
-                <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 600, color: (syncMutation.isPending || isInitialLoading) ? '#3b82f6' : '#94a3b8' }}>
-                  {isInitialLoading ? 'Chargement...' : (syncMutation.isPending ? 'Synchronisation...' : 'Cloud Sync OK')}
+           <div 
+             onClick={refetchData}
+             style={{ 
+               padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.75rem', borderRadius: '0.5rem', 
+               background: isCloudLoaded ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+               cursor: 'pointer', border: `1px solid ${isCloudLoaded ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'}`
+             }}
+           >
+              <RefreshCw size={14} className={syncMutation.isPending || isInitialLoading ? "animate-spin" : ""} style={{ color: isCloudLoaded ? '#10b981' : '#ef4444' }} />
+              <div style={{ flex: 1 }}>
+                <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 700, color: isCloudLoaded ? '#10b981' : '#ef4444' }}>
+                  {isInitialLoading ? 'Chargement...' : (syncMutation.isPending ? 'Sync...' : (isCloudLoaded ? 'Cloud Connecté' : 'Cloud Déconnecté'))}
                 </p>
                 {lastSyncTime && (
-                  <p style={{ margin: 0, fontSize: '0.65rem', color: '#64748b' }}>
-                    Dernier : {lastSyncTime.toLocaleTimeString()}
+                  <p style={{ margin: 0, fontSize: '0.65rem', color: '#94a3b8' }}>
+                    MàJ : {lastSyncTime.toLocaleTimeString()}
                   </p>
                 )}
               </div>
            </div>
+           {!isCloudLoaded && !isInitialLoading && (
+             <p style={{ fontSize: '0.6rem', color: '#ef4444', marginTop: '0.5rem', textAlign: 'center', padding: '0 0.5rem' }}>
+               ⚠️ Mode Local (Lecture seule cloud). <br/>Vérifiez votre connexion.
+             </p>
+           )}
         </div>
 
         <div className="sidebar-footer" style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '1rem' }}>

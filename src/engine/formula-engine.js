@@ -120,14 +120,18 @@ export class FormulaEngine {
     const glassQty = isNaN(glassQtyRaw) ? 0 : glassQtyRaw;
 
     // 2. Build the final enriched scope for all subsequent calculations
+    const windowDir = (config.openingDirection || 'gauche').toLowerCase();
     const scope = { 
       ...tempScope,
       glassQty,
       qty: glassQty, // alias
-      openingDirection: config.openingDirection || 'gauche'
+      openingDirection: windowDir,
+      isGauche: windowDir.includes('gauch'),
+      isDroit: windowDir.includes('droit'),
+      isDroite: windowDir.includes('droit') // Alias for French
     };
     
-    const originalScope = { L: originalL || L, H: originalH || H, HC, openingDirection: config.openingDirection || 'gauche' };
+    const originalScope = { ...scope, L: originalL || L, H: originalH || H };
 
     const isCompoundWithTraverse = config.compoundType === 'compound';
     
@@ -317,6 +321,9 @@ export class FormulaEngine {
       const safeValue = isError ? 0 : value;
       const qty = safeValue * elQty;
 
+      // Skip items with quantity 0 (except if it's a fixed length profile we might want to see? No, usually skip)
+      if (qty <= 0 && !isError) return;
+
       if (el.type === 'profile') {
         let pRef = (this.db.profiles || []).find(p => p.id === el.id);
         if (!pRef) {
@@ -364,6 +371,12 @@ export class FormulaEngine {
             } catch (e) {
               console.warn(`[FormulaEngine] Compatibility error for accessory ${aRef.id}:`, e.message);
             }
+          }
+
+          // NEW: Filter by side if specified in the accessory database
+          const windowDir = (config.openingDirection || 'gauche').toLowerCase();
+          if (aRef.side && aRef.side !== 'both' && aRef.side !== windowDir) {
+            return; // Skip this accessory as it's for the other side
           }
 
           const unitUpper = (aRef.unit || '').toUpperCase();
@@ -935,7 +948,7 @@ export class FormulaEngine {
         } else {
             // Fallback 2: Check standard traverses for a match
             const trvEntry = (this.db.traverses || []).find(t => t.id === effectiveDivId || t.profileId === effectiveDivId);
-            divThick = trvEntry?.thickness || (compoundType === 'fix_coulissant' ? 3 : 25);
+            divThick = (compoundType === 'fix_coulissant') ? (trvEntry?.thickness || 3) : 0;
         }
     }
 
@@ -1168,18 +1181,25 @@ export class FormulaEngine {
               // Compatibility Check
               if (addRef.compatibilityFormula && addRef.compatibilityFormula.trim() !== '') {
                 try {
-                  const ok = this.evaluate(addRef.compatibilityFormula, { L, H });
+                  const ok = this.evaluate(addRef.compatibilityFormula, scope);
                   if (!ok) return; // Skip incompatible option accessory
                 } catch (e) {
                   console.warn(`[FormulaEngine] Option compatibility error for ${addRef.id}:`, e.message);
                 }
               }
+
+              const windowDir = config.openingDirection || 'gauche';
               const optionSide = config.optionSides?.[optId] || 'both';
-              const sideFactor = (optionSide === 'gauche' || optionSide === 'droit') ? 0.5 : 1.0;
               
-              const rawQty = this.evaluate(option.formula || '1', { L, H }, `Option: ${option.name}`, errors);
-              const qty = rawQty * sideFactor;
+              // NEW: Filter by side. If option is for Gauche and window is Droit, skip it.
+              if (optionSide !== 'both' && optionSide !== windowDir) {
+                return; // Skip this option as it's for the other side
+              }
               
+              const rawQty = this.evaluate(option.formula || '1', scope, `Option: ${option.name}`, errors);
+              const qty = rawQty; 
+              
+              if (qty <= 0) return; // Skip if qty is 0              
               activeAccessories.push({
                 ...addRef,
                 label: `Option: ${option.name}${optionSide !== 'both' ? ' (' + optionSide + ')' : ''}`,

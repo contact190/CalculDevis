@@ -95,6 +95,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                     ...item.config, 
                     L: m.L, 
                     H: m.H, 
+                    wallDepth: m.wallDepth,
                     partOverrides: m.partOverrides,
                     shutterConfig: {
                       ...(item.config?.shutterConfig || {}),
@@ -118,7 +119,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
               if (instancesProcessed.has(i)) continue;
               
               configs.push({
-                config: { ...item.config, L: m.L, H: m.H, partOverrides: m.partOverrides },
+                config: { ...item.config, L: m.L, H: m.H, wallDepth: m.wallDepth, partOverrides: m.partOverrides },
                 qty: 1,
                 label: item.label,
                 allLabels: [m.instanceNames?.[i] || `${item.label}-${i + 1}`],
@@ -693,7 +694,11 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(30, 41, 59);
-        doc.text(`DIM TOTALE: ${cfg.L} x ${cfg.H} mm`, startX, currentY + 82);
+        doc.text(`DIM TOTALE: ${cfg.L} x ${cfg.H} mm`, startX, currentY + 77);
+        if (cfg.wallDepth) {
+          doc.setFontSize(10);
+          doc.text(`Prof. Mur: ${cfg.wallDepth} mm`, startX, currentY + 84);
+        }
         
         // Per-part breakdown
         doc.setFontSize(8);
@@ -781,7 +786,11 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         doc.setFontSize(14);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(30, 41, 59);
-        doc.text(`DIM: ${cfg.L} x ${cfg.H} mm`, startX, currentY + 95);
+        doc.text(`DIM: ${cfg.L} x ${cfg.H} mm`, startX, currentY + 92);
+        if (cfg.wallDepth) {
+          doc.setFontSize(10);
+          doc.text(`Prof. Mur: ${cfg.wallDepth} mm`, startX, currentY + 99);
+        }
         doc.setTextColor(0, 0, 0);
       }
       
@@ -2248,7 +2257,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                   const instanceName = m.instanceNames?.[i] || `${originalLabel} (${i + 1}/${qty})`;
                   targetItems.push({ 
                     ...bi, 
-                    config: { ...bi.config, L: m.L, H: m.H }, 
+                    config: { ...bi.config, L: m.L, H: m.H, wallDepth: m.wallDepth }, 
                     qty: 1, 
                     isFromBatch: true,
                     instanceLabel: instanceName
@@ -2268,7 +2277,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                   const instanceName = m.instanceNames?.[i] || `${originalLabel} (${i + 1}/${mQty})`;
                   targetItems.push({ 
                     ...item, 
-                    config: { ...item.config, L: m.L, H: m.H }, 
+                    config: { ...item.config, L: m.L, H: m.H, wallDepth: m.wallDepth }, 
                     qty: 1, 
                     instanceLabel: instanceName
                   });
