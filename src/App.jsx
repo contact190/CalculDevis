@@ -74,123 +74,42 @@ function App() {
 
   const repairDatabase = (db) => {
     if (!db) return DEFAULT_DATA;
-    
-    // Non-destructive merge: only fill missing TOP-LEVEL categories
     const repaired = { ...db };
+    
+    // Ensure all mandatory keys exist
     Object.keys(DEFAULT_DATA).forEach(key => {
-      // Deduplicate arrays if they exist
+      if (repaired[key] === undefined || repaired[key] === null) {
+        repaired[key] = DEFAULT_DATA[key];
+      }
+      
+      // Structural repair: deduplicate arrays
       if (Array.isArray(repaired[key])) {
-        const unique = [];
         const seen = new Set();
-        repaired[key].forEach(item => {
-          if (!item) return;
+        repaired[key] = repaired[key].filter(item => {
+          if (!item) return false;
           const id = item.id || JSON.stringify(item);
-          if (!seen.has(id)) {
-            unique.push(item);
-            seen.add(id);
-          }
+          if (seen.has(id)) return false;
+          seen.add(id);
+          return true;
         });
-        repaired[key] = unique;
       }
 
-      if (repaired[key] === undefined || (Array.isArray(repaired[key]) && repaired[key].length === 0 && DEFAULT_DATA[key].length > 0 && key !== 'profiles' && key !== 'glassProfileCompatibility')) {
-        repaired[key] = DEFAULT_DATA[key];
+      // Fill empty structural keys from DEFAULT_DATA, but NOT user data keys
+      const userDataKeys = ['clients', 'quotes', 'orders'];
+      if (Array.isArray(repaired[key]) && repaired[key].length === 0 && !userDataKeys.includes(key)) {
+         if (DEFAULT_DATA[key] && DEFAULT_DATA[key].length > 0) {
+            repaired[key] = DEFAULT_DATA[key];
+         }
       }
     });
 
-    // Specific field repairs for existing items
-    if (repaired.compositions) {
-      repaired.compositions = repaired.compositions.filter(Boolean).map(c => ({
-        ...c,
-        categoryId: c.categoryId || (repaired.categories?.[0]?.id || 'CAT-F'),
-        openingType: c.openingType || 'Fixe'
-      }));
-    }
-    if (repaired.accessories) {
-      repaired.accessories = repaired.accessories.filter(Boolean).map(a => {
-        const item = { ...a };
-        if (item.rangeId && !item.rangeIds) {
-          item.rangeIds = [item.rangeId];
-        }
-        if (!item.rangeIds) item.rangeIds = [repaired.ranges?.[0]?.id || 'H36'];
-        return item;
+    // Handle legacy 'products' vs 'items' in quotes
+    if (repaired.quotes) {
+      repaired.quotes = repaired.quotes.map(q => {
+        let updated = { ...q };
+        if (q.products && !q.items) updated.items = q.products;
+        return updated;
       });
-    }
-    if (repaired.options) {
-      repaired.options = repaired.options.filter(Boolean).map(o => {
-        const item = { ...o };
-        if (item.rangeId && !item.rangeIds) {
-          item.rangeIds = [item.rangeId];
-        }
-        if (!item.rangeIds) item.rangeIds = [repaired.ranges?.[0]?.id || 'H36'];
-        return item;
-      });
-    }
-
-    if (repaired.glassProfileCompatibility) {
-      repaired.glassProfileCompatibility = repaired.glassProfileCompatibility.filter(Boolean).map(gc => {
-        const item = { ...gc };
-        if (item.profileId && !item.profileHId) {
-          item.profileHId = item.profileId;
-          item.profileVId = item.profileId;
-        }
-        if (item.formula && !item.formulaH) {
-          item.formulaH = item.formula;
-          item.formulaV = item.formula;
-        }
-        // Ensure defaults if missing
-        if (!item.formulaH) item.formulaH = 'L-80';
-        if (!item.formulaV) item.formulaV = 'H-80';
-        if (item.qtyH === undefined) item.qtyH = 2;
-        if (item.qtyV === undefined) item.qtyV = 2;
-        return item;
-      });
-      // Legacy ID migration
-      repaired.compositions = (repaired.compositions || []).map(c => {
-        if (c.rangeId === 'H36') c.rangeId = 'H36-2V';
-        if (c.rangeId === 'H40') c.rangeId = 'H40-1V';
-        return c;
-      });
-    }
-
-    // Note: We no longer auto-merge missing default items here 
-    // to allow users to permanently delete them.
-
-
-    // Repair Shutter Components (Caissons)
-    if (repaired.shutterComponents) {
-      // Just ensure the object structure exists, don't force default items
-      if (!repaired.shutterComponents.caissons) repaired.shutterComponents.caissons = [];
-    }
-
-    // Repair Shutter Components (glissieres Mono/Pala)
-    if (repaired.shutterComponents) {
-      if (!repaired.shutterComponents.glissieres) repaired.shutterComponents.glissieres = [];
-      let currentG = repaired.shutterComponents.glissieres;
-      
-      // Migration: Remove old range-specific glissieres
-      currentG = currentG.filter(cg => !cg.rangeId);
-      repaired.shutterComponents.glissieres = currentG;
-
-
-
-      // MISSION CRITICAL: Migrate existing products to items and handle glissiereIds
-      if (repaired.quotes) {
-        repaired.quotes.forEach(q => {
-          // Unify products -> items
-          if (q.products && !q.items) q.items = q.products;
-          
-          (q.items || []).forEach(item => {
-            if (item.config?.shutterConfig?.glissiereId) {
-              const oldId = item.config.shutterConfig.glissiereId;
-              if (oldId.includes('-H36') || oldId.includes('-H48')) {
-                const newId = oldId.replace('-H36', '').replace('-H48', '');
-                item.config.shutterConfig.glissiereId = newId;
-              }
-            }
-          });
-        });
-      }
     }
 
     if (!repaired.orders) repaired.orders = [];
@@ -270,13 +189,22 @@ function App() {
   React.useEffect(() => {
     if (database === DEFAULT_DATA) return;
     
-    // IMPORTANT: If cloud failed to load, don't auto-save to prevent overwriting cloud with default/empty data
+    // 1. ALWAYS SAVE TO LOCAL STORAGE (Immediate)
+    try {
+      const { quotes, ...mainDb } = database;
+      localStorage.setItem('calculDevisDB', JSON.stringify(mainDb));
+      localStorage.setItem('calculDevisQuotes', JSON.stringify(quotes || []));
+    } catch (e) {
+      console.error("Local storage save failed:", e);
+    }
+
+    // 2. SAVE TO CLOUD (Debounced)
+    // IMPORTANT: If cloud failed to load, don't auto-save to CLOUD to prevent overwriting cloud with default/empty data
     if (!isCloudLoaded && !isInitialLoading) {
-      console.warn("Cloud not loaded. Auto-save disabled to prevent data loss.");
+      console.warn("Cloud not loaded. Auto-sync to cloud disabled to avoid overwriting remote data.");
       return;
     }
 
-    // Auto-save to Cloud (debounced)
     const timeout = setTimeout(() => {
       syncMutation.mutate(database);
     }, 3000);
@@ -361,33 +289,82 @@ function App() {
             })}
           </ul>
         </nav>
-
-        <div style={{ marginTop: 'auto', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '1rem', paddingBottom: '1rem' }}>
+        <div style={{ marginTop: 'auto', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '1.5rem', paddingBottom: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+           {/* Backup & Sync Status */}
            <div 
              onClick={refetchData}
              style={{ 
-               padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.75rem', borderRadius: '0.5rem', 
+               padding: '0.75rem 1rem', display: 'flex', alignItems: 'center', gap: '0.75rem', borderRadius: '0.5rem', 
                background: isCloudLoaded ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-               cursor: 'pointer', border: `1px solid ${isCloudLoaded ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'}`
+               cursor: 'pointer', border: `1px solid ${isCloudLoaded ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'}`,
+               transition: 'all 0.2s'
              }}
            >
-              <RefreshCw size={14} className={syncMutation.isPending || isInitialLoading ? "animate-spin" : ""} style={{ color: isCloudLoaded ? '#10b981' : '#ef4444' }} />
+              <div style={{ position: 'relative' }}>
+                <RefreshCw size={18} className={syncMutation.isPending || isInitialLoading ? "animate-spin" : ""} style={{ color: isCloudLoaded ? '#10b981' : '#ef4444' }} />
+                <div style={{ position: 'absolute', top: -4, right: -4, width: '8px', height: '8px', borderRadius: '50%', background: isOnline ? '#10b981' : '#ef4444', border: '2px solid #1e293b' }}></div>
+              </div>
               <div style={{ flex: 1 }}>
-                <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 700, color: isCloudLoaded ? '#10b981' : '#ef4444' }}>
-                  {isInitialLoading ? 'Chargement...' : (syncMutation.isPending ? 'Sync...' : (isCloudLoaded ? 'Cloud Connecté' : 'Cloud Déconnecté'))}
+                <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: 700, color: isCloudLoaded ? '#10b981' : '#ef4444' }}>
+                  {isInitialLoading ? 'Init...' : (syncMutation.isPending ? 'Sync...' : (isCloudLoaded ? 'Cloud OK' : 'Mode Local'))}
                 </p>
-                {lastSyncTime && (
-                  <p style={{ margin: 0, fontSize: '0.65rem', color: '#94a3b8' }}>
-                    MàJ : {lastSyncTime.toLocaleTimeString()}
-                  </p>
-                )}
+                <p style={{ margin: 0, fontSize: '0.65rem', color: '#94a3b8' }}>
+                  {lastSyncTime ? `MàJ : ${lastSyncTime.toLocaleTimeString()}` : 'Non sync'}
+                </p>
               </div>
            </div>
+           
            {!isCloudLoaded && !isInitialLoading && (
-             <p style={{ fontSize: '0.6rem', color: '#ef4444', marginTop: '0.5rem', textAlign: 'center', padding: '0 0.5rem' }}>
-               ⚠️ Mode Local (Lecture seule cloud). <br/>Vérifiez votre connexion.
-             </p>
+             <button 
+               onClick={() => setIsCloudLoaded(true)}
+               style={{ 
+                 width: '100%', padding: '0.5rem', fontSize: '0.7rem', background: '#f59e0b', color: 'white', 
+                 border: 'none', borderRadius: '0.4rem', cursor: 'pointer', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem'
+               }}
+             >
+               <RefreshCw size={14} /> Forcer Synchro Cloud
+             </button>
            )}
+
+           {/* Manual Export/Import Shortcut */}
+           <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button 
+                onClick={() => {
+                  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(database, null, 2));
+                  const dl = document.createElement('a');
+                  dl.setAttribute("href", dataStr);
+                  dl.setAttribute("download", `backup_devis_${new Date().toISOString().slice(0,10)}.json`);
+                  dl.click();
+                }}
+                className="btn"
+                style={{ flex: 1, fontSize: '0.65rem', padding: '0.4rem', color: '#94a3b8', borderColor: 'rgba(255,255,255,0.1)', background: 'transparent' }}
+                title="Exporter une sauvegarde locale"
+              >
+                💾 Export
+              </button>
+              <label 
+                className="btn"
+                style={{ flex: 1, fontSize: '0.65rem', padding: '0.4rem', color: '#94a3b8', borderColor: 'rgba(255,255,255,0.1)', background: 'transparent', cursor: 'pointer', textAlign: 'center' }}
+                title="Restaurer un fichier JSON"
+              >
+                📂 Import
+                <input type="file" accept=".json" style={{ display: 'none' }} onChange={(e) => {
+                  const file = e.target.files[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = (evt) => {
+                    try {
+                      const imported = JSON.parse(evt.target.result);
+                      if (window.confirm("Restaurer cette sauvegarde ? Cela écrasera les données actuelles.")) {
+                        setDatabase(imported);
+                        setIsCloudLoaded(true);
+                      }
+                    } catch(err) { alert("Fichier invalide"); }
+                  };
+                  reader.readAsText(file);
+                }} />
+              </label>
+           </div>
         </div>
 
         <div className="sidebar-footer" style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '1rem' }}>
