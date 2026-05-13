@@ -682,7 +682,13 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         const fixParts = cfg.compoundConfig.parts.filter(p => p.type === 'fixe');
         
         const openingComp = database.compositions?.find(c => c.id === openingPart?.compositionId);
-        const fixLabel = fixParts.length > 0 ? `Fix (×${fixParts.length})` : '';
+        
+        // Find range for fix parts
+        const firstFix = fixParts[0];
+        const fixRange = database.ranges?.find(r => r.id === firstFix?.rangeId);
+        const globalRange = database.ranges?.find(r => r.id === cfg.rangeId);
+        const fixRangeName = fixRange?.name || globalRange?.name || 'Fix';
+        const fixLabel = fixParts.length > 0 ? `${fixRangeName} (×${fixParts.length})` : '';
         
         const modelLabel = [openingComp?.name, fixLabel].filter(Boolean).join(' + ');
         doc.setFontSize(11);
@@ -690,21 +696,13 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         doc.text(`Couleur: ${color?.name || '—'}`, startX, detailsStartY + 7);
         doc.text(`RAL: ${cfg.colorId || 'Std'}`, startX, detailsStartY + 14);
         
-        // Total dimension
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(30, 41, 59);
-        doc.text(`DIM TOTALE: ${cfg.L} x ${cfg.H} mm`, startX, currentY + 77);
-        if (cfg.wallDepth) {
-          doc.setFontSize(10);
-          doc.text(`Prof. Mur: ${cfg.wallDepth} mm`, startX, currentY + 84);
-        }
+        doc.setTextColor(0, 0, 0);
         
         // Per-part breakdown
         doc.setFontSize(8);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(71, 85, 105);
-        let partY = currentY + 89;
+        let partY = detailsStartY + 24;
         
         if (openingPart) {
           const w = openingPart.width || cfg.L;
@@ -720,6 +718,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         });
         
         doc.setTextColor(0, 0, 0);
+        var finalNextY = partY + 2;
       } else {
         doc.setFontSize(11);
         doc.text(`Modèle: ${compo?.name || '—'}`, startX, detailsStartY);
@@ -727,74 +726,78 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         doc.text(`RAL: ${cfg.colorId || 'Std'}`, startX, detailsStartY + 16);
         
         doc.setTextColor(0, 0, 0);
-
-        // ── Dynamic Positions for following elements ──
-        let nextY = detailsStartY + 24;
-
-        // Couvre-joint detection
-        const cjProfiles = filteredItems.filter(p => p.isCouvreJoint || p.usage === 'ACCESSOIRES / FINITION' && /couvre|cj/i.test(p.label || ''));
-        const cjSummary = [];
-        const seenThick = new Set();
-
-        cjProfiles.forEach(pCalc => {
-          const pRef = (database.profiles || []).find(x => x.id === pCalc.id || x.name === pCalc.id);
-          const thicknessValue = pRef?.thickness || pRef?.epas || pRef?.epaisseur || pRef?.ep || pRef?.e || 0;
-          const thickness = parseFloat(thicknessValue) || 0;
-          if (thickness > 0 && !seenThick.has(thickness)) {
-            seenThick.add(thickness);
-            cjSummary.push({ name: pRef?.name || pCalc?.name || 'Couvre-joint', thickness });
-          }
-        });
-
-        if (cjSummary.length > 0) {
-          doc.setFontSize(9);
-          cjSummary.forEach((cj, cjIdx) => {
-            doc.text(`Couvre-joint: ${cj.thickness} mm`, startX, nextY);
-            nextY += 7;
-          });
-        } else {
-          doc.setFontSize(9);
-          doc.text("Couvre-joint: Sans", startX, nextY);
-          nextY += 7;
-        }
-
-        // Shutter Info Box
-        if (cfg.hasShutter && database.shutterComponents) {
-           const sc = database.shutterComponents;
-           const caisson = sc.caissons?.find(c => c.id === (cfg.shutterOverrides?.caissonId || cfg.shutterConfig?.caissonId));
-           const glissiere = sc.glissieres?.find(g => g.id === (cfg.shutterOverrides?.glissiereId || cfg.shutterConfig?.glissiereId));
-           const lame = sc.lames?.find(l => l.id === (cfg.shutterOverrides?.lameId || cfg.shutterConfig?.lameId));
-           const kit = sc.kits?.find(k => k.id === (cfg.shutterOverrides?.kitId || cfg.shutterConfig?.kitId));
-
-           const boxY = nextY + 2;
-           doc.setFillColor(241, 245, 249);
-           doc.roundedRect(110, boxY, 80, 25, 2, 2, 'F');
-           doc.setFontSize(8);
-           doc.setFont('helvetica', 'bold');
-           doc.text("INFO VOLET :", 115, boxY + 5);
-           doc.setFont('helvetica', 'normal');
-           doc.setFontSize(7.5);
-           doc.text(`Caisson: ${caisson?.name || '—'}`, 115, boxY + 10);
-           doc.text(`Glissière: ${glissiere?.name || '—'}`, 115, boxY + 15);
-           doc.text(`Lame: ${lame?.name || '—'} / ${kit?.name || '—'}`, 115, boxY + 20);
-           nextY = boxY + 28;
-        } else {
-          nextY += 5;
-        }
-
-        // DIM TOTALE position adjusted
-        doc.setFontSize(14);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(30, 41, 59);
-        doc.text(`DIM: ${cfg.L} x ${cfg.H} mm`, startX, currentY + 92);
-        if (cfg.wallDepth) {
-          doc.setFontSize(10);
-          doc.text(`Prof. Mur: ${cfg.wallDepth} mm`, startX, currentY + 99);
-        }
-        doc.setTextColor(0, 0, 0);
+        var finalNextY = detailsStartY + 24;
       }
+
+      // ── Dynamic Positions for following elements ──
+      let nextY = finalNextY;
+
+      // Couvre-joint detection
+      const cjProfiles = filteredItems.filter(p => p.isCouvreJoint || p.usage === 'ACCESSOIRES / FINITION' && /couvre|cj/i.test(p.label || ''));
+      const cjSummary = [];
+      const seenThick = new Set();
+
+      cjProfiles.forEach(pCalc => {
+        const pRef = (database.profiles || []).find(x => x.id === pCalc.id || x.name === pCalc.id);
+        const thicknessValue = pRef?.thickness || pRef?.epas || pRef?.epaisseur || pRef?.ep || pRef?.e || 0;
+        const thickness = parseFloat(thicknessValue) || 0;
+        if (thickness > 0 && !seenThick.has(thickness)) {
+          seenThick.add(thickness);
+          cjSummary.push({ name: pRef?.name || pCalc?.name || 'Couvre-joint', thickness });
+        }
+      });
+
+      if (cjSummary.length > 0) {
+        doc.setFontSize(9);
+        cjSummary.forEach((cj, cjIdx) => {
+          doc.text(`Couvre-joint: ${cj.thickness} mm`, startX, nextY);
+          nextY += 7;
+        });
+      } else {
+        doc.setFontSize(9);
+        doc.text("Couvre-joint: Sans", startX, nextY);
+        nextY += 7;
+      }
+
+      // Shutter Info Box
+      if (cfg.hasShutter && database.shutterComponents) {
+          const sc = database.shutterComponents;
+          const caisson = sc.caissons?.find(c => c.id === (cfg.shutterOverrides?.caissonId || cfg.shutterConfig?.caissonId));
+          const glissiere = sc.glissieres?.find(g => g.id === (cfg.shutterOverrides?.glissiereId || cfg.shutterConfig?.glissiereId));
+          const lame = sc.lames?.find(l => l.id === (cfg.shutterOverrides?.lameId || cfg.shutterConfig?.lameId));
+          const kit = sc.kits?.find(k => k.id === (cfg.shutterOverrides?.kitId || cfg.shutterConfig?.kitId));
+
+          const boxY = nextY + 2;
+          doc.setFillColor(241, 245, 249);
+          doc.roundedRect(110, boxY, 80, 25, 2, 2, 'F');
+          doc.setFontSize(8);
+          doc.setFont('helvetica', 'bold');
+          doc.text("INFO VOLET :", 115, boxY + 5);
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(7.5);
+          doc.text(`Caisson: ${caisson?.name || '—'}`, 115, boxY + 10);
+          doc.text(`Glissière: ${glissiere?.name || '—'}`, 115, boxY + 15);
+          doc.text(`Lame: ${lame?.name || '—'} / ${kit?.name || '—'}`, 115, boxY + 20);
+          nextY = boxY + 28;
+      } else {
+        nextY += 5;
+      }
+
+      // DIM TOTALE (Always at the bottom of technical section)
+      doc.setFontSize(13);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(30, 41, 59);
+      doc.text(`DIM: ${cfg.L} x ${cfg.H} mm`, startX, nextY);
+      nextY += 7;
+      if (cfg.wallDepth) {
+        doc.setFontSize(10);
+        doc.text(`Prof. Mur: ${cfg.wallDepth} mm`, startX, nextY);
+        nextY += 7;
+      }
+      doc.setTextColor(0, 0, 0);
       
-      currentY += 105;
+      // Update currentY dynamically based on how much technical info was written
+      currentY = Math.max(currentY + 105, nextY + 10);
 
       // Group items by category
       const itemsByCategory = filteredItems.reduce((acc, p) => {
