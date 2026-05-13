@@ -1007,17 +1007,21 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                    </tr>
                  </thead>
                  <tbody>
-                   {siteResults.accessories.map(a => (
-                     <tr key={a.key}>
-                       <td style={{ fontWeight: 600 }}>{a.name}</td>
-                       <td style={{ fontSize: '0.8rem' }}>{a.unit}</td>
-                       <td style={{ fontWeight: 700, color: '#d97706' }}>
-                         {['M', 'ML', 'JOINT'].includes((a.unit || '').toUpperCase()) 
-                            ? `${(a.totalMeasure / 1000).toFixed(2)} m` 
-                            : a.totalQty}
-                       </td>
-                     </tr>
-                   ))}
+                   {siteResults.accessories.map(a => {
+                     const unitLabel = a.unit || a.priceUnit || 'U';
+                     const isMl = ['M', 'ML', 'JOINT'].includes(unitLabel.toUpperCase());
+                     return (
+                       <tr key={a.key}>
+                         <td style={{ fontWeight: 600 }}>{a.name}</td>
+                         <td style={{ fontSize: '0.8rem' }}>{unitLabel}</td>
+                         <td style={{ fontWeight: 700, color: '#d97706' }}>
+                           {isMl 
+                              ? `${(a.totalMeasure / 1000).toFixed(2)} m` 
+                              : (Number.isInteger(a.totalQty) ? a.totalQty : a.totalQty.toFixed(2))}
+                         </td>
+                       </tr>
+                     );
+                   })}
                  </tbody>
                </table>
             </div>

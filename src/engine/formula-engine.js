@@ -817,17 +817,20 @@ export class FormulaEngine {
 
     const weight = (key === 'lameId') ? (vars.area * (parseFloat(item.weightPerM2) || 0)) : null;
 
+    const finalQty = (key === 'lameId' || key === 'caissonId' || key === 'axeId' || key === 'lameFinaleId' || key === 'glissiereId') ? Math.ceil(pieceCount) : pieceCount;
+
     shutterPack.push({
       ...item,
       itemKey: key,
       name: displayName + nameSuffix,
-      qty: pieceCount,
+      qty: finalQty,
       totalWeight: weight,
       totalMeasure: linearTotalMm, 
       length: itemLength,
       barLength: barLength,
       price: itemPrice,
-      priceUnit: item.priceUnit,
+      priceUnit: item.priceUnit || 'Unité',
+      unit: item.priceUnit || 'Unité',
       resolvedFormula: `${this.resolveFormula(formulaToUse, evalScope)} x [${this.resolveFormula(item.cuttingFormula || (key === 'glissiereId' ? 'H' : 'L'), evalScope)}]`,
       usage: 'VOLET ROULANT',
       cost: finalCost
@@ -851,6 +854,7 @@ export class FormulaEngine {
             id: `${item.id}-addon-${(addon.name || 'opt').replace(/\s+/g, '-').toLowerCase()}`,
             name: `Add-on (${item.name}): ${addon.name}`,
             qty: addonQty,
+            unit: addon.unit || 'Unité',
             priceUnit: addon.unit || 'Unité',
             price: addonPrice,
             formula: formulaToUse,          // ← formule réellement utilisée (doubleFormula si dispo)

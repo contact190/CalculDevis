@@ -2047,13 +2047,14 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                     <th>Référence</th>
                     <th>Finition</th>
                     <th>Désignation</th>
-                    <th>Longueur / M.L</th>
-                    <th>Quantité</th>
+                    <th>Unité</th>
+                    <th>Quantité Totale</th>
                   </tr>
                 </thead>
                 <tbody>
                   {purchasingAccessories.map((a, i) => {
-                    const isMl = ['M', 'ML', 'JOINT'].includes((a.unit || '').toUpperCase());
+                    const unitLabel = a.unit || a.priceUnit || 'U';
+                    const isMl = ['M', 'ML', 'JOINT'].includes(unitLabel.toUpperCase());
                     return (
                       <tr key={`aa-${i}`} style={{ background: proformaSelection.has(a.id) ? '#fffbeb' : 'transparent' }}>
                         <td>
@@ -2066,9 +2067,9 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                         <td data-label="Réf." style={{ color: '#64748b', fontSize: '0.75rem', fontFamily: 'monospace' }}>{a.baseId || a.id.split('|')[0]}</td>
                         <td data-label="Finition" style={{ fontSize: '0.85rem' }}>{a.colorName || 'Standard'}</td>
                         <td data-label="Nom" style={{ fontWeight: 600 }}>{a.combinedName || 'Accessoire'}</td>
-                        <td data-label="Lg/ML">{isMl ? `${(a.totalMeasure / 1000).toFixed(2)} m` : '—'}</td>
+                        <td data-label="Unité">{unitLabel}</td>
                         <td data-label="Qté" style={{ color: '#f59e0b', fontWeight: 700 }}>
-                          {!isMl ? a.totalQty : '—'}
+                          {isMl ? `${(a.totalMeasure / 1000).toFixed(2)} m` : (Number.isInteger(a.totalQty) ? a.totalQty : a.totalQty.toFixed(2))}
                         </td>
                       </tr>
                     );
