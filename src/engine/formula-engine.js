@@ -678,17 +678,25 @@ export class FormulaEngine {
     const isCJ = /couvres?[- ]?joints?|cj[vh]?/i.test((item.name || '').toLowerCase());
     const effectiveH = HT || (H + HC);
 
-    // Rule: Couvre Joint reduction ONLY on the caisson length
+    // Rule: Couvre Joint reduction on horizontal components
     let itemScopeL = L;
-    if (key === 'caissonId') {
-      const cjType = config.shutterConfig?.couvreJointType;
-      if (cjType === 'total') {
-        itemScopeL -= 3;
-      } else if (cjType === 'half') {
-        itemScopeL -= 1.5;
-      } else if (config.shutterConfig?.hasCouvreJoint) {
-        itemScopeL -= 3;
-      }
+    let cjReduction = 0;
+    
+    // Detect from shutterConfig (legacy/explicit) or from selectedOptions (standard)
+    if (config.shutterConfig?.couvreJointType === 'total') cjReduction = 3;
+    else if (config.shutterConfig?.couvreJointType === 'half') cjReduction = 1.5;
+    else if (config.selectedOptions && config.selectedOptions.length > 0) {
+      const cjOptions = config.selectedOptions.map(id => (this.db.options || []).find(o => o.id === id)).filter(o => o);
+      const sideCJs = cjOptions.filter(o => {
+        const n = (o.name || '').toLowerCase();
+        return n.includes('couvre-joint') && (n.includes('gauche') || n.includes('droit') || n.includes('latéral') || n.includes('lateral'));
+      });
+      if (sideCJs.length >= 2) cjReduction = 3;
+      else if (sideCJs.length === 1) cjReduction = 1.5;
+    }
+
+    if (key === 'caissonId' || key === 'lameId' || key === 'lameFinaleId' || key === 'axeId' || key === 'baguetteId') {
+      itemScopeL -= cjReduction;
     }
 
     const evalScope = { 
