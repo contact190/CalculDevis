@@ -218,42 +218,40 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
           }
         });
         } // end if (b.profiles)
-        // Shutter profiles (Linear items)
+        // Shutter components -> List 1 ONLY if sold by BARRE
         (b.shutters || []).forEach(s => {
           const unit = (s.priceUnit || '').toUpperCase().trim();
-          // If it's sold by bar (BARRE) or if it has a specific length to cut
-          if (unit === 'BARRE' || (s.length > 0 && s.qty > 0)) {
-            const mapKey = `${s.id}|${colorName}`;
-            const measure = (s.totalMeasure || (s.length * s.qty)) * cfgQty;
-            
-            // Create the list of actual pieces for the optimization algorithm
-            const newPieces = [];
-            for (let k = 0; k < cfgQty; k++) {
-              for (let j = 0; j < (s.qty || 1); j++) {
-                newPieces.push({
-                  length: s.length || 0,
-                  instanceLabel: entry.allLabels?.[k] || groupLabels,
-                  usage: 'VOLET',
-                  label: s.name,
-                  windowIdx: configIdx
-                });
-              }
+          if (unit !== 'BARRE') return; // Unité + ML go to List 2 (accessories)
+
+          const mapKey = `${s.id}|${colorName}`;
+          const measure = (s.totalMeasure || (s.length * s.qty)) * cfgQty;
+          
+          const newPieces = [];
+          for (let k = 0; k < cfgQty; k++) {
+            for (let j = 0; j < (s.qty || 1); j++) {
+              newPieces.push({
+                length: s.length || 0,
+                instanceLabel: entry.allLabels?.[k] || groupLabels,
+                usage: 'VOLET',
+                label: s.name,
+                windowIdx: configIdx
+              });
             }
-            
-            if (!map[mapKey]) {
-              map[mapKey] = { 
-                ...s, 
-                originalNames: new Set([s.name]), 
-                totalMeasure: measure, 
-                pieces: newPieces, 
-                colorName,
-                baseId: s.id
-              };
-            } else {
-              map[mapKey].totalMeasure += measure;
-              map[mapKey].pieces.push(...newPieces);
-              map[mapKey].originalNames.add(s.name);
-            }
+          }
+          
+          if (!map[mapKey]) {
+            map[mapKey] = { 
+              ...s, 
+              originalNames: new Set([s.name]), 
+              totalMeasure: measure, 
+              pieces: newPieces, 
+              colorName,
+              baseId: s.id
+            };
+          } else {
+            map[mapKey].totalMeasure += measure;
+            map[mapKey].pieces.push(...newPieces);
+            map[mapKey].originalNames.add(s.name);
           }
         });
       } catch (e) { console.warn(e); }
@@ -2054,11 +2052,53 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
             </div>
           </div>
 
-          {/* Table: Achats Accessoires & Joints */}
+          {/* Table: Joints & Elements ML */}
+          {purchasingAccessories.some(a => ['M', 'ML', 'JOINT'].includes((a.unit || a.priceUnit || '').toUpperCase().trim())) && (
+          <div className="glass shadow-md" style={{ borderLeft: '4px solid #06b6d4' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.5rem' }}>
+              <Package size={20} color="#06b6d4" />
+              <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Liste d'Achat : Joints & Éléments Linéaires</h2>
+              <span style={{ fontSize: '0.72rem', background: '#0e7490', color: 'white', padding: '0.15rem 0.5rem', borderRadius: '999px', fontWeight: 700 }}>ML</span>
+            </div>
+            <div className="table-responsive">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: '40px' }}></th>
+                    <th>Référence</th>
+                    <th>Finition</th>
+                    <th>Désignation</th>
+                    <th>Longueur Totale</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {purchasingAccessories
+                    .filter(a => ['M', 'ML', 'JOINT'].includes((a.unit || a.priceUnit || '').toUpperCase().trim()))
+                    .map((a, i) => (
+                      <tr key={`ml-${i}`} style={{ background: proformaSelection.has(a.id) ? '#ecfeff' : 'transparent' }}>
+                        <td><input type="checkbox" checked={proformaSelection.has(a.id)} onChange={() => toggleProformaSelection(a.id)} /></td>
+                        <td data-label="Réf." style={{ color: '#64748b', fontSize: '0.75rem', fontFamily: 'monospace' }}>{a.baseId || a.id.split('|')[0]}</td>
+                        <td data-label="Finition" style={{ fontSize: '0.85rem' }}>{a.colorName || 'Standard'}</td>
+                        <td data-label="Nom" style={{ fontWeight: 600 }}>{a.combinedName || 'Joint'}</td>
+                        <td data-label="ML" style={{ color: '#0891b2', fontWeight: 800, fontSize: '1rem' }}>
+                          {(a.totalMeasure / 1000).toFixed(2)} m
+                        </td>
+                      </tr>
+                    ))
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
+          )}
+
+          {/* Table: Accessoires Unité */}
+          {purchasingAccessories.some(a => !['M', 'ML', 'JOINT'].includes((a.unit || a.priceUnit || '').toUpperCase().trim())) && (
           <div className="glass shadow-md" style={{ borderLeft: '4px solid #f59e0b' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.5rem' }}>
               <Package size={20} color="#f59e0b" />
-              <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Liste d'Achat : Accessoires & Joints</h2>
+              <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Liste d'Achat : Accessoires</h2>
+              <span style={{ fontSize: '0.72rem', background: '#d97706', color: 'white', padding: '0.15rem 0.5rem', borderRadius: '999px', fontWeight: 700 }}>Unité</span>
             </div>
             <div className="table-responsive">
               <table className="data-table">
@@ -2069,37 +2109,33 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                     <th>Finition</th>
                     <th>Désignation</th>
                     <th>Unité</th>
-                    <th>Quantité Totale</th>
+                    <th>Quantité</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {purchasingAccessories.map((a, i) => {
-                    const unitLabel = a.unit || a.priceUnit || 'U';
-                    const isMl = ['M', 'ML', 'JOINT'].includes(unitLabel.toUpperCase());
-                    return (
-                      <tr key={`aa-${i}`} style={{ background: proformaSelection.has(a.id) ? '#fffbeb' : 'transparent' }}>
-                        <td>
-                           <input 
-                             type="checkbox" 
-                             checked={proformaSelection.has(a.id)} 
-                             onChange={() => toggleProformaSelection(a.id)} 
-                           />
-                        </td>
-                        <td data-label="Réf." style={{ color: '#64748b', fontSize: '0.75rem', fontFamily: 'monospace' }}>{a.baseId || a.id.split('|')[0]}</td>
-                        <td data-label="Finition" style={{ fontSize: '0.85rem' }}>{a.colorName || 'Standard'}</td>
-                        <td data-label="Nom" style={{ fontWeight: 600 }}>{a.combinedName || 'Accessoire'}</td>
-                        <td data-label="Unité">{unitLabel}</td>
-                        <td data-label="Qté" style={{ color: '#f59e0b', fontWeight: 700 }}>
-                          {isMl ? `${(a.totalMeasure / 1000).toFixed(2)} m` : (Number.isInteger(a.totalQty) ? a.totalQty : a.totalQty.toFixed(2))}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {purchasingAccessories.length === 0 && <tr><td colSpan="5">Aucun accessoire trouvé.</td></tr>}
+                  {purchasingAccessories
+                    .filter(a => !['M', 'ML', 'JOINT'].includes((a.unit || a.priceUnit || '').toUpperCase().trim()))
+                    .map((a, i) => {
+                      const unitLabel = a.unit || a.priceUnit || 'U';
+                      return (
+                        <tr key={`ua-${i}`} style={{ background: proformaSelection.has(a.id) ? '#fffbeb' : 'transparent' }}>
+                          <td><input type="checkbox" checked={proformaSelection.has(a.id)} onChange={() => toggleProformaSelection(a.id)} /></td>
+                          <td data-label="Réf." style={{ color: '#64748b', fontSize: '0.75rem', fontFamily: 'monospace' }}>{a.baseId || a.id.split('|')[0]}</td>
+                          <td data-label="Finition" style={{ fontSize: '0.85rem' }}>{a.colorName || 'Standard'}</td>
+                          <td data-label="Nom" style={{ fontWeight: 600 }}>{a.combinedName || 'Accessoire'}</td>
+                          <td data-label="Unité" style={{ fontSize: '0.8rem', color: '#64748b' }}>{unitLabel}</td>
+                          <td data-label="Qté" style={{ color: '#f59e0b', fontWeight: 800, fontSize: '1rem' }}>
+                            {Number.isInteger(a.totalQty) ? a.totalQty : a.totalQty.toFixed(2)}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  }
                 </tbody>
               </table>
             </div>
           </div>
+          )}
 
           {/* Table: Détails Vitrage */}
           <div className="glass shadow-md" style={{ borderLeft: '4px solid #06b6d4' }}>
