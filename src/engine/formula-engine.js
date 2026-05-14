@@ -838,14 +838,21 @@ export class FormulaEngine {
 
     // 6. Process Add-ons
     if (item.addOns && Array.isArray(item.addOns)) {
+      // Enrich scope with parent item's calculated quantities so add-on formulas can reference them
+      const addonScope = {
+        ...evalScope,
+        nb_lames: Math.ceil(pieceCount),   // Number of slats (parent item qty)
+        qty_lame: Math.ceil(pieceCount),   // Alias
+        nb_volets: isDouble ? 2 : 1,       // Number of shutter wings
+      };
       item.addOns.forEach(addon => {
         // Compatibility Check for Add-on
         if (addon.compatibilityFormula) {
-          const isCompatible = this.evaluate(addon.compatibilityFormula, evalScope, `Compatibilité Add-on ${addon.name}`, errors);
+          const isCompatible = this.evaluate(addon.compatibilityFormula, addonScope, `Compatibilité Add-on ${addon.name}`, errors);
           if (!isCompatible) return;
         }
         const formulaToUse = (isDouble && addon.doubleFormula) ? addon.doubleFormula : (addon.formula || '1');
-        const addonQty = this.evaluate(formulaToUse, evalScope, `Quantité Add-on ${addon.name}`, errors);
+        const addonQty = this.evaluate(formulaToUse, addonScope, `Quantité Add-on ${addon.name}`, errors);
         if (addonQty > 0) {
           const addonPrice = addon.price || 0;
           const addonUnit = (addon.unit || 'Unité').toUpperCase();
@@ -857,8 +864,8 @@ export class FormulaEngine {
             unit: addon.unit || 'Unité',
             priceUnit: addon.unit || 'Unité',
             price: addonPrice,
-            formula: formulaToUse,          // ← formule réellement utilisée (doubleFormula si dispo)
-            resolvedFormula: `${formulaToUse} = ${addonQty}`,
+            formula: formulaToUse,
+            resolvedFormula: `${formulaToUse} = ${addonQty}  [nb_lames=${Math.ceil(pieceCount)}, L=${Math.round(itemScopeL)}, H=${Math.round(effectiveH)}]`,
             cost: addonCost
           });
         }

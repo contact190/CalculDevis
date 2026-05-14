@@ -2117,12 +2117,20 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                     .filter(a => !['M', 'ML', 'JOINT'].includes((a.unit || a.priceUnit || '').toUpperCase().trim()))
                     .map((a, i) => {
                       const unitLabel = a.unit || a.priceUnit || 'U';
+                      const isAddon = a.id?.includes('-addon-');
                       return (
                         <tr key={`ua-${i}`} style={{ background: proformaSelection.has(a.id) ? '#fffbeb' : 'transparent' }}>
                           <td><input type="checkbox" checked={proformaSelection.has(a.id)} onChange={() => toggleProformaSelection(a.id)} /></td>
                           <td data-label="Réf." style={{ color: '#64748b', fontSize: '0.75rem', fontFamily: 'monospace' }}>{a.baseId || a.id.split('|')[0]}</td>
                           <td data-label="Finition" style={{ fontSize: '0.85rem' }}>{a.colorName || 'Standard'}</td>
-                          <td data-label="Nom" style={{ fontWeight: 600 }}>{a.combinedName || 'Accessoire'}</td>
+                          <td data-label="Nom" style={{ fontWeight: 600 }}>
+                            {a.combinedName || 'Accessoire'}
+                            {isAddon && a.resolvedFormula && (
+                              <div style={{ fontSize: '0.68rem', color: '#94a3b8', fontWeight: 400, marginTop: '0.15rem', fontFamily: 'monospace' }}>
+                                📐 {a.resolvedFormula}
+                              </div>
+                            )}
+                          </td>
                           <td data-label="Unité" style={{ fontSize: '0.8rem', color: '#64748b' }}>{unitLabel}</td>
                           <td data-label="Qté" style={{ color: '#f59e0b', fontWeight: 800, fontSize: '1rem' }}>
                             {Number.isInteger(a.totalQty) ? a.totalQty : a.totalQty.toFixed(2)}
