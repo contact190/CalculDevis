@@ -6,6 +6,52 @@ import { DEFAULT_DATA } from '../../data/default-data';
 import jsPDF from 'jspdf';
 import { getTechnicalDrawingDataURL } from '../../utils/drawingUtils';
 
+const calculateBarsNeeded = (pieces, bLength, stockOffcuts = []) => {
+  if (!pieces || pieces.length === 0) return 0;
+  
+  const usagePriority = { 'DORMANT': 1, 'OUVRANT': 2, 'VOLET': 3, 'FINITION': 4 };
+  const sortedPieces = [...pieces].sort((a, b) => {
+    const prioA = usagePriority[a.usage] || 9;
+    const prioB = usagePriority[b.usage] || 9;
+    if (prioA !== prioB) return prioA - prioB;
+    if (a.windowIdx !== b.windowIdx) return a.windowIdx - b.windowIdx;
+    return b.length - a.length;
+  });
+
+  const currentBars = [...stockOffcuts].map((len, idx) => ({
+    remaining: len,
+    pieces: [],
+    isStock: true
+  }));
+
+  sortedPieces.forEach(pObj => {
+    const piece = pObj.length || pObj;
+    let bestFitIdx = -1;
+    let minRemainder = Infinity;
+
+    for (let j = 0; j < currentBars.length; j++) {
+      const remainder = currentBars[j].remaining - piece;
+      if (remainder >= 0 && remainder < minRemainder) {
+        minRemainder = remainder;
+        bestFitIdx = j;
+      }
+    }
+    
+    if (bestFitIdx !== -1) {
+      currentBars[bestFitIdx].remaining -= piece;
+      currentBars[bestFitIdx].pieces.push(pObj);
+    } else {
+      currentBars.push({ 
+        remaining: bLength - piece, 
+        pieces: [pObj],
+        isStock: false
+      });
+    }
+  });
+  
+  return currentBars.filter(b => !b.isStock).length;
+};
+
 const ProductionModule = ({ currentConfig, currentQuote, database, setData }) => {
   const engine = useMemo(() => new FormulaEngine(database), [database]);
   const [activeTab, setActiveTab] = useState('achat');
@@ -1607,22 +1653,12 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                         
                         const isProfile = !!p.pieces;
                         if (isProfile) {
-                          const barKey = p._barKey || p.baseId || p.id;
+                          const barKey = p.id;
                           const bLength = barLengths[barKey] || 6400;
                           const pieces = p.pieces ? [...p.pieces].sort((a,b) => b.length - a.length) : [];
                           let barsNeeded = 0;
                           if (pieces.length > 0) {
-                            let currentBars = [];
-                            pieces.forEach(piece => {
-                              let bestIdx = -1; let minLeft = Infinity;
-                              for (let j = 0; j < currentBars.length; j++) {
-                                if (currentBars[j] >= piece.length && currentBars[j] - piece.length < minLeft) {
-                                  bestIdx = j; minLeft = currentBars[j] - piece.length;
-                                }
-                              }
-                              if (bestIdx !== -1) currentBars[bestIdx] -= piece.length;
-                              else { currentBars.push(bLength - piece.length); barsNeeded++; }
-                            });
+                            barsNeeded = calculateBarsNeeded(pieces, bLength, manualStockOffcuts[barKey] || []);
                           } else {
                             barsNeeded = Math.ceil(p.totalMeasure / bLength);
                           }
@@ -1866,54 +1902,8 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                     const unitClean = (p.priceUnit || '').toUpperCase().trim();
                     
                     if ((unitClean === 'BARRE' || !unitClean) && pieces.length > 0) {
-                      // --- LEAN SEQUENCING SORT ---
-                      const usagePriority = { 'DORMANT': 1, 'OUVRANT': 2, 'VOLET': 3, 'FINITION': 4 };
-                      
-                      // Sort pieces to keep kits together but optimize within the kit
-                      const sortedPieces = [...pieces].sort((a, b) => {
-                        const prioA = usagePriority[a.usage] || 9;
-                        const prioB = usagePriority[b.usage] || 9;
-                        if (prioA !== prioB) return prioA - prioB;
-                        if (a.windowIdx !== b.windowIdx) return a.windowIdx - b.windowIdx;
-                        return b.length - a.length; // Maximize material use within the window group
-                      });
-
-                      // 1. Initialize with manual stock offcuts
-                      const currentBars = (manualStockOffcuts[barKey] || []).map((len, idx) => ({
-                        remaining: len,
-                        pieces: [],
-                        id: `STOCK-${barKey}-${idx}`,
-                        isStock: true
-                      }));
-
-                      // 2. Optimization: BEST FIT into stock then new bars
-                      sortedPieces.forEach(pObj => {
-                        const piece = pObj.length || pObj;
-                        let bestFitIdx = -1;
-                        let minRemainder = Infinity;
-
-                        for (let j = 0; j < currentBars.length; j++) {
-                          const remainder = currentBars[j].remaining - piece;
-                          if (remainder >= 0 && remainder < minRemainder) {
-                            minRemainder = remainder;
-                            bestFitIdx = j;
-                          }
-                        }
-                        
-                        if (bestFitIdx !== -1) {
-                          currentBars[bestFitIdx].remaining -= piece;
-                          currentBars[bestFitIdx].pieces.push(pObj);
-                        } else {
-                          currentBars.push({ 
-                            remaining: bLength - piece, 
-                            pieces: [pObj],
-                            id: `BAR-${barKey}-${currentBars.length + 1}`
-                          });
-                        }
-                      });
-                      
-                      // 3. Count only NEW bars to buy
-                      bars = currentBars.filter(b => !b.isStock).length;
+                      // Optimization: BEST FIT into stock then new bars
+                      bars = calculateBarsNeeded(pieces, bLength, manualStockOffcuts[barKey] || []);
                     } else {
                       // No optimization for ML or other units, just straight division
                       bars = Math.ceil(ml / bLength);
