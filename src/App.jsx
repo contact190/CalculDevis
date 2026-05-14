@@ -44,6 +44,7 @@ function App() {
   const queryClient = useQueryClient();
   
   const [database, setDatabase] = useState(DEFAULT_DATA);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
 
   const [quoteSettings, setQuoteSettings] = useState(() => {
     try {
@@ -116,45 +117,69 @@ function App() {
     return repaired;
   };
 
-  // 1. Initial Cloud Sync via React Query (Offline-first)
-  const { data: cloudDb, isLoading: isInitialLoading } = useQuery({
-    queryKey: ['database'],
-    queryFn: async () => {
-      const cloudData = await syncDatabase.load();
-      if (cloudData) {
-        return repairDatabase(cloudData);
-      } else {
-        const savedMain = localStorage.getItem('calculDevisDB');
-        const savedQuotes = localStorage.getItem('calculDevisQuotes');
-        if (savedMain) {
-           try { 
-             const parsedMain = JSON.parse(savedMain);
-             if (savedQuotes) parsedMain.quotes = JSON.parse(savedQuotes);
-             return repairDatabase(parsedMain); 
-           } catch(e) {}
-        }
+  React.useEffect(() => {
+    // 1. Initial Load from LocalStorage (Immediate)
+    const localData = localStorage.getItem('calculDevisDB');
+    const localQuotes = localStorage.getItem('calculDevisQuotes');
+    
+    let initialDb = DEFAULT_DATA;
+    if (localData) {
+      try {
+        const parsed = JSON.parse(localData);
+        if (localQuotes) parsed.quotes = JSON.parse(localQuotes);
+        initialDb = repairDatabase(parsed);
+        setDatabase(initialDb);
+      } catch (e) {
+        console.error("Failed to parse local data", e);
       }
-      return DEFAULT_DATA;
-    },
-    staleTime: 5 * 60 * 1000,
-    networkMode: 'offlineFirst',
-  });
+    }
+
+    // 2. Load from Cloud (with safety checks)
+    setIsInitialLoading(true);
+    syncDatabase.load().then(cloudData => {
+      if (cloudData) {
+        const repairedCloud = repairDatabase(cloudData);
+        
+        setDatabase(prev => {
+          // SAFETY: If the user has already started working (prev != initialDb), 
+          // do NOT overwrite with cloud data automatically. 
+          // Instead, we could show a merge dialog, but for now, we prioritize current work.
+          if (JSON.stringify(prev) !== JSON.stringify(initialDb)) {
+            console.warn("Cloud data received but local data has changed. Ignoring cloud to prevent data loss.");
+            return prev;
+          }
+          
+          console.log("Cloud data loaded successfully and applied.");
+          setIsCloudLoaded(true);
+          return repairedCloud;
+        });
+      } else {
+        console.log("No cloud data or error, staying in local mode.");
+        setIsCloudLoaded(false);
+      }
+    }).catch(err => {
+      console.error("Sync error:", err);
+      setIsCloudLoaded(false);
+    }).finally(() => {
+      setIsInitialLoading(false);
+    });
+  }, []);
+
+  // Emergency Restore Function
+  const handleEmergencyRestore = () => {
+    const backup = localStorage.getItem('calculDevisDB_SAFETY_BACKUP');
+    if (backup && window.confirm("Restaurer la sauvegarde de sécurité créée juste avant le dernier rafraîchissement ?")) {
+      setDatabase(repairDatabase(JSON.parse(backup)));
+      alert("Données restaurées !");
+    } else {
+      alert("Aucune sauvegarde de sécurité trouvée.");
+    }
+  };
 
   const refetchData = () => {
     queryClient.invalidateQueries({ queryKey: ['database'] });
   };
 
-  React.useEffect(() => {
-    if (cloudDb) {
-      setDatabase(cloudDb);
-      setLastSyncTime(new Date());
-      setIsCloudLoaded(true);
-      setSyncError(null);
-    } else if (!isInitialLoading) {
-      // If loading finished but no data came back from cloud
-      setIsCloudLoaded(false);
-    }
-  }, [cloudDb, isInitialLoading]);
 
   // 2. Mutation to Continuous Cloud Sync
   const syncMutation = useMutation({
@@ -208,6 +233,11 @@ function App() {
     const timeout = setTimeout(() => {
       syncMutation.mutate(database);
     }, 3000);
+
+    // 3. Create a safety backup for next refresh
+    try {
+      localStorage.setItem('calculDevisDB_SAFETY_BACKUP', JSON.stringify(database));
+    } catch(e) {}
 
     return () => clearTimeout(timeout);
   }, [database, isCloudLoaded, isInitialLoading]);
@@ -315,15 +345,28 @@ function App() {
            </div>
            
            {!isCloudLoaded && !isInitialLoading && (
-             <button 
-               onClick={() => setIsCloudLoaded(true)}
-               style={{ 
-                 width: '100%', padding: '0.5rem', fontSize: '0.7rem', background: '#f59e0b', color: 'white', 
-                 border: 'none', borderRadius: '0.4rem', cursor: 'pointer', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem'
-               }}
-             >
-               <RefreshCw size={14} /> Forcer Synchro Cloud
-             </button>
+             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                <button 
+                  onClick={() => setIsCloudLoaded(true)}
+                  style={{ 
+                    width: '100%', padding: '0.5rem', fontSize: '0.7rem', background: '#f59e0b', color: 'white', 
+                    border: 'none', borderRadius: '0.4rem', cursor: 'pointer', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem'
+                  }}
+                >
+                  <RefreshCw size={14} /> Forcer Synchro Cloud
+                </button>
+                {localStorage.getItem('calculDevisDB_SAFETY_BACKUP') && (
+                  <button 
+                    onClick={handleEmergencyRestore}
+                    style={{ 
+                      width: '100%', padding: '0.5rem', fontSize: '0.7rem', background: '#ef4444', color: 'white', 
+                      border: 'none', borderRadius: '0.4rem', cursor: 'pointer', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem'
+                    }}
+                  >
+                    🆘 Récupérer Session Perdue
+                  </button>
+                )}
+             </div>
            )}
 
            {/* Manual Export/Import Shortcut */}

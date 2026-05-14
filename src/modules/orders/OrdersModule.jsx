@@ -284,7 +284,28 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
 
           const accs = [...(bom.accessories || [])];
           if (bom.gasket) accs.push(bom.gasket);
-          (bom.shutters || []).forEach(s => { if (s.priceUnit !== 'ML') accs.push(s); });
+          
+          (bom.shutters || []).forEach(s => {
+            const unit = (s.priceUnit || '').toUpperCase();
+            if (unit === 'ML' || unit === 'M') {
+              // Add to profiles if measured in ML
+              const key = `${s.id}-${item.config.colorId}`;
+              const existing = allProfiles.find(x => x.key === key);
+              if (existing) {
+                existing.totalMeasure += (s.totalMeasure || 0) * m.qty;
+              } else {
+                allProfiles.push({ 
+                  ...s, 
+                  key, 
+                  colorId: item.config.colorId,
+                  totalMeasure: (s.totalMeasure || 0) * m.qty 
+                });
+              }
+            } else {
+              // Add to accessories otherwise
+              accs.push(s);
+            }
+          });
 
           accs.forEach(a => {
             const key = `${a.id}-${item.config.colorId}`;
@@ -979,7 +1000,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                            </td>
                            <td data-label="Coul.">{data.colors?.find(c => c.id === p.colorId)?.name || p.colorId}</td>
                            <td data-label="ML" style={{ fontWeight: 700, color: p.isGroup ? '#7c3aed' : '#8b5cf6' }}>{(p.totalMeasure / 1000).toFixed(2)}</td>
-                           <td data-label="Barres">{Math.ceil(p.totalMeasure / 6000)}</td>
+                           <td data-label="Barres">{Math.ceil(p.totalMeasure / (p.barLength || 6000))}</td>
                            {jumelageGroups.length > 0 && (
                              <td data-label="Actions">
                                {p.isGroup && (
