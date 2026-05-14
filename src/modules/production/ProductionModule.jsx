@@ -2422,6 +2422,10 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                   const isLinear = ['ML', 'M', 'JOINT'].includes(unitUpper);
                   
                   if (isLinear && s.length > 0 && s.qty > 0) {
+                    const sName = (s.name || '').toLowerCase();
+                    // Exclude Joints, Brosse, and Lame Finale from Nesting/Logistics
+                    if (sName.includes('joint') || sName.includes('lame finale') || sName.includes('lames finales') || sName.includes('brosse')) return;
+
                     const piecesPerUnit = Math.max(0, Number(s.qty) || 0);
                     const totalPieces = piecesPerUnit * qty;
                     totalPiecesInBoms += totalPieces;
@@ -2766,8 +2770,11 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
           allBarsFlat.forEach(bar => {
             const nameLower = (bar.profileName || '').toLowerCase();
             const profIdLower = (bar.profId || '').toLowerCase();
+            
+            // Filters for Nesting PDF
             if (nameLower.includes('parclose') || nameLower.includes('couvre') || 
-                nameLower.includes('cj') || profIdLower.includes('cj')) return;
+                nameLower.includes('cj') || profIdLower.includes('cj') ||
+                nameLower.includes('joint') || nameLower.includes('lame finale') || nameLower.includes('lames finales') || nameLower.includes('brosse')) return;
 
             if (!groupedByProfile[bar.profId]) {
               groupedByProfile[bar.profId] = { 
@@ -2788,7 +2795,11 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
 
             doc.setFillColor(30, 41, 59); doc.rect(margin, currentY, 180, 8, 'F');
             doc.setTextColor(255, 255, 255); doc.setFontSize(9); doc.setFont('helvetica', 'bold');
-            doc.text(`${group.ref ? '[' + group.ref + '] ' : ''}${group.name} ${group.combinedRanges ? '- ' + group.combinedRanges : ''} (${group.color || 'Standard'})`, margin + 3, currentY + 5.5);
+            
+            let fullTitle = `${group.ref ? '[' + group.ref + '] ' : ''}${group.name} ${group.combinedRanges ? '- ' + group.combinedRanges : ''}`;
+            if (fullTitle.length > 85) fullTitle = fullTitle.substring(0, 82) + '...';
+            
+            doc.text(fullTitle, margin + 3, currentY + 5.5);
             doc.setFontSize(8); doc.text(`${group.bars.length} Barres (${newBarsCount} Neuves + ${stockBarsCount} Stock)`, 195, currentY + 5.5, { align: 'right' });
             currentY += 15;
 
