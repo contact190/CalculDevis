@@ -221,13 +221,34 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         // Shutter profiles (Linear items)
         (b.shutters || []).forEach(s => {
           const unit = (s.priceUnit || '').toUpperCase().trim();
-          if (unit === 'BARRE') {
+          // If it's sold by bar (BARRE) or if it has a specific length to cut
+          if (unit === 'BARRE' || (s.length > 0 && s.qty > 0)) {
             const mapKey = `${s.id}|${colorName}`;
-            const measure = (s.qty || 0) * cfgQty;
-            const newPieces = Array(cfgQty).fill(s.qty || 0);
+            const measure = (s.totalMeasure || (s.length * s.qty)) * cfgQty;
+            
+            // Create the list of actual pieces for the optimization algorithm
+            const newPieces = [];
+            for (let k = 0; k < cfgQty; k++) {
+              for (let j = 0; j < (s.qty || 1); j++) {
+                newPieces.push({
+                  length: s.length || 0,
+                  instanceLabel: entry.allLabels?.[k] || groupLabels,
+                  usage: 'VOLET',
+                  label: s.name,
+                  windowIdx: configIdx
+                });
+              }
+            }
             
             if (!map[mapKey]) {
-              map[mapKey] = { ...s, originalNames: new Set([s.name]), totalMeasure: measure, pieces: newPieces, colorName };
+              map[mapKey] = { 
+                ...s, 
+                originalNames: new Set([s.name]), 
+                totalMeasure: measure, 
+                pieces: newPieces, 
+                colorName,
+                baseId: s.id
+              };
             } else {
               map[mapKey].totalMeasure += measure;
               map[mapKey].pieces.push(...newPieces);

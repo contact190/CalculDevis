@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
-import { Home, Package, Settings, FileText, ChevronRight, Menu, LogOut, LayoutDashboard, Users, RefreshCw, ShoppingBag, ClipboardList, Rotate3D, Truck } from 'lucide-react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Home, Package, Settings, ChevronRight, LayoutDashboard, Users, RefreshCw, ShoppingBag, Truck, CheckCircle } from 'lucide-react';
 import CommercialModule from './modules/commercial/CommercialModule';
 import ProductionModule from './modules/production/ProductionModule';
 import AdminDashboard from './modules/admin/AdminDashboard';
@@ -10,6 +9,10 @@ import ShippingModule from './modules/shipping/ShippingModule';
 import InstallerPortal from './modules/shipping/InstallerPortal';
 import { DEFAULT_DATA } from './data/default-data';
 import { syncDatabase } from './utils/supabaseClient';
+import { persistentStorage } from './utils/storage';
+
+const LOCAL_KEY = 'calculDevis_main';
+const BACKUP_KEY = 'calculDevis_backup';
 
 const DEFAULT_QUOTE_SETTINGS = {
   companyName: '',
@@ -21,7 +24,7 @@ const DEFAULT_QUOTE_SETTINGS = {
   companyMF: '',
   companyBank: '',
   logoBase64: null,
-  footerText: 'Devis valable sous réserve d\'acceptation dans le délai indiqué.',
+  footerText: "Devis valable sous réserve d'acceptation dans le délai indiqué.",
   validityDays: 30,
   tvaRate: 19,
   quotePrefix: 'DEV-',
@@ -38,13 +41,15 @@ const makeNewQuote = (settings) => ({
 
 function App() {
   const [activeTab, setActiveTab] = useState('commercial');
-  const [lastSyncTime, setLastSyncTime] = useState(null);
-  const [syncError, setSyncError] = useState(null);
-  const [isCloudLoaded, setIsCloudLoaded] = useState(false);
-  const queryClient = useQueryClient();
-  
-  const [database, setDatabase] = useState(DEFAULT_DATA);
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [database, setDatabase] = useState(null); // null = loading
+  const [isLoading, setIsLoading] = useState(true);
+  const [saveStatus, setSaveStatus] = useState('idle'); // 'idle' | 'saving' | 'saved' | 'error'
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [cloudSyncStatus, setCloudSyncStatus] = useState('idle'); // 'idle' | 'syncing' | 'ok' | 'offline'
+  const [lastCloudSync, setLastCloudSync] = useState(null);
+  const saveTimerRef = useRef(null);
+  const cloudSyncTimerRef = useRef(null);
+  const isFirstLoad = useRef(true);
 
   const [quoteSettings, setQuoteSettings] = useState(() => {
     try {
@@ -55,7 +60,6 @@ function App() {
 
   const [currentQuote, setCurrentQuote] = useState(() => makeNewQuote(DEFAULT_QUOTE_SETTINGS));
 
-  // Shared state for the current configuration (session specific)
   const [currentConfig, setCurrentConfig] = useState({
     L: 1200,
     H: 2150,
@@ -69,21 +73,15 @@ function App() {
     margin: 2.2
   });
 
-  const generateUniqueId = (prefix = 'ID') => {
-    return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
-  };
+  const generateUniqueId = (prefix = 'ID') => `${prefix}-${Date.now()}-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
 
-  const repairDatabase = (db) => {
+  const repairDatabase = useCallback((db) => {
     if (!db) return DEFAULT_DATA;
     const repaired = { ...db };
-    
-    // Ensure all mandatory keys exist
     Object.keys(DEFAULT_DATA).forEach(key => {
       if (repaired[key] === undefined || repaired[key] === null) {
         repaired[key] = DEFAULT_DATA[key];
       }
-      
-      // Structural repair: deduplicate arrays
       if (Array.isArray(repaired[key])) {
         const seen = new Set();
         repaired[key] = repaired[key].filter(item => {
@@ -94,17 +92,13 @@ function App() {
           return true;
         });
       }
-
-      // Fill empty structural keys from DEFAULT_DATA, but NOT user data keys
       const userDataKeys = ['clients', 'quotes', 'orders'];
       if (Array.isArray(repaired[key]) && repaired[key].length === 0 && !userDataKeys.includes(key)) {
-         if (DEFAULT_DATA[key] && DEFAULT_DATA[key].length > 0) {
-            repaired[key] = DEFAULT_DATA[key];
-         }
+        if (DEFAULT_DATA[key] && DEFAULT_DATA[key].length > 0) {
+          repaired[key] = DEFAULT_DATA[key];
+        }
       }
     });
-
-    // Handle legacy 'products' vs 'items' in quotes
     if (repaired.quotes) {
       repaired.quotes = repaired.quotes.map(q => {
         let updated = { ...q };
@@ -112,152 +106,151 @@ function App() {
         return updated;
       });
     }
-
     if (!repaired.orders) repaired.orders = [];
     return repaired;
-  };
-
-  React.useEffect(() => {
-    // 1. Initial Load from LocalStorage (Immediate)
-    const localData = localStorage.getItem('calculDevisDB');
-    const localQuotes = localStorage.getItem('calculDevisQuotes');
-    
-    let initialDb = DEFAULT_DATA;
-    if (localData) {
-      try {
-        const parsed = JSON.parse(localData);
-        if (localQuotes) parsed.quotes = JSON.parse(localQuotes);
-        initialDb = repairDatabase(parsed);
-        setDatabase(initialDb);
-      } catch (e) {
-        console.error("Failed to parse local data", e);
-      }
-    }
-
-    // 2. Load from Cloud (with safety checks)
-    setIsInitialLoading(true);
-    syncDatabase.load().then(cloudData => {
-      if (cloudData) {
-        const repairedCloud = repairDatabase(cloudData);
-        
-        setDatabase(prev => {
-          // SAFETY: If the user has already started working (prev != initialDb), 
-          // do NOT overwrite with cloud data automatically. 
-          // Instead, we could show a merge dialog, but for now, we prioritize current work.
-          if (JSON.stringify(prev) !== JSON.stringify(initialDb)) {
-            console.warn("Cloud data received but local data has changed. Ignoring cloud to prevent data loss.");
-            return prev;
-          }
-          
-          console.log("Cloud data loaded successfully and applied.");
-          setIsCloudLoaded(true);
-          return repairedCloud;
-        });
-      } else {
-        console.log("No cloud data or error, staying in local mode.");
-        setIsCloudLoaded(false);
-      }
-    }).catch(err => {
-      console.error("Sync error:", err);
-      setIsCloudLoaded(false);
-    }).finally(() => {
-      setIsInitialLoading(false);
-    });
   }, []);
 
-  // Emergency Restore Function
-  const handleEmergencyRestore = () => {
-    const backup = localStorage.getItem('calculDevisDB_SAFETY_BACKUP');
-    if (backup && window.confirm("Restaurer la sauvegarde de sécurité créée juste avant le dernier rafraîchissement ?")) {
-      setDatabase(repairDatabase(JSON.parse(backup)));
-      alert("Données restaurées !");
-    } else {
-      alert("Aucune sauvegarde de sécurité trouvée.");
-    }
-  };
-
-  const refetchData = () => {
-    queryClient.invalidateQueries({ queryKey: ['database'] });
-  };
-
-
-  // 2. Mutation to Continuous Cloud Sync
-  const syncMutation = useMutation({
-    mutationFn: async (db) => {
-      const { quotes, ...mainDb } = db;
-      localStorage.setItem('calculDevisDB', JSON.stringify(mainDb));
-      localStorage.setItem('calculDevisQuotes', JSON.stringify(quotes || []));
-      return await syncDatabase.save({ mainDb, quotes });
-    },
-    onSuccess: (ok) => {
-      if (ok) setLastSyncTime(new Date());
-    },
-    networkMode: 'offlineFirst',
-  });
-
-  const [isOnline, setIsOnline] = React.useState(navigator.onLine);
-
-  React.useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
-      refetchData(); // Refresh data when connection returns
+  // ─── STEP 1: Load from IndexedDB on mount ───────────────────────────────
+  useEffect(() => {
+    const loadLocal = async () => {
+      setIsLoading(true);
+      try {
+        const localData = await persistentStorage.load(LOCAL_KEY);
+        if (localData) {
+          console.log('✅ Données locales chargées depuis IndexedDB');
+          setDatabase(repairDatabase(localData));
+        } else {
+          // Migrate from old localStorage if present
+          try {
+            const oldMain = localStorage.getItem('calculDevisDB');
+            const oldQuotes = localStorage.getItem('calculDevisQuotes');
+            if (oldMain) {
+              const parsed = JSON.parse(oldMain);
+              if (oldQuotes) parsed.quotes = JSON.parse(oldQuotes);
+              console.log('🔄 Migration depuis localStorage vers IndexedDB');
+              const repaired = repairDatabase(parsed);
+              setDatabase(repaired);
+              await persistentStorage.save(LOCAL_KEY, repaired);
+            } else {
+              setDatabase(DEFAULT_DATA);
+            }
+          } catch(e) {
+            setDatabase(DEFAULT_DATA);
+          }
+        }
+      } catch (e) {
+        console.error('Erreur chargement local:', e);
+        setDatabase(DEFAULT_DATA);
+      } finally {
+        setIsLoading(false);
+      }
     };
-    const handleOffline = () => setIsOnline(false);
+    loadLocal();
+  }, [repairDatabase]);
+
+  // ─── STEP 2: Save to IndexedDB on every change (instant) ─────────────────
+  useEffect(() => {
+    if (!database || isLoading) return;
+    if (isFirstLoad.current) { isFirstLoad.current = false; return; }
+
+    setSaveStatus('saving');
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+
+    saveTimerRef.current = setTimeout(async () => {
+      try {
+        await persistentStorage.save(LOCAL_KEY, database);
+        await persistentStorage.save(BACKUP_KEY, { ...database, _backupTime: new Date().toISOString() });
+        setSaveStatus('saved');
+        setTimeout(() => setSaveStatus('idle'), 2000);
+      } catch (e) {
+        console.error('IndexedDB save error:', e);
+        setSaveStatus('error');
+      }
+    }, 300);
+
+    // Cloud sync (5s debounce, best-effort)
+    if (cloudSyncTimerRef.current) clearTimeout(cloudSyncTimerRef.current);
+    cloudSyncTimerRef.current = setTimeout(async () => {
+      if (!navigator.onLine) { setCloudSyncStatus('offline'); return; }
+      setCloudSyncStatus('syncing');
+      try {
+        const { quotes, ...mainDb } = database;
+        await syncDatabase.save({ mainDb, quotes });
+        setCloudSyncStatus('ok');
+        setLastCloudSync(new Date());
+      } catch (e) {
+        console.warn('Cloud sync failed (non-critical):', e.message);
+        setCloudSyncStatus('offline');
+      }
+    }, 5000);
+
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      if (cloudSyncTimerRef.current) clearTimeout(cloudSyncTimerRef.current);
+    };
+  }, [database, isLoading]);
+
+  // ─── Network listeners ────────────────────────────────────────────────────
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => { setIsOnline(false); setCloudSyncStatus('offline'); };
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
+    return () => { window.removeEventListener('online', handleOnline); window.removeEventListener('offline', handleOffline); };
   }, []);
 
-  React.useEffect(() => {
-    if (database === DEFAULT_DATA) return;
-    
-    // 1. ALWAYS SAVE TO LOCAL STORAGE (Immediate)
-    try {
-      const { quotes, ...mainDb } = database;
-      localStorage.setItem('calculDevisDB', JSON.stringify(mainDb));
-      localStorage.setItem('calculDevisQuotes', JSON.stringify(quotes || []));
-    } catch (e) {
-      console.error("Local storage save failed:", e);
-    }
-
-    // 2. SAVE TO CLOUD (Debounced)
-    // IMPORTANT: If cloud failed to load, don't auto-save to CLOUD to prevent overwriting cloud with default/empty data
-    if (!isCloudLoaded && !isInitialLoading) {
-      console.warn("Cloud not loaded. Auto-sync to cloud disabled to avoid overwriting remote data.");
-      return;
-    }
-
-    const timeout = setTimeout(() => {
-      syncMutation.mutate(database);
-    }, 3000);
-
-    // 3. Create a safety backup for next refresh
-    try {
-      localStorage.setItem('calculDevisDB_SAFETY_BACKUP', JSON.stringify(database));
-    } catch(e) {}
-
-    return () => clearTimeout(timeout);
-  }, [database, isCloudLoaded, isInitialLoading]);
-
-  React.useEffect(() => {
-    if (!database.compositions || database.compositions.length === 0) return;
-    
+  // ─── Fix current config if catalog changes ────────────────────────────────
+  useEffect(() => {
+    if (!database || !database.compositions || database.compositions.length === 0) return;
     const compExists = database.compositions.some(c => c.id === currentConfig.compositionId);
     const glassExists = database.glass.some(g => g.id === currentConfig.glassId);
     const colorExists = database.colors.some(c => c.id === currentConfig.colorId);
-    
     if (!compExists || !glassExists || !colorExists) {
-      setCurrentConfig(prev => ({ 
-        ...prev, 
+      setCurrentConfig(prev => ({
+        ...prev,
         compositionId: compExists ? prev.compositionId : database.compositions[0].id,
         glassId: glassExists ? prev.glassId : database.glass[0].id,
         colorId: colorExists ? prev.colorId : database.colors[0].id
       }));
     }
   }, [database]);
+
+  // ─── Emergency restore ────────────────────────────────────────────────────
+  const handleEmergencyRestore = async () => {
+    const backup = await persistentStorage.load(BACKUP_KEY);
+    if (backup && window.confirm(`Restaurer la sauvegarde du ${backup._backupTime ? new Date(backup._backupTime).toLocaleString() : '?'} ?`)) {
+      setDatabase(repairDatabase(backup));
+      alert('Données restaurées !');
+    } else if (!backup) {
+      alert('Aucune sauvegarde de sécurité trouvée.');
+    }
+  };
+
+  // ─── Force cloud sync ─────────────────────────────────────────────────────
+  const handleForceCloudSync = async () => {
+    if (!database) return;
+    setCloudSyncStatus('syncing');
+    try {
+      const { quotes, ...mainDb } = database;
+      await syncDatabase.save({ mainDb, quotes });
+      setCloudSyncStatus('ok');
+      setLastCloudSync(new Date());
+      alert('Synchronisation Cloud réussie !');
+    } catch (e) {
+      setCloudSyncStatus('offline');
+      alert('Échec Cloud. Données sauvegardées en local.');
+    }
+  };
+
+  // ─── Loading screen ───────────────────────────────────────────────────────
+  if (isLoading || !database) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', flexDirection: 'column', gap: '1rem', background: '#0f172a', color: 'white' }}>
+        <div style={{ width: '48px', height: '48px', border: '4px solid #334155', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+        <p style={{ fontSize: '1rem', color: '#94a3b8' }}>Chargement de vos données locales...</p>
+      </div>
+    );
+  }
 
   const menuItems = [
     { id: 'commercial', label: 'Commercial', icon: LayoutDashboard },
@@ -277,16 +270,25 @@ function App() {
       <InstallerPortal 
         data={database} 
         setData={setDatabase} 
-        orderId={installerOrderId} 
-        refetchData={refetchData}
+        orderId={installerOrderId}
         isOnline={isOnline}
-        isSyncing={syncMutation.isPending}
+        isSyncing={cloudSyncStatus === 'syncing'}
       />
     );
   }
 
+  const cloudColor = cloudSyncStatus === 'ok' ? '#10b981' : cloudSyncStatus === 'syncing' ? '#f59e0b' : '#94a3b8';
+
   return (
     <div className="app-container">
+      {/* Save Status Bar (top of screen) */}
+      <div style={{
+        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
+        height: '3px',
+        background: saveStatus === 'saved' ? '#10b981' : saveStatus === 'saving' ? '#3b82f6' : saveStatus === 'error' ? '#ef4444' : 'transparent',
+        transition: 'background 0.5s',
+      }} />
+
       {/* Sidebar */}
       <aside className="sidebar shadow-2xl">
         <div className="sidebar-logo" style={{ padding: '0 0.5rem', marginBottom: '2.5rem' }}>
@@ -319,95 +321,80 @@ function App() {
             })}
           </ul>
         </nav>
-        <div style={{ marginTop: 'auto', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '1.5rem', paddingBottom: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-           {/* Backup & Sync Status */}
-           <div 
-             onClick={refetchData}
-             style={{ 
-               padding: '0.75rem 1rem', display: 'flex', alignItems: 'center', gap: '0.75rem', borderRadius: '0.5rem', 
-               background: isCloudLoaded ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-               cursor: 'pointer', border: `1px solid ${isCloudLoaded ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'}`,
-               transition: 'all 0.2s'
-             }}
-           >
-              <div style={{ position: 'relative' }}>
-                <RefreshCw size={18} className={syncMutation.isPending || isInitialLoading ? "animate-spin" : ""} style={{ color: isCloudLoaded ? '#10b981' : '#ef4444' }} />
-                <div style={{ position: 'absolute', top: -4, right: -4, width: '8px', height: '8px', borderRadius: '50%', background: isOnline ? '#10b981' : '#ef4444', border: '2px solid #1e293b' }}></div>
-              </div>
-              <div style={{ flex: 1 }}>
-                <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: 700, color: isCloudLoaded ? '#10b981' : '#ef4444' }}>
-                  {isInitialLoading ? 'Init...' : (syncMutation.isPending ? 'Sync...' : (isCloudLoaded ? 'Cloud OK' : 'Mode Local'))}
-                </p>
-                <p style={{ margin: 0, fontSize: '0.65rem', color: '#94a3b8' }}>
-                  {lastSyncTime ? `MàJ : ${lastSyncTime.toLocaleTimeString()}` : 'Non sync'}
-                </p>
-              </div>
-           </div>
-           
-           {!isCloudLoaded && !isInitialLoading && (
-             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                <button 
-                  onClick={() => setIsCloudLoaded(true)}
-                  style={{ 
-                    width: '100%', padding: '0.5rem', fontSize: '0.7rem', background: '#f59e0b', color: 'white', 
-                    border: 'none', borderRadius: '0.4rem', cursor: 'pointer', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem'
-                  }}
-                >
-                  <RefreshCw size={14} /> Forcer Synchro Cloud
-                </button>
-                {localStorage.getItem('calculDevisDB_SAFETY_BACKUP') && (
-                  <button 
-                    onClick={handleEmergencyRestore}
-                    style={{ 
-                      width: '100%', padding: '0.5rem', fontSize: '0.7rem', background: '#ef4444', color: 'white', 
-                      border: 'none', borderRadius: '0.4rem', cursor: 'pointer', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem'
-                    }}
-                  >
-                    🆘 Récupérer Session Perdue
-                  </button>
-                )}
-             </div>
-           )}
 
-           {/* Manual Export/Import Shortcut */}
-           <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <button 
-                onClick={() => {
-                  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(database, null, 2));
-                  const dl = document.createElement('a');
-                  dl.setAttribute("href", dataStr);
-                  dl.setAttribute("download", `backup_devis_${new Date().toISOString().slice(0,10)}.json`);
-                  dl.click();
-                }}
-                className="btn"
-                style={{ flex: 1, fontSize: '0.65rem', padding: '0.4rem', color: '#94a3b8', borderColor: 'rgba(255,255,255,0.1)', background: 'transparent' }}
-                title="Exporter une sauvegarde locale"
-              >
-                💾 Export
-              </button>
-              <label 
-                className="btn"
-                style={{ flex: 1, fontSize: '0.65rem', padding: '0.4rem', color: '#94a3b8', borderColor: 'rgba(255,255,255,0.1)', background: 'transparent', cursor: 'pointer', textAlign: 'center' }}
-                title="Restaurer un fichier JSON"
-              >
-                📂 Import
-                <input type="file" accept=".json" style={{ display: 'none' }} onChange={(e) => {
-                  const file = e.target.files[0];
-                  if (!file) return;
-                  const reader = new FileReader();
-                  reader.onload = (evt) => {
-                    try {
-                      const imported = JSON.parse(evt.target.result);
-                      if (window.confirm("Restaurer cette sauvegarde ? Cela écrasera les données actuelles.")) {
-                        setDatabase(imported);
-                        setIsCloudLoaded(true);
-                      }
-                    } catch(err) { alert("Fichier invalide"); }
-                  };
-                  reader.readAsText(file);
-                }} />
-              </label>
-           </div>
+        <div style={{ marginTop: 'auto', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '1.5rem', paddingBottom: '1rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+          
+          {/* Local Save Indicator */}
+          <div style={{ padding: '0.5rem 0.75rem', borderRadius: '0.4rem', background: 'rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+            {saveStatus === 'saving' 
+              ? <RefreshCw size={13} color="#3b82f6" style={{ animation: 'spin 1s linear infinite', flexShrink: 0 }} />
+              : <CheckCircle size={13} color={saveStatus === 'error' ? '#ef4444' : '#10b981'} style={{ flexShrink: 0 }} />
+            }
+            <span style={{ fontSize: '0.68rem', color: saveStatus === 'saving' ? '#93c5fd' : saveStatus === 'error' ? '#fca5a5' : '#6ee7b7' }}>
+              {saveStatus === 'saving' ? 'Sauvegarde...' : saveStatus === 'error' ? '⚠️ Erreur de sauvegarde' : '💾 Sauvegardé localement'}
+            </span>
+          </div>
+
+          {/* Cloud Sync Status */}
+          <div style={{ padding: '0.5rem 0.75rem', borderRadius: '0.4rem', background: 'rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+            <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: isOnline ? '#10b981' : '#ef4444', flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ margin: 0, fontSize: '0.68rem', color: cloudColor, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {cloudSyncStatus === 'ok' ? '☁️ Cloud synchronisé' : cloudSyncStatus === 'syncing' ? '☁️ Sync en cours...' : isOnline ? '☁️ En attente sync' : '📴 Hors-ligne'}
+              </p>
+              {lastCloudSync && <p style={{ margin: 0, fontSize: '0.58rem', color: '#64748b' }}>{lastCloudSync.toLocaleTimeString()}</p>}
+            </div>
+            <button onClick={handleForceCloudSync} title="Forcer la synchro" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', flexShrink: 0 }}>
+              <RefreshCw size={12} color="#64748b" />
+            </button>
+          </div>
+
+          {/* Emergency Restore */}
+          <button
+            onClick={handleEmergencyRestore}
+            style={{ width: '100%', padding: '0.4rem', fontSize: '0.68rem', background: 'rgba(239,68,68,0.1)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '0.4rem', cursor: 'pointer', fontWeight: 600 }}
+          >
+            🆘 Récupérer Sauvegarde
+          </button>
+
+          {/* Export / Import */}
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button
+              onClick={() => {
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(database, null, 2));
+                const dl = document.createElement('a');
+                dl.setAttribute("href", dataStr);
+                dl.setAttribute("download", `backup_devis_${new Date().toISOString().slice(0,10)}.json`);
+                dl.click();
+              }}
+              className="btn"
+              style={{ flex: 1, fontSize: '0.65rem', padding: '0.4rem', color: '#94a3b8', borderColor: 'rgba(255,255,255,0.1)', background: 'transparent' }}
+              title="Exporter une sauvegarde locale"
+            >
+              💾 Export
+            </button>
+            <label
+              className="btn"
+              style={{ flex: 1, fontSize: '0.65rem', padding: '0.4rem', color: '#94a3b8', borderColor: 'rgba(255,255,255,0.1)', background: 'transparent', cursor: 'pointer', textAlign: 'center' }}
+              title="Restaurer un fichier JSON"
+            >
+              📂 Import
+              <input type="file" accept=".json" style={{ display: 'none' }} onChange={(e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                  try {
+                    const imported = JSON.parse(evt.target.result);
+                    if (window.confirm("Restaurer cette sauvegarde ? Cela écrasera les données actuelles.")) {
+                      setDatabase(repairDatabase(imported));
+                    }
+                  } catch(err) { alert("Fichier invalide"); }
+                };
+                reader.readAsText(file);
+              }} />
+            </label>
+          </div>
         </div>
 
         <div className="sidebar-footer" style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '1rem' }}>
@@ -474,7 +461,7 @@ function App() {
           <ShippingModule 
             data={database}
             setData={setDatabase}
-            refetchData={refetchData}
+            refetchData={() => {}}
           />
         )}
         {activeTab === 'admin' && (
