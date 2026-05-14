@@ -838,34 +838,39 @@ export class FormulaEngine {
 
     // 6. Process Add-ons
     if (item.addOns && Array.isArray(item.addOns)) {
-      // Enrich scope with parent item's calculated quantities so add-on formulas can reference them
+      const parentQty = Math.ceil(pieceCount);
+      // Enrich scope with parent item's calculated quantities
       const addonScope = {
         ...evalScope,
-        nb_lames: Math.ceil(pieceCount),   // Number of slats (parent item qty)
-        qty_lame: Math.ceil(pieceCount),   // Alias
-        nb_volets: isDouble ? 2 : 1,       // Number of shutter wings
+        nb_lames: parentQty,
+        qty_lame: parentQty,
+        nb_volets: isDouble ? 2 : 1,
       };
       item.addOns.forEach(addon => {
-        // Compatibility Check for Add-on
         if (addon.compatibilityFormula) {
           const isCompatible = this.evaluate(addon.compatibilityFormula, addonScope, `Compatibilité Add-on ${addon.name}`, errors);
           if (!isCompatible) return;
         }
         const formulaToUse = (isDouble && addon.doubleFormula) ? addon.doubleFormula : (addon.formula || '1');
-        const addonQty = this.evaluate(formulaToUse, addonScope, `Quantité Add-on ${addon.name}`, errors);
-        if (addonQty > 0) {
+        // Calculate base qty from formula
+        const baseAddonQty = this.evaluate(formulaToUse, addonScope, `Quantité Add-on ${addon.name}`, errors);
+        
+        // AUTO-MULTIPLY by parent piece count (e.g. 2 caps * 40 slats)
+        const totalAddonQty = baseAddonQty * parentQty;
+
+        if (totalAddonQty > 0) {
           const addonPrice = addon.price || 0;
           const addonUnit = (addon.unit || 'Unité').toUpperCase();
-          let addonCost = (addonUnit === 'BARRE') ? (addonQty / 6400 * addonPrice) : (addonQty * addonPrice);
+          let addonCost = (addonUnit === 'BARRE') ? (totalAddonQty / 6400 * addonPrice) : (totalAddonQty * addonPrice);
           shutterPack.push({
             id: `${item.id}-addon-${(addon.name || 'opt').replace(/\s+/g, '-').toLowerCase()}`,
             name: `Add-on (${item.name}): ${addon.name}`,
-            qty: addonQty,
+            qty: totalAddonQty,
             unit: addon.unit || 'Unité',
             priceUnit: addon.unit || 'Unité',
             price: addonPrice,
             formula: formulaToUse,
-            resolvedFormula: `${formulaToUse} = ${addonQty}  [nb_lames=${Math.ceil(pieceCount)}, L=${Math.round(itemScopeL)}, H=${Math.round(effectiveH)}]`,
+            resolvedFormula: `${formulaToUse} (${baseAddonQty}) x ${parentQty} pcs = ${totalAddonQty}`,
             cost: addonCost
           });
         }
