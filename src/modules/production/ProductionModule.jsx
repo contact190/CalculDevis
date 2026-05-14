@@ -228,46 +228,56 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         
         // Standard profiles
         if (b.profiles) {
+          const rId = cfg.rangeId || entry.rangeId || '';
+          const rangeInfo = database.ranges?.find(r => String(r.id) === String(rId));
+          const rangeName = rangeInfo?.name || rId || '';
+
           b.profiles.forEach(p => {
-          const mapKey = `${p.id}|${colorName}`;
-          const displayName = p.name || p.label || 'Sans nom';
-          const measure = p.length * p.qty * cfgQty;
-          
-          const newPieces = Array(p.qty * cfgQty).fill(0).map((_, i) => ({ 
-            length: p.length, 
-            instanceLabel: entry.allLabels?.[Math.floor(i / p.qty)] || groupLabels,
-            usage: p.usage || 'FINITION',
-            label: p.label,
-            windowIdx: configIdx
-          }));
-          
-          const pRef = (database.profiles || []).find(x => x.id === p.id);
-          const unitPrice = pRef ? (pRef.weightPerM * pRef.pricePerKg) : 0;
-          
-          if (!map[mapKey]) {
-            map[mapKey] = { 
-              ...p, 
-              originalNames: new Set([displayName]), 
-              totalMeasure: measure, 
-              pieces: newPieces, 
-              colorName, 
-              colorId: cfg.colorId,
-              baseId: p.id,
-              image: pRef?.image,
-              technicalDrawing: pRef?.technicalDrawing,
-              unitPrice
-            };
-          } else {
-            map[mapKey].totalMeasure += measure;
-            map[mapKey].pieces = [...map[mapKey].pieces, ...newPieces];
-            map[mapKey].originalNames.add(displayName);
-          }
-        });
+            const mapKey = `${p.id}|${colorName}`;
+            const displayName = p.name || p.label || 'Sans nom';
+            const measure = p.length * p.qty * cfgQty;
+            
+            const newPieces = Array(p.qty * cfgQty).fill(0).map((_, i) => ({ 
+              length: p.length, 
+              instanceLabel: entry.allLabels?.[Math.floor(i / p.qty)] || groupLabels,
+              usage: p.usage || 'FINITION',
+              label: p.label,
+              windowIdx: configIdx
+            }));
+            
+            const pRef = (database.profiles || []).find(x => x.id === p.id);
+            const unitPrice = pRef ? (pRef.weightPerM * pRef.pricePerKg) : 0;
+            
+            if (!map[mapKey]) {
+              map[mapKey] = { 
+                ...p, 
+                originalNames: new Set([displayName]), 
+                originalRanges: new Set(rangeName ? [rangeName] : []),
+                totalMeasure: measure, 
+                pieces: newPieces, 
+                colorName, 
+                colorId: cfg.colorId,
+                baseId: p.id,
+                image: pRef?.image,
+                technicalDrawing: pRef?.technicalDrawing,
+                unitPrice
+              };
+            } else {
+              map[mapKey].totalMeasure += measure;
+              map[mapKey].pieces = [...map[mapKey].pieces, ...newPieces];
+              map[mapKey].originalNames.add(displayName);
+              if (rangeName) map[mapKey].originalRanges.add(rangeName);
+            }
+          });
         } // end if (b.profiles)
         // Shutter components -> List 1 ONLY if sold by BARRE
         (b.shutters || []).forEach(s => {
           const unit = (s.priceUnit || '').toUpperCase().trim();
-          if (unit !== 'BARRE') return; // Unité + ML go to List 2 (accessories)
+          if (unit !== 'BARRE') return;
+
+          const rId = cfg.rangeId || entry.rangeId || '';
+          const rangeInfo = database.ranges?.find(r => String(r.id) === String(rId));
+          const rangeName = rangeInfo?.name || rId || '';
 
           const mapKey = `${s.id}|${colorName}`;
           const measure = (s.totalMeasure || (s.length * s.qty)) * cfgQty;
@@ -289,6 +299,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
             map[mapKey] = { 
               ...s, 
               originalNames: new Set([s.name]), 
+              originalRanges: new Set(rangeName ? [rangeName] : []),
               totalMeasure: measure, 
               pieces: newPieces, 
               colorName,
@@ -296,8 +307,9 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
             };
           } else {
             map[mapKey].totalMeasure += measure;
-            map[mapKey].pieces.push(...newPieces);
+            map[mapKey].pieces = [...map[mapKey].pieces, ...newPieces];
             map[mapKey].originalNames.add(s.name);
+            if (rangeName) map[mapKey].originalRanges.add(rangeName);
           }
         });
       } catch (e) { console.warn(e); }
@@ -307,9 +319,10 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
       // For jumelage later we will use original base ref for id, but unique id is key
       baseId: item.id,
       id: `${item.id}|${item.colorName}`,
-      combinedName: Array.from(item.originalNames).filter(Boolean).join(' / ')
+      combinedName: Array.from(item.originalNames).filter(Boolean).join(' / '),
+      combinedRanges: Array.from(item.originalRanges || []).join(', ')
     }));
-  }, [activeConfigs, engine, database.colors]);
+  }, [activeConfigs, engine, database.colors, database.ranges]);
 
   const purchasingAccessories = useMemo(() => {
     const map = {};
@@ -2354,6 +2367,13 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         // --- 2. CALCULATION LOOP ---
         targetItems.forEach((item, windowIdx) => {
           if (!item.config) return;
+          const rId = item.config.rangeId || item.rangeId || '';
+          const rangeInfo = database.ranges?.find(r => String(r.id) === String(rId));
+          const compoInfo = database.compositions?.find(c => String(c.id) === String(item.config?.compositionId));
+          
+          // Use Range Name, or Fallback to Composition Name, or fallback to rId
+          const rangeName = rangeInfo?.name || compoInfo?.name || rId || 'Inconnu';
+
           const cId = item.config.compositionId;
           if (cId) {
              requestedCompoIds.add(cId);
@@ -2389,6 +2409,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                       windowItemId: item.id,
                       isBatch: !!item.isFromBatch,
                       colorName,
+                      rangeName,
                       barKey
                     });
                   }
@@ -2416,6 +2437,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                         windowLabel: item.label || item.instanceLabel || `Fenêtre #${windowIdx + 1}`,
                         windowItemId: item.id,
                         isShutter: true,
+                        rangeName,
                         isBatch: !!item.isFromBatch
                       });
                     }
@@ -2460,8 +2482,9 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         const profileGroups = {};
         globalCuts.forEach(cut => {
           const key = cut.barKey || cut.profileId;
-          if (!profileGroups[key]) profileGroups[key] = { profileName: cut.profileName, colorName: cut.colorName, cuts: [] };
+          if (!profileGroups[key]) profileGroups[key] = { profileName: cut.profileName, colorName: cut.colorName, cuts: [], ranges: new Set() };
           profileGroups[key].cuts.push(cut);
+          if (cut.rangeName) profileGroups[key].ranges.add(cut.rangeName);
         });
 
         // Best-Fit Decreasing per profile group
@@ -2523,7 +2546,20 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
             bar.isTrash = bar.remaining < minPieceInOrder;
             bar.waste = bar.remaining;
           });
-          barsResult[barKey] = { profileName, colorName, bars, barLen };
+          // Filter out "Inconnu" if other ranges exist to keep titles clean
+          const rangesArray = Array.from(profileGroups[barKey].ranges);
+          const filteredRanges = (rangesArray.length > 1) 
+            ? rangesArray.filter(r => r !== 'Inconnu' && r !== 'Inconnue' && r !== 'Inconnu' && !r.includes('Inconnue'))
+            : rangesArray;
+
+          barsResult[barKey] = { 
+            profileName, 
+            colorName, 
+            bars, 
+            barLen, 
+            baseId: profileGroups[barKey].cuts[0]?.profileId || barKey.split('|')[0],
+            combinedRanges: filteredRanges.join(', ') 
+          };
         });
 
         // Assign each BAR to a chariot slot based on barsPerSlot
@@ -2551,6 +2587,8 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
               profileName, 
               profId, 
               colorName,
+              baseId: barsResult[profId].baseId,
+              combinedRanges: barsResult[profId].combinedRanges,
               priority: getProfilePriority(profileName),
               barLen: bar.barLen || standardLen 
             });
@@ -2627,7 +2665,15 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         // Groupement par adresse pour l'affichage
         const slotsMap = {};
         allPiecesFlat.forEach(p => {
-          if (!slotsMap[p.address]) slotsMap[p.address] = { address: p.address, pieces: [], profileName: p.profileName };
+          if (!slotsMap[p.address]) {
+            const barInfo = allBarsFlat.find(b => b.profId === p.profId);
+            slotsMap[p.address] = { 
+              address: p.address, 
+              pieces: [], 
+              profileName: p.profileName,
+              combinedRanges: barInfo?.combinedRanges || ''
+            };
+          }
           slotsMap[p.address].pieces.push(p);
         });
 
@@ -2723,7 +2769,15 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
             if (nameLower.includes('parclose') || nameLower.includes('couvre') || 
                 nameLower.includes('cj') || profIdLower.includes('cj')) return;
 
-            if (!groupedByProfile[bar.profId]) groupedByProfile[bar.profId] = { name: bar.profileName, color: bar.colorName, bars: [] };
+            if (!groupedByProfile[bar.profId]) {
+              groupedByProfile[bar.profId] = { 
+                name: bar.profileName, 
+                ref: bar.baseId,
+                color: bar.colorName, 
+                combinedRanges: bar.combinedRanges,
+                bars: [] 
+              };
+            }
             groupedByProfile[bar.profId].bars.push(bar);
           });
 
@@ -2734,7 +2788,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
 
             doc.setFillColor(30, 41, 59); doc.rect(margin, currentY, 180, 8, 'F');
             doc.setTextColor(255, 255, 255); doc.setFontSize(9); doc.setFont('helvetica', 'bold');
-            doc.text(`${group.name} (${group.color || 'Standard'})`, margin + 3, currentY + 5.5);
+            doc.text(`${group.ref ? '[' + group.ref + '] ' : ''}${group.name} ${group.combinedRanges ? '- ' + group.combinedRanges : ''} (${group.color || 'Standard'})`, margin + 3, currentY + 5.5);
             doc.setFontSize(8); doc.text(`${group.bars.length} Barres (${newBarsCount} Neuves + ${stockBarsCount} Stock)`, 195, currentY + 5.5, { align: 'right' });
             currentY += 15;
 
@@ -3001,7 +3055,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                                         <>
                                           <div style={{ marginBottom: '0.8rem', fontWeight: 800, fontSize: '0.75rem', color: '#475569', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                             <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#7c3aed' }}></div>
-                                            {slotData.profileName} 
+                                            {slotData.baseId ? `[${slotData.baseId}] ` : ''}{slotData.profileName} {slotData.combinedRanges ? `- ${slotData.combinedRanges}` : ''}
                                             <span style={{ fontWeight: 400, color: '#94a3b8' }}>({slotData.pieces.length} / {kitConfig.piecesPerSlot} pièces)</span>
                                           </div>
                                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.8rem' }}>
