@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { ShoppingBag, FileText, Ruler, Plus, Trash2, CheckCircle, Package, Scissors, Download, ExternalLink, ChevronRight, ChevronDown, ListOrdered, ShoppingCart, Layers, ArrowLeft, ClipboardList, Settings, Copy } from 'lucide-react';
+import { ShoppingBag, FileText, Ruler, Plus, Trash2, CheckCircle, Package, Scissors, Download, ExternalLink, ChevronRight, ChevronDown, ListOrdered, ShoppingCart, Layers, ArrowLeft, ClipboardList, Settings, Copy, QrCode } from 'lucide-react';
 import { FormulaEngine } from '../../engine/formula-engine';
 import { QuoteSettingsPanel } from '../commercial/CommercialModule';
 import jsPDF from 'jspdf';
