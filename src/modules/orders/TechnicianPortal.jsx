@@ -525,20 +525,44 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                             <option value="">Auto</option>
                                             {(data.shutterComponents?.axes || []).map(opt => <option key={opt.id} value={opt.id}>{opt.name}</option>)}
                                           </select>
-                                        </div>
-                                        <div>
-                                          <label style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', marginBottom: '0.2rem', fontWeight: 600 }}>KIT</label>
-                                          <select
-                                            className="input"
-                                            value={v.shutter.overrides?.kitId || ''}
-                                            onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.kitId', e.target.value)}
-                                            style={{ fontSize: '0.85rem', padding: '0.35rem 0.5rem' }}
-                                          >
-                                            <option value="">Auto</option>
-                                            {(data.shutterComponents?.kits || []).map(opt => <option key={opt.id} value={opt.id}>{opt.name}</option>)}
-                                          </select>
-                                        </div>
-                                      </div>
+                                         </div>
+                                         <div>
+                                           <label style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', marginBottom: '0.2rem', fontWeight: 600 }}>KIT</label>
+                                           <select
+                                             className="input"
+                                             value={v.shutter.overrides?.kitId || ''}
+                                             onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.kitId', e.target.value)}
+                                             style={{ fontSize: '0.85rem', padding: '0.35rem 0.5rem' }}
+                                           >
+                                             <option value="">Auto</option>
+                                             {(data.shutterComponents?.kits || []).map(opt => <option key={opt.id} value={opt.id}>{opt.name}</option>)}
+                                           </select>
+                                         </div>
+                                         {(() => {
+                                           const selectedKitId = v.shutter.overrides?.kitId !== undefined && v.shutter.overrides?.kitId !== '' 
+                                             ? v.shutter.overrides?.kitId 
+                                             : (item.config?.shutterConfig?.kitId || '');
+                                           const selectedKit = (data.shutterComponents?.kits || []).find(k => k.id === selectedKitId);
+                                           const isMotor = selectedKit?.type === 'MOTEUR' || 
+                                            selectedKitId.toLowerCase().includes('mote') || 
+                                            selectedKit?.name?.toLowerCase().includes('moteur');
+                                           if (!isMotor) return null;
+                                           return (
+                                             <div>
+                                               <label style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', marginBottom: '0.2rem', fontWeight: 600 }}>MOTEUR</label>
+                                               <select
+                                                 className="input"
+                                                 value={v.shutter.overrides?.moteurId || ''}
+                                                 onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.moteurId', e.target.value)}
+                                                 style={{ fontSize: '0.85rem', padding: '0.35rem 0.5rem' }}
+                                               >
+                                                 <option value="">Auto</option>
+                                                 {(data.shutterComponents?.moteurs || []).map(opt => <option key={opt.id} value={opt.id}>{opt.name}</option>)}
+                                               </select>
+                                             </div>
+                                           );
+                                         })()}
+                                       </div>
                                     )}
                                   </div>
 

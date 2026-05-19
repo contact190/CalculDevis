@@ -998,7 +998,10 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                   if (key === 'moteurId') {
                     const selectedKitId = config.shutterConfig?.kitId;
                     const selectedKit = (database.shutterComponents?.kits || []).find(k => k.id === selectedKitId);
-                    if (!selectedKit || selectedKit.type !== 'MOTEUR') return null;
+                    const isMotor = selectedKit?.type === 'MOTEUR' || 
+                                            (selectedKitId || '').toLowerCase().includes('mote') || 
+                                            selectedKit?.name?.toLowerCase().includes('moteur');
+                    if (!selectedKit || !isMotor) return null;
                   }
 
 
