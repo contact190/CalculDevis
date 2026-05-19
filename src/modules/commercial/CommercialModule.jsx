@@ -1007,7 +1007,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
 
                   let filteredItems = (items || []).filter(item => {
                     const isDouble = config.shutterConfig?.isDoubleShutter || false;
-                    const usage = item.usageVolet || 'NORMAL';
+                    const usage = item.usageVolet || (key === 'moteurId' ? 'BOTH' : 'NORMAL');
                     if (isDouble) return usage === 'DOUBLE' || usage === 'BOTH';
                     return usage === 'NORMAL' || usage === 'BOTH';
                   });

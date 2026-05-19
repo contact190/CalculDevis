@@ -662,7 +662,7 @@ export class FormulaEngine {
   }
   processShutterComponent(item, vars, shutterPack, key = '', config = {}, errors = []) {
     const isDouble = config.shutterConfig?.isDoubleShutter || false;
-    const usage = item.usageVolet || 'NORMAL';
+    const usage = item.usageVolet || (key === 'moteurId' ? 'BOTH' : 'NORMAL');
 
     // 0. Usage Filtering
     if (isDouble) {
@@ -831,7 +831,7 @@ export class FormulaEngine {
       price: itemPrice,
       priceUnit: item.priceUnit || 'Unité',
       unit: item.priceUnit || 'Unité',
-      resolvedFormula: `${this.resolveFormula(formulaToUse, evalScope)} x [${this.resolveFormula(item.cuttingFormula || (key === 'glissiereId' ? 'H' : 'L'), evalScope)}]`,
+      resolvedFormula: `${this.resolveFormula(formulaToUse, evalScope)} x [${this.resolveFormula(cuttingFormulaToUse || (key === 'glissiereId' ? 'H' : 'L'), evalScope)}]`,
       usage: 'VOLET ROULANT',
       cost: finalCost
     });
