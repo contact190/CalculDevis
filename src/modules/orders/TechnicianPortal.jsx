@@ -443,9 +443,19 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                     </div>
 
                                     {v.shutter && (
-                                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginTop: '0.5rem' }}>
+                                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginTop: '0.75rem' }}>
                                         <div>
-                                          <label style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', marginBottom: '0.2rem' }}>Largeur Lame (LV)</label>
+                                          <label style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', marginBottom: '0.2rem', fontWeight: 600 }}>QUANTITÉ VOLET</label>
+                                          <input
+                                            type="number"
+                                            className="input"
+                                            value={v.shutter.qty !== undefined ? v.shutter.qty : 1}
+                                            onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.qty', e.target.value)}
+                                            style={{ fontSize: '0.85rem', padding: '0.35rem 0.5rem', textAlign: 'center' }}
+                                          />
+                                        </div>
+                                        <div>
+                                          <label style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', marginBottom: '0.2rem', fontWeight: 600 }}>LARGEUR LAME (LV) mm</label>
                                           <input
                                             type="number"
                                             className="input"
@@ -456,14 +466,77 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                           />
                                         </div>
                                         <div>
-                                          <label style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', marginBottom: '0.2rem' }}>Qté Volet</label>
-                                          <input
-                                            type="number"
+                                          <label style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', marginBottom: '0.2rem', fontWeight: 600 }}>MANOEUVRE</label>
+                                          <select
                                             className="input"
-                                            value={v.shutter.qty !== undefined ? v.shutter.qty : 1}
-                                            onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.qty', e.target.value)}
-                                            style={{ fontSize: '0.85rem', padding: '0.35rem 0.5rem', textAlign: 'center' }}
-                                          />
+                                            value={v.shutter.overrides?.controlPosition || ''}
+                                            onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.controlPosition', e.target.value)}
+                                            style={{ fontSize: '0.85rem', padding: '0.35rem 0.5rem', fontWeight: 700 }}
+                                          >
+                                            <option value="">Auto</option>
+                                            <option value="Gauche">Gauche</option>
+                                            <option value="Droite">Droite</option>
+                                          </select>
+                                        </div>
+                                        <div>
+                                          <label style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', marginBottom: '0.2rem', fontWeight: 600 }}>CAISSON</label>
+                                          <select
+                                            className="input"
+                                            value={v.shutter.overrides?.caissonId || ''}
+                                            onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.caissonId', e.target.value)}
+                                            style={{ fontSize: '0.85rem', padding: '0.35rem 0.5rem' }}
+                                          >
+                                            <option value="">Auto</option>
+                                            {(data.shutterComponents?.caissons || []).map(opt => <option key={opt.id} value={opt.id}>{opt.name}</option>)}
+                                          </select>
+                                        </div>
+                                        <div>
+                                          <label style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', marginBottom: '0.2rem', fontWeight: 600 }}>LAME</label>
+                                          <select
+                                            className="input"
+                                            value={v.shutter.overrides?.lameId || ''}
+                                            onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.lameId', e.target.value)}
+                                            style={{ fontSize: '0.85rem', padding: '0.35rem 0.5rem' }}
+                                          >
+                                            <option value="">Auto</option>
+                                            {(data.shutterComponents?.lames || []).map(opt => <option key={opt.id} value={opt.id}>{opt.name}</option>)}
+                                          </select>
+                                        </div>
+                                        <div>
+                                          <label style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', marginBottom: '0.2rem', fontWeight: 600 }}>GLISSIÈRE</label>
+                                          <select
+                                            className="input"
+                                            value={v.shutter.overrides?.glissiereId || ''}
+                                            onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.glissiereId', e.target.value)}
+                                            style={{ fontSize: '0.85rem', padding: '0.35rem 0.5rem' }}
+                                          >
+                                            <option value="">Auto</option>
+                                            {(data.shutterComponents?.glissieres || []).map(opt => <option key={opt.id} value={opt.id}>{opt.name}</option>)}
+                                          </select>
+                                        </div>
+                                        <div>
+                                          <label style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', marginBottom: '0.2rem', fontWeight: 600 }}>AXE</label>
+                                          <select
+                                            className="input"
+                                            value={v.shutter.overrides?.axeId || ''}
+                                            onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.axeId', e.target.value)}
+                                            style={{ fontSize: '0.85rem', padding: '0.35rem 0.5rem' }}
+                                          >
+                                            <option value="">Auto</option>
+                                            {(data.shutterComponents?.axes || []).map(opt => <option key={opt.id} value={opt.id}>{opt.name}</option>)}
+                                          </select>
+                                        </div>
+                                        <div>
+                                          <label style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', marginBottom: '0.2rem', fontWeight: 600 }}>KIT</label>
+                                          <select
+                                            className="input"
+                                            value={v.shutter.overrides?.kitId || ''}
+                                            onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.kitId', e.target.value)}
+                                            style={{ fontSize: '0.85rem', padding: '0.35rem 0.5rem' }}
+                                          >
+                                            <option value="">Auto</option>
+                                            {(data.shutterComponents?.kits || []).map(opt => <option key={opt.id} value={opt.id}>{opt.name}</option>)}
+                                          </select>
                                         </div>
                                       </div>
                                     )}
