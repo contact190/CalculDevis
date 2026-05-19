@@ -105,9 +105,8 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
   };
 
   const activeQuote = useMemo(() => {
-    // Only look at orders (launched projects), exclude simple quotes
-    const allSources = database?.orders || [];
-    return allSources.find(q => q.id === selectedGlobalQuoteId) || (currentQuote?.status === 'COMMANDE' ? currentQuote : null);
+    const allSources = [...(database?.orders || []), ...(database?.quotes || [])];
+    return allSources.find(q => q.id === selectedGlobalQuoteId) || currentQuote;
   }, [database, selectedGlobalQuoteId, currentQuote]);
 
   const quoteItems = activeQuote?.items || [];
@@ -271,13 +270,11 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
             }
           });
         } // end if (b.profiles)
-        // Shutter components -> List 1 ONLY if sold by BARRE OR if it is a Glissiere/Coulisse/Guide
+        // Shutter components -> List 1 (bar nesting) ONLY if sold by BARRE (caisson, glissiere, lame par barre)
+        // ML/JOINT items (joint brosse, lame finale par ML) go to purchasingAccessories instead
         (b.shutters || []).forEach(s => {
-          const sName = (s.name || '').toLowerCase();
-          const isGlissiere = sName.includes('glissière') || sName.includes('glissiere') || sName.includes('coulisse') || sName.includes('guide');
-
-          // ONLY Glissiere/Coulisse/Guide are allowed in List 1 (Bars/Nesting) for shutters
-          if (!isGlissiere) return;
+          const unitUpper = (s.priceUnit || s.unit || '').toUpperCase().trim();
+          if (unitUpper !== 'BARRE') return;
 
           const rId = cfg.rangeId || entry.rangeId || '';
           const rangeInfo = database.ranges?.find(r => String(r.id) === String(rId));
@@ -337,10 +334,10 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         const b = engine.calculateBOM(cfg, []);
         const items = [...(b.accessories || [])];
         if (b.gasket) items.push(b.gasket);
-        // Add non-profile shutter items
+        // Add non-BARRE shutter items: ML/JOINT (joint brosse, lame finale/ml) and unit items (motors, kits)
         (b.shutters || []).forEach(s => {
-          const unit = (s.priceUnit || '').toUpperCase().trim();
-          if (unit !== 'BARRE') items.push(s);
+          const unitUpper = (s.priceUnit || s.unit || '').toUpperCase().trim();
+          if (unitUpper !== 'BARRE') items.push(s);
         });
 
         items.forEach(a => {
@@ -674,18 +671,12 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
       // Combine regular profiles with ALL shutter components (slats, caissons, motors, etc.)
       const allItems = [
         ...(b.profiles || []),
-        ...(b.shutters || [])
-          .filter(s => {
-             const unit = (s.priceUnit || '').toUpperCase().trim();
-             return unit !== 'ML' && unit !== 'JOINT' && unit !== 'UNITÉ' && unit !== 'UNITE' && unit !== 'UNIT';
-          })
-          .map(s => {
-             const unit = (s.priceUnit || '').toUpperCase().trim();
-             const isLinear = ['BARRE'].includes(unit);
+        ...(b.shutters || []).map(s => {
+             const isLinear = s.length && s.length > 0;
              return { 
                ...s, 
                usage: 'VOLET ROULANT',
-               // If it's a unit item (caisson, motor), set length to 0 or null to distinguish from cutting items
+               // If it's a unit item (caisson, motor), set length to null to distinguish from cutting items
                length: isLinear ? s.length : null 
              };
           })
@@ -1029,7 +1020,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
     doc.setFont('helvetica', 'normal');
     displayProfiles.forEach(p => {
        const barKey = p._barKey || p.baseId || p.id;
-       const bLength = barLengths[barKey] || 6400;
+       const bLength = barLengths[barKey] || parseFloat(p.barLength) || 6400;
        const ml = p.totalMeasure;
        // Bin Packing Algorithm (1D Nesting / Next Fit Decreasing)
        const pieces = p.pieces ? [...p.pieces].sort((a,b) => b - a) : [];
@@ -1152,10 +1143,20 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
           <p style={{ color: '#64748b', fontSize: '1.05rem', lineHeight: 1.6 }}>Sélectionnez une commande lancée pour générer les documents de production avec les dimensions réelles.</p>
           <div style={{ marginTop: '2rem' }}>
             <select value={selectedGlobalQuoteId} onChange={e => setSelectedGlobalQuoteId(e.target.value)} className="input" style={{ width: '100%', padding: '0.75rem', borderRadius: '0.75rem' }}>
-              <option value="">Sélectionner une commande...</option>
-              {(database.orders || []).map(q => (
-                <option key={q.id} value={q.id}>{q.number} - {database.clients?.find(c => c.id === q.clientId)?.nom} [Lancé]</option>
-              ))}
+              <option value="">Sélectionner un document...</option>
+              {currentQuote?.id && <option value={currentQuote.id}>⭐ Devis Actif (Écran Commercial)</option>}
+              <optgroup label="🛒 COMMANDES (Lancées)">
+                {(database.orders || []).map(o => {
+                  const client = database.clients?.find(c => c.id === o.clientId);
+                  return <option key={o.id} value={o.id}>📦 {o.number || o.id}{client ? ` — ${client.nom}` : ''}</option>;
+                })}
+              </optgroup>
+              <optgroup label="📋 DEVIS SIMPLES">
+                {(database.quotes || []).filter(q => !(database.orders || []).some(o => o.quoteId === q.id || o.id === q.id)).map(q => {
+                  const client = database.clients?.find(c => c.id === q.clientId);
+                  return <option key={q.id} value={q.id}>📄 {q.number}{client ? ` — ${client.nom}` : ''}</option>;
+                })}
+              </optgroup>
             </select>
           </div>
         </div>
@@ -1207,11 +1208,20 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                 className="input"
                 style={{ width: '300px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'white', paddingRight: '2.5rem' }}
               >
-                <option value="">Sélectionner une commande lancée...</option>
-                {currentQuote?.id && currentQuote.status === 'COMMANDE' && <option value={currentQuote.id}>Commande Actuelle</option>}
-                {(database.orders || []).map(q => (
-                  <option key={q.id} value={q.id}>{q.number} - {database.clients?.find(c => c.id === q.clientId)?.nom} [Lancé]</option>
-                ))}
+                <option value="">Sélectionner un document...</option>
+                {currentQuote?.id && <option value={currentQuote.id}>⭐ Devis Actif (Écran Commercial)</option>}
+                <optgroup label="🛒 COMMANDES (Lancées)">
+                  {(database.orders || []).map(o => {
+                    const client = database.clients?.find(c => c.id === o.clientId);
+                    return <option key={o.id} value={o.id}>📦 {o.number || o.id}{client ? ` — ${client.nom}` : ''}</option>;
+                  })}
+                </optgroup>
+                <optgroup label="📋 DEVIS SIMPLES">
+                  {(database.quotes || []).filter(q => !(database.orders || []).some(o => o.quoteId === q.id || o.id === q.id)).map(q => {
+                    const client = database.clients?.find(c => c.id === q.clientId);
+                    return <option key={q.id} value={q.id}>📄 {q.number}{client ? ` — ${client.nom}` : ''}</option>;
+                  })}
+                </optgroup>
               </select>
             </div>
 
@@ -1671,7 +1681,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                         const isProfile = !!p.pieces;
                         if (isProfile) {
                           const barKey = p.id;
-                          const bLength = barLengths[barKey] || 6400;
+                          const bLength = barLengths[barKey] || parseFloat(p.barLength) || 6400;
                           const pieces = p.pieces ? [...p.pieces].sort((a,b) => b.length - a.length) : [];
                           let barsNeeded = 0;
                           if (pieces.length > 0) {
@@ -1828,7 +1838,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                     const q = (v) => `"${String(v || "").replace(/"/g, '""').replace(/;/g, ',')}"`;
                     let csv = "Reference;Designation;Finition;Quantite;Unite\n";
                     displayProfiles.forEach(p => {
-                      const bLength = barLengths[p._barKey || p.baseId || p.id] || 6400;
+                      const bLength = barLengths[p._barKey || p.baseId || p.id] !== undefined ? barLengths[p._barKey || p.baseId || p.id] : (parseFloat(p.barLength) || 6400);
                       const qty = Math.ceil(p.totalMeasure / bLength);
                       csv += `${q(p.baseId || p.id.split('|')[0])};${q(p.name || p.combinedName)};${q(p.colorName || 'Std')};${qty};Barres\n`;
                     });
@@ -1911,7 +1921,8 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                 <tbody>
                   {displayProfiles.map((p, i) => {
                     const barKey = p.id;
-                    const bLength = barLengths[barKey] || 6400;
+                    const adminBarLength = parseFloat(p.barLength) || 6400;
+                    const bLength = barLengths[barKey] !== undefined ? barLengths[barKey] : adminBarLength;
                     const ml = p.totalMeasure;
                     // Bin Packing Algorithm (1D Nesting / Next Fit Decreasing)
                     const pieces = p.pieces ? [...p.pieces].sort((a,b) => b - a) : [];
@@ -2422,29 +2433,34 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
 
               if (b.shutters && Array.isArray(b.shutters)) {
                 b.shutters.forEach(s => {
-                  const sName = (s.name || '').toLowerCase();
-                  const isGlissiere = sName.includes('glissière') || sName.includes('glissiere') || sName.includes('coulisse') || sName.includes('guide');
-                  
-                  if (isGlissiere && s.length > 0 && s.qty > 0) {
-                    const piecesPerUnit = Math.max(0, Number(s.qty) || 0);
-                    const totalPieces = piecesPerUnit * qty;
-                    totalPiecesInBoms += totalPieces;
-                    
-                    for (let q = 0; q < totalPieces; q++) {
-                      globalCuts.push({
-                        profileId: s.id,
-                        profileName: s.name,
-                        label: `[Volet] ${s.name}`,
-                        length: Math.round(s.length),
-                        usage: 'VOLET',
-                        windowIdx,
-                        windowLabel: item.label || item.instanceLabel || `Fenêtre #${windowIdx + 1}`,
-                        windowItemId: item.id,
-                        isShutter: true,
-                        rangeName,
-                        isBatch: !!item.isFromBatch
-                      });
-                    }
+                  const unitUpper = (s.priceUnit || s.unit || '').toUpperCase().trim();
+                  if (unitUpper !== 'BARRE') return; // Only bar-sold shutter items go to cut nesting
+                  if (!s.length || s.length <= 0 || !s.qty || s.qty <= 0) return;
+
+                  const piecesPerUnit = Math.max(0, Number(s.qty) || 0);
+                  const totalPieces = piecesPerUnit * qty;
+                  totalPiecesInBoms += totalPieces;
+                  const colorInfo = database.colors?.find(c => c.id === item.config.colorId);
+                  const colorName = colorInfo?.name || item.config.colorId || 'Standard';
+                  const barKey = `${s.id}|${colorName}`;
+
+                  for (let q = 0; q < totalPieces; q++) {
+                    globalCuts.push({
+                      profileId: s.id,
+                      profileName: s.name,
+                      label: `[Volet] ${s.name}`,
+                      length: Math.round(s.length),
+                      usage: 'VOLET',
+                      windowIdx,
+                      windowLabel: item.label || item.instanceLabel || `Fenêtre #${windowIdx + 1}`,
+                      windowItemId: item.id,
+                      isShutter: true,
+                      rangeName,
+                      colorName,
+                      barKey,
+                      adminBarLength: s.barLength || 6400,
+                      isBatch: !!item.isFromBatch
+                    });
                   }
                 });
               }
@@ -2486,16 +2502,16 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         const profileGroups = {};
         globalCuts.forEach(cut => {
           const key = cut.barKey || cut.profileId;
-          if (!profileGroups[key]) profileGroups[key] = { profileName: cut.profileName, colorName: cut.colorName, cuts: [], ranges: new Set() };
+          if (!profileGroups[key]) profileGroups[key] = { profileName: cut.profileName, colorName: cut.colorName, cuts: [], ranges: new Set(), adminBarLength: cut.adminBarLength || 6400 };
           profileGroups[key].cuts.push(cut);
           if (cut.rangeName) profileGroups[key].ranges.add(cut.rangeName);
         });
 
         // Best-Fit Decreasing per profile group
         const barsResult = {};
-        Object.entries(profileGroups).forEach(([barKey, { profileName, colorName, cuts }]) => {
+        Object.entries(profileGroups).forEach(([barKey, { profileName, colorName, cuts, adminBarLength: groupBarLength }]) => {
           const profId = barKey.split('|')[0];
-          const barLen = barLengths[barKey] || 6400;
+          const barLen = barLengths[barKey] !== undefined ? barLengths[barKey] : (groupBarLength || 6400);
           const usagePriority = { 'DORMANT': 1, 'OUVRANT': 2, 'VOLET': 3, 'FINITION': 4 };
           const sorted = [...cuts].sort((a, b) => {
             const prioA = usagePriority[a.usage] || 9;

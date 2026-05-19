@@ -171,8 +171,8 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                       }
                     };
                   }
-                  if (shutterField.startsWith('overrides.')) {
-                    const overrideField = shutterField.split('.')[2];
+                  if (property.startsWith('shutter.overrides.')) {
+                    const overrideField = property.split('.')[2]; // e.g. 'controlPosition', 'caissonId', etc.
                     return {
                       ...v,
                       shutter: {
