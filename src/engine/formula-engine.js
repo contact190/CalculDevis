@@ -708,16 +708,29 @@ export class FormulaEngine {
       nb_moteurs: isDouble ? (config.shutterConfig?.motorCount || 2) : 1
     };
 
+    // For compatibility and alerts, if it is a double shutter, components (except caisson) should be evaluated against individual shutter dimensions (divided by 2)
+    const compScope = { ...evalScope };
+    if (isDouble && key !== 'caissonId') {
+      compScope.L = evalScope.L / 2;
+      compScope.area = evalScope.area / 2;
+      if (compScope.totalWeight !== undefined && compScope.totalWeight !== null) {
+        compScope.totalWeight = evalScope.totalWeight / 2;
+      }
+      if (compScope.liftingWeight !== undefined && compScope.liftingWeight !== null) {
+        compScope.liftingWeight = evalScope.liftingWeight / 2;
+      }
+    }
+
     // 1. Compatibility Check (Standalone Logic V3.3)
     if (item.compatibilityFormula) {
-      const isCompatible = this.evaluate(item.compatibilityFormula, evalScope, `Compatibilité ${item.name}`);
+      const isCompatible = this.evaluate(item.compatibilityFormula, compScope, `Compatibilité ${item.name}`);
       if (!isCompatible) return;
     }
 
     // 1.5 Technical Alert Evaluation
     if (item.technicalAlert) {
       try {
-        const alertMsg = this.evaluate(item.technicalAlert, evalScope, `Alerte ${item.name}`, errors);
+        const alertMsg = this.evaluate(item.technicalAlert, compScope, `Alerte ${item.name}`, errors);
         if (alertMsg && String(alertMsg).trim() !== '' && alertMsg !== true && alertMsg !== false) {
            // Evaluated for use in BOM or reports
         }

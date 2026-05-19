@@ -1039,7 +1039,8 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
 
                   // Apply compatibility formula for lames
                   if (key === 'lameId') {
-                    const L = config.L || 0;
+                    const isDouble = config.shutterConfig?.isDoubleShutter || false;
+                    const L = isDouble ? (config.L || 0) / 2 : (config.L || 0);
                     const H = config.H || 0;
                     const selectedAxeId = config.shutterConfig?.axeId;
                     const axes = database.shutterComponents?.axes || [];
@@ -1065,7 +1066,8 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
 
                   // Apply compatibility formula for motors
                   if (key === 'moteurId') {
-                    const L = config.L || 0;
+                    const isDouble = config.shutterConfig?.isDoubleShutter || false;
+                    const L = isDouble ? (config.L || 0) / 2 : (config.L || 0);
                     const H = config.H || 0;
                     
                     const selectedLame = (database.shutterComponents?.lames || []).find(l => l.id === config.shutterConfig?.lameId);
@@ -1099,7 +1101,8 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
 
                   // Apply compatibility formula for axes
                   if (key === 'axeId') {
-                    const L = config.L || 0;
+                    const isDouble = config.shutterConfig?.isDoubleShutter || false;
+                    const L = isDouble ? (config.L || 0) / 2 : (config.L || 0);
                     const H = config.H || 0;
                     
                     const selectedLame = (database.shutterComponents?.lames || []).find(l => l.id === config.shutterConfig?.lameId);
@@ -1123,7 +1126,8 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
 
                   // Apply compatibility formula for kits
                   if (key === 'kitId' || key === 'kits') {
-                    const L = config.L || 0;
+                    const isDouble = config.shutterConfig?.isDoubleShutter || false;
+                    const L = isDouble ? (config.L || 0) / 2 : (config.L || 0);
                     const H = config.H || 0;
                     const area = (L * H) / 1000000;
                     
