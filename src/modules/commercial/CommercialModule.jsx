@@ -1800,9 +1800,19 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
       }
     });
 
-    const tva = ht * ((quoteSettings?.tvaRate ?? 19) / 100);
-    return { ht, tva, ttc: ht + tva, profiles, accessories, glass, shutters };
-  }, [quote.items, quoteSettings, engine]);
+    const rawHT = ht;
+    const discountType = quote.discountType || 'percent';
+    const discountValue = Number(quote.discountValue || 0);
+    let discountAmount = 0;
+    if (discountType === 'percent') {
+      discountAmount = rawHT * (discountValue / 100);
+    } else {
+      discountAmount = Math.min(rawHT, discountValue);
+    }
+    const netHT = Math.max(0, rawHT - discountAmount);
+    const tva = netHT * ((quoteSettings?.tvaRate ?? 19) / 100);
+    return { rawHT, discountAmount, ht: netHT, tva, ttc: netHT + tva, profiles, accessories, glass, shutters };
+  }, [quote.items, quote.discountType, quote.discountValue, quoteSettings, engine]);
 
   // Consolidated BOM for consumables
   const allBoms = useMemo(() => {
@@ -2306,19 +2316,43 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
 
     // Right Box: Totals (simplified - total only)
     const rightBoxX = 110;
-    const boxHeight = 22;
+    const discountAmount = totals.discountAmount || 0;
+    const hasDiscount = discountAmount > 0;
+    const boxHeight = hasDiscount ? 30 : 22;
     doc.roundedRect(rightBoxX, y, pw - 15 - rightBoxX, boxHeight, 3, 3);
     const tvaRate = quoteSettings?.tvaRate ?? 19;
     
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    doc.text('MONTANT TOTAL HT', rightBoxX + 5, y + 10);
-    doc.text(`${formatPrice(totals.ht)} DZD`, pw - 20, y + 10, { align: 'right' });
-    
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8.5);
-    doc.text(`TVA ${tvaRate}% : ${formatPrice(totals.tva)} DZD`, rightBoxX + 5, y + 18);
-    doc.text(`${formatPrice(totals.tva)} DZD`, pw - 20, y + 18, { align: 'right' });
+    if (hasDiscount) {
+      doc.setFontSize(8.5);
+      doc.setFont('helvetica', 'bold');
+      doc.text('TOTAL BRUT HT', rightBoxX + 5, y + 7);
+      doc.text(`${formatPrice(totals.rawHT)} DZD`, pw - 20, y + 7, { align: 'right' });
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(220, 38, 38);
+      const discLabel = quote.discountType === 'percent' ? `REMISE COMMERCIAL (${quote.discountValue}%)` : 'REMISE EXCEPTIONNELLE (FIXE)';
+      doc.text(discLabel, rightBoxX + 5, y + 13);
+      doc.text(`-${formatPrice(totals.discountAmount)} DZD`, pw - 20, y + 13, { align: 'right' });
+      doc.setTextColor(0, 0, 0);
+      
+      doc.setFont('helvetica', 'bold');
+      doc.text('TOTAL NET HT', rightBoxX + 5, y + 19);
+      doc.text(`${formatPrice(totals.ht)} DZD`, pw - 20, y + 19, { align: 'right' });
+      
+      doc.setFont('helvetica', 'normal');
+      doc.text(`TVA ${tvaRate}% :`, rightBoxX + 5, y + 25);
+      doc.text(`${formatPrice(totals.tva)} DZD`, pw - 20, y + 25, { align: 'right' });
+    } else {
+      doc.setFontSize(9.5);
+      doc.setFont('helvetica', 'bold');
+      doc.text('MONTANT TOTAL HT', rightBoxX + 5, y + 9);
+      doc.text(`${formatPrice(totals.ht)} DZD`, pw - 20, y + 9, { align: 'right' });
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      doc.text(`TVA ${tvaRate}% :`, rightBoxX + 5, y + 16);
+      doc.text(`${formatPrice(totals.tva)} DZD`, pw - 20, y + 16, { align: 'right' });
+    }
 
     y += boxHeight + 15;
     
@@ -2633,7 +2667,48 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', opacity: 0.85 }}>
-                <span>Total HT</span><span>{totals.ht.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</span>
+                <span>Total Brut (HT)</span><span>{totals.rawHT.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</span>
+              </div>
+
+              {/* Remise / Discount Input */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginBottom: '0.5rem', background: 'rgba(255, 255, 255, 0.1)', padding: '0.5rem', borderRadius: '0.4rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>Remise Commerciale</span>
+                  <div style={{ display: 'flex', gap: '2px', background: 'rgba(255,255,255,0.2)', padding: '2px', borderRadius: '4px' }}>
+                    <button 
+                      onClick={() => setCurrentQuote(p => ({ ...p, discountType: 'percent', discountValue: p.discountType === 'fixed' ? 0 : p.discountValue }))}
+                      style={{ fontSize: '0.65rem', border: 'none', background: (quote.discountType || 'percent') === 'percent' ? 'white' : 'transparent', color: (quote.discountType || 'percent') === 'percent' ? '#1e293b' : 'white', padding: '2px 6px', borderRadius: '3px', cursor: 'pointer', fontWeight: 700 }}
+                    >
+                      %
+                    </button>
+                    <button 
+                      onClick={() => setCurrentQuote(p => ({ ...p, discountType: 'fixed', discountValue: p.discountType === 'percent' ? 0 : p.discountValue }))}
+                      style={{ fontSize: '0.65rem', border: 'none', background: quote.discountType === 'fixed' ? 'white' : 'transparent', color: quote.discountType === 'fixed' ? '#1e293b' : 'white', padding: '2px 6px', borderRadius: '3px', cursor: 'pointer', fontWeight: 700 }}
+                    >
+                      DZD
+                    </button>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                  <input 
+                    type="number" 
+                    min="0"
+                    max={(quote.discountType || 'percent') === 'percent' ? 100 : undefined}
+                    value={quote.discountValue || 0}
+                    onChange={e => {
+                      const val = Math.max(0, parseFloat(e.target.value) || 0);
+                      setCurrentQuote(p => ({ ...p, discountValue: val }));
+                    }}
+                    style={{ flex: 1, background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: 'white', borderRadius: '4px', padding: '4px 8px', fontSize: '0.85rem', fontWeight: 700, outline: 'none' }}
+                  />
+                  <span style={{ fontSize: '0.8rem', fontWeight: 700, minWidth: '60px', textAlign: 'right' }}>
+                    -{totals.discountAmount.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} DZD
+                  </span>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', opacity: 0.85, borderBottom: '1px dashed rgba(255,255,255,0.2)', paddingBottom: '0.4rem' }}>
+                <span>Total Net (HT)</span><span style={{ fontWeight: 700 }}>{totals.ht.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', opacity: 0.85 }}>
                 <span>Marge Globale</span>

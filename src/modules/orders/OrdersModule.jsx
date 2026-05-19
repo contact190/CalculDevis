@@ -34,11 +34,59 @@ const ItemPreview = ({ config, database }) => {
       />
     </div>
   );
+};const syncSitePlanToMeasurements = (sitePlan, items) => {
+  const newItems = items.map(item => ({
+    ...item,
+    siteMeasurements: []
+  }));
+
+  if (!sitePlan || !sitePlan.floors) return newItems;
+
+  sitePlan.floors.forEach(floor => {
+    (floor.apartments || []).forEach(appt => {
+      (appt.voids || []).forEach(v => {
+        if (!v.itemId) return;
+        const itemIdx = newItems.findIndex(i => i.id === v.itemId);
+        if (itemIdx === -1) return;
+
+        const item = newItems[itemIdx];
+        const label = `${floor.name} - ${appt.name} - ${v.name}`;
+        
+        const shutterList = [];
+        if (v.shutter && v.shutter.qty > 0) {
+          shutterList.push({
+            id: v.shutter.id || `shutter-${v.id}`,
+            qty: v.shutter.qty,
+            customLV: v.shutter.customLV !== undefined ? v.shutter.customLV : (v.L || item.config.L),
+            overrides: v.shutter.overrides || {}
+          });
+        }
+
+        const newMeasure = {
+          id: v.id,
+          L: v.L !== undefined && v.L !== '' ? parseFloat(v.L) : item.config.L,
+          H: v.H !== undefined && v.H !== '' ? parseFloat(v.H) : item.config.H,
+          wallDepth: v.wallDepth !== undefined && v.wallDepth !== '' ? parseFloat(v.wallDepth) : '',
+          handleHeight: v.handleHeight !== undefined && v.handleHeight !== '' ? parseFloat(v.handleHeight) : '',
+          qty: 1,
+          label: label,
+          shutterList: shutterList,
+          instanceNames: [v.name],
+          instanceFloors: [floor.name]
+        };
+
+        newItems[itemIdx].siteMeasurements.push(newMeasure);
+      });
+    });
+  });
+
+  return newItems;
 };
 
 const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
   const [selectedOrderId, setSelectedOrderId] = useState(null);
   const [activeOrderTab, setActiveOrderTab] = useState('measurements'); // 'measurements', 'batches', 'purchasing', 'glass'
+  const [measurementSubTab, setMeasurementSubTab] = useState('cotes'); // 'cotes' | 'structure'
   const [selectedBatchId, setSelectedBatchId] = useState('current'); // 'current' or batch index
   const [showSettings, setShowSettings] = useState(false);
   const [listView, setListView] = useState('active'); // 'active' | 'history'
@@ -47,6 +95,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
   const [namingMeasure, setNamingMeasure] = useState(null); // { itemIdx, mId, qty, names: [], floors: [] }
   const [shutterMeasure, setShutterMeasure] = useState(null); // { itemIdx, mId, shutters: [] }
   const [showSituationModal, setShowSituationModal] = useState(false);
+  const [showQRModal, setShowQRModal] = useState(false);
   const [situationRemarks, setSituationRemarks] = useState({}); // { itemId: string }
   const [situationSelection, setSituationSelection] = useState(new Set()); // Set of item IDs to include
   
@@ -236,6 +285,309 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
     setSelectedBatchId(newBatch.id);
     setActiveOrderTab('purchasing');
     alert(`Lot de fabrication validé !`);
+  };
+
+  const addFloor = () => {
+    if (!selectedOrder) return;
+    const currentPlan = selectedOrder.sitePlan || { floors: [] };
+    const updatedPlan = {
+      ...currentPlan,
+      floors: [
+        ...(currentPlan.floors || []),
+        { id: `FLOOR-${Date.now()}`, name: `Étage ${(currentPlan.floors || []).length + 1}`, apartments: [] }
+      ]
+    };
+    const updatedItems = syncSitePlanToMeasurements(updatedPlan, selectedOrder.items);
+    handleUpdateOrder({ ...selectedOrder, sitePlan: updatedPlan, items: updatedItems });
+  };
+
+  const deleteFloor = (floorId) => {
+    if (!selectedOrder) return;
+    const currentPlan = selectedOrder.sitePlan || { floors: [] };
+    const updatedPlan = {
+      ...currentPlan,
+      floors: (currentPlan.floors || []).filter(f => f.id !== floorId)
+    };
+    const updatedItems = syncSitePlanToMeasurements(updatedPlan, selectedOrder.items);
+    handleUpdateOrder({ ...selectedOrder, sitePlan: updatedPlan, items: updatedItems });
+  };
+
+  const updateFloorName = (floorId, name) => {
+    if (!selectedOrder) return;
+    const currentPlan = selectedOrder.sitePlan || { floors: [] };
+    const updatedPlan = {
+      ...currentPlan,
+      floors: (currentPlan.floors || []).map(f => f.id === floorId ? { ...f, name } : f)
+    };
+    const updatedItems = syncSitePlanToMeasurements(updatedPlan, selectedOrder.items);
+    handleUpdateOrder({ ...selectedOrder, sitePlan: updatedPlan, items: updatedItems });
+  };
+
+  const addApartment = (floorId) => {
+    if (!selectedOrder) return;
+    const currentPlan = selectedOrder.sitePlan || { floors: [] };
+    const updatedPlan = {
+      ...currentPlan,
+      floors: (currentPlan.floors || []).map(f => {
+        if (f.id !== floorId) return f;
+        return {
+          ...f,
+          apartments: [
+            ...(f.apartments || []),
+            { id: `APT-${Date.now()}`, name: `Appt ${(f.apartments || []).length + 1}`, voids: [] }
+          ]
+        };
+      })
+    };
+    const updatedItems = syncSitePlanToMeasurements(updatedPlan, selectedOrder.items);
+    handleUpdateOrder({ ...selectedOrder, sitePlan: updatedPlan, items: updatedItems });
+  };
+
+  const deleteApartment = (floorId, aptId) => {
+    if (!selectedOrder) return;
+    const currentPlan = selectedOrder.sitePlan || { floors: [] };
+    const updatedPlan = {
+      ...currentPlan,
+      floors: (currentPlan.floors || []).map(f => {
+        if (f.id !== floorId) return f;
+        return {
+          ...f,
+          apartments: (f.apartments || []).filter(a => a.id !== aptId)
+        };
+      })
+    };
+    const updatedItems = syncSitePlanToMeasurements(updatedPlan, selectedOrder.items);
+    handleUpdateOrder({ ...selectedOrder, sitePlan: updatedPlan, items: updatedItems });
+  };
+
+  const updateApartmentName = (floorId, aptId, name) => {
+    if (!selectedOrder) return;
+    const currentPlan = selectedOrder.sitePlan || { floors: [] };
+    const updatedPlan = {
+      ...currentPlan,
+      floors: (currentPlan.floors || []).map(f => {
+        if (f.id !== floorId) return f;
+        return {
+          ...f,
+          apartments: (f.apartments || []).map(a => a.id === aptId ? { ...a, name } : a)
+        };
+      })
+    };
+    const updatedItems = syncSitePlanToMeasurements(updatedPlan, selectedOrder.items);
+    handleUpdateOrder({ ...selectedOrder, sitePlan: updatedPlan, items: updatedItems });
+  };
+
+  const addVoid = (floorId, aptId) => {
+    if (!selectedOrder) return;
+    const currentPlan = selectedOrder.sitePlan || { floors: [] };
+    const defaultItem = selectedOrder.items[0];
+    const updatedPlan = {
+      ...currentPlan,
+      floors: (currentPlan.floors || []).map(f => {
+        if (f.id !== floorId) return f;
+        return {
+          ...f,
+          apartments: (f.apartments || []).map(a => {
+            if (a.id !== aptId) return a;
+            return {
+              ...a,
+              voids: [
+                ...(a.voids || []),
+                {
+                  id: `VOID-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+                  name: `Vide ${(a.voids || []).length + 1}`,
+                  itemId: defaultItem?.id || '',
+                  L: defaultItem?.config?.L || 1200,
+                  H: defaultItem?.config?.H || 1200,
+                  wallDepth: '',
+                  handleHeight: '',
+                  shutter: {
+                    qty: 1,
+                    customLV: defaultItem?.config?.L || 1200,
+                    overrides: {}
+                  }
+                }
+              ]
+            };
+          })
+        };
+      })
+    };
+    const updatedItems = syncSitePlanToMeasurements(updatedPlan, selectedOrder.items);
+    handleUpdateOrder({ ...selectedOrder, sitePlan: updatedPlan, items: updatedItems });
+  };
+
+  const deleteVoid = (floorId, aptId, voidId) => {
+    if (!selectedOrder) return;
+    const currentPlan = selectedOrder.sitePlan || { floors: [] };
+    const updatedPlan = {
+      ...currentPlan,
+      floors: (currentPlan.floors || []).map(f => {
+        if (f.id !== floorId) return f;
+        return {
+          ...f,
+          apartments: (f.apartments || []).map(a => {
+            if (a.id !== aptId) return a;
+            return {
+              ...a,
+              voids: (a.voids || []).filter(v => v.id !== voidId)
+            };
+          })
+        };
+      })
+    };
+    const updatedItems = syncSitePlanToMeasurements(updatedPlan, selectedOrder.items);
+    handleUpdateOrder({ ...selectedOrder, sitePlan: updatedPlan, items: updatedItems });
+  };
+
+  const updateVoidProperty = (floorId, aptId, voidId, property, value) => {
+    if (!selectedOrder) return;
+    const selectedClient = data.clients?.find(c => c.id === selectedOrder.clientId);
+    if (!selectedClient) return;
+
+    const currentPlan = selectedClient.sitePlan || { floors: [] };
+    const updatedPlan = {
+      ...currentPlan,
+      floors: (currentPlan.floors || []).map(f => {
+        if (f.id !== floorId) return f;
+        return {
+          ...f,
+          apartments: (f.apartments || []).map(a => {
+            if (a.id !== aptId) return a;
+            return {
+              ...a,
+              voids: (a.voids || []).map(v => {
+                if (v.id !== voidId) return v;
+
+                if (property === 'itemId') {
+                  const item = selectedOrder.items.find(i => i.id === value);
+                  return {
+                    ...v,
+                    itemId: value,
+                    L: item?.config?.L || v.L,
+                    H: item?.config?.H || v.H,
+                    shutter: {
+                      qty: 1,
+                      customLV: item?.config?.L || v.L,
+                      overrides: {}
+                    }
+                  };
+                }
+
+                if (property.startsWith('shutter.')) {
+                  const shutterField = property.split('.')[1];
+                  const currentShutter = v.shutter || { qty: 1, overrides: {} };
+                  
+                  if (shutterField === 'qty') {
+                    return {
+                      ...v,
+                      shutter: {
+                        ...currentShutter,
+                        qty: parseInt(value) || 1
+                      }
+                    };
+                  }
+                  if (shutterField === 'customLV') {
+                    return {
+                      ...v,
+                      shutter: {
+                        ...currentShutter,
+                        customLV: parseFloat(value) || 0
+                      }
+                    };
+                  }
+                  if (shutterField.startsWith('overrides.')) {
+                    const overrideField = shutterField.split('.')[2];
+                    return {
+                      ...v,
+                      shutter: {
+                        ...currentShutter,
+                        overrides: {
+                          ...currentShutter.overrides,
+                          [overrideField]: value || undefined
+                        }
+                      }
+                    };
+                  }
+                }
+
+                return { ...v, [property]: value };
+              })
+            };
+          })
+        };
+      })
+    };
+
+    const updatedItems = syncSitePlanToMeasurements(updatedPlan, selectedOrder.items);
+    
+    // Update the database state for both client and order
+    setData(prev => {
+      const updatedClients = (prev.clients || []).map(c => 
+        c.id === selectedClient.id ? { ...c, sitePlan: updatedPlan } : c
+      );
+      const updatedOrders = (prev.orders || []).map(o => 
+        o.id === selectedOrder.id ? { ...o, items: updatedItems } : o
+      );
+      return {
+        ...prev,
+        clients: updatedClients,
+        orders: updatedOrders
+      };
+    });
+  };
+
+  const applyVoidToAllSameInApartment = (floorId, aptId, sourceVoid) => {
+    if (!selectedOrder) return;
+    const selectedClient = data.clients?.find(c => c.id === selectedOrder.clientId);
+    if (!selectedClient) return;
+
+    const currentPlan = selectedClient.sitePlan || { floors: [] };
+    const updatedPlan = {
+      ...currentPlan,
+      floors: (currentPlan.floors || []).map(f => {
+        if (f.id !== floorId) return f;
+        return {
+          ...f,
+          apartments: (f.apartments || []).map(a => {
+            if (a.id !== aptId) return a;
+            return {
+              ...a,
+              voids: (a.voids || []).map(v => {
+                if (v.itemId === sourceVoid.itemId) {
+                  return {
+                    ...v,
+                    L: sourceVoid.L,
+                    H: sourceVoid.H,
+                    wallDepth: sourceVoid.wallDepth,
+                    handleHeight: sourceVoid.handleHeight,
+                    shutter: JSON.parse(JSON.stringify(sourceVoid.shutter || { qty: 1, overrides: {} }))
+                  };
+                }
+                return v;
+              })
+            };
+          })
+        };
+      })
+    };
+
+    const updatedItems = syncSitePlanToMeasurements(updatedPlan, selectedOrder.items);
+
+    setData(prev => {
+      const updatedClients = (prev.clients || []).map(c => 
+        c.id === selectedClient.id ? { ...c, sitePlan: updatedPlan } : c
+      );
+      const updatedOrders = (prev.orders || []).map(o => 
+        o.id === selectedOrder.id ? { ...o, items: updatedItems } : o
+      );
+      return {
+        ...prev,
+        clients: updatedClients,
+        orders: updatedOrders
+      };
+    });
+    alert(`Configuration appliquée à toutes les ouvertures identiques de cet appartement !`);
   };
 
   // --- Calculations ---
@@ -681,6 +1033,13 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.75rem' }}>
              <button 
+               onClick={() => setShowQRModal(true)}
+               className="btn btn-secondary" 
+               style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0' }}
+             >
+               <QrCode size={16} /> QR Code Technicien
+             </button>
+             <button 
                onClick={() => {
                  setSituationSelection(new Set(selectedOrder.items.map(i => i.id)));
                  setShowSituationModal(true);
@@ -695,6 +1054,51 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
              </span>
           </div>
         </header>
+
+        {showQRModal && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ background: 'white', borderRadius: '1rem', padding: '2rem', width: '420px', textAlign: 'center', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                <h3 style={{ margin: 0, fontWeight: 800, color: '#1e293b', fontSize: '1.2rem' }}>📱 Prise de Mesures Mobile</h3>
+                <button onClick={() => setShowQRModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', fontWeight: 'bold', color: '#64748b' }}>✕</button>
+              </div>
+
+              <div style={{ background: '#f8fafc', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #e2e8f0', display: 'inline-block', marginBottom: '1.5rem' }}>
+                <img 
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`${window.location.origin}${window.location.pathname}?mode=technician&orderId=${selectedOrder.id}`)}`} 
+                  alt="QR Code Prise de Mesures" 
+                  style={{ width: '200px', height: '200px', display: 'block' }}
+                />
+              </div>
+
+              <p style={{ fontSize: '0.88rem', color: '#64748b', lineHeight: 1.5, margin: '0 0 1.5rem 0' }}>
+                Scannez ce QR Code avec un smartphone ou une tablette sur le chantier pour ouvrir le plan et saisir les dimensions réelles en temps réel.
+              </p>
+
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <button 
+                  onClick={() => {
+                    const url = `${window.location.origin}${window.location.pathname}?mode=technician&orderId=${selectedOrder.id}`;
+                    navigator.clipboard.writeText(url);
+                    alert("Lien copié dans le presse-papiers !");
+                  }}
+                  style={{ flex: 1, padding: '0.75rem', border: '1px solid #e2e8f0', borderRadius: '0.5rem', cursor: 'pointer', background: 'white', color: '#64748b', fontWeight: 600 }}
+                >
+                  🔗 Copier le lien
+                </button>
+                <button 
+                  onClick={() => {
+                    const url = `${window.location.origin}${window.location.pathname}?mode=technician&orderId=${selectedOrder.id}`;
+                    window.open(url, '_blank');
+                  }}
+                  style={{ flex: 1, padding: '0.75rem', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', background: '#0f766e', color: 'white', fontWeight: 700 }}
+                >
+                  🌐 Ouvrir la page
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="tabs-container flex-wrap">
@@ -714,167 +1118,319 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
           ))}
         </div>
 
-        {activeOrderTab === 'measurements' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-            {selectedOrder.items.map((item, idx) => {
-              const alreadyBatchQty = (selectedOrder.batches || []).reduce((sum, b) => {
-                const bItem = b.items?.find(bi => bi.id === item.id);
-                return sum + (bItem?.measurements || []).reduce((s, m) => s + m.qty, 0);
-              }, 0);
-              const currentDraftQty = (item.siteMeasurements || []).reduce((sum, m) => sum + m.qty, 0);
-              const remaining = (item.qty || 1) - alreadyBatchQty - currentDraftQty;
-              
-              return (
-                <div key={item.id} className="glass shadow-sm" style={{ display: 'flex', overflow: 'hidden', borderLeft: '4px solid #3b82f6', minHeight: '350px', marginBottom: '1.5rem' }}>
-                  {/* Left Side: Massive Image Area */}
-                  <div style={{ width: '350px', background: '#f8fafc', borderRight: '1px solid #e2e8f0', flexShrink: 0 }}>
-                    <ItemPreview config={item.config} database={data} />
-                  </div>
+        {activeOrderTab === 'measurements' && (() => {
+          const selectedClient = data.clients?.find(c => c.id === selectedOrder.clientId);
+          const activeSitePlan = selectedClient?.sitePlan || { floors: [] };
+          const hasPlan = activeSitePlan.floors && activeSitePlan.floors.length > 0 && activeSitePlan.floors.some(f => f.apartments?.some(a => a.voids?.length > 0));
 
-                  {/* Right Side: Content */}
-                  <div style={{ flex: 1, padding: '1.5rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem', alignItems: 'center', gap: '1.5rem' }}>
-                      <div>
-                        <h3 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 800, color: '#1e293b' }}>{item.label}</h3>
-                        <p style={{ margin: '0.2rem 0', color: '#64748b', fontSize: '0.9rem', fontWeight: 500 }}>
-                          Devis: <strong>{item.qty || 1} u</strong> | Produit: <strong>{alreadyBatchQty} u</strong> | <span style={{ color: '#3b82f6' }}>En cours: <strong>{currentDraftQty} u</strong></span>
-                        </p>
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'block' }}>Reste à produire:</span>
-                        <span style={{ fontSize: '1.5rem', fontWeight: 900, color: remaining > 0 ? '#3b82f6' : (remaining < 0 ? '#ef4444' : '#10b981') }}>
-                          {remaining}
-                        </span>
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              {!hasPlan ? (
+                <div style={{ textAlign: 'center', padding: '4rem 2rem', background: '#f8fafc', borderRadius: '1.5rem', border: '2px dashed #cbd5e1' }}>
+                  <span style={{ fontSize: '2.5rem', display: 'block', marginBottom: '1rem' }}>📐</span>
+                  <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '1.25rem', fontWeight: 800, color: '#1e293b' }}>En attente du Plan de Chantier</h4>
+                  <p style={{ color: '#64748b', fontSize: '0.9rem', maxWidth: '500px', margin: '0 auto 1.5rem auto' }}>
+                    Pour pouvoir saisir vos cotes réelles, veuillez d'abord créer la structure du chantier (Étages ➜ Appartements ➜ Vides) dans l'onglet **"Plan de Chantier"** accessible dans la barre de navigation sur la gauche.
+                  </p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                  {/* QR Code and Mobile Portal Info Card */}
+                  <div className="glass" style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', padding: '1.25rem', background: '#ecfdf5', border: '1.5px solid #a7f3d0', borderRadius: '1rem', flexWrap: 'wrap' }}>
+                    <div style={{ padding: '0.5rem', background: 'white', borderRadius: '0.5rem', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', flexShrink: 0 }}>
+                      <img 
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(`${window.location.origin}${window.location.pathname}?mode=technician&orderId=${selectedOrder.id}`)}`} 
+                        alt="QR Code Prise de Mesures" 
+                        style={{ width: '100px', height: '100px', display: 'block' }}
+                      />
+                    </div>
+                    <div style={{ flex: 1, minWidth: '240px' }}>
+                      <h4 style={{ margin: '0 0 0.25rem 0', fontWeight: 800, color: '#065f46', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>📱 Portail Prise de Mesures Mobile</h4>
+                      <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.82rem', color: '#047857', lineHeight: 1.4 }}>
+                        Le technicien peut scanner ce QR Code sur le chantier pour ouvrir le plan directement sur son smartphone ou tablette et saisir les dimensions réelles.
+                      </p>
+                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <button 
+                          onClick={() => {
+                            const url = `${window.location.origin}${window.location.pathname}?mode=technician&orderId=${selectedOrder.id}`;
+                            navigator.clipboard.writeText(url);
+                            alert("Lien copié dans le presse-papiers !");
+                          }}
+                          className="btn" 
+                          style={{ padding: '0.35rem 0.8rem', fontSize: '0.75rem', background: 'white', border: '1px solid #a7f3d0', color: '#047857', fontWeight: 700, cursor: 'pointer' }}
+                        >
+                          🔗 Copier le lien
+                        </button>
+                        <button 
+                          onClick={() => {
+                            const url = `${window.location.origin}${window.location.pathname}?mode=technician&orderId=${selectedOrder.id}`;
+                            window.open(url, '_blank');
+                          }}
+                          className="btn" 
+                          style={{ padding: '0.35rem 0.8rem', fontSize: '0.75rem', background: '#047857', border: 'none', color: 'white', fontWeight: 700, cursor: 'pointer' }}
+                        >
+                          🌐 Ouvrir la page
+                        </button>
                       </div>
                     </div>
+                  </div>
 
-                  {/* Measurements Table */}
-                  <table className="data-table" style={{ background: '#f8fafc', marginBottom: '1rem' }}>
-                    <thead>
-                      <tr>
-                        <th>N°</th>
-                        <th style={{ width: '150px' }}>Nom / Emplacement</th>
-                        <th>Largeur (mm)</th>
-                        <th>Hauteur (mm)</th>
-                        <th>Prof. Mur (mm)</th>
-                        <th>Quantité</th>
-                        <th style={{ width: '80px' }}>Volet</th>
-                        <th style={{ width: '50px' }}>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(item.siteMeasurements || []).map((m, mIdx) => (
-                        <React.Fragment key={m.id}>
-                          <tr>
-                            <td>{mIdx + 1}</td>
-                             <td>
-                               <button 
-                                 onClick={() => {
-                                   const currentNames = m.instanceNames || [];
-                                   const currentFloors = m.instanceFloors || [];
-                                   const names = Array.from({ length: m.qty || 1 }).map((_, i) => currentNames[i] || '');
-                                   const floors = Array.from({ length: m.qty || 1 }).map((_, i) => currentFloors[i] || '');
-                                   setNamingMeasure({ itemIdx: idx, mId: m.id, qty: m.qty || 1, names, floors });
-                                 }}
-                                 className="btn btn-secondary"
-                                 style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
-                               >
-                                 <FileText size={14} /> 
-                                 {m.instanceNames?.filter(Boolean).length > 0 || m.instanceFloors?.filter(Boolean).length > 0 
-                                   ? `${m.instanceNames?.filter(Boolean).length || 0} nom(s) / ${m.instanceFloors?.filter(Boolean).length || 0} étage(s)` 
-                                   : '+ Nom / Étage'}
-                               </button>
-                             </td>
-                             <td><input type="number" className="input" value={m.L} onChange={e => updateSiteMeasurement(idx, m.id, 'L', e.target.value)} style={{ minWidth: '90px' }} /></td>
-                             <td><input type="number" className="input" value={m.H} onChange={e => updateSiteMeasurement(idx, m.id, 'H', e.target.value)} style={{ minWidth: '90px' }} /></td>
-                             <td><input type="number" className="input" value={m.wallDepth || ''} onChange={e => updateSiteMeasurement(idx, m.id, 'wallDepth', e.target.value)} style={{ minWidth: '90px' }} placeholder="—" /></td>
-                             <td><input type="number" className="input" value={m.qty} onChange={e => updateSiteMeasurement(idx, m.id, 'qty', e.target.value)} style={{ minWidth: '70px' }} /></td>
-                             <td style={{ textAlign: 'center' }}>
-                               <button 
-                                 onClick={() => {
-                                   const shutters = m.shutterList || [{ id: Date.now(), qty: m.qty, customLV: m.L, overrides: {} }];
-                                   setShutterMeasure({ itemIdx: idx, mId: m.id, shutters });
-                                 }}
-                                 style={{ 
-                                   border: '1px solid #e2e8f0', 
-                                   background: (m.shutterList?.length > 0) ? '#fef3c7' : '#fff', 
-                                   padding: '0.5rem', borderRadius: '0.5rem', cursor: 'pointer', 
-                                   color: (m.shutterList?.length > 0) ? '#d97706' : '#64748b',
-                                   display: 'flex', alignItems: 'center', justifyContent: 'center'
-                                 }}
-                                 title="Gérer les Volets"
-                               >
-                                 <Plus size={16} /> <span style={{ marginLeft: '4px', fontSize: '0.7rem', fontWeight: 600 }}>{m.shutterList?.length || 0} Volet(s)</span>
-                               </button>
-                             </td>
-                             <td>
-                               <div style={{ display: 'flex', gap: '0.3rem' }}>
-                                 <button onClick={() => removeSiteMeasurement(idx, m.id)} style={{ color: '#ef4444', border: 'none', background: 'transparent', cursor: 'pointer' }} title="Supprimer"><Trash2 size={16} /></button>
-                               </div>
-                             </td>
-                          </tr>
-                          {item.config.compoundType && item.config.compoundType !== 'none' && (
-                            <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
-                              <td colSpan="6" style={{ padding: '0.5rem 1rem' }}>
-                                <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                                  <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Cotes des parties :</span>
-                                  {(item.config.compoundConfig?.parts || []).map((p) => (
-                                    <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                      <span style={{ fontSize: '0.8rem', color: '#1e293b' }}>{p.type === 'opening' ? 'Ouvrant' : 'Fixe'} :</span>
-                                      <input 
-                                        type="number" 
-                                        className="input" 
-                                        style={{ width: '90px', padding: '0.2rem 0.5rem', fontSize: '0.8rem', border: '1px solid #cbd5e1' }} 
-                                        placeholder={item.config.compoundConfig.orientation === 'horizontal' ? p.width : p.height}
-                                        value={m.partOverrides?.[p.id]?.[item.config.compoundConfig.orientation === 'horizontal' ? 'width' : 'height'] || ''} 
-                                        onChange={e => {
-                                          const val = e.target.value === '' ? '' : (parseFloat(e.target.value) || 0);
-                                          const field = item.config.compoundConfig.orientation === 'horizontal' ? 'width' : 'height';
-                                          const currentOverrides = m.partOverrides || {};
-                                          const partData = currentOverrides[p.id] || {};
-                                          updateSiteMeasurement(idx, m.id, 'partOverrides', { ...currentOverrides, [p.id]: { ...partData, [field]: val } });
-                                        }}
-                                      />
-                                      <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>mm</span>
+                  {(activeSitePlan.floors || []).map(floor => {
+                  const floorHasVoids = floor.apartments?.some(a => a.voids?.length > 0);
+                  if (!floorHasVoids) return null;
+
+                  return (
+                    <div key={floor.id} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      {/* Floor Separator */}
+                      <div style={{ padding: '0.5rem 1rem', background: '#e2e8f0', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{ fontSize: '1rem' }}>🏢</span>
+                        <strong style={{ fontSize: '0.95rem', color: '#1e293b', textTransform: 'uppercase' }}>{floor.name}</strong>
+                      </div>
+
+                      {/* Apartments */}
+                      {(floor.apartments || []).map(apt => {
+                        if (!apt.voids || apt.voids.length === 0) return null;
+
+                        return (
+                          <div key={apt.id} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', paddingLeft: '1rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.25rem', marginBottom: '0.25rem' }}>
+                              <span style={{ fontSize: '0.9rem' }}>🚪</span>
+                              <strong style={{ fontSize: '0.9rem', color: '#475569' }}>{apt.name}</strong>
+                            </div>
+
+                            {/* Voids Cards */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1.25rem' }}>
+                              {(apt.voids || []).map(v => {
+                                const item = selectedOrder.items.find(i => i.id === v.itemId);
+                                if (!item) return null;
+
+                                return (
+                                  <div key={v.id} style={{ display: 'flex', background: 'white', borderRadius: '1rem', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}>
+                                    {/* Visual Preview */}
+                                    <div style={{ width: '220px', background: '#f8fafc', borderRight: '1px solid #e2e8f0', flexShrink: 0 }}>
+                                      <ItemPreview config={item.config} database={data} />
                                     </div>
-                                  ))}
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                        </React.Fragment>
-                      ))}
-                      {(!item.siteMeasurements || item.siteMeasurements.length === 0) && (
-                        <tr><td colSpan="5" style={{ textAlign: 'center', color: '#94a3b8', fontSize: '0.85rem' }}>Aucune cote réelle ajoutée.</td></tr>
-                      )}
-                    </tbody>
-                  </table>
 
-                  <button 
-                    onClick={() => addSiteMeasurement(idx)}
-                    className="btn btn-secondary"
-                    style={{ fontSize: '0.85rem', padding: '0.4rem 0.8rem' }}
-                    disabled={remaining <= 0}
-                  >
-                    <Plus size={14} /> Ajouter une cote réelle
-                  </button>
-                </div>
+                                    {/* Form Panel */}
+                                    <div style={{ flex: 1, padding: '1.25rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                                      {/* Header Row */}
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem' }}>
+                                        <div>
+                                          <span style={{ fontSize: '0.75rem', background: '#eff6ff', color: '#1d4ed8', padding: '0.2rem 0.6rem', borderRadius: '9999px', fontWeight: 700, marginRight: '0.5rem' }}>{v.name}</span>
+                                          <strong style={{ fontSize: '0.95rem', color: '#1e293b' }}>{item.label}</strong>
+                                        </div>
+                                        <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Cotes Devis: {item.config.L} x {item.config.H} mm</span>
+                                      </div>
+
+                                      {/* Real Dimensions Grid */}
+                                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem', marginBottom: '1rem' }}>
+                                        <div>
+                                          <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '0.25rem' }}>Largeur Réelle (L) mm</label>
+                                          <input
+                                            type="number"
+                                            className="input"
+                                            value={v.L !== undefined ? v.L : ''}
+                                            onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'L', e.target.value)}
+                                            style={{ fontSize: '0.85rem', padding: '0.35rem 0.6rem' }}
+                                            placeholder={item.config.L}
+                                          />
+                                        </div>
+                                        <div>
+                                          <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '0.25rem' }}>Hauteur Réelle (H) mm</label>
+                                          <input
+                                            type="number"
+                                            className="input"
+                                            value={v.H !== undefined ? v.H : ''}
+                                            onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'H', e.target.value)}
+                                            style={{ fontSize: '0.85rem', padding: '0.35rem 0.6rem' }}
+                                            placeholder={item.config.H}
+                                          />
+                                        </div>
+                                        <div>
+                                          <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '0.25rem' }}>Prof. Mur (mm)</label>
+                                          <input
+                                            type="number"
+                                            className="input"
+                                            value={v.wallDepth !== undefined ? v.wallDepth : ''}
+                                            onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'wallDepth', e.target.value)}
+                                            style={{ fontSize: '0.85rem', padding: '0.35rem 0.6rem' }}
+                                            placeholder="ex: 120"
+                                          />
+                                        </div>
+                                        <div>
+                                          <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '0.25rem' }}>Ht. Poignée (mm)</label>
+                                          <input
+                                            type="number"
+                                            className="input"
+                                            value={v.handleHeight !== undefined ? v.handleHeight : ''}
+                                            onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'handleHeight', e.target.value)}
+                                            style={{ fontSize: '0.85rem', padding: '0.35rem 0.6rem' }}
+                                            placeholder="Auto"
+                                          />
+                                        </div>
+                                      </div>
+
+                                      {/* Inline Shutter Configuration */}
+                                      <div style={{ background: '#f8fafc', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0', marginBottom: '1rem' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                                          <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>🌀 Configuration du Volet</span>
+                                          <button
+                                            onClick={() => {
+                                              const hasShutter = !!v.shutter;
+                                              updateVoidProperty(floor.id, apt.id, v.id, 'shutter', hasShutter ? null : { qty: 1, customLV: v.L || item.config.L, overrides: {} });
+                                            }}
+                                            style={{
+                                              border: 'none',
+                                              background: v.shutter ? '#fef3c7' : '#e2e8f0',
+                                              color: v.shutter ? '#d97706' : '#475569',
+                                              fontSize: '0.7rem',
+                                              fontWeight: 700,
+                                              padding: '0.2rem 0.6rem',
+                                              borderRadius: '4px',
+                                              cursor: 'pointer'
+                                            }}
+                                          >
+                                            {v.shutter ? '❌ Retirer le volet' : '➕ Activer le volet'}
+                                          </button>
+                                        </div>
+
+                                        {v.shutter && (
+                                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem' }}>
+                                            <div>
+                                              <label style={{ fontSize: '0.65rem', color: '#64748b', display: 'block' }}>Quantité</label>
+                                              <input
+                                                type="number"
+                                                className="input"
+                                                value={v.shutter.qty}
+                                                onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.qty', e.target.value)}
+                                                style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', minHeight: 'auto' }}
+                                              />
+                                            </div>
+                                            <div>
+                                              <label style={{ fontSize: '0.65rem', color: '#64748b', display: 'block' }}>Largeur (LV) mm</label>
+                                              <input
+                                                type="number"
+                                                className="input"
+                                                value={v.shutter.customLV || ''}
+                                                placeholder="Auto"
+                                                onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.customLV', e.target.value)}
+                                                style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', minHeight: 'auto' }}
+                                              />
+                                            </div>
+                                            <div>
+                                              <label style={{ fontSize: '0.65rem', color: '#64748b', display: 'block' }}>Manoeuvre</label>
+                                              <select
+                                                className="input"
+                                                value={v.shutter.overrides?.controlPosition || ''}
+                                                onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.controlPosition', e.target.value)}
+                                                style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', minHeight: 'auto', fontWeight: 700 }}
+                                              >
+                                                <option value="">Auto</option>
+                                                <option value="Gauche">Gauche</option>
+                                                <option value="Droite">Droite</option>
+                                              </select>
+                                            </div>
+                                            <div>
+                                              <label style={{ fontSize: '0.65rem', color: '#64748b', display: 'block' }}>Caisson</label>
+                                              <select
+                                                className="input"
+                                                value={v.shutter.overrides?.caissonId || ''}
+                                                onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.caissonId', e.target.value)}
+                                                style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', minHeight: 'auto' }}
+                                              >
+                                                <option value="">Auto</option>
+                                                {(data.shutterComponents?.caissons || []).map(opt => <option key={opt.id} value={opt.id}>{opt.name}</option>)}
+                                              </select>
+                                            </div>
+                                            <div>
+                                              <label style={{ fontSize: '0.65rem', color: '#64748b', display: 'block' }}>Lame</label>
+                                              <select
+                                                className="input"
+                                                value={v.shutter.overrides?.lameId || ''}
+                                                onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.lameId', e.target.value)}
+                                                style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', minHeight: 'auto' }}
+                                              >
+                                                <option value="">Auto</option>
+                                                {(data.shutterComponents?.lames || []).map(opt => <option key={opt.id} value={opt.id}>{opt.name}</option>)}
+                                              </select>
+                                            </div>
+                                            <div>
+                                              <label style={{ fontSize: '0.65rem', color: '#64748b', display: 'block' }}>Glissière</label>
+                                              <select
+                                                className="input"
+                                                value={v.shutter.overrides?.glissiereId || ''}
+                                                onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.glissiereId', e.target.value)}
+                                                style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', minHeight: 'auto' }}
+                                              >
+                                                <option value="">Auto</option>
+                                                {(data.shutterComponents?.glissieres || []).map(opt => <option key={opt.id} value={opt.id}>{opt.name}</option>)}
+                                              </select>
+                                            </div>
+                                            <div>
+                                              <label style={{ fontSize: '0.65rem', color: '#64748b', display: 'block' }}>Axe</label>
+                                              <select
+                                                className="input"
+                                                value={v.shutter.overrides?.axeId || ''}
+                                                onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.axeId', e.target.value)}
+                                                style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', minHeight: 'auto' }}
+                                              >
+                                                <option value="">Auto</option>
+                                                {(data.shutterComponents?.axes || []).map(opt => <option key={opt.id} value={opt.id}>{opt.name}</option>)}
+                                              </select>
+                                            </div>
+                                            <div>
+                                              <label style={{ fontSize: '0.65rem', color: '#64748b', display: 'block' }}>Kit</label>
+                                              <select
+                                                className="input"
+                                                value={v.shutter.overrides?.kitId || ''}
+                                                onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.kitId', e.target.value)}
+                                                style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', minHeight: 'auto' }}
+                                              >
+                                                <option value="">Auto</option>
+                                                {(data.shutterComponents?.kits || []).map(opt => <option key={opt.id} value={opt.id}>{opt.name}</option>)}
+                                              </select>
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      {/* Actions Footer */}
+                                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'auto' }}>
+                                        <button
+                                          onClick={() => applyVoidToAllSameInApartment(floor.id, apt.id, v)}
+                                          className="btn btn-secondary"
+                                          style={{ fontSize: '0.75rem', padding: '0.35rem 0.75rem', color: '#4f46e5', borderColor: '#c7d2fe', background: '#f5f3ff', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                                        >
+                                          <Copy size={14} /> Appliquer à tous les identiques
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
+            )}
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem', padding: '1rem', background: '#f0f9ff', borderRadius: '0.75rem', border: '1px dashed #3b82f6' }}>
-               <button 
+            {/* Launch Fabrication Action Bar */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.5rem', padding: '1.25rem', background: '#f0f9ff', borderRadius: '1rem', border: '1px dashed #3b82f6' }}>
+              <button
                 onClick={handleLaunchProductionBatch}
                 className="btn btn-primary"
                 style={{ background: '#10b981', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700 }}
-               >
-                 <CheckCircle size={18} /> VALIDER ET LANCER LA FABRICATION (LOT EN COURS)
-               </button>
+              >
+                <CheckCircle size={18} /> VALIDER ET LANCER LA FABRICATION (LOT EN COURS)
+              </button>
             </div>
           </div>
-        )}
-
+          );
+        })()}
         {activeOrderTab === 'batches' && (
           <div className="glass shadow-md">
             <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1.5rem' }}>Historique des Lots de Fabrication</h3>

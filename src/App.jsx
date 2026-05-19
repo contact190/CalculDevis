@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Home, Package, Settings, ChevronRight, LayoutDashboard, Users, RefreshCw, ShoppingBag, Truck, CheckCircle } from 'lucide-react';
+import { Home, Package, Settings, ChevronRight, LayoutDashboard, Users, RefreshCw, ShoppingBag, Truck, CheckCircle, Building } from 'lucide-react';
 import CommercialModule from './modules/commercial/CommercialModule';
 import ProductionModule from './modules/production/ProductionModule';
 import AdminDashboard from './modules/admin/AdminDashboard';
@@ -7,6 +7,8 @@ import ClientsModule from './modules/clients/ClientsModule';
 import OrdersModule from './modules/orders/OrdersModule';
 import ShippingModule from './modules/shipping/ShippingModule';
 import InstallerPortal from './modules/shipping/InstallerPortal';
+import TechnicianPortal from './modules/orders/TechnicianPortal';
+import SitePlanModule from './modules/siteplan/SitePlanModule';
 import { DEFAULT_DATA } from './data/default-data';
 import { syncDatabase } from './utils/supabaseClient';
 import { persistentStorage } from './utils/storage';
@@ -254,6 +256,7 @@ function App() {
 
   const menuItems = [
     { id: 'commercial', label: 'Commercial', icon: LayoutDashboard },
+    { id: 'siteplan', label: 'Plan de Chantier', icon: Building },
     { id: 'orders', label: 'Commandes', icon: ShoppingBag },
     { id: 'production', label: 'Atelier / Production', icon: Package },
     { id: 'shipping', label: 'Expédition & Colisage', icon: Truck },
@@ -264,6 +267,8 @@ function App() {
   const urlParams = new URLSearchParams(window.location.search);
   const isInstallerMode = urlParams.get('mode') === 'installer';
   const installerOrderId = urlParams.get('orderId');
+  const isTechnicianMode = urlParams.get('mode') === 'technician';
+  const technicianOrderId = urlParams.get('orderId');
 
   if (isInstallerMode && installerOrderId) {
     return (
@@ -271,6 +276,18 @@ function App() {
         data={database} 
         setData={setDatabase} 
         orderId={installerOrderId}
+        isOnline={isOnline}
+        isSyncing={cloudSyncStatus === 'syncing'}
+      />
+    );
+  }
+
+  if (isTechnicianMode && technicianOrderId) {
+    return (
+      <TechnicianPortal 
+        data={database} 
+        setData={setDatabase} 
+        orderId={technicianOrderId}
         isOnline={isOnline}
         isSyncing={cloudSyncStatus === 'syncing'}
       />
@@ -444,6 +461,12 @@ function App() {
               setCurrentQuote(quote);
               setActiveTab('commercial');
             }}
+          />
+        )}
+        {activeTab === 'siteplan' && (
+          <SitePlanModule 
+            data={database}
+            setData={setDatabase}
           />
         )}
         {activeTab === 'orders' && (

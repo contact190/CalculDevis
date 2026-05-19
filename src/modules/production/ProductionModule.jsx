@@ -143,6 +143,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                     H: m.H, 
                     wallDepth: m.wallDepth,
                     partOverrides: m.partOverrides,
+                    hasShutter: true,
                     shutterConfig: {
                       ...(item.config?.shutterConfig || {}),
                       ...(sh.overrides || {})
@@ -270,10 +271,13 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
             }
           });
         } // end if (b.profiles)
-        // Shutter components -> List 1 ONLY if sold by BARRE
+        // Shutter components -> List 1 ONLY if sold by BARRE OR if it is a Glissiere/Coulisse/Guide
         (b.shutters || []).forEach(s => {
-          const unit = (s.priceUnit || '').toUpperCase().trim();
-          if (unit !== 'BARRE') return;
+          const sName = (s.name || '').toLowerCase();
+          const isGlissiere = sName.includes('glissière') || sName.includes('glissiere') || sName.includes('coulisse') || sName.includes('guide');
+
+          // ONLY Glissiere/Coulisse/Guide are allowed in List 1 (Bars/Nesting) for shutters
+          if (!isGlissiere) return;
 
           const rId = cfg.rangeId || entry.rangeId || '';
           const rangeInfo = database.ranges?.find(r => String(r.id) === String(rId));
@@ -2418,14 +2422,10 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
 
               if (b.shutters && Array.isArray(b.shutters)) {
                 b.shutters.forEach(s => {
-                  const unitUpper = (s.priceUnit || '').toUpperCase().trim();
-                  const isLinear = ['ML', 'M', 'JOINT'].includes(unitUpper);
+                  const sName = (s.name || '').toLowerCase();
+                  const isGlissiere = sName.includes('glissière') || sName.includes('glissiere') || sName.includes('coulisse') || sName.includes('guide');
                   
-                  if (isLinear && s.length > 0 && s.qty > 0) {
-                    const sName = (s.name || '').toLowerCase();
-                    // Exclude Joints, Brosse, and Lame Finale from Nesting/Logistics
-                    if (sName.includes('joint') || sName.includes('lame finale') || sName.includes('lames finales') || sName.includes('brosse')) return;
-
+                  if (isGlissiere && s.length > 0 && s.qty > 0) {
                     const piecesPerUnit = Math.max(0, Number(s.qty) || 0);
                     const totalPieces = piecesPerUnit * qty;
                     totalPiecesInBoms += totalPieces;
