@@ -240,21 +240,51 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
     if (config.compoundType && config.compoundType !== 'none' && config.compoundConfig?.parts) {
       const { parts, orientation, unionId, traverseId } = config.compoundConfig;
       const isMulti = config.compoundType === 'fix_coulissant';
-      const divRef = database.profiles.find(p => p.id === (isMulti ? unionId : traverseId));
-      const thick = isMulti ? ((divRef?.thickness || 3) * scale) : 0;
       
-      const drawPartList = (list, bx, by, bw, bh, dir) => {
+      const drawPartList = (list, bx, by, bw, bh, dir, depth = 0) => {
         if (!list || !Array.isArray(list)) return;
         const isH = dir !== 'vertical';
         let cx = bx;
         let cy = by;
+
+        // Resolve division profile and thickness dynamically based on depth
+        let currentDivId = (isMulti && depth === 0) ? unionId : traverseId;
+        if (currentDivId === 'AUTO') {
+          const targetRole = isH ? 'traverse_v' : 'traverse_h';
+          const normalize = (s) => (s || '').replace(/[-\s]+/g, '').toLowerCase();
+          const currentNormRangeId = normalize(config.rangeId);
+          const dividerEntry = (database.traverses || []).find(t => 
+            (t.role === targetRole || t.type === targetRole) && 
+            (t.rangeIds || []).some(rid => normalize(rid) === currentNormRangeId)
+          );
+          if (dividerEntry) currentDivId = dividerEntry.profileId;
+        }
+
+        const currentProfile = database.profiles?.find(p => p.id === currentDivId);
+        let currentThickness = currentProfile?.thickness;
+
+        if (!currentThickness) {
+          const nameMatch = (currentProfile?.name || '').match(/(\d+)/);
+          if (nameMatch) {
+            currentThickness = parseInt(nameMatch[0]);
+          } else {
+            const trvEntry = (database.traverses || []).find(t => t.id === currentDivId || t.profileId === currentDivId);
+            if (trvEntry && trvEntry.thickness) {
+              currentThickness = trvEntry.thickness;
+            } else {
+              currentThickness = (isMulti && depth === 0) ? 3 : 0;
+            }
+          }
+        }
+
+        const currentThickPx = isMulti ? (currentThickness * scale) : 0;
 
         list.forEach((part, idx) => {
           const pW = isH ? (part.width ? part.width * scale : (bw / list.length)) : bw;
           const pH = isH ? bh : (part.height ? part.height * scale : (bh / list.length));
 
           if (part.type === 'group' && part.subParts) {
-             drawPartList(part.subParts, cx, cy, pW, pH, isH ? 'vertical' : 'horizontal');
+             drawPartList(part.subParts, cx, cy, pW, pH, isH ? 'vertical' : 'horizontal', depth + 1);
           } else {
              drawJoinery(cx, cy, pW, pH, part.compositionId || compositionId);
           }
@@ -263,22 +293,22 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
              cx += pW;
              if (idx < list.length - 1) {
                 ctx.fillStyle = '#64748b';
-                ctx.fillRect(cx, by, thick, bh);
-                cx += thick;
+                ctx.fillRect(cx, by, currentThickPx, bh);
+                cx += currentThickPx;
              }
           } else {
              cy += pH;
              if (idx < list.length - 1) {
                 ctx.fillStyle = '#64748b';
-                ctx.fillRect(bx, cy, bw, thick);
-                cy += thick;
+                ctx.fillRect(bx, cy, bw, currentThickPx);
+                cy += currentThickPx;
              }
           }
         });
       };
 
       if (!isOnlyShutter) {
-        drawPartList(parts, offsetX, winOffsetY, dW, dH, orientation);
+        drawPartList(parts, offsetX, winOffsetY, dW, dH, orientation, 0);
       }
     } else {
       if (!isOnlyShutter) {

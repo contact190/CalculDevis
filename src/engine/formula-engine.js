@@ -990,18 +990,48 @@ export class FormulaEngine {
     }
 
     // --- 3. RECURSIVE PROCESSING ---
-    const processPartList = (partList, boxL, boxH, direction) => {
+    const processPartList = (partList, boxL, boxH, direction, depth = 0) => {
       const isDividerHorizontal = direction === 'vertical';
       const divQty = (partList || []).length - 1;
 
+      // Determine division profile and thickness dynamically based on depth
+      let currentDivId = (isMultiChassis && depth === 0) ? unionId : traverseId;
+      if (currentDivId === 'AUTO') {
+        const targetRole = isDividerHorizontal ? 'traverse_h' : 'traverse_v';
+        const dividerEntry = (this.db.traverses || []).find(t => 
+          (t.role === targetRole || t.type === targetRole) && 
+          (t.rangeIds || []).some(rid => normalize(rid) === currentNormRangeId)
+        );
+        if (dividerEntry) currentDivId = dividerEntry.profileId;
+      }
+
+      const currentDivProfile = (this.db.profiles || []).find(p => p.id === currentDivId);
+      let currentDivThick = currentDivProfile?.thickness;
+
+      if (!currentDivThick) {
+        // Fallback 1: Regex on name (e.g., "Traverse 25" -> 25)
+        const nameMatch = (currentDivProfile?.name || '').match(/(\d+)/);
+        if (nameMatch) {
+          currentDivThick = parseInt(nameMatch[0]);
+        } else {
+          // Fallback 2: Check standard traverses/unions for a match
+          const trvEntry = (this.db.traverses || []).find(t => t.id === currentDivId || t.profileId === currentDivId);
+          if (trvEntry && trvEntry.thickness) {
+            currentDivThick = trvEntry.thickness;
+          } else {
+            currentDivThick = (isMultiChassis && depth === 0) ? 3 : 0;
+          }
+        }
+      }
+
       if (divQty > 0) {
         const len = isDividerHorizontal ? boxL : boxH;
-        let prof = divProfile || { id: 'TRAVERSE-TMP', name: 'Traverse à définir', pricePerBar: 0, weightPerM: 0 };
+        let prof = currentDivProfile || { id: 'TRAVERSE-TMP', name: 'Traverse à définir', pricePerBar: 0, weightPerM: 0 };
         let cost = prof.pricePerBar ? (len / prof.barLength * prof.pricePerBar) : ((len/1000) * (prof.weightPerM||0) * (prof.pricePerKg||0));
         
         results.profiles.push({
           ...prof,
-          label: compoundType === 'fix_coulissant' ? 'Profilé d\'Union' : `Traverse ${isDividerHorizontal ? 'Horiz.' : 'Vert.'}`,
+          label: (isMultiChassis && depth === 0) ? 'Profilé d\'Union' : `Traverse ${isDividerHorizontal ? 'Horiz.' : 'Vert.'}`,
           source: 'Jonction',
           formula: isDividerHorizontal ? 'L' : 'H',
           resolvedFormula: `${len} mm`,
@@ -1024,7 +1054,7 @@ export class FormulaEngine {
 
       // 2. Adjust dimensions if they exceed available space (e.g. caisson deduction)
       // Deduct divider thickness from available space for part calculation
-      const divThickNum = Number(divThick || 0);
+      const divThickNum = Number(currentDivThick || 0);
       const available = (direction === 'horizontal' ? boxL : boxH) - (divQty * divThickNum);
       const totalRequested = items.reduce((sum, item) => sum + (direction === 'horizontal' ? item.rawL : item.rawH), 0);
 
@@ -1058,21 +1088,25 @@ export class FormulaEngine {
         let calcH = part.rawH;
 
         if (part.type === 'group' && part.subParts) {
-           processPartList(part.subParts, calcL, calcH, direction === 'horizontal' ? 'vertical' : 'horizontal');
+           processPartList(part.subParts, calcL, calcH, direction === 'horizontal' ? 'vertical' : 'horizontal', depth + 1);
            return;
         }
 
         const compId = part.compositionId || frameCompId;
-        const subPartOpt = isMultiChassis 
-          ? { ...(config.optionalSides || { top: true, bottom: true, left: true, right: true }), isSubPart: false } 
-          : { top: false, bottom: false, left: false, right: false, isSubPart: true };
+        const useSubPart = !isMultiChassis || (depth > 0);
+        
+        const subPartOpt = useSubPart 
+          ? { top: false, bottom: false, left: false, right: false, isSubPart: true } 
+          : { ...(config.optionalSides || { top: true, bottom: true, left: true, right: true }), isSubPart: false };
+        
+        const currentEPt = useSubPart ? currentDivThick : 0;
         
         const res = this.calculateComponentBOM({
-        ...config,
-        compositionId: compId,
-        _compoundMode: true,
-        _filterDormant: compoundType === 'fix_ouvrant' // Only filter dormant if we handled it globally
-      }, calcL, calcH, compId, part.glassId || config.glassId, subPartOpt, calcH, Number(originalL || L), totalH, isMultiChassis ? 0 : divThick, errors);
+          ...config,
+          compositionId: compId,
+          _compoundMode: true,
+          _filterDormant: compoundType === 'fix_ouvrant' // Only filter dormant if we handled it globally
+        }, calcL, calcH, compId, part.glassId || config.glassId, subPartOpt, calcH, Number(originalL || L), totalH, currentEPt, errors);
         const sourceLabel = `Partie ${idx + 1} (${part.type})`;
 
         const filterFn = (i) => {
@@ -1080,7 +1114,7 @@ export class FormulaEngine {
            const isCJ = i.isCouvreJoint || /couvres?[- ]?joints?|cj[vh]?/i.test(s);
            const isDormant = ['dormant', 'cadre', 'batit', 'dorme'].some(t => s.includes(t));
 
-           if (compoundType === 'fix_coulissant') {
+           if (isMultiChassis && depth === 0) {
               if (isCJ) return false; // CJ are now global
               return true; // Keep dormants for multi-chassis
            }
@@ -1099,7 +1133,7 @@ export class FormulaEngine {
       });
     };
 
-    processPartList(parts, L, H, orientation);
+    processPartList(parts, L, H, orientation, 0);
     return results;
   }
 
