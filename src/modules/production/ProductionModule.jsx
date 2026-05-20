@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Package, Scissors, Download, CheckCircle, Barcode, ShoppingCart, Layers, Edit2, Link2, Link2Off, Plus, QrCode, Trash2, ArrowLeft, FileText, FileSpreadsheet, RefreshCw, Info, ChevronDown, ChevronUp } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { FormulaEngine } from '../../engine/formula-engine';
@@ -54,6 +54,43 @@ const calculateBarsNeeded = (pieces, bLength, stockOffcuts = []) => {
 
 const ProductionModule = ({ currentConfig, currentQuote, database, setData }) => {
   const engine = useMemo(() => new FormulaEngine(database), [database]);
+  const resolveRef = useCallback((itemId) => {
+    if (!itemId) return '---';
+    const cleanId = String(itemId).split('|')[0];
+    
+    // Look up in shutterComponents
+    const sc = database.shutterComponents || {};
+    const shutterLists = [
+      sc.axes || [],
+      sc.kits || [],
+      sc.lames || [],
+      sc.extras || [],
+      sc.moteurs || [],
+      sc.caissons || [],
+      sc.glissieres || [],
+      sc.lameFinales || [],
+    ];
+    for (const list of shutterLists) {
+      const dbSC = list.find(x => x.id === cleanId);
+      if (dbSC) {
+        return dbSC.reference || '---';
+      }
+    }
+
+    // Look up in profiles
+    const prof = (database.profiles || []).find(x => x.id === cleanId);
+    if (prof) return prof.reference || cleanId;
+
+    // Look up in accessories
+    const acc = (database.accessories || []).find(x => x.id === cleanId);
+    if (acc) return acc.reference || cleanId;
+
+    // Look up in glass
+    const gl = (database.glass || []).find(x => x.id === cleanId);
+    if (gl) return gl.reference || cleanId;
+
+    return '---';
+  }, [database]);
   const [activeTab, setActiveTab] = useState('achat');
   const [barLengths, setBarLengths] = useState({});
   const [jumelageGroups, setJumelageGroups] = useState([]);
@@ -582,7 +619,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
     const title = type === 'scraps' ? 'Déchets_Chutes_Non_Reutilisables' : 'Chutes_Reutilisables';
     const csvContent = "data:text/csv;charset=utf-8," 
       + "Référence;Désignation;Couleur;Longueur (mm)\n"
-      + target.map(c => `${c.baseId};${c.name};${c.color};${c.length}`).join("\n");
+      + target.map(c => `${resolveRef(c.baseId)};${c.name};${c.color};${c.length}`).join("\n");
     
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
@@ -1050,7 +1087,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
          bars = Math.ceil(ml / bLength);
        }
 
-       const ref = p._isGroup ? p.id.split(' + ').map(x => x.split('|')[0]).join(' + ') : p.baseId || p.id.split('|')[0];
+       const ref = p._isGroup ? p.id.split(' + ').map(x => resolveRef(x)).join(' + ') : resolveRef(p.baseId || p.id);
        
        doc.text(String(ref).substring(0, 18), 15, y);
        doc.text(String(p._isGroup ? 'Varié' : p.colorName || 'Std').substring(0, 15), 55, y);
@@ -1085,7 +1122,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
     doc.setFont('helvetica', 'normal');
     purchasingAccessories.forEach(a => {
        const isMl = ['M', 'ML', 'JOINT'].includes((a.unit || '').toUpperCase());
-       const ref = a.baseId || a.id.split('|')[0];
+       const ref = resolveRef(a.baseId || a.id);
        
        doc.text(String(ref).substring(0, 18), 15, y);
        doc.text(String(a.colorName || 'Std').substring(0, 15), 55, y);
@@ -1119,7 +1156,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
 
     doc.setFont('helvetica', 'normal');
     purchasingGlass.forEach(g => {
-       const ref = g.baseId || g.id;
+       const ref = resolveRef(g.baseId || g.id);
        doc.text(String(ref).substring(0, 18), 15, y);
        doc.text(String(g.colorName || 'Std').substring(0, 15), 55, y);
        doc.text(String(g.name || '').substring(0, 25), 95, y);
@@ -1455,7 +1492,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                                   </div>
                                 )}
                               </td>
-                              <td style={{ fontSize: '0.75rem', color: '#64748b' }}>{p.id}</td>
+                              <td style={{ fontSize: '0.75rem', color: '#64748b' }}>{resolveRef(p.id)}</td>
                               <td style={{ fontWeight: 600 }}>{p.name} <span style={{ fontWeight: 400, color: '#64748b' }}>[{p.label}]</span></td>
                               <td>
                                 <span style={{ 
@@ -1663,7 +1700,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                       doc.text("Aucun article sélectionné.", 15, y);
                     } else {
                       itemsToPrint.forEach(p => {
-                        const ref = String(p.id.split('|')[0]);
+                        const ref = p._isGroup ? p.id.split(' + ').map(x => resolveRef(x)).join(' + ') : resolveRef(p.baseId || p.id);
                         const name = String(p.name || p.combinedName || '—');
                         const color = String(p.colorName || '—');
 
@@ -1819,7 +1856,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                   onClick={() => {
                     let csv = "Reference;Designation;Finition;Dimensions;Quantite;Unite\n";
                     purchasingGlass.forEach(g => {
-                      csv += `${g.baseId || g.id};${g.name};${g.colorName};${g.width}x${g.height};${g.count};U\n`;
+                      csv += `${resolveRef(g.baseId || g.id)};${g.name};${g.colorName};${g.width}x${g.height};${g.count};U\n`;
                     });
                     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
                     const link = document.createElement("a");
@@ -1840,12 +1877,13 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                     displayProfiles.forEach(p => {
                       const bLength = barLengths[p._barKey || p.baseId || p.id] !== undefined ? barLengths[p._barKey || p.baseId || p.id] : (parseFloat(p.barLength) || 6400);
                       const qty = Math.ceil(p.totalMeasure / bLength);
-                      csv += `${q(p.baseId || p.id.split('|')[0])};${q(p.name || p.combinedName)};${q(p.colorName || 'Std')};${qty};Barres\n`;
+                      const ref = p._isGroup ? p.id.split(' + ').map(x => resolveRef(x)).join(' + ') : resolveRef(p.baseId || p.id);
+                      csv += `${q(ref)};${q(p.name || p.combinedName)};${q(p.colorName || 'Std')};${qty};Barres\n`;
                     });
                     purchasingAccessories.forEach(a => {
                       const isMl = ['M', 'ML', 'JOINT'].includes((a.unit || '').toUpperCase());
                       const qty = isMl ? (a.totalMeasure/1000).toFixed(2) : a.totalQty;
-                      csv += `${q(a.baseId || a.id.split('|')[0])};${q(a.combinedName)};${q(a.colorName || 'Std')};${qty};${q(a.unit || 'U')}\n`;
+                      csv += `${q(resolveRef(a.baseId || a.id))};${q(a.combinedName)};${q(a.colorName || 'Std')};${qty};${q(a.unit || 'U')}\n`;
                     });
                     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
                     const link = document.createElement("a");
@@ -1969,7 +2007,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                             )}
                          </td>
                          <td data-label="Réf." style={{ color: '#64748b', fontSize: '0.75rem', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                           {p._isGroup ? p.id.split(' + ').map(x => x.split('|')[0]).join(' + ') : p.baseId || p.id.split('|')[0]}
+                           {p._isGroup ? p.id.split(' + ').map(x => resolveRef(x)).join(' + ') : resolveRef(p.baseId || p.id)}
                          </td>
                          <td data-label="Finition" style={{ fontSize: '0.85rem' }}>{p._isGroup ? 'Multicolore / Varié' : p.colorName || 'Standard'}</td>
                          <td data-label="RAL" style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b' }}>{p._isGroup ? '—' : p.colorId || 'Std'}</td>
@@ -2095,7 +2133,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                     .map((a, i) => (
                       <tr key={`ml-${i}`} style={{ background: proformaSelection.has(a.id) ? '#ecfeff' : 'transparent' }}>
                         <td><input type="checkbox" checked={proformaSelection.has(a.id)} onChange={() => toggleProformaSelection(a.id)} /></td>
-                        <td data-label="Réf." style={{ color: '#64748b', fontSize: '0.75rem', fontFamily: 'monospace' }}>{a.baseId || a.id.split('|')[0]}</td>
+                        <td data-label="Réf." style={{ color: '#64748b', fontSize: '0.75rem', fontFamily: 'monospace' }}>{resolveRef(a.baseId || a.id)}</td>
                         <td data-label="Finition" style={{ fontSize: '0.85rem' }}>{a.colorName || 'Standard'}</td>
                         <td data-label="Nom" style={{ fontWeight: 600 }}>{a.combinedName || 'Joint'}</td>
                         <td data-label="ML" style={{ color: '#0891b2', fontWeight: 800, fontSize: '1rem' }}>
@@ -2139,7 +2177,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                       return (
                         <tr key={`ua-${i}`} style={{ background: proformaSelection.has(a.id) ? '#fffbeb' : 'transparent' }}>
                           <td><input type="checkbox" checked={proformaSelection.has(a.id)} onChange={() => toggleProformaSelection(a.id)} /></td>
-                          <td data-label="Réf." style={{ color: '#64748b', fontSize: '0.75rem', fontFamily: 'monospace' }}>{a.baseId || a.id.split('|')[0]}</td>
+                          <td data-label="Réf." style={{ color: '#64748b', fontSize: '0.75rem', fontFamily: 'monospace' }}>{resolveRef(a.baseId || a.id)}</td>
                           <td data-label="Finition" style={{ fontSize: '0.85rem' }}>{a.colorName || 'Standard'}</td>
                           <td data-label="Nom" style={{ fontWeight: 600 }}>
                             {a.combinedName || 'Accessoire'}
@@ -2184,7 +2222,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                   <tbody>
                     {purchasingGlass.map((g, i) => (
                       <tr key={`ag-${i}`}>
-                        <td data-label="Réf." style={{ color: '#64748b', fontSize: '0.75rem', fontFamily: 'monospace' }}>{g.baseId || g.id}</td>
+                        <td data-label="Réf." style={{ color: '#64748b', fontSize: '0.75rem', fontFamily: 'monospace' }}>{resolveRef(g.baseId || g.id)}</td>
                         <td data-label="Finition" style={{ fontSize: '0.85rem' }}>{g.colorName || 'Standard'}</td>
                         <td data-label="Nom" style={{ fontWeight: 600 }}>{g.name}</td>
                         <td data-label="Réf. Fen.">{g.combinedRefs || '—'}</td>
@@ -2795,7 +2833,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
             if (!groupedByProfile[bar.profId]) {
               groupedByProfile[bar.profId] = { 
                 name: bar.profileName, 
-                ref: bar.baseId,
+                ref: resolveRef(bar.baseId || bar.profId),
                 color: bar.colorName, 
                 combinedRanges: bar.combinedRanges,
                 bars: [] 
@@ -2812,7 +2850,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
             doc.setFillColor(30, 41, 59); doc.rect(margin, currentY, 180, 8, 'F');
             doc.setTextColor(255, 255, 255); doc.setFontSize(9); doc.setFont('helvetica', 'bold');
             
-            let fullTitle = `${group.ref ? '[' + group.ref + '] ' : ''}${group.name} ${group.combinedRanges ? '- ' + group.combinedRanges : ''}`;
+            let fullTitle = `${group.ref && group.ref !== '---' ? '[' + group.ref + '] ' : ''}${group.name} ${group.combinedRanges ? '- ' + group.combinedRanges : ''}`;
             if (fullTitle.length > 85) fullTitle = fullTitle.substring(0, 82) + '...';
             
             doc.text(fullTitle, margin + 3, currentY + 5.5);
@@ -3082,7 +3120,10 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                                         <>
                                           <div style={{ marginBottom: '0.8rem', fontWeight: 800, fontSize: '0.75rem', color: '#475569', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                             <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#7c3aed' }}></div>
-                                            {slotData.baseId ? `[${slotData.baseId}] ` : ''}{slotData.profileName} {slotData.combinedRanges ? `- ${slotData.combinedRanges}` : ''}
+                                            {(() => {
+                                              const ref = resolveRef(slotData.baseId);
+                                              return ref && ref !== '---' ? `[${ref}] ` : '';
+                                            })()}{slotData.profileName} {slotData.combinedRanges ? `- ${slotData.combinedRanges}` : ''}
                                             <span style={{ fontWeight: 400, color: '#94a3b8' }}>({slotData.pieces.length} / {kitConfig.piecesPerSlot} pièces)</span>
                                           </div>
                                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.8rem' }}>

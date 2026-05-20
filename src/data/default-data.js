@@ -18261,6 +18261,7 @@ export const DEFAULT_DATA = {
       },
       {
         "id": "GLI-VIDC",
+        "reference": "200095046",
         "name": "L Visible Monobloc",
         "price": 6350,
         "formula": "2",

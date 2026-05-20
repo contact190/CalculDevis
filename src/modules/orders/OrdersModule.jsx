@@ -1396,8 +1396,8 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                                  : (item.config?.shutterConfig?.kitId || '');
                                                const selectedKit = (data.shutterComponents?.kits || []).find(k => k.id === selectedKitId);
                                                const isMotor = selectedKit?.type === 'MOTEUR' || 
-                                               selectedKitId.toLowerCase().includes('mote') || 
-                                               selectedKit?.name?.toLowerCase().includes('moteur');
+                                               (selectedKitId && selectedKitId.toLowerCase().includes('mote')) || 
+                                               (selectedKit?.name && selectedKit.name.toLowerCase().includes('moteur'));
                                                if (!isMotor) return null;
                                                return (
                                                  <div>
@@ -1567,12 +1567,55 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                )}
                              </td>
                            )}
-                           <td data-label="Code" style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{p.id || '---'}</td>
+                           <td data-label="Code" style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                              {p.isGroup ? '---' : (() => {
+                                if (p.reference) return p.reference;
+                                const allSC = [
+                                  ...(data.shutterComponents?.glissieres || []),
+                                  ...(data.shutterComponents?.lames || []),
+                                  ...(data.shutterComponents?.lameFinales || []),
+                                  ...(data.shutterComponents?.caissons || []),
+                                  ...(data.shutterComponents?.axes || []),
+                                  ...(data.shutterComponents?.kits || []),
+                                  ...(data.shutterComponents?.moteurs || []),
+                                  ...(data.shutterComponents?.extras || []),
+                                ];
+                                const dbSC = allSC.find(x => x.id === p.id);
+                                if (dbSC?.reference) return dbSC.reference;
+                                const prof = (data.profiles || []).find(x => x.id === p.id);
+                                if (prof?.reference) return prof.reference;
+                                return '---';
+                              })()}
+                            </td>
                            <td data-label="Nom" style={{ fontWeight: 600 }}>
                              {p.isGroup ? (
                                <div style={{ color: '#7c3aed', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                                  <Layers size={14} />
                                  {p.label}
+                               </div>
+                             ) : p.id && String(p.id).startsWith('VR-') ? (
+                               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                 <span style={{ fontWeight: 700, color: '#0f766e' }}>{p.name} {p.label ? `[${p.label}]` : ''}</span>
+                                 <div style={{ paddingLeft: '0.5rem', borderLeft: '2px solid #cbd5e1', fontSize: '0.75rem', color: '#475569', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                                    {(() => {
+                                       const item = selectedOrder.items.find(i => p.source && p.source.includes(i.id)) || selectedOrder.items[0];
+                                       const sc = item?.config?.shutterConfig || {};
+                                       const selectedKitId = sc.kitId || '';
+                                       const selectedKit = (data.shutterComponents?.kits || []).find(k => k.id === selectedKitId);
+                                       const isMotor = selectedKit?.type === 'MOTEUR' || 
+                                                       (selectedKitId && selectedKitId.toLowerCase().includes('mote')) || 
+                                                       (selectedKit?.name && selectedKit.name.toLowerCase().includes('moteur'));
+                                       return (
+                                         <>
+                                           {sc.lameId && <div><strong>Lames:</strong> {data.shutterComponents?.lames?.find(x => x.id === sc.lameId)?.name || sc.lameId}</div>}
+                                           {sc.glissiereId && <div><strong>Coulisses:</strong> {data.shutterComponents?.glissieres?.find(x => x.id === sc.glissiereId)?.name || sc.glissiereId}</div>}
+                                           {sc.caissonId && <div><strong>Caisson:</strong> {data.shutterComponents?.caissons?.find(x => x.id === sc.caissonId)?.name || sc.caissonId}</div>}
+                                           {(sc.kitId || sc.axeId) && <div><strong>Axe / Kit:</strong> {selectedKit?.name || sc.kitId || sc.axeId}</div>}
+                                           {isMotor && <div><strong>Moteur:</strong> {data.shutterComponents?.moteurs?.find(x => x.id === sc.moteurId)?.name || sc.moteurId || 'Automatique'}</div>}
+                                         </>
+                                       );
+                                    })()}
+                                 </div>
                                </div>
                              ) : (
                                <>{p.name} {p.label ? `[${p.label}]` : ''}</>
