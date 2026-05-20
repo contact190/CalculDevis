@@ -1306,7 +1306,7 @@ export class FormulaEngine {
     const axeDiameter = vars.axeSize || 0;
     vars.axeDiameter = axeDiameter;
     const totalWeight = vars.totalWeight || 0;
-    vars.liftingWeight = axeDiameter === 40 ? totalWeight / 2 : totalWeight / 1.5;
+    vars.liftingWeight = totalWeight;
 
     const shutterPack = [];
     if (config.hasShutter && config.shutterConfig && this.db.shutterComponents) {

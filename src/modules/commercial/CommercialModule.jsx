@@ -1081,18 +1081,22 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                     const selectedAxe = axes.find(a => a.id === selectedAxeId) || axes[0];
                     const axeDiameter = selectedAxe ? parseFloat(selectedAxe.diameter) || 0 : 0;
 
-                    const liftingWeight = axeDiameter === 40 
-                      ? (totalWeight) / 2 
-                      : (totalWeight) / 1.5;
+                    const liftingWeight = totalWeight;
 
                     filteredItems = filteredItems.filter(moteur => {
                       const formula = moteur.compatibilityFormula;
-                      if (!formula || formula.trim() === '') return true;
+                      if (!formula || formula.trim() === '') {
+                        console.log(`[Motor Debug] ${moteur.name} | No formula -> Compatible (usage=${moteur.usageVolet || 'BOTH'})`);
+                        return true;
+                      }
                       try {
                         const lameWidth = parseFloat(selectedLame?.lameWidth) || 0;
                         const scope = { L, H, area, totalWeight, weightPerM2, liftingWeight, axeDiameter, lameWidth };
-                        return engine.evaluate(formula, scope);
+                        const res = engine.evaluate(formula, scope);
+                        console.log(`[Motor Debug] ${moteur.name} | Formula: "${formula}" | Scope: L=${L}, H=${H}, area=${area.toFixed(3)}, weight=${totalWeight.toFixed(2)}, lift=${liftingWeight.toFixed(2)}, axe=${axeDiameter} | Result -> ${res} (usage=${moteur.usageVolet || 'BOTH'})`);
+                        return res;
                       } catch (e) {
+                        console.log(`[Motor Debug] ${moteur.name} | Formula: "${formula}" | Error: ${e.message}`);
                         console.warn(`[Motor Compatibility] Formula error for "${moteur.name}":`, e.message);
                         return true;
                       }
@@ -1237,7 +1241,8 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                       {key === 'lameId' && (
                         <div style={{ gridColumn: 'span 2', marginTop: '-0.5rem', marginBottom: '0.5rem' }}>
                           {(() => {
-                            const L = config.L || 0;
+                            const isDouble = config.shutterConfig?.isDoubleShutter || false;
+                            const L = isDouble ? (config.L || 0) / 2 : (config.L || 0);
                             const H = config.H || 0;
                             const area = (L * H) / 1000000;
                             const selectedAxeId = config.shutterConfig?.axeId;
@@ -1251,7 +1256,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                             const weightPerM2 = parseFloat(selectedLame?.weightPerM2) || 0;
                             const totalWeight = area * weightPerM2;
 
-                            const liftingWeight = axeDiameter === 40 ? totalWeight / 2 : totalWeight / 1.5;
+                            const liftingWeight = totalWeight;
                             
                             return (
                               <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', color: '#64748b', background: '#f8fafc', padding: '0.3rem 0.6rem', borderRadius: '0.3rem', border: '1px solid #e2e8f0', width: 'fit-content' }}>
@@ -1284,7 +1289,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                                const axes = database.shutterComponents?.axes || [];
                                const selectedAxe = axes.find(a => a.id === selectedAxeId) || axes[0];
                                const axeDiameter = selectedAxe ? parseFloat(selectedAxe.diameter) || 0 : 0;
-                               const liftingWeight = axeDiameter === 40 ? totalWeight / 2 : totalWeight / 1.5;
+                               const liftingWeight = totalWeight;
                                
                                const scope = { L, H, area, totalWeight, liftingWeight, axeDiameter, lameWidth, caissonSize };
                                const alerts = [];
@@ -2161,7 +2166,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
           const totalWeight = apronItem?.totalWeight || (area * weightPerM2);
           const caissonSize = parseFloat(caisson?.size) || 0;
           const axeDiameter = parseFloat(axe?.diameter) || 0;
-          const liftingWeight = axeDiameter === 40 ? totalWeight / 2 : totalWeight / 1.5;
+          const liftingWeight = totalWeight;
           const scope = { L: cfg.L || 0, H: cfg.H || 0, area, totalWeight, liftingWeight, axeDiameter, lameWidth, caissonSize };
 
           descLines.push(`Volet Roulant :`);
