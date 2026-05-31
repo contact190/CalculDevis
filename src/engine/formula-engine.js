@@ -1087,6 +1087,14 @@ export class FormulaEngine {
         let calcL = part.rawL;
         let calcH = part.rawH;
 
+        if (compoundType === 'fix_ouvrant' && part.type === 'opening') {
+          if (direction === 'horizontal') {
+            calcL += 25;
+          } else if (direction === 'vertical') {
+            calcH += 25;
+          }
+        }
+
         if (part.type === 'group' && part.subParts) {
            processPartList(part.subParts, calcL, calcH, direction === 'horizontal' ? 'vertical' : 'horizontal', depth + 1);
            return;
