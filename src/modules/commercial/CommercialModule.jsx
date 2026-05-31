@@ -1139,12 +1139,19 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                     const weightPerM2 = parseFloat(selectedLame?.weightPerM2) || 0;
                     const totalWeight = area * weightPerM2;
 
+                    const selectedCaissonKit = (database.shutterComponents?.caissons || []).find(c => c.id === config.shutterConfig?.caissonId);
+                    const caissonSize = parseFloat(selectedCaissonKit?.height) || parseFloat(selectedCaissonKit?.size) || parseFloat(selectedCaissonKit?.thickness) || 0;
+
+                    const axesKit = database.shutterComponents?.axes || [];
+                    const selectedAxeKit = axesKit.find(a => a.id === config.shutterConfig?.axeId) || axesKit[0];
+                    const axeDiameter = selectedAxeKit ? parseFloat(selectedAxeKit.diameter) || parseFloat((selectedAxeKit.name || '').match(/\d+/)?.[0]) || 0 : 0;
+
                     filteredItems = filteredItems.filter(kit => {
                       const formula = kit.compatibilityFormula;
                       if (!formula || formula.trim() === '') return true;
                       try {
                         const lameWidth = parseFloat(selectedLame?.lameWidth) || 0;
-                        const scope = { L, H, area, totalWeight, weightPerM2, lameWidth };
+                        const scope = { L, H, area, totalWeight, weightPerM2, lameWidth, caissonSize, axeDiameter };
                         return engine.evaluate(formula, scope);
                       } catch (e) {
                         console.warn(`[Kit Compatibility] Formula error for "${kit.name}":`, e.message);
@@ -1155,16 +1162,28 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
 
                   // Apply compatibility formula for extras
                   if (key === 'extraId' || key === 'extras') {
-                    const L = config.L || 0;
+                    const isDouble = config.shutterConfig?.isDoubleShutter || false;
+                    const L = isDouble ? (config.L || 0) / 2 : (config.L || 0);
                     const H = config.H || 0;
+                    const area = (L * H) / 1000000;
+
                     const selectedLame = (database.shutterComponents?.lames || []).find(l => l.id === config.shutterConfig?.lameId);
                     const lameWidth = parseFloat(selectedLame?.lameWidth) || 0;
+                    const weightPerM2 = parseFloat(selectedLame?.weightPerM2) || 0;
+                    const totalWeight = area * weightPerM2;
+
+                    const selectedCaissonKit = (database.shutterComponents?.caissons || []).find(c => c.id === config.shutterConfig?.caissonId);
+                    const caissonSize = parseFloat(selectedCaissonKit?.height) || parseFloat(selectedCaissonKit?.size) || parseFloat(selectedCaissonKit?.thickness) || 0;
+
+                    const axesKit = database.shutterComponents?.axes || [];
+                    const selectedAxeKit = axesKit.find(a => a.id === config.shutterConfig?.axeId) || axesKit[0];
+                    const axeDiameter = selectedAxeKit ? parseFloat(selectedAxeKit.diameter) || parseFloat((selectedAxeKit.name || '').match(/\d+/)?.[0]) || 0 : 0;
 
                     filteredItems = filteredItems.filter(extra => {
                       const formula = extra.compatibilityFormula;
                       if (!formula || formula.trim() === '') return true;
                       try {
-                        const scope = { L, H, lameWidth, area: (L * H) / 1000000 };
+                        const scope = { L, H, area, lameWidth, totalWeight, weightPerM2, caissonSize, axeDiameter };
                         return engine.evaluate(formula, scope);
                       } catch (e) {
                         console.warn(`[Extra Compatibility] Formula error for "${extra.name}":`, e.message);
@@ -1478,7 +1497,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                       <td data-label="Source"><span style={{ fontSize: '0.6rem', padding: '0.1rem 0.4rem', background: '#f1f5f9', borderRadius: '1rem', color: '#64748b', whiteSpace: 'nowrap' }}>{p.source || 'Standard'}</span></td>
                       <td data-label="Formule" style={{ color: '#64748b', fontSize: '0.65rem' }}>{p.formula}</td>
                       <td data-label="Calcul" style={{ color: '#3b82f6', fontSize: '0.65rem' }}>{p.resolvedFormula}</td><td data-label="Nbre">{p.qty}u</td>
-                      <td data-label="Mesure Totale">{Math.round(p.totalMeasure || 0)} mm</td><td data-label="Prix Unit.">{p.unitPrice?.toFixed(2)}</td>
+                      <td data-label="Mesure Totale">{Math.round(p.totalMeasure || 0)} mm</td><td data-label="Prix Unit." style={{ color: Number(p.unitPrice) === 0 ? '#ef4444' : 'inherit', fontWeight: Number(p.unitPrice) === 0 ? 600 : 'normal' }}>{p.unitPrice?.toFixed(2)}</td>
                       <td data-label="Prix Total" style={{ textAlign: 'right', fontWeight: 600 }}>{(p.cost || 0).toFixed(2)} DZD</td>
                     </tr>
                   ))}
@@ -1489,7 +1508,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                       <td data-label="Formule" style={{ color: '#64748b', fontSize: '0.65rem' }}>{acc.formula}</td>
                       <td data-label="Calcul" style={{ color: '#3b82f6', fontSize: '0.65rem' }}>{acc.resolvedFormula}</td><td data-label="Nbre">{acc.multiplier}u</td>
                       <td data-label="Mesure Totale">{(acc.totalMeasure || 0).toFixed(2)} {acc.unit === 'Ml' || acc.unit === 'Joint' ? 'mm' : 'u'}</td>
-                      <td data-label="Prix Unit.">{acc.unitPrice?.toFixed(2)}</td><td data-label="Prix Total" style={{ textAlign: 'right', fontWeight: 600 }}>{(acc.cost || 0).toFixed(2)} DZD</td>
+                      <td data-label="Prix Unit." style={{ color: Number(acc.unitPrice) === 0 ? '#ef4444' : 'inherit', fontWeight: Number(acc.unitPrice) === 0 ? 600 : 'normal' }}>{acc.unitPrice?.toFixed(2)}</td><td data-label="Prix Total" style={{ textAlign: 'right', fontWeight: 600 }}>{(acc.cost || 0).toFixed(2)} DZD</td>
                     </tr>
                   ))}
 
@@ -1508,7 +1527,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                       <td data-label="Mesure Totale">
                         {s.totalMeasure ? `${Math.round(s.totalMeasure)} mm` : '-'}
                       </td>
-                      <td data-label="Prix Unit.">{s.price?.toFixed(2)}</td>
+                      <td data-label="Prix Unit." style={{ color: Number(s.price) === 0 ? '#ef4444' : 'inherit', fontWeight: Number(s.price) === 0 ? 600 : 'normal' }}>{s.price?.toFixed(2)}</td>
                       <td data-label="Prix Total" style={{ textAlign: 'right', fontWeight: 600 }}>{(s.cost || 0).toFixed(2)} DZD</td>
                     </tr>
                   ))}
@@ -1519,7 +1538,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                       <td data-label="Formule">{Math.round(g.width || 0)} x {Math.round(g.height || 0)} mm</td>
                       <td data-label="Calcul" style={{ color: '#3b82f6', fontSize: '0.65rem' }}>{g.calculation || '-'}</td>
                       <td data-label="Nbre">{g.qty}u</td>
-                      <td data-label="Mesure Totale">{(g.area || 0).toFixed(2)} m²</td><td data-label="Prix Unit.">{(g.pricePerM2 || g.unitPrice)?.toFixed(2)}</td>
+                      <td data-label="Mesure Totale">{(g.area || 0).toFixed(2)} m²</td><td data-label="Prix Unit." style={{ color: Number(g.pricePerM2 || g.unitPrice) === 0 ? '#ef4444' : 'inherit', fontWeight: Number(g.pricePerM2 || g.unitPrice) === 0 ? 600 : 'normal' }}>{(g.pricePerM2 || g.unitPrice)?.toFixed(2)}</td>
                       <td data-label="Prix Total" style={{ textAlign: 'right', fontWeight: 600 }}>{(g.cost || 0).toFixed(2)} DZD</td>
                     </tr>
                   ))}
