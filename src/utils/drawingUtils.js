@@ -2,16 +2,17 @@ export const getTechnicalDrawingDataURL = (cfg, database) => {
   if (!cfg || !database) return null;
 
   const canvas = document.createElement('canvas');
-  canvas.width = 600;
-  canvas.height = 600;
+  canvas.width = 700;
+  canvas.height = 700;
   const ctx = canvas.getContext('2d');
   
   const { L, H, compositionId, optionalSides = {} } = cfg;
   if (!L || !H) return null;
 
   const margin = 100;
-  const drawAreaW = 600 - margin * 2;
-  const drawAreaH = 600 - margin * 2;
+  const canvasSize = 700;
+  const drawAreaW = canvasSize - margin * 2;
+  const drawAreaH = canvasSize - margin * 2;
   
   let caissonH = 0;
   if (cfg.hasShutter && cfg.shutterConfig?.caissonId && database.shutterComponents) {
@@ -19,18 +20,21 @@ export const getTechnicalDrawingDataURL = (cfg, database) => {
     caissonH = parseFloat(cRef?.height) || 0;
   }
 
-  const scale = Math.min(drawAreaW / L, drawAreaH / H);
+  // Total visual height includes caisson on top + couvre-joint at bottom
+  const totalVisualH = H + caissonH;
+  const scale = Math.min(drawAreaW / L, drawAreaH / totalVisualH);
   const dW = L * scale;
   const dCaissonH = caissonH * scale;
   const dH_total = H * scale;
   const dH_window = Math.max(0, H - caissonH) * scale;
   
-  const offsetX = (600 - dW) / 2;
-  const offsetY = (600 - dH_total) / 2;
+  // Reserve extra 30px at top for caisson, 30px at bottom for couvre-joint
+  const offsetX = (canvasSize - dW) / 2;
+  const offsetY = (canvasSize - (dCaissonH + dH_total)) / 2;
 
   // Background
   ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, 600, 600);
+  ctx.fillRect(0, 0, 700, 700);
 
   ctx.lineJoin = 'round';
   
@@ -180,34 +184,34 @@ export const getTechnicalDrawingDataURL = (cfg, database) => {
   }
 
   // 3. Couvre-joints (Architraves)
-  const cjThick = 18 * scale;
-  const hasCJ = cfg.optionalSides && Object.values(cfg.optionalSides).some(Boolean);
+  const cjThick = Math.max(18 * scale, 20); // Minimum 20px so it's always visible
+  // Force bottom CJ to always be drawn
+  const effectiveSides = { ...optionalSides, bottom: true };
+  const hasCJ = true; // always draw at least the bottom
   if (hasCJ) {
     ctx.fillStyle = '#e2e8f0';
     ctx.strokeStyle = '#94a3b8';
     ctx.lineWidth = 1;
     
     // Top Architrave
-    if (optionalSides.top) {
+    if (effectiveSides.top) {
       ctx.fillRect(offsetX - cjThick, offsetY - cjThick, dW + cjThick * 2, cjThick);
       ctx.strokeRect(offsetX - cjThick, offsetY - cjThick, dW + cjThick * 2, cjThick);
     }
-    // Bottom Architrave
-    if (optionalSides.bottom) {
-      ctx.fillRect(offsetX - cjThick, offsetY + dH_total, dW + cjThick * 2, cjThick);
-      ctx.strokeRect(offsetX - cjThick, offsetY + dH_total, dW + cjThick * 2, cjThick);
-    }
+    // Bottom Architrave (always drawn)
+    ctx.fillRect(offsetX - cjThick, offsetY + dH_total, dW + cjThick * 2, cjThick);
+    ctx.strokeRect(offsetX - cjThick, offsetY + dH_total, dW + cjThick * 2, cjThick);
     // Left Architrave (Vertical) - Covers full height from Top CJ to Bottom CJ
-    if (optionalSides.left) {
-      const startY = offsetY - (optionalSides.top ? cjThick : 0);
-      const hExt = dH_total + (optionalSides.top ? cjThick : 0) + (optionalSides.bottom ? cjThick : 0);
+    if (effectiveSides.left) {
+      const startY = offsetY - (effectiveSides.top ? cjThick : 0);
+      const hExt = dH_total + (effectiveSides.top ? cjThick : 0) + cjThick;
       ctx.fillRect(offsetX - cjThick, startY, cjThick, hExt);
       ctx.strokeRect(offsetX - cjThick, startY, cjThick, hExt);
     }
     // Right Architrave (Vertical) - Covers full height from Top CJ to Bottom CJ
-    if (optionalSides.right) {
-      const startY = offsetY - (optionalSides.top ? cjThick : 0);
-      const hExt = dH_total + (optionalSides.top ? cjThick : 0) + (optionalSides.bottom ? cjThick : 0);
+    if (effectiveSides.right) {
+      const startY = offsetY - (effectiveSides.top ? cjThick : 0);
+      const hExt = dH_total + (effectiveSides.top ? cjThick : 0) + cjThick;
       ctx.fillRect(offsetX + dW, startY, cjThick, hExt);
       ctx.strokeRect(offsetX + dW, startY, cjThick, hExt);
     }
@@ -257,8 +261,8 @@ export const getTechnicalDrawingDataURL = (cfg, database) => {
   ctx.moveTo(offsetX + dW, dimY - 5); ctx.lineTo(offsetX + dW, dimY + 5);
   ctx.stroke();
   ctx.textAlign = 'center';
-  ctx.font = 'bold 13px Inter, sans-serif';
-  ctx.fillText(`${L} mm`, offsetX + dW/2, dimY + 15);
+  ctx.font = 'bold 24px Inter, sans-serif';
+  ctx.fillText(`${L} mm`, offsetX + dW/2, dimY + 20);
 
   const dimX = offsetX - 60;
   ctx.beginPath();
@@ -270,6 +274,7 @@ export const getTechnicalDrawingDataURL = (cfg, database) => {
   ctx.save();
   ctx.translate(dimX - 15, offsetY + dH_total/2);
   ctx.rotate(-Math.PI/2);
+  ctx.font = 'bold 24px Inter, sans-serif';
   ctx.fillText(`${H} mm (Total)`, 0, 0);
   ctx.restore();
 
@@ -281,15 +286,16 @@ export const getTechnicalDrawingDataURL = (cfg, database) => {
     ctx.stroke();
     
     ctx.save();
-    ctx.translate(dimX2 - 10, winOffsetY + dH_window/2);
+    ctx.translate(dimX2 - 15, winOffsetY + dH_window/2);
     ctx.rotate(-Math.PI/2);
     ctx.fillStyle = '#3b82f6';
+    ctx.font = 'bold 20px Inter, sans-serif';
     ctx.fillText(`${Math.round(H - caissonH)} mm (Ouv.)`, 0, 0);
     ctx.restore();
     
     ctx.fillStyle = '#94a3b8';
-    ctx.font = '10px Inter, sans-serif';
-    ctx.fillText(`${caissonH}`, dimX2 - 10, offsetY + dCaissonH/2);
+    ctx.font = 'bold 18px Inter, sans-serif';
+    ctx.fillText(`${caissonH}`, dimX2 - 15, offsetY + dCaissonH/2 + 5);
   }
 
   return canvas.toDataURL('image/png');

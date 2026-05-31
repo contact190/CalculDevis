@@ -438,9 +438,12 @@ function App() {
             currentQuote={currentQuote}
             setCurrentQuote={setCurrentQuote}
             quoteSettings={quoteSettings}
-            setQuoteSettings={(settings) => {
-              setQuoteSettings(settings);
-              localStorage.setItem('quoteSettings', JSON.stringify(settings));
+            setQuoteSettings={(newSettings) => {
+              setQuoteSettings(prev => {
+                const next = typeof newSettings === 'function' ? newSettings(prev) : newSettings;
+                localStorage.setItem('quoteSettings', JSON.stringify(next));
+                return next;
+              });
             }}
             onNewQuote={() => setCurrentQuote(makeNewQuote(quoteSettings))}
           />
@@ -474,9 +477,12 @@ function App() {
             data={database}
             setData={setDatabase}
             quoteSettings={quoteSettings}
-            setQuoteSettings={(settings) => {
-              setQuoteSettings(settings);
-              localStorage.setItem('quoteSettings', JSON.stringify(settings));
+            setQuoteSettings={(newSettings) => {
+              setQuoteSettings(prev => {
+                const next = typeof newSettings === 'function' ? newSettings(prev) : newSettings;
+                localStorage.setItem('quoteSettings', JSON.stringify(next));
+                return next;
+              });
             }}
           />
         )}

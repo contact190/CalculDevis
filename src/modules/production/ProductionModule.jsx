@@ -274,9 +274,10 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
             const displayName = p.name || p.label || 'Sans nom';
             const measure = p.length * p.qty * cfgQty;
             
-            const newPieces = Array(p.qty * cfgQty).fill(0).map((_, i) => ({ 
+            const piecesCount = Math.max(0, Math.round(p.qty * cfgQty));
+            const newPieces = Array(piecesCount).fill(0).map((_, i) => ({ 
               length: p.length, 
-              instanceLabel: entry.allLabels?.[Math.floor(i / p.qty)] || groupLabels,
+              instanceLabel: entry.allLabels?.[Math.floor(i / (p.qty || 1))] || groupLabels,
               usage: p.usage || 'FINITION',
               label: p.label,
               windowIdx: configIdx
@@ -720,8 +721,11 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
       ];
 
       // Filter based on document type (Opening vs Shutter)
+      // NOTE: We rely ONLY on p.usage === 'VOLET ROULANT' (set by the BOM engine).
+      // Do NOT use name-based fallbacks like includes('lame') or includes('coulisse') —
+      // they cause false positives for door compositions (e.g. "Lame de seuil", "Lame de sol").
       const filteredItems = allItems.filter(p => {
-        const isShutter = p.usage === 'VOLET ROULANT' || p.name?.toLowerCase().includes('lame') || p.name?.toLowerCase().includes('coulisse');
+        const isShutter = p.usage === 'VOLET ROULANT';
         return isOpening ? !isShutter : isShutter;
       });
 

@@ -1972,6 +1972,8 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
   const handleSaveGlobalQuote = () => {
     if (setDatabase) {
       const finalQuote = { ...quote, totals };
+      const isNewQuote = !(database?.quotes || []).some(q => q.id === finalQuote.id);
+
       setDatabase(prev => {
         // Update quotes list
         const existsInQuotes = (prev.quotes || []).some(q => q.id === finalQuote.id);
@@ -1995,6 +1997,14 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
 
         return { ...prev, quotes, orders };
       });
+
+      if (isNewQuote && setQuoteSettings) {
+        setQuoteSettings(prevSettings => ({
+          ...prevSettings,
+          quoteCounter: (prevSettings.quoteCounter || 1) + 1
+        }));
+      }
+
       alert('Devis enregistré avec succès !');
     } else {
       console.error('setDatabase est introuvable');
@@ -2013,67 +2023,93 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
     // Left: Logo
     if (quoteSettings?.logoBase64) {
       try {
-        // Logo carré 25x25mm
-        doc.addImage(quoteSettings.logoBase64, 'PNG', 15, y, 25, 25, '', 'FAST');
+        doc.addImage(quoteSettings.logoBase64, 'PNG', 15, y, 60, 25, '', 'FAST');
       } catch (e) {}
     }
     
-    // Middle: Company Information
-    const midX = 50; // Decalage réduit pour le logo carré
-    doc.setFontSize(14);
+    // Top Right: Title
+    doc.setFontSize(22);
     doc.setFont('helvetica', 'bold');
-    doc.text(quoteSettings?.companyName || 'Mon Entreprise', midX, y + 5);
+    doc.text('DEVIS ESTIMATIF', pw - 15, y + 15, { align: 'right' });
+    
+    // Gauche: Devis number and date
+    y += 35;
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    const quoteYear = new Date(quote.createdAt || Date.now()).getFullYear().toString().slice(-2);
+    doc.text(`Devis N° : ${quote.number} / ${quoteYear}`, 15, y);
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
-    let phoneEmailYOffset = 15;
+    doc.text(`Date : ${new Date().toLocaleDateString('fr-FR')}`, 15, y + 5);
+    
+    y += 8;
+    
+    const boxY = y;
+    const boxWidth = (pw - 35) / 2; // 15 margin L/R, 5 gap = 35
+    
+    // Company box (Left)
+    doc.setDrawColor(150, 150, 150);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(15, boxY, boxWidth, 42, 2, 2);
+    
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(quoteSettings?.companyName || 'Mon Entreprise', 18, boxY + 6);
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    let cy = boxY + 11;
     if (quoteSettings?.companyAddress) {
-      // Largeur réduite à 70 pour éviter le chevauchement avec la droite
-      const addressLines = doc.splitTextToSize(quoteSettings.companyAddress, 70);
-      doc.text(addressLines, midX, y + 12);
-      phoneEmailYOffset = 12 + (addressLines.length * 4) + 2;
+      const addressLines = doc.splitTextToSize(quoteSettings.companyAddress, boxWidth - 6);
+      doc.text(addressLines, 18, cy);
+      cy += addressLines.length * 4;
     }
     const phone = quoteSettings?.companyPhone || '';
     const email = quoteSettings?.companyEmail || '';
-    doc.setFont('helvetica', 'bold');
-    doc.text(`${phone} ${email ? ' - ' + email : ''}`, midX, y + phoneEmailYOffset);
-    doc.setFont('helvetica', 'normal');
-
-    // Right: Legal Information (RC, AI, NIF)
-    const rightX = pw - 15;
-    doc.setFontSize(8);
+    if (phone || email) {
+      doc.text(`${phone} ${email ? ' - ' + email : ''}`, 18, cy);
+      cy += 5;
+    }
     doc.setTextColor(80, 80, 80);
-    let rightY = y + 5;
-    if (quoteSettings?.companyRC) { doc.text(`RC N: ${quoteSettings.companyRC}`, rightX, rightY, { align: 'right' }); rightY += 5; }
-    if (quoteSettings?.companyIMP) { doc.text(`AI N: ${quoteSettings.companyIMP}`, rightX, rightY, { align: 'right' }); rightY += 5; }
-    if (quoteSettings?.companyMF) { doc.text(`NIF N: ${quoteSettings.companyMF}`, rightX, rightY, { align: 'right' }); rightY += 5; }
+    if (quoteSettings?.companyRC) { doc.text(`RC N°: ${quoteSettings.companyRC}`, 18, cy); cy += 4; }
+    if (quoteSettings?.companyIMP) { doc.text(`AI N°: ${quoteSettings.companyIMP}`, 18, cy); cy += 4; }
+    if (quoteSettings?.companyMF) { doc.text(`NIF N°: ${quoteSettings.companyMF}`, 18, cy); cy += 4; }
     doc.setTextColor(0, 0, 0);
 
-    y = 40;
-    doc.setLineWidth(0.5);
-    doc.setDrawColor(220, 38, 38); // Redish line similar to image
-    doc.line(15, y, pw - 15, y);
-    y += 10;
-
-    // ----- TITLE -----
-    doc.setFontSize(22);
-    doc.setFont('helvetica', 'normal');
-    doc.text('Devis Estimatif', pw / 2, y, { align: 'center' });
-    y += 15;
-
-    // ----- CLIENT & QUOTE INFO -----
-    doc.setFontSize(11);
+    // Client box (Right)
     const currentClient = database.clients?.find(c => c.id === quote.clientId);
+    const rightBoxXHeader = 15 + boxWidth + 5;
+    doc.roundedRect(rightBoxXHeader, boxY, boxWidth, 42, 2, 2);
     
-    // Left side: Client
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Destinataire :', rightBoxXHeader + 3, boxY + 6);
+    doc.setFontSize(10);
+    doc.text(currentClient?.nom || 'Client', rightBoxXHeader + 3, boxY + 11);
+    
+    doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Client : ${currentClient ? currentClient.nom : ''}`, 15, y);
-    doc.text(`Contact : ${currentClient?.telephone || ''}`, 15, y + 6);
-    
-    // Right side: Quote
-    doc.text(`Devis : ${quote.number}`, pw / 2 + 10, y);
-    doc.text(`Validité de l'offre : ${(quoteSettings?.validityDays || 30)} jours`, pw / 2 + 10, y + 6);
+    let cly = boxY + 16;
+    if (currentClient?.adresse) {
+      const addrLines = doc.splitTextToSize(currentClient.adresse, boxWidth - 6);
+      doc.text(addrLines, rightBoxXHeader + 3, cly);
+      cly += addrLines.length * 4;
+    }
+    if (currentClient?.telephone) {
+      doc.text(`Tél : ${currentClient.telephone}`, rightBoxXHeader + 3, cly);
+      cly += 4;
+    }
+    if (currentClient?.email) {
+      doc.text(`Email : ${currentClient.email}`, rightBoxXHeader + 3, cly);
+      cly += 5;
+    }
+    doc.setTextColor(80, 80, 80);
+    if (currentClient?.rc) { doc.text(`RC : ${currentClient.rc}`, rightBoxXHeader + 3, cly); cly += 4; }
+    if (currentClient?.nif) { doc.text(`NIF : ${currentClient.nif}`, rightBoxXHeader + 3, cly); cly += 4; }
+    if (currentClient?.nis) { doc.text(`NIS : ${currentClient.nis}`, rightBoxXHeader + 3, cly); cly += 4; }
+    if (currentClient?.ai) { doc.text(`AI : ${currentClient.ai}`, rightBoxXHeader + 3, cly); cly += 4; }
+    doc.setTextColor(0, 0, 0);
 
-    y += 15;
+    y = boxY + 48;
 
     // ----- TABLE HEADER -----
     doc.setFillColor(40, 40, 40);
@@ -2222,10 +2258,33 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
           }
         }
 
+        // Calculate total lines after wrapping to get accurate row height
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        let totalWrappedLines = 0;
+        descLines.forEach(line => {
+           if (line.startsWith('[ALERTE TECHNIQUE]')) {
+              doc.setFont('helvetica', 'bold');
+              totalWrappedLines += doc.splitTextToSize(line, 60).length;
+              doc.setFont('helvetica', 'normal');
+           } else {
+              const isBoldLabel = line === 'Volet Roulant :';
+              if (isBoldLabel) doc.setFont('helvetica', 'bold');
+              totalWrappedLines += doc.splitTextToSize(line, 60).length;
+              doc.setFont('helvetica', 'normal');
+           }
+        });
+
         // Dynamic row height (5pt per line + padding)
         const lineHeight = 5;
         const padding = 8;
-        const rowHeight = Math.max(50, descLines.length * lineHeight + padding * 2); // Min 50 for larger image
+        const rowHeight = Math.max(50, totalWrappedLines * lineHeight + padding * 2); // Min 50 for larger image
+
+        // Check page break BEFORE drawing the row
+        if (y + rowHeight > 280) {
+          doc.addPage();
+          y = 20;
+        }
 
         // Draw row border
         doc.rect(15, y, pw - 30, rowHeight);
@@ -2271,6 +2330,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
           if (line.startsWith('[ALERTE TECHNIQUE]')) {
             doc.setTextColor(234, 88, 12); // Orange #ea580c
             doc.setFont('helvetica', 'bold');
+            doc.setFontSize(8);
             const lines = doc.splitTextToSize(line, 60); // Wrap if too long
             lines.forEach((l, i) => {
               doc.text(l, descX, descY);
@@ -2280,11 +2340,25 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
             doc.setFont('helvetica', 'normal');
           } else {
             const isBoldLabel = line === 'Volet Roulant :';
+            const isVoletSubItem = line.startsWith('  Caisson') || line.startsWith('  Glissière') || line.startsWith('  Lame') || line.startsWith('  Axe') || line.startsWith('  Moteur') || line.startsWith('  Kit') || line.startsWith('  Option');
+            
             if (isBoldLabel) {
               doc.setFont('helvetica', 'bold');
+              doc.setFontSize(8);
+            } else if (isVoletSubItem) {
+              doc.setFont('helvetica', 'normal');
+              doc.setFontSize(7);
+            } else {
+              doc.setFont('helvetica', 'normal');
+              doc.setFontSize(8);
             }
-            doc.text(line, descX, descY);
+            const lines = doc.splitTextToSize(line, 60); // Wrap if too long
+            lines.forEach((l, i) => {
+              doc.text(l, descX, descY);
+              if (i < lines.length - 1) descY += lineHeight;
+            });
             doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8);
           }
           descY += lineHeight;
         });
@@ -2302,11 +2376,34 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
         doc.setFont('helvetica', 'normal');
 
         y += rowHeight;
-        if (y > 240) {
-          doc.addPage();
-          y = 20;
-        }
+
       });
+      
+      // Total QTE Box at the end of the table
+      const totalQte = quote.items.reduce((sum, item) => sum + item.qty, 0);
+      
+      // Page break check for total box
+      if (y + 10 > 280) {
+        doc.addPage();
+        y = 20;
+      }
+      
+      // Draw border
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(0.3);
+      doc.rect(125, y, 20, 8); // Box strictly under QTE column
+      
+      // Text
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`${totalQte}`, 143, y + 5.5, { align: 'right' });
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`T. QTE : `, 123, y + 5.5, { align: 'right' });
+      
+      doc.setFont('helvetica', 'normal');
+      
+      y += 15;
     }
 
     y += 10;
@@ -2427,7 +2524,15 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
 
     doc.setFontSize(10);
     doc.setFont('helvetica', 'italic');
-    doc.text(`Arrêté le présent devis à la somme de : ${numberToFrenchWords(totals.ttc)}.`, 15, y);
+    const totalAmountText = `Arrêté le présent devis à la somme de : ${numberToFrenchWords(totals.ttc)}.`;
+    const totalAmountLines = doc.splitTextToSize(totalAmountText, pw - 30);
+    doc.text(totalAmountLines, 15, y);
+    
+    y += totalAmountLines.length * 5 + 5;
+    
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Validité de l'offre : ${(quoteSettings?.validityDays || 30)} jours`, 15, y);
 
     // Footer
     doc.setFontSize(8);
