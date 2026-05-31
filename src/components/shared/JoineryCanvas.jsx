@@ -110,6 +110,15 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
       ctx.fillText(`H.C : ${caissonH} mm`, offsetX + dW/2, offsetY + dCaissonH/2 + 4);
     }
 
+    // Helper: detect vasistas from composition name or rangeId
+    const isVasistas = (comp) => {
+      if (!comp) return false;
+      const name = (comp.name || '').toUpperCase();
+      if (name.includes('VASISTAS')) return true;
+      const rangeId = (comp.rangeId || comp.id || '').toUpperCase();
+      return rangeId.includes('VASISTAS');
+    };
+
     const drawJoinery = (x, y, w, h, compId) => {
       const comp = database.compositions?.find(c => c.id === compId);
       const openingType = comp?.openingType || 'Fixe';
@@ -125,6 +134,41 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
       ctx.fillRect(x, y, w, h);
 
       const fW = 12 * scale; // Sash frame width roughly
+
+      // ── VASISTAS (top-hung tilting) ──────────────────────────────────────
+      if (isVasistas(comp)) {
+        // Inner sash frame
+        ctx.setLineDash([]);
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(x + 2, y + 2, w - 4, h - 4);
+
+        // Diagonal lines from top corners to bottom-centre
+        ctx.beginPath();
+        ctx.setLineDash([5, 5]);
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 1.2;
+        ctx.moveTo(x + 4,     y + 4);      // top-left
+        ctx.lineTo(x + w / 2, y + h - 4); // bottom-centre
+        ctx.lineTo(x + w - 4, y + 4);      // top-right
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Hinge bar on top
+        ctx.strokeStyle = '#475569';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(x + w * 0.3, y + 4);
+        ctx.lineTo(x + w * 0.7, y + 4);
+        ctx.stroke();
+
+        // Label 'V'
+        ctx.fillStyle = '#64748b';
+        ctx.font = 'bold 12px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('V', x + w / 2, y + h / 2 + 4);
+        return;
+      }
 
       if (openingType.includes('Ouvrant') || openingType.includes('Battant') || openingType.includes('Porte')) {
         const name = (comp?.name || '').toLowerCase();

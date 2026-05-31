@@ -63,6 +63,22 @@ export const getTechnicalDrawingDataURL = (cfg, database) => {
   const compo = database.compositions?.find(c => c.id === compositionId);
   const openingType = (compo?.openingType || '').toLowerCase();
   
+  // Helper: detect vasistas from composition name or its rangeIds
+  const isVasistas = (comp) => {
+    if (!comp) return false;
+    const name = (comp.name || '').toUpperCase();
+    if (name.includes('VASISTAS')) return true;
+    // check rangeIds on the composition's profiles via rangeId on the comp itself
+    const rangeId = (comp.rangeId || comp.id || '').toUpperCase();
+    if (rangeId.includes('VASISTAS')) return true;
+    // check against database profiles for this composition
+    const profiles = database.profiles || [];
+    return profiles.some(p =>
+      Array.isArray(p.rangeIds) && p.rangeIds.some(r => r.toUpperCase().includes('VASISTAS')) &&
+      p.rangeIds.some(r => r === comp.rangeId || r === comp.id)
+    );
+  };
+
   // Inner drawJoinery function
   const drawJoinery = (x, y, w, h, compId) => {
     const comp = database.compositions?.find(c => c.id === compId) || database.compositions?.find(c => c.id === compositionId);
@@ -74,6 +90,42 @@ export const getTechnicalDrawingDataURL = (cfg, database) => {
     ctx.strokeRect(x, y, w, h);
     ctx.fillStyle = 'rgba(186, 230, 253, 0.15)';
     ctx.fillRect(x, y, w, h);
+
+    // ── VASISTAS (top-hung tilting) ──────────────────────────────────────────
+    if (isVasistas(comp)) {
+      // Inner sash frame
+      ctx.setLineDash([]);
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(x + 2, y + 2, w - 4, h - 4);
+
+      // Diagonal lines from top corners to bottom-centre (symbol for top-hung)
+      ctx.beginPath();
+      ctx.setLineDash([5, 5]);
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 1.2;
+      ctx.moveTo(x + 4,     y + 4);   // top-left
+      ctx.lineTo(x + w / 2, y + h - 4); // bottom-centre
+      ctx.lineTo(x + w - 4, y + 4);   // top-right
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Hinge symbol on top edge (short horizontal bar)
+      ctx.strokeStyle = '#475569';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(x + w * 0.3, y + 4);
+      ctx.lineTo(x + w * 0.7, y + 4);
+      ctx.stroke();
+
+      // Label
+      ctx.fillStyle = '#64748b';
+      ctx.font = 'bold 12px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('V', x + w / 2, y + h / 2 + 5);
+
+      return; // done for vasistas
+    }
 
     if (oType.includes('Ouvrant') || oType.includes('Battant') || oType.includes('Porte')) {
       const combined = (comp?.name || '').toLowerCase();
