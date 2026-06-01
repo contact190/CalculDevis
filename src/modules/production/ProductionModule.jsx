@@ -1879,8 +1879,15 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                     const q = (v) => `"${String(v || "").replace(/"/g, '""').replace(/;/g, ',')}"`;
                     let csv = "Reference;Designation;Finition;Quantite;Unite\n";
                     displayProfiles.forEach(p => {
-                      const bLength = barLengths[p._barKey || p.baseId || p.id] !== undefined ? barLengths[p._barKey || p.baseId || p.id] : (parseFloat(p.barLength) || 6400);
-                      const qty = Math.ceil(p.totalMeasure / bLength);
+                      const barKeyLength = p._barKey || p.id;
+                      const bLength = barLengths[barKeyLength] !== undefined ? barLengths[barKeyLength] : (parseFloat(p.barLength) || 6400);
+                      const pieces = p.pieces ? [...p.pieces].sort((a,b) => b.length - a.length) : [];
+                      let qty = 0;
+                      if (pieces.length > 0) {
+                        qty = calculateBarsNeeded(pieces, bLength, manualStockOffcuts[p.id] || []);
+                      } else {
+                        qty = Math.ceil(p.totalMeasure / bLength);
+                      }
                       const ref = p._isGroup ? p.id.split(' + ').map(x => resolveRef(x)).join(' + ') : resolveRef(p.baseId || p.id);
                       csv += `${q(ref)};${q(p.name || p.combinedName)};${q(p.colorName || 'Std')};${qty};Barres\n`;
                     });
