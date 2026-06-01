@@ -124,20 +124,19 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
 
   // Statistics: how many voids have custom L and H entered
   const stats = useMemo(() => {
-    if (!activeSitePlan.floors) return { total: 0, filled: 0 };
-    let total = 0;
-    let filled = 0;
+    if (!activeSitePlan.floors) return { total: 0, filled: 0, validated: 0, launched: 0 };
+    let total = 0, filled = 0, validated = 0, launched = 0;
     activeSitePlan.floors.forEach(f => {
       (f.apartments || []).forEach(a => {
         (a.voids || []).forEach(v => {
           total++;
-          if (v.L !== undefined && v.L !== '' && v.H !== undefined && v.H !== '') {
-            filled++;
-          }
+          if (v.L !== undefined && v.L !== '' && v.H !== undefined && v.H !== '') filled++;
+          if (v.measurementsValidated) validated++;
+          if (v.productionLaunched) launched++;
         });
       });
     });
-    return { total, filled };
+    return { total, filled, validated, launched };
   }, [activeSitePlan]);
 
   const updateVoidProperty = (floorId, aptId, voidId, property, value) => {
@@ -508,10 +507,14 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
         <div className="glass" style={{ padding: '1rem', borderRadius: '1rem', background: 'white', border: '1px solid #e2e8f0' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.5rem' }}>
             <span>Progression du Chantier</span>
-            <span style={{ color: '#0f766e' }}>{stats.filled} / {stats.total} fenêtres ({completionPercent}%)</span>
+            <span style={{ color: '#0f766e' }}>{stats.filled} / {stats.total} saisies ({completionPercent}%)</span>
           </div>
-          <div style={{ width: '100%', height: '8px', background: '#e2e8f0', borderRadius: '999px', overflow: 'hidden' }}>
+          <div style={{ width: '100%', height: '8px', background: '#e2e8f0', borderRadius: '999px', overflow: 'hidden', marginBottom: '0.5rem' }}>
             <div style={{ width: `${completionPercent}%`, height: '100%', background: '#0f766e', transition: 'width 0.4s ease' }} />
+          </div>
+          <div style={{ display: 'flex', gap: '0.75rem', fontSize: '0.72rem', fontWeight: 700 }}>
+            <span style={{ color: '#0ea5e9' }}>✓ {stats.validated} validées</span>
+            <span style={{ color: '#166534' }}>🚀 {stats.launched} lancées</span>
           </div>
         </div>
 
@@ -564,15 +567,42 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                             if (!item) return null;
 
                             return (
-                              <div key={v.id} className="glass shadow-sm" style={{ background: 'white', borderRadius: '1rem', border: '1px solid #e2e8f0', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                              <div key={v.id} className="glass shadow-sm" style={{ 
+                                background: 'white', 
+                                borderRadius: '1rem', 
+                                border: v.productionLaunched 
+                                  ? '2px solid #22c55e' 
+                                  : v.measurementsValidated 
+                                    ? '2px solid #0ea5e9' 
+                                    : '1px solid #e2e8f0', 
+                                overflow: 'hidden', 
+                                display: 'flex', 
+                                flexDirection: 'column',
+                                transition: 'border-color 0.3s ease'
+                              }}>
                                 
                                 {/* Info Banner */}
-                                <div style={{ background: '#f8fafc', padding: '0.75rem 1rem', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div style={{ 
+                                  background: v.productionLaunched ? '#f0fdf4' : v.measurementsValidated ? '#eff6ff' : '#f8fafc', 
+                                  padding: '0.75rem 1rem', 
+                                  borderBottom: '1px solid #e2e8f0', 
+                                  display: 'flex', 
+                                  justifyContent: 'space-between', 
+                                  alignItems: 'center' 
+                                }}>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                     <span style={{ fontSize: '0.75rem', background: '#0f766e', color: 'white', padding: '0.2rem 0.6rem', borderRadius: '9999px', fontWeight: 800 }}>{v.name}</span>
                                     <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>{item.label}</strong>
                                   </div>
-                                  <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>Devis: {item.config.L} x {item.config.H} mm</span>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    {v.productionLaunched && (
+                                      <span style={{ fontSize: '0.65rem', fontWeight: 800, background: '#dcfce7', color: '#166534', padding: '0.15rem 0.5rem', borderRadius: '9999px' }}>🚀 LANCÉE</span>
+                                    )}
+                                    {v.measurementsValidated && !v.productionLaunched && (
+                                      <span style={{ fontSize: '0.65rem', fontWeight: 800, background: '#dbeafe', color: '#1d4ed8', padding: '0.15rem 0.5rem', borderRadius: '9999px' }}>✓ VALIDÉE</span>
+                                    )}
+                                    <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>Devis: {item.config.L} x {item.config.H} mm</span>
+                                  </div>
                                 </div>
 
                                 {/* Preview and Inputs Content */}
