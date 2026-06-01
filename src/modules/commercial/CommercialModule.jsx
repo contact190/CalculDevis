@@ -1054,8 +1054,9 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                         const area = (L * H) / 1000000;
                         const weightPerM2 = parseFloat(lame.weightPerM2) || 0;
                         const totalWeight = area * weightPerM2;
+                        const liftingWeight = totalWeight;
                         const lameWidth = parseFloat(lame.lameWidth) || 0;
-                        const scope = { L, H, area, axeDiameter, weightPerM2, totalWeight, lameWidth };
+                        const scope = { L, H, area, axeDiameter, weightPerM2, totalWeight, liftingWeight, lameWidth };
                         return engine.evaluate(formula, scope);
                       } catch (e) {
                         console.warn(`[Lame Compatibility] Formula error for "${lame.name}":`, e.message);
@@ -1119,7 +1120,8 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                       if (!formula || formula.trim() === '') return true;
                       try {
                         const lameWidth = parseFloat(selectedLame?.lameWidth) || 0;
-                        const scope = { L, H, area, totalWeight, weightPerM2, lameWidth };
+                        const liftingWeight = totalWeight;
+                        const scope = { L, H, area, totalWeight, liftingWeight, weightPerM2, lameWidth };
                         return engine.evaluate(formula, scope);
                       } catch (e) {
                         console.warn(`[Axe Compatibility] Formula error for "${axe.name}":`, e.message);
@@ -1248,7 +1250,20 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                   return (
                     <React.Fragment key={key}>
                       <div className="form-group">
-                        <label className="label" style={{ fontSize: '0.8rem' }}>{label}</label>
+                        <label className="label" style={{ fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span>{label}</span>
+                          {key === 'lameId' && config.shutterConfig?.lameId && (() => {
+                            const isDouble = config.shutterConfig?.isDoubleShutter || false;
+                            const L = isDouble ? (config.L || 0) / 2 : (config.L || 0);
+                            const H = config.H || 0;
+                            const area = (L * H) / 1000000;
+                            const selectedLame = (database.shutterComponents?.lames || []).find(l => l.id === config.shutterConfig.lameId);
+                            if (!selectedLame) return null;
+                            const weightPerM2 = parseFloat(selectedLame?.weightPerM2) || 0;
+                            const totalWeight = area * weightPerM2;
+                            return <span style={{ color: '#3b82f6', fontSize: '0.75rem', fontWeight: 600 }} title="Poids du tablier">⚖️ {totalWeight.toFixed(2)} kg</span>;
+                          })()}
+                        </label>
                         <select className="input" value={selectedItemId || ''} onChange={e => handleShutterChange(e.target.value)}>
                           <option value="">-- Sélectionner --</option>
                           {key === 'glissiereId' && <option value="AUTO">-- Automatique (Kit) --</option>}

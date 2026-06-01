@@ -68,15 +68,8 @@ export const getTechnicalDrawingDataURL = (cfg, database) => {
     if (!comp) return false;
     const name = (comp.name || '').toUpperCase();
     if (name.includes('VASISTAS')) return true;
-    // check rangeIds on the composition's profiles via rangeId on the comp itself
     const rangeId = (comp.rangeId || comp.id || '').toUpperCase();
-    if (rangeId.includes('VASISTAS')) return true;
-    // check against database profiles for this composition
-    const profiles = database.profiles || [];
-    return profiles.some(p =>
-      Array.isArray(p.rangeIds) && p.rangeIds.some(r => r.toUpperCase().includes('VASISTAS')) &&
-      p.rangeIds.some(r => r === comp.rangeId || r === comp.id)
-    );
+    return rangeId.includes('VASISTAS');
   };
 
   // Inner drawJoinery function

@@ -498,3 +498,51 @@ body {
     position: static !important;
   }
 }
+
+/* --- OPTIMISATIONS TABLETTE STRICTES (641px - 1024px) --- */
+@media (min-width: 641px) and (max-width: 1024px) {
+  /* 1. Rendre la barre supérieure plus flexible sans empilement complet (flex-wrap) */
+  .flex-mobile-stack {
+    flex-wrap: wrap !important;
+    gap: 1rem !important;
+    padding: 1rem !important;
+  }
+  
+  .flex-mobile-stack > div:nth-child(2) {
+    /* Force le conteneur du titre sur toute la largeur */
+    flex: 1 1 100% !important;
+    order: -1; 
+    margin-bottom: 0.5rem;
+  }
+
+  /* 2. Augmenter légèrement la taille des cibles tactiles (Touch Targets) */
+  .input, select.input {
+    padding: 0.85rem 1rem !important;
+    font-size: 1rem !important;
+    min-height: 44px; /* Hauteur minimale recommandée pour le tactile */
+  }
+
+  .btn {
+    padding: 0.85rem 1.25rem !important;
+    font-size: 1rem !important;
+    min-height: 44px;
+  }
+
+  .btn-secondary {
+    min-height: 40px;
+  }
+
+  /* 3. Ajuster les marges de la grille pour récupérer de l'espace */
+  .configurator-grid .glass {
+    padding: 1.25rem !important;
+  }
+
+  /* Améliorer le scroll horizontal tactile pour les zones complexes (Assemblage) */
+  .configurator-grid div[style*="overflow"] {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; /* Hide scrollbar for cleaner look */
+  }
+  .configurator-grid div[style*="overflow"]::-webkit-scrollbar {
+    display: none;
+  }
+}

@@ -441,7 +441,12 @@ function App() {
             setQuoteSettings={(newSettings) => {
               setQuoteSettings(prev => {
                 const next = typeof newSettings === 'function' ? newSettings(prev) : newSettings;
-                localStorage.setItem('quoteSettings', JSON.stringify(next));
+                try {
+                  localStorage.setItem('quoteSettings', JSON.stringify(next));
+                } catch (e) {
+                  console.error('LocalStorage quota exceeded:', e);
+                  alert("Erreur de sauvegarde : l'image du logo est trop volumineuse (limite 5 Mo).");
+                }
                 return next;
               });
             }}
@@ -480,7 +485,12 @@ function App() {
             setQuoteSettings={(newSettings) => {
               setQuoteSettings(prev => {
                 const next = typeof newSettings === 'function' ? newSettings(prev) : newSettings;
-                localStorage.setItem('quoteSettings', JSON.stringify(next));
+                try {
+                  localStorage.setItem('quoteSettings', JSON.stringify(next));
+                } catch (e) {
+                  console.error('LocalStorage quota exceeded:', e);
+                  alert("Erreur de sauvegarde : l'image du logo est trop volumineuse (limite 5 Mo).");
+                }
                 return next;
               });
             }}
