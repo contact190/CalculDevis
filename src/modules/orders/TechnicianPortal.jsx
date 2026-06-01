@@ -606,7 +606,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                 </div>
 
                                 {/* Preview and Inputs Content */}
-                                <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem', opacity: v.productionLaunched ? 0.75 : 1, pointerEvents: v.productionLaunched ? 'none' : 'auto' }}>
                                   
                                   {/* Drawing Preview */}
                                   <div style={{ flex: 1, background: '#f8fafc', border: '1px solid #f1f5f9', borderRadius: '0.5rem' }}>
@@ -819,7 +819,11 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                   </button>
 
                                   {/* Individual Validation Button */}
-                                  {!v.measurementsValidated ? (
+                                  {v.productionLaunched ? (
+                                    <div style={{ width: '100%', padding: '0.6rem', fontSize: '0.78rem', fontWeight: 800, background: '#dcfce7', color: '#166534', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', borderRadius: '0.5rem' }}>
+                                      🚀 Lancée en Production
+                                    </div>
+                                  ) : !v.measurementsValidated ? (
                                     <button 
                                       onClick={() => setVoidToValidate({ floorId: floor.id, aptId: apt.id, voidId: v.id })}
                                       className="btn btn-primary"
@@ -828,8 +832,18 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                       <CheckCircle size={14} /> Valider cette fenêtre
                                     </button>
                                   ) : (
-                                    <div style={{ width: '100%', padding: '0.6rem', fontSize: '0.78rem', fontWeight: 800, background: '#dcfce7', color: '#166534', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', borderRadius: '0.5rem' }}>
-                                      <CheckCircle size={14} /> Fenêtre Validée
+                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                      <div style={{ flex: 2, padding: '0.6rem', fontSize: '0.78rem', fontWeight: 800, background: '#dbeafe', color: '#1d4ed8', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', borderRadius: '0.5rem' }}>
+                                        <CheckCircle size={14} /> Fenêtre Validée
+                                      </div>
+                                      <button 
+                                        onClick={() => {
+                                          updateVoidProperty(floor.id, apt.id, v.id, 'measurementsValidated', false);
+                                        }}
+                                        style={{ flex: 1, padding: '0.6rem', fontSize: '0.72rem', fontWeight: 700, background: '#fef9c3', border: '1px solid #fde047', color: '#854d0e', cursor: 'pointer', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem' }}
+                                      >
+                                        ✏️ Modifier
+                                      </button>
                                     </div>
                                   )}
 
