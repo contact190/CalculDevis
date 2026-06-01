@@ -85,6 +85,11 @@ const syncSitePlanToMeasurements = (sitePlan, items) => {
 };
 
 const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
+  const [expandedFloors, setExpandedFloors] = useState({});
+  const [showValidation, setShowValidation] = useState(false);
+  const [voidToValidate, setVoidToValidate] = useState(null);
+  const [selectedVoidsForLaunch, setSelectedVoidsForLaunch] = useState({});
+
   const order = useMemo(() => {
     return (data.orders || []).find(o => o.id === orderId);
   }, [data.orders, orderId]);
@@ -304,6 +309,176 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
 
   const completionPercent = stats.total > 0 ? Math.round((stats.filled / stats.total) * 100) : 0;
 
+  React.useEffect(() => {
+    if (showValidation) {
+      const initialSelection = {};
+      (activeSitePlan.floors || []).forEach(f => {
+        (f.apartments || []).forEach(a => {
+          (a.voids || []).forEach(v => {
+            if (v.measurementsValidated && !v.productionLaunched) {
+               // keep existing selection if previously unselected, else default to true
+               initialSelection[v.id] = selectedVoidsForLaunch[v.id] !== undefined ? selectedVoidsForLaunch[v.id] : true;
+            }
+          });
+        });
+      });
+      setSelectedVoidsForLaunch(initialSelection);
+    }
+  }, [showValidation, activeSitePlan]);
+
+  const renderIndividualValidationPopup = () => {
+    if (!voidToValidate) return null;
+    const f = activeSitePlan.floors?.find(fl => fl.id === voidToValidate.floorId);
+    const a = f?.apartments?.find(ap => ap.id === voidToValidate.aptId);
+    const v = a?.voids?.find(vo => vo.id === voidToValidate.voidId);
+    if (!v) return null;
+    const item = order.items.find(i => i.id === v.itemId);
+    if (!item) return null;
+
+    return (
+      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000, padding: '1rem' }}>
+        <div style={{ background: 'white', padding: '1.5rem', borderRadius: '1rem', maxWidth: '400px', width: '100%', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+          <h2 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#1e293b', marginBottom: '1rem' }}>Confirmer la validation</h2>
+          <div style={{ fontSize: '0.85rem', color: '#475569', marginBottom: '1.5rem' }}>
+            <p style={{ margin: '0 0 0.5rem 0' }}><strong>{v.name}</strong> ({item.label})</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', background: '#f8fafc', padding: '0.75rem', borderRadius: '0.5rem' }}>
+              <div><span style={{ color: '#94a3b8' }}>Devis:</span> {item.config.L} x {item.config.H}</div>
+              <div><span style={{ color: '#0f766e' }}>Mesuré:</span> {v.L !== undefined ? v.L : item.config.L} x {v.H !== undefined ? v.H : item.config.H}</div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button onClick={() => setVoidToValidate(null)} style={{ flex: 1, padding: '0.6rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', background: 'white', color: '#475569', fontWeight: 700, cursor: 'pointer' }}>Annuler</button>
+            <button 
+              onClick={() => {
+                updateVoidProperty(f.id, a.id, v.id, 'measurementsValidated', true);
+                setVoidToValidate(null);
+              }}
+              style={{ flex: 2, padding: '0.6rem', borderRadius: '0.5rem', border: 'none', background: '#0ea5e9', color: 'white', fontWeight: 700, cursor: 'pointer' }}
+            >
+              Confirmer
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderValidationPopup = () => {
+    if (!showValidation) return null;
+
+    const validatedVoids = [];
+    (activeSitePlan.floors || []).forEach(f => {
+      (f.apartments || []).forEach(a => {
+        (a.voids || []).forEach(v => {
+          if (v.measurementsValidated && !v.productionLaunched) {
+            const item = order.items.find(i => i.id === v.itemId);
+            validatedVoids.push({ floor: f, apt: a, void: v, item });
+          }
+        });
+      });
+    });
+
+    const handleLaunch = () => {
+      const selectedCount = Object.values(selectedVoidsForLaunch).filter(Boolean).length;
+      if (selectedCount === 0) {
+        alert("Veuillez sélectionner au moins une fenêtre à lancer.");
+        return;
+      }
+
+      const currentPlan = activeSitePlan;
+      const updatedPlan = {
+        ...currentPlan,
+        floors: (currentPlan.floors || []).map(f => ({
+          ...f,
+          apartments: (f.apartments || []).map(a => ({
+            ...a,
+            voids: (a.voids || []).map(v => {
+              if (selectedVoidsForLaunch[v.id]) {
+                return { ...v, productionLaunched: true };
+              }
+              return v;
+            })
+          }))
+        }))
+      };
+
+      const updatedItems = syncSitePlanToMeasurements(updatedPlan, order.items);
+
+      setData(prev => {
+        const updatedClients = (prev.clients || []).map(c => {
+          if (c.id !== selectedClient.id) return c;
+          const plans = c.sitePlans || [];
+          const planExists = plans.some(p => p.id === updatedPlan.id);
+          const newPlans = planExists 
+            ? plans.map(p => p.id === updatedPlan.id ? updatedPlan : p)
+            : [...plans, updatedPlan];
+          return { ...c, sitePlans: newPlans };
+        });
+        const updatedOrders = (prev.orders || []).map(o => 
+          o.id === order.id ? { ...o, items: updatedItems, status: 'PARTIEL_PRODUCTION' } : o
+        );
+        return { ...prev, clients: updatedClients, orders: updatedOrders };
+      });
+      setShowValidation(false);
+      setSelectedVoidsForLaunch({});
+      alert('Fenêtres lancées en production avec succès !');
+    };
+
+    return (
+      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}>
+        <div style={{ background: 'white', padding: '1.5rem', borderRadius: '1rem', maxWidth: '500px', width: '100%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#1e293b', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <ClipboardList size={24} color="#0f766e" />
+            Lancement en Production
+          </h2>
+          
+          {validatedVoids.length === 0 ? (
+            <div style={{ padding: '1rem', background: '#f8fafc', borderRadius: '0.5rem', textAlign: 'center', color: '#64748b', marginBottom: '1.5rem' }}>
+              Aucune fenêtre validée en attente de lancement.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem' }}>
+              {validatedVoids.map(({ floor, apt, void: v, item }, idx) => (
+                <div key={idx} style={{ padding: '0.75rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '0.5rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={!!selectedVoidsForLaunch[v.id]}
+                    onChange={(e) => setSelectedVoidsForLaunch(prev => ({ ...prev, [v.id]: e.target.checked }))}
+                    style={{ width: '1.2rem', height: '1.2rem', cursor: 'pointer' }}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: '0.25rem' }}>
+                      {floor.name} - {apt.name} - {v.name}
+                    </div>
+                    <div style={{ fontSize: '0.85rem' }}>
+                      Mesuré: <strong>{v.L !== undefined ? v.L : item.config.L} x {v.H !== undefined ? v.H : item.config.H}</strong>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: '0.75rem' }}>
+            <button 
+              onClick={() => setShowValidation(false)}
+              style={{ flex: 1, padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', background: 'white', color: '#475569', fontWeight: 700, cursor: 'pointer' }}
+            >
+              Fermer
+            </button>
+            <button 
+              onClick={handleLaunch}
+              disabled={validatedVoids.length === 0}
+              style={{ flex: 2, padding: '0.75rem', borderRadius: '0.5rem', border: 'none', background: validatedVoids.length === 0 ? '#94a3b8' : '#0f766e', color: 'white', fontWeight: 700, cursor: validatedVoids.length === 0 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+            >
+              <CheckCircle size={18} /> Lancer la sélection
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc', color: '#1e293b', fontFamily: 'Inter, sans-serif' }}>
       <div style={{ maxWidth: '600px', margin: '0 auto', background: '#f8fafc', minHeight: '100vh', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -355,16 +530,24 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
               const floorHasVoids = floor.apartments?.some(a => a.voids?.length > 0);
               if (!floorHasVoids) return null;
 
+              const isExpanded = expandedFloors[floor.id] !== false;
+
               return (
                 <div key={floor.id} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                   {/* Floor Header */}
-                  <div style={{ padding: '0.6rem 1rem', background: '#0f766e', color: 'white', borderRadius: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-                    <span style={{ fontSize: '1.1rem' }}>🏢</span>
-                    <strong style={{ fontSize: '0.95rem', fontWeight: 800, textTransform: 'uppercase' }}>{floor.name}</strong>
+                  <div 
+                    onClick={() => setExpandedFloors(prev => ({ ...prev, [floor.id]: prev[floor.id] === false ? true : false }))}
+                    style={{ padding: '0.6rem 1rem', background: '#0f766e', color: 'white', borderRadius: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', cursor: 'pointer' }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{ fontSize: '1.1rem' }}>🏢</span>
+                      <strong style={{ fontSize: '0.95rem', fontWeight: 800, textTransform: 'uppercase' }}>{floor.name}</strong>
+                    </div>
+                    {isExpanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
                   </div>
 
                   {/* Apartments */}
-                  {(floor.apartments || []).map(apt => {
+                  {isExpanded && (floor.apartments || []).map(apt => {
                     if (!apt.voids || apt.voids.length === 0) return null;
 
                     return (
@@ -600,10 +783,25 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                   <button 
                                     onClick={() => applyVoidToAllSameInApartment(floor.id, apt.id, v)}
                                     className="btn btn-secondary"
-                                    style={{ width: '100%', padding: '0.6rem', fontSize: '0.78rem', fontWeight: 800, background: '#f0fdfa', border: '1.5px dashed #5eead4', color: '#0f766e', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}
+                                    style={{ width: '100%', padding: '0.6rem', fontSize: '0.78rem', fontWeight: 800, background: '#f0fdfa', border: '1.5px dashed #5eead4', color: '#0f766e', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', marginBottom: '0.5rem' }}
                                   >
                                     <Save size={14} /> Appliquer à tous les vides identiques de l'appartement
                                   </button>
+
+                                  {/* Individual Validation Button */}
+                                  {!v.measurementsValidated ? (
+                                    <button 
+                                      onClick={() => setVoidToValidate({ floorId: floor.id, aptId: apt.id, voidId: v.id })}
+                                      className="btn btn-primary"
+                                      style={{ width: '100%', padding: '0.6rem', fontSize: '0.78rem', fontWeight: 800, background: '#0ea5e9', border: 'none', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', borderRadius: '0.5rem' }}
+                                    >
+                                      <CheckCircle size={14} /> Valider cette fenêtre
+                                    </button>
+                                  ) : (
+                                    <div style={{ width: '100%', padding: '0.6rem', fontSize: '0.78rem', fontWeight: 800, background: '#dcfce7', color: '#166534', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', borderRadius: '0.5rem' }}>
+                                      <CheckCircle size={14} /> Fenêtre Validée
+                                    </div>
+                                  )}
 
                                 </div>
                               </div>
@@ -619,11 +817,25 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
           </div>
         )}
 
+        {/* Lancement de Production Button */}
+        {hasPlan && (
+          <button 
+            onClick={() => setShowValidation(true)}
+            className="btn btn-primary"
+            style={{ width: '100%', padding: '1rem', fontSize: '1rem', fontWeight: 800, borderRadius: '0.75rem', marginTop: '1rem', background: '#0f766e', color: 'white', border: 'none', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(15, 118, 110, 0.4)' }}
+          >
+            <CheckCircle size={20} style={{ verticalAlign: 'middle', marginRight: '0.5rem' }} />
+            Lancement en Production
+          </button>
+        )}
+
         {/* Footer info */}
         <div style={{ marginTop: '2rem', textAlign: 'center', padding: '1rem', opacity: 0.5 }}>
           <ShieldCheck size={16} style={{ verticalAlign: 'middle', marginRight: '0.4rem' }} />
           <span style={{ fontSize: '0.75rem' }}>Accès Sécurisé Technicien Prise de Mesures</span>
         </div>
+        {renderValidationPopup()}
+        {renderIndividualValidationPopup()}
       </div>
     </div>
   );
