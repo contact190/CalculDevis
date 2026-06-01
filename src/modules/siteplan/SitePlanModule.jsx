@@ -52,50 +52,110 @@ function syncSitePlanToMeasurements(sitePlan, orderItems) {
 
 export default function SitePlanModule({ data, setData }) {
   const [selectedClientId, setSelectedClientId] = useState('');
-  const [selectedOrderId, setSelectedOrderId] = useState('');
+  const [selectedQuoteId, setSelectedQuoteId] = useState('');
+  const [selectedPlanId, setSelectedPlanId] = useState('');
 
   const clients = data?.clients || [];
   
-  // Filter orders by the selected client
-  const clientOrders = selectedClientId 
-    ? (data?.orders || []).filter(o => o.clientId === selectedClientId)
-    : [];
-
-  const selectedOrder = selectedOrderId 
-    ? (data?.orders || []).find(o => o.id === selectedOrderId)
-    : null;
-
   // Active client object
   const selectedClient = selectedClientId
     ? clients.find(c => c.id === selectedClientId)
     : null;
 
+  const clientPlans = selectedClient?.sitePlans || [];
+  const activeSitePlan = selectedPlanId ? clientPlans.find(p => p.id === selectedPlanId) : null;
+
+  // Filter quotes by the selected client
+  const clientQuotes = selectedClientId 
+    ? (data?.quotes || []).filter(o => o.clientId === selectedClientId)
+    : [];
+
+  const selectedQuote = selectedQuoteId 
+    ? clientQuotes.find(o => o.id === selectedQuoteId)
+    : null;
+
   // DB update helper for client site plan & syncing
   const handleUpdateSitePlan = (updatedPlan) => {
     setData(prev => {
-      // 1. Update the client
-      const updatedClients = (prev.clients || []).map(c => 
-        c.id === selectedClientId ? { ...c, sitePlan: updatedPlan } : c
-      );
+      // 1. Update the client's sitePlans array
+      const updatedClients = (prev.clients || []).map(c => {
+        if (c.id !== selectedClientId) return c;
+        const plans = c.sitePlans || [];
+        const planExists = plans.some(p => p.id === updatedPlan.id);
+        const newPlans = planExists 
+          ? plans.map(p => p.id === updatedPlan.id ? updatedPlan : p)
+          : [...plans, updatedPlan];
+        return { ...c, sitePlans: newPlans };
+      });
 
-      // 2. If an order is selected, also sync this plan to the order's items
-      let updatedOrders = prev.orders || [];
-      if (selectedOrderId) {
-        const orderToSync = updatedOrders.find(o => o.id === selectedOrderId);
-        if (orderToSync) {
-          const syncedItems = syncSitePlanToMeasurements(updatedPlan, orderToSync.items);
-          updatedOrders = updatedOrders.map(o => 
-            o.id === selectedOrderId ? { ...o, items: syncedItems } : o
-          );
-        }
-      }
+      // 2. Sync this plan to ALL quotes that are assigned to it
+      let updatedQuotes = prev.quotes || [];
+      const quotesToSync = updatedQuotes.filter(o => o.sitePlanId === updatedPlan.id);
+      
+      quotesToSync.forEach(quoteToSync => {
+        const syncedItems = syncSitePlanToMeasurements(updatedPlan, quoteToSync.items);
+        updatedQuotes = updatedQuotes.map(o => 
+          o.id === quoteToSync.id ? { ...o, items: syncedItems } : o
+        );
+      });
 
       return {
         ...prev,
         clients: updatedClients,
-        orders: updatedOrders
+        quotes: updatedQuotes
       };
     });
+  };
+
+  const createNewPlan = () => {
+    if (!selectedClientId) return;
+    const name = window.prompt("Nom du nouveau plan de chantier :", `Plan ${clientPlans.length + 1}`);
+    if (!name) return;
+    
+    const newPlan = {
+      id: `plan-${Date.now()}`,
+      name: name,
+      floors: []
+    };
+    handleUpdateSitePlan(newPlan);
+    setSelectedPlanId(newPlan.id);
+  };
+
+  const deletePlan = (planId) => {
+    if (!window.confirm("Êtes-vous sûr de vouloir supprimer ce plan ?")) return;
+    setData(prev => {
+      const updatedClients = (prev.clients || []).map(c => {
+        if (c.id !== selectedClientId) return c;
+        return { ...c, sitePlans: (c.sitePlans || []).filter(p => p.id !== planId) };
+      });
+      return { ...prev, clients: updatedClients };
+    });
+    if (selectedPlanId === planId) setSelectedPlanId('');
+  };
+
+  const renamePlan = () => {
+    if (!activeSitePlan) return;
+    const name = window.prompt("Nouveau nom du plan :", activeSitePlan.name);
+    if (!name) return;
+    handleUpdateSitePlan({ ...activeSitePlan, name });
+  };
+
+  const assignQuoteToPlan = () => {
+    if (!selectedQuoteId || !activeSitePlan) return;
+    setData(prev => {
+      let updatedQuotes = (prev.quotes || []).map(q => 
+        q.id === selectedQuoteId ? { ...q, sitePlanId: activeSitePlan.id } : q
+      );
+      
+      const quoteToSync = updatedQuotes.find(q => q.id === selectedQuoteId);
+      const syncedItems = syncSitePlanToMeasurements(activeSitePlan, quoteToSync.items);
+      updatedQuotes = updatedQuotes.map(q => 
+        q.id === selectedQuoteId ? { ...q, items: syncedItems } : q
+      );
+
+      return { ...prev, quotes: updatedQuotes };
+    });
+    alert("Devis rattaché à ce plan !");
   };
 
   // Helper to initialize sitePlan
@@ -107,8 +167,8 @@ export default function SitePlanModule({ data, setData }) {
 
   // State mutation actions
   const addFloor = () => {
-    if (!selectedClientId) return;
-    const currentPlan = selectedClient?.sitePlan || { floors: [] };
+    if (!activeSitePlan) return;
+    const currentPlan = activeSitePlan;
     const floors = [...(currentPlan.floors || [])];
     const newFloor = {
       id: `floor-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
@@ -120,17 +180,17 @@ export default function SitePlanModule({ data, setData }) {
   };
 
   const deleteFloor = (floorId) => {
-    if (!selectedClientId) return;
+    if (!activeSitePlan) return;
     if (!window.confirm("Voulez-vous supprimer cet étage et tous ses appartements / vides ?")) return;
-    const currentPlan = selectedClient?.sitePlan || { floors: [] };
+    const currentPlan = activeSitePlan;
     const floors = (currentPlan.floors || []).filter(f => f.id !== floorId);
     const updatedPlan = { ...currentPlan, floors };
     handleUpdateSitePlan(updatedPlan);
   };
 
   const updateFloorName = (floorId, name) => {
-    if (!selectedClientId) return;
-    const currentPlan = selectedClient?.sitePlan || { floors: [] };
+    if (!activeSitePlan) return;
+    const currentPlan = activeSitePlan;
     const floors = (currentPlan.floors || []).map(f => 
       f.id === floorId ? { ...f, name } : f
     );
@@ -139,8 +199,8 @@ export default function SitePlanModule({ data, setData }) {
   };
 
   const addApartment = (floorId) => {
-    if (!selectedClientId) return;
-    const currentPlan = selectedClient?.sitePlan || { floors: [] };
+    if (!activeSitePlan) return;
+    const currentPlan = activeSitePlan;
     const floors = (currentPlan.floors || []).map(f => {
       if (f.id !== floorId) return f;
       const apts = f.apartments || [];
@@ -156,9 +216,9 @@ export default function SitePlanModule({ data, setData }) {
   };
 
   const deleteApartment = (floorId, aptId) => {
-    if (!selectedClientId) return;
+    if (!activeSitePlan) return;
     if (!window.confirm("Voulez-vous supprimer cet appartement et tous ses vides ?")) return;
-    const currentPlan = selectedClient?.sitePlan || { floors: [] };
+    const currentPlan = activeSitePlan;
     const floors = (currentPlan.floors || []).map(f => {
       if (f.id !== floorId) return f;
       return {
@@ -171,8 +231,8 @@ export default function SitePlanModule({ data, setData }) {
   };
 
   const updateApartmentName = (floorId, aptId, name) => {
-    if (!selectedClientId) return;
-    const currentPlan = selectedClient?.sitePlan || { floors: [] };
+    if (!activeSitePlan) return;
+    const currentPlan = activeSitePlan;
     const floors = (currentPlan.floors || []).map(f => {
       if (f.id !== floorId) return f;
       return {
@@ -185,9 +245,9 @@ export default function SitePlanModule({ data, setData }) {
   };
 
   const addVoid = (floorId, aptId) => {
-    if (!selectedClientId) return;
-    const currentPlan = selectedClient?.sitePlan || { floors: [] };
-    const defaultItem = selectedOrder?.items?.[0];
+    if (!activeSitePlan) return;
+    const currentPlan = activeSitePlan;
+    const defaultItem = selectedQuote?.items?.[0];
     const floors = (currentPlan.floors || []).map(f => {
       if (f.id !== floorId) return f;
       return {
@@ -214,8 +274,8 @@ export default function SitePlanModule({ data, setData }) {
   };
 
   const deleteVoid = (floorId, aptId, voidId) => {
-    if (!selectedClientId) return;
-    const currentPlan = selectedClient?.sitePlan || { floors: [] };
+    if (!activeSitePlan) return;
+    const currentPlan = activeSitePlan;
     const floors = (currentPlan.floors || []).map(f => {
       if (f.id !== floorId) return f;
       return {
@@ -234,8 +294,8 @@ export default function SitePlanModule({ data, setData }) {
   };
 
   const updateVoidProperty = (floorId, aptId, voidId, propertyPath, value) => {
-    if (!selectedClientId) return;
-    const currentPlan = selectedClient?.sitePlan || { floors: [] };
+    if (!activeSitePlan) return;
+    const currentPlan = activeSitePlan;
     const floors = (currentPlan.floors || []).map(f => {
       if (f.id !== floorId) return f;
       return {
@@ -252,7 +312,7 @@ export default function SitePlanModule({ data, setData }) {
                 updatedVoid.name = value;
               } else if (propertyPath === 'itemId') {
                 updatedVoid.itemId = value;
-                const matchedItem = selectedOrder?.items?.find(i => i.id === value);
+                const matchedItem = selectedQuote?.items?.find(i => i.id === value);
                 if (matchedItem) {
                   updatedVoid.L = matchedItem.config?.L;
                   updatedVoid.H = matchedItem.config?.H;
@@ -285,42 +345,93 @@ export default function SitePlanModule({ data, setData }) {
       </header>
 
       {/* Selectors Panel */}
-      <div className="glass shadow-sm" style={{ padding: '1.5rem', background: 'white', borderRadius: '1rem', border: '1px solid #e2e8f0', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-        {/* Client Selection */}
-        <div>
-          <label style={{ fontSize: '0.85rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '0.5rem' }}>1. Sélectionnez le Client</label>
-          <select
-            className="input"
-            value={selectedClientId}
-            onChange={e => {
-              setSelectedClientId(e.target.value);
-              setSelectedOrderId('');
-            }}
-            style={{ width: '100%', fontSize: '0.9rem', fontWeight: 600, padding: '0.6rem' }}
-          >
-            <option value="">-- Choisissez un client --</option>
-            {clients.map(c => (
-              <option key={c.id} value={c.id}>{c.nom} {c.prenom ? `(${c.prenom})` : ''} - {c.telephone || c.ville}</option>
-            ))}
-          </select>
+      <div className="glass shadow-sm" style={{ padding: '1.5rem', background: 'white', borderRadius: '1rem', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+          {/* Client Selection */}
+          <div>
+            <label style={{ fontSize: '0.85rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '0.5rem' }}>1. Sélectionnez le Client</label>
+            <select
+              className="input"
+              value={selectedClientId}
+              onChange={e => {
+                setSelectedClientId(e.target.value);
+                setSelectedPlanId('');
+                setSelectedQuoteId('');
+              }}
+              style={{ width: '100%', fontSize: '0.9rem', fontWeight: 600, padding: '0.6rem' }}
+            >
+              <option value="">-- Choisissez un client --</option>
+              {clients.map(c => (
+                <option key={c.id} value={c.id}>{c.nom} {c.prenom ? `(${c.prenom})` : ''} - {c.telephone || c.ville}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Plan Selection */}
+          <div>
+            <label style={{ fontSize: '0.85rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '0.5rem' }}>2. Choisissez le Plan</label>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <select
+                className="input"
+                value={selectedPlanId}
+                onChange={e => setSelectedPlanId(e.target.value)}
+                disabled={!selectedClientId}
+                style={{ flex: 1, fontSize: '0.9rem', fontWeight: 600, padding: '0.6rem' }}
+              >
+                <option value="">-- Sélectionnez un plan --</option>
+                {clientPlans.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+              <button 
+                onClick={createNewPlan} 
+                disabled={!selectedClientId}
+                className="btn btn-primary" 
+                style={{ padding: '0.6rem', display: 'flex', alignItems: 'center' }}
+                title="Créer un nouveau plan"
+              >
+                <Plus size={18} />
+              </button>
+            </div>
+          </div>
         </div>
 
-        {/* Order/Quote Selection */}
-        <div>
-          <label style={{ fontSize: '0.85rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '0.5rem' }}>2. Sélectionnez la Commande / Devis</label>
-          <select
-            className="input"
-            value={selectedOrderId}
-            onChange={e => setSelectedOrderId(e.target.value)}
-            disabled={!selectedClientId}
-            style={{ width: '100%', fontSize: '0.9rem', fontWeight: 600, padding: '0.6rem' }}
-          >
-            <option value="">-- Choisissez un projet --</option>
-            {clientOrders.map(o => (
-              <option key={o.id} value={o.id}>Commande {o.id} (Devis {o.quoteNumber}) - {o.items?.length || 0} produits</option>
-            ))}
-          </select>
-        </div>
+        {/* Quote Selection & Assignment (only if plan is active) */}
+        {activeSitePlan && (
+          <div style={{ padding: '1rem', background: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
+            <label style={{ fontSize: '0.85rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '0.5rem' }}>3. Associer un Devis à ce Plan</label>
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+              <select
+                className="input"
+                value={selectedQuoteId}
+                onChange={e => setSelectedQuoteId(e.target.value)}
+                style={{ flex: 1, fontSize: '0.9rem', fontWeight: 600, padding: '0.6rem' }}
+              >
+                <option value="">-- Sélectionnez un devis pour l'associer --</option>
+                {clientQuotes.map(o => (
+                  <option key={o.id} value={o.id}>
+                    Devis {o.number || o.id} - {o.items?.length || 0} produits {o.sitePlanId === activeSitePlan.id ? '(Déjà rattaché)' : ''}
+                  </option>
+                ))}
+              </select>
+              <button 
+                onClick={assignQuoteToPlan}
+                disabled={!selectedQuoteId}
+                className="btn btn-secondary"
+                style={{ padding: '0.6rem 1rem', background: '#e0f2fe', color: '#0369a1', borderColor: '#bae6fd', fontWeight: 700 }}
+              >
+                Associer au plan actif
+              </button>
+            </div>
+            
+            <div style={{ marginTop: '0.75rem', fontSize: '0.8rem', color: '#64748b' }}>
+              <strong>Devis associés :</strong> {
+                clientQuotes.filter(q => q.sitePlanId === activeSitePlan.id).map(q => q.number || q.id).join(', ') || 'Aucun'
+              }
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Main Structural Editor Block */}
@@ -338,15 +449,15 @@ export default function SitePlanModule({ data, setData }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           
           {/* If sitePlan is not initialized */}
-          {!selectedClient?.sitePlan ? (
+          {!activeSitePlan ? (
             <div style={{ textAlign: 'center', padding: '4rem 2rem', background: '#f8fafc', borderRadius: '1.5rem', border: '2px dashed #10b981' }}>
               <Layout size={44} color="#10b981" style={{ marginBottom: '1rem' }} />
-              <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.25rem', fontWeight: 700 }}>Créer la structure pour ce chantier</h3>
+              <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.25rem', fontWeight: 700 }}>Créer un Plan pour ce client</h3>
               <p style={{ color: '#64748b', fontSize: '0.875rem', maxWidth: '500px', margin: '0 auto 1.5rem auto' }}>
-                Ce client n'a pas encore de structure de chantier définie. Vous pouvez l'initialiser immédiatement pour ajouter des étages et des pièces.
+                Vous devez sélectionner ou créer un nouveau plan de chantier pour pouvoir ajouter des étages et des pièces.
               </p>
-              <button onClick={initializeSitePlan} className="btn btn-primary" style={{ background: '#10b981', display: 'flex', alignItems: 'center', gap: '0.4rem', margin: '0 auto' }}>
-                <Plus size={16} /> Initialiser le Plan de Chantier
+              <button onClick={createNewPlan} className="btn btn-primary" style={{ background: '#10b981', display: 'flex', alignItems: 'center', gap: '0.4rem', margin: '0 auto' }}>
+                <Plus size={16} /> Créer un Plan de Chantier
               </button>
             </div>
           ) : (
@@ -354,11 +465,10 @@ export default function SitePlanModule({ data, setData }) {
             /* Structural tree editor */
             <div className="glass shadow-sm" style={{ padding: '1.5rem', borderLeft: '4px solid #10b981', background: 'white' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '1rem' }}>
-                <div>
-                  <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800 }}>🧱 Structure active : {selectedClient?.nom} {selectedClient?.prenom ? selectedClient.prenom : ''}</h3>
-                  <p style={{ color: '#64748b', fontSize: '0.85rem', margin: '0.2rem 0 0 0' }}>
-                    Le plan de chantier est sauvegardé au niveau du client et est conservé même si des devis ou commandes sont supprimés.
-                  </p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800 }}>🧱 Plan actif : {activeSitePlan.name}</h3>
+                  <button onClick={renamePlan} className="btn" style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', color: '#64748b' }}>Renommer</button>
+                  <button onClick={() => deletePlan(activeSitePlan.id)} className="btn" style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', color: '#ef4444' }}>Supprimer</button>
                 </div>
                 <button onClick={addFloor} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: '#10b981' }}>
                   <Plus size={16} /> Ajouter un Étage
@@ -367,7 +477,7 @@ export default function SitePlanModule({ data, setData }) {
 
               {/* Tree Container */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                {(selectedClient.sitePlan?.floors || []).map(floor => (
+                {(activeSitePlan.floors || []).map(floor => (
                   <div key={floor.id} style={{ border: '1px solid #e2e8f0', borderRadius: '1rem', padding: '1.25rem', background: '#f8fafc' }}>
                     
                     {/* Floor Header */}
@@ -423,7 +533,7 @@ export default function SitePlanModule({ data, setData }) {
                                   style={{ fontSize: '0.85rem', padding: '0.2rem 0.4rem', width: '180px' }}
                                 />
                                 <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600, marginLeft: '0.5rem' }}>Assigné à la Menuiserie :</span>
-                                {selectedOrder ? (
+                                {selectedQuote ? (
                                   <select
                                     className="input"
                                     value={v.itemId}
@@ -431,13 +541,13 @@ export default function SitePlanModule({ data, setData }) {
                                     style={{ fontSize: '0.85rem', padding: '0.2rem 0.4rem', width: '280px' }}
                                   >
                                     <option value="">Sélectionnez un produit...</option>
-                                    {selectedOrder.items.map(item => (
-                                      <option key={item.id} value={item.id}>{item.label} ({item.config.L}x{item.config.H})</option>
+                                    {selectedQuote.items?.map(item => (
+                                      <option key={item.id} value={item.id}>{item.label || item.type || 'Menuiserie'} ({item.config?.L || '?'}x{item.config?.H || '?'})</option>
                                     ))}
                                   </select>
                                 ) : (
                                   <span style={{ fontSize: '0.8rem', color: '#b45309', fontStyle: 'italic', background: '#fffbeb', border: '1px solid #fef3c7', padding: '0.2rem 0.5rem', borderRadius: '6px' }}>
-                                    ⚠️ Sélectionnez un Devis/Commande ci-dessus pour assigner ce vide.
+                                    ⚠️ Sélectionnez un Devis ci-dessus pour assigner ce vide.
                                   </span>
                                 )}
 
@@ -459,7 +569,7 @@ export default function SitePlanModule({ data, setData }) {
                   </div>
                 ))}
 
-                {(selectedClient.sitePlan?.floors || []).length === 0 && (
+                {(activeSitePlan.floors || []).length === 0 && (
                   <div style={{ textAlign: 'center', padding: '3rem 1.5rem', background: '#f8fafc', borderRadius: '1rem', border: '2px dashed #cbd5e1' }}>
                     <span style={{ fontSize: '2.5rem', display: 'block', marginBottom: '1rem' }}>🏢</span>
                     <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '1.1rem', fontWeight: 700 }}>Aucune structure de chantier définie</h4>

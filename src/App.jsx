@@ -39,6 +39,7 @@ const makeNewQuote = (settings) => ({
   clientId: null,
   createdAt: new Date().toISOString(),
   items: [],
+  sitePlanId: null,
 });
 
 function App() {
@@ -101,6 +102,18 @@ function App() {
         }
       }
     });
+    if (repaired.clients) {
+      repaired.clients = repaired.clients.map(c => {
+        let updated = { ...c };
+        if (updated.sitePlan && !updated.sitePlans) {
+          updated.sitePlans = [{ ...updated.sitePlan, id: 'plan-default', name: 'Plan Principal' }];
+          delete updated.sitePlan;
+        } else if (!updated.sitePlans) {
+          updated.sitePlans = [];
+        }
+        return updated;
+      });
+    }
     if (repaired.quotes) {
       repaired.quotes = repaired.quotes.map(q => {
         let updated = { ...q };
@@ -109,6 +122,7 @@ function App() {
       });
     }
     if (!repaired.orders) repaired.orders = [];
+    if (!repaired.quotes) repaired.quotes = [];
     return repaired;
   }, []);
 

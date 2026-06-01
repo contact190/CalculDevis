@@ -154,11 +154,52 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
 
   const selectedOrder = (data?.orders || []).find(o => o.id === selectedOrderId);
 
+  const activeSitePlan = useMemo(() => {
+    if (!selectedOrder) return { floors: [] };
+    const client = data?.clients?.find(c => c.id === selectedOrder.clientId);
+    if (!client) return { floors: [] };
+    const plans = client.sitePlans || [];
+    if (selectedOrder.sitePlanId) {
+      return plans.find(p => p.id === selectedOrder.sitePlanId) || { floors: [] };
+    }
+    for (const plan of plans) {
+       for (const floor of (plan.floors || [])) {
+          for (const apt of (floor.apartments || [])) {
+             for (const voidItem of (apt.voids || [])) {
+                if (selectedOrder.items?.some(i => i.id === voidItem.itemId)) {
+                   return plan;
+                }
+             }
+          }
+       }
+    }
+    return plans.length > 0 ? plans[0] : { floors: [] };
+  }, [data?.clients, selectedOrder]);
+
   const handleUpdateOrder = (updatedOrder) => {
     setData(prev => ({
       ...prev,
       orders: prev.orders.map(o => o.id === updatedOrder.id ? updatedOrder : o)
     }));
+  };
+
+  const updateClientPlanInDB = (updatedPlan) => {
+    setData(prev => {
+      if (!selectedOrder) return prev;
+      const selectedClient = prev.clients?.find(c => c.id === selectedOrder.clientId);
+      if (!selectedClient) return prev;
+      
+      const updatedClients = (prev.clients || []).map(c => {
+        if (c.id !== selectedClient.id) return c;
+        const plans = c.sitePlans || [];
+        const planExists = plans.some(p => p.id === updatedPlan.id);
+        const newPlans = planExists 
+          ? plans.map(p => p.id === updatedPlan.id ? updatedPlan : p)
+          : [...plans, updatedPlan];
+        return { ...c, sitePlans: newPlans };
+      });
+      return { ...prev, clients: updatedClients };
+    });
   };
 
   const handleDeleteOrder = () => {
@@ -289,7 +330,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
 
   const addFloor = () => {
     if (!selectedOrder) return;
-    const currentPlan = selectedOrder.sitePlan || { floors: [] };
+    const currentPlan = activeSitePlan;
     const updatedPlan = {
       ...currentPlan,
       floors: [
@@ -298,34 +339,37 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
       ]
     };
     const updatedItems = syncSitePlanToMeasurements(updatedPlan, selectedOrder.items);
-    handleUpdateOrder({ ...selectedOrder, sitePlan: updatedPlan, items: updatedItems });
+    handleUpdateOrder({ ...selectedOrder, items: updatedItems });
+    updateClientPlanInDB(updatedPlan);
   };
 
   const deleteFloor = (floorId) => {
     if (!selectedOrder) return;
-    const currentPlan = selectedOrder.sitePlan || { floors: [] };
+    const currentPlan = activeSitePlan;
     const updatedPlan = {
       ...currentPlan,
       floors: (currentPlan.floors || []).filter(f => f.id !== floorId)
     };
     const updatedItems = syncSitePlanToMeasurements(updatedPlan, selectedOrder.items);
-    handleUpdateOrder({ ...selectedOrder, sitePlan: updatedPlan, items: updatedItems });
+    handleUpdateOrder({ ...selectedOrder, items: updatedItems });
+    updateClientPlanInDB(updatedPlan);
   };
 
   const updateFloorName = (floorId, name) => {
     if (!selectedOrder) return;
-    const currentPlan = selectedOrder.sitePlan || { floors: [] };
+    const currentPlan = activeSitePlan;
     const updatedPlan = {
       ...currentPlan,
       floors: (currentPlan.floors || []).map(f => f.id === floorId ? { ...f, name } : f)
     };
     const updatedItems = syncSitePlanToMeasurements(updatedPlan, selectedOrder.items);
-    handleUpdateOrder({ ...selectedOrder, sitePlan: updatedPlan, items: updatedItems });
+    handleUpdateOrder({ ...selectedOrder, items: updatedItems });
+    updateClientPlanInDB(updatedPlan);
   };
 
   const addApartment = (floorId) => {
     if (!selectedOrder) return;
-    const currentPlan = selectedOrder.sitePlan || { floors: [] };
+    const currentPlan = activeSitePlan;
     const updatedPlan = {
       ...currentPlan,
       floors: (currentPlan.floors || []).map(f => {
@@ -340,12 +384,13 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
       })
     };
     const updatedItems = syncSitePlanToMeasurements(updatedPlan, selectedOrder.items);
-    handleUpdateOrder({ ...selectedOrder, sitePlan: updatedPlan, items: updatedItems });
+    handleUpdateOrder({ ...selectedOrder, items: updatedItems });
+    updateClientPlanInDB(updatedPlan);
   };
 
   const deleteApartment = (floorId, aptId) => {
     if (!selectedOrder) return;
-    const currentPlan = selectedOrder.sitePlan || { floors: [] };
+    const currentPlan = activeSitePlan;
     const updatedPlan = {
       ...currentPlan,
       floors: (currentPlan.floors || []).map(f => {
@@ -357,12 +402,13 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
       })
     };
     const updatedItems = syncSitePlanToMeasurements(updatedPlan, selectedOrder.items);
-    handleUpdateOrder({ ...selectedOrder, sitePlan: updatedPlan, items: updatedItems });
+    handleUpdateOrder({ ...selectedOrder, items: updatedItems });
+    updateClientPlanInDB(updatedPlan);
   };
 
   const updateApartmentName = (floorId, aptId, name) => {
     if (!selectedOrder) return;
-    const currentPlan = selectedOrder.sitePlan || { floors: [] };
+    const currentPlan = activeSitePlan;
     const updatedPlan = {
       ...currentPlan,
       floors: (currentPlan.floors || []).map(f => {
@@ -374,12 +420,13 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
       })
     };
     const updatedItems = syncSitePlanToMeasurements(updatedPlan, selectedOrder.items);
-    handleUpdateOrder({ ...selectedOrder, sitePlan: updatedPlan, items: updatedItems });
+    handleUpdateOrder({ ...selectedOrder, items: updatedItems });
+    updateClientPlanInDB(updatedPlan);
   };
 
   const addVoid = (floorId, aptId) => {
     if (!selectedOrder) return;
-    const currentPlan = selectedOrder.sitePlan || { floors: [] };
+    const currentPlan = activeSitePlan;
     const defaultItem = selectedOrder.items[0];
     const updatedPlan = {
       ...currentPlan,
@@ -414,12 +461,13 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
       })
     };
     const updatedItems = syncSitePlanToMeasurements(updatedPlan, selectedOrder.items);
-    handleUpdateOrder({ ...selectedOrder, sitePlan: updatedPlan, items: updatedItems });
+    handleUpdateOrder({ ...selectedOrder, items: updatedItems });
+    updateClientPlanInDB(updatedPlan);
   };
 
   const deleteVoid = (floorId, aptId, voidId) => {
     if (!selectedOrder) return;
-    const currentPlan = selectedOrder.sitePlan || { floors: [] };
+    const currentPlan = activeSitePlan;
     const updatedPlan = {
       ...currentPlan,
       floors: (currentPlan.floors || []).map(f => {
@@ -437,7 +485,8 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
       })
     };
     const updatedItems = syncSitePlanToMeasurements(updatedPlan, selectedOrder.items);
-    handleUpdateOrder({ ...selectedOrder, sitePlan: updatedPlan, items: updatedItems });
+    handleUpdateOrder({ ...selectedOrder, items: updatedItems });
+    updateClientPlanInDB(updatedPlan);
   };
 
   const updateVoidProperty = (floorId, aptId, voidId, property, value) => {
@@ -445,7 +494,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
     const selectedClient = data.clients?.find(c => c.id === selectedOrder.clientId);
     if (!selectedClient) return;
 
-    const currentPlan = selectedClient.sitePlan || { floors: [] };
+    const currentPlan = activeSitePlan;
     const updatedPlan = {
       ...currentPlan,
       floors: (currentPlan.floors || []).map(f => {
@@ -520,21 +569,8 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
     };
 
     const updatedItems = syncSitePlanToMeasurements(updatedPlan, selectedOrder.items);
-    
-    // Update the database state for both client and order
-    setData(prev => {
-      const updatedClients = (prev.clients || []).map(c => 
-        c.id === selectedClient.id ? { ...c, sitePlan: updatedPlan } : c
-      );
-      const updatedOrders = (prev.orders || []).map(o => 
-        o.id === selectedOrder.id ? { ...o, items: updatedItems } : o
-      );
-      return {
-        ...prev,
-        clients: updatedClients,
-        orders: updatedOrders
-      };
-    });
+    handleUpdateOrder({ ...selectedOrder, items: updatedItems });
+    updateClientPlanInDB(updatedPlan);
   };
 
   const applyVoidToAllSameInApartment = (floorId, aptId, sourceVoid) => {
@@ -542,7 +578,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
     const selectedClient = data.clients?.find(c => c.id === selectedOrder.clientId);
     if (!selectedClient) return;
 
-    const currentPlan = selectedClient.sitePlan || { floors: [] };
+    const currentPlan = activeSitePlan;
     const updatedPlan = {
       ...currentPlan,
       floors: (currentPlan.floors || []).map(f => {
@@ -573,20 +609,9 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
     };
 
     const updatedItems = syncSitePlanToMeasurements(updatedPlan, selectedOrder.items);
+    handleUpdateOrder({ ...selectedOrder, items: updatedItems });
+    updateClientPlanInDB(updatedPlan);
 
-    setData(prev => {
-      const updatedClients = (prev.clients || []).map(c => 
-        c.id === selectedClient.id ? { ...c, sitePlan: updatedPlan } : c
-      );
-      const updatedOrders = (prev.orders || []).map(o => 
-        o.id === selectedOrder.id ? { ...o, items: updatedItems } : o
-      );
-      return {
-        ...prev,
-        clients: updatedClients,
-        orders: updatedOrders
-      };
-    });
     alert(`Configuration appliquée à toutes les ouvertures identiques de cet appartement !`);
   };
 
@@ -1119,8 +1144,6 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
         </div>
 
         {activeOrderTab === 'measurements' && (() => {
-          const selectedClient = data.clients?.find(c => c.id === selectedOrder.clientId);
-          const activeSitePlan = selectedClient?.sitePlan || { floors: [] };
           const hasPlan = activeSitePlan.floors && activeSitePlan.floors.length > 0 && activeSitePlan.floors.some(f => f.apartments?.some(a => a.voids?.length > 0));
 
           return (

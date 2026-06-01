@@ -2690,6 +2690,21 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
               placeholder="Client..."
             />
           </div>
+          {quote.clientId && (
+            <div style={{ fontSize: '0.78rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '0.4rem' }}>
+              <span style={{ fontWeight: 600 }}>Plan de Chantier :</span>
+              <SearchableDropdown 
+                compact
+                value={quote.sitePlanId || ''}
+                onChange={val => setCurrentQuote(p => ({ ...p, sitePlanId: val }))}
+                options={[
+                  { value: '', label: 'Aucun (Non assigné)' },
+                  ...(database.clients?.find(c => c.id === quote.clientId)?.sitePlans || []).map(p => ({ value: p.id, label: p.name || 'Plan sans nom' }))
+                ]}
+                placeholder="Sélectionnez un plan..."
+              />
+            </div>
+          )}
         </div>
       </div>
 

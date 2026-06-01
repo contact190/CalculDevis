@@ -94,7 +94,25 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
     return data.clients?.find(c => c.id === order.clientId);
   }, [data.clients, order]);
 
-  const activeSitePlan = selectedClient?.sitePlan || { floors: [] };
+  const activeSitePlan = useMemo(() => {
+    if (!selectedClient) return { floors: [] };
+    const plans = selectedClient.sitePlans || [];
+    if (order?.sitePlanId) {
+      return plans.find(p => p.id === order.sitePlanId) || { floors: [] };
+    }
+    for (const plan of plans) {
+       for (const floor of (plan.floors || [])) {
+          for (const apt of (floor.apartments || [])) {
+             for (const voidItem of (apt.voids || [])) {
+                if (order?.items?.some(i => i.id === voidItem.itemId)) {
+                   return plan;
+                }
+             }
+          }
+       }
+    }
+    return plans.length > 0 ? plans[0] : { floors: [] };
+  }, [selectedClient, order]);
   const hasPlan = activeSitePlan.floors && activeSitePlan.floors.length > 0 && activeSitePlan.floors.some(f => f.apartments?.some(a => a.voids?.length > 0));
 
   const engine = useMemo(() => new FormulaEngine(data || {}), [data]);
@@ -120,7 +138,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
   const updateVoidProperty = (floorId, aptId, voidId, property, value) => {
     if (!order || !selectedClient) return;
 
-    const currentPlan = selectedClient.sitePlan || { floors: [] };
+    const currentPlan = activeSitePlan;
     const updatedPlan = {
       ...currentPlan,
       floors: (currentPlan.floors || []).map(f => {
@@ -197,9 +215,15 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
     const updatedItems = syncSitePlanToMeasurements(updatedPlan, order.items);
 
     setData(prev => {
-      const updatedClients = (prev.clients || []).map(c => 
-        c.id === selectedClient.id ? { ...c, sitePlan: updatedPlan } : c
-      );
+      const updatedClients = (prev.clients || []).map(c => {
+        if (c.id !== selectedClient.id) return c;
+        const plans = c.sitePlans || [];
+        const planExists = plans.some(p => p.id === updatedPlan.id);
+        const newPlans = planExists 
+          ? plans.map(p => p.id === updatedPlan.id ? updatedPlan : p)
+          : [...plans, updatedPlan];
+        return { ...c, sitePlans: newPlans };
+      });
       const updatedOrders = (prev.orders || []).map(o => 
         o.id === order.id ? { ...o, items: updatedItems } : o
       );
@@ -214,7 +238,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
   const applyVoidToAllSameInApartment = (floorId, aptId, sourceVoid) => {
     if (!order || !selectedClient) return;
 
-    const currentPlan = selectedClient.sitePlan || { floors: [] };
+    const currentPlan = activeSitePlan;
     const updatedPlan = {
       ...currentPlan,
       floors: (currentPlan.floors || []).map(f => {
@@ -247,9 +271,15 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
     const updatedItems = syncSitePlanToMeasurements(updatedPlan, order.items);
 
     setData(prev => {
-      const updatedClients = (prev.clients || []).map(c => 
-        c.id === selectedClient.id ? { ...c, sitePlan: updatedPlan } : c
-      );
+      const updatedClients = (prev.clients || []).map(c => {
+        if (c.id !== selectedClient.id) return c;
+        const plans = c.sitePlans || [];
+        const planExists = plans.some(p => p.id === updatedPlan.id);
+        const newPlans = planExists 
+          ? plans.map(p => p.id === updatedPlan.id ? updatedPlan : p)
+          : [...plans, updatedPlan];
+        return { ...c, sitePlans: newPlans };
+      });
       const updatedOrders = (prev.orders || []).map(o => 
         o.id === order.id ? { ...o, items: updatedItems } : o
       );
