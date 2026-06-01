@@ -164,6 +164,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
   const [priceData, setPriceData] = useState(null);
   const [compareModalOpen, setCompareModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('tech');
+  const [showDetailsTablet, setShowDetailsTablet] = useState(false);
 
   const getDividerThickness = (cfg = config) => {
     const isMulti = cfg.compoundType === 'fix_coulissant';
@@ -1501,8 +1502,21 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
 
           {/* Detail Table */}
           <div style={{ marginTop: '2rem', borderTop: '1px solid #f1f5f9', paddingTop: '1.5rem' }}>
-            <h3 style={{ fontSize: '0.875rem', fontWeight: 600, color: '#64748b', marginBottom: '1rem' }}>RÉSUMÉ DÉTAILLÉ DU CALCUL</h3>
-            <div className="table-responsive">
+            <h3 
+              className="details-toggle-btn"
+              onClick={() => {
+                if (window.innerWidth >= 641 && window.innerWidth <= 1024) {
+                  setShowDetailsTablet(!showDetailsTablet);
+                }
+              }}
+              style={{ fontSize: '0.875rem', fontWeight: 600, color: '#64748b', marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+            >
+              RÉSUMÉ DÉTAILLÉ DU CALCUL
+              <span className="tablet-only-icon" style={{ marginLeft: 'auto' }}>
+                {showDetailsTablet ? '▲' : '▼'}
+              </span>
+            </h3>
+            <div className={`table-responsive details-content ${!showDetailsTablet ? 'tablet-collapsed' : ''}`}>
               <table className="data-table" style={{ fontSize: '0.7rem' }}>
                 <thead><tr><th>Composant</th><th>Source</th><th>Formule</th><th>Calcul</th><th>Nbre</th><th>Mesure Totale</th><th>Prix Unit.</th><th style={{ textAlign: 'right' }}>Prix Total</th></tr></thead>
                 <tbody>

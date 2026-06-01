@@ -501,7 +501,41 @@ body {
 
 /* --- OPTIMISATIONS TABLETTE STRICTES (641px - 1024px) --- */
 @media (min-width: 641px) and (max-width: 1024px) {
-  /* 1. Rendre la barre supérieure plus flexible sans empilement complet (flex-wrap) */
+  /* 1. Layout Image + Prix en haut (Side-by-Side) */
+  .configurator-grid {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  
+  .configurator-grid > .glass {
+    order: 2; /* Les options en bas */
+  }
+
+  .configurator-grid > .configurator-sticky-sidebar {
+    order: 1; /* Image et Prix en haut */
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: stretch !important;
+    justify-content: space-between;
+    width: 100%;
+    margin-bottom: 1.5rem;
+    gap: 1.5rem !important;
+    position: static !important;
+  }
+
+  .configurator-grid > .configurator-sticky-sidebar > div {
+    flex: 1;
+    width: 50%;
+  }
+
+  .configurator-grid > .configurator-sticky-sidebar .price-card {
+    margin: 0 !important;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  /* 2. Rendre la barre supérieure plus flexible sans empilement complet */
   .flex-mobile-stack {
     flex-wrap: wrap !important;
     gap: 1rem !important;
@@ -515,7 +549,7 @@ body {
     margin-bottom: 0.5rem;
   }
 
-  /* 2. Augmenter légèrement la taille des cibles tactiles (Touch Targets) */
+  /* 3. Augmenter légèrement la taille des cibles tactiles (Touch Targets) */
   .input, select.input {
     padding: 0.85rem 1rem !important;
     font-size: 1rem !important;
@@ -532,17 +566,53 @@ body {
     min-height: 40px;
   }
 
-  /* 3. Ajuster les marges de la grille pour récupérer de l'espace */
+  /* 4. Ajuster les marges de la grille pour récupérer de l'espace */
   .configurator-grid .glass {
     padding: 1.25rem !important;
   }
 
-  /* Améliorer le scroll horizontal tactile pour les zones complexes (Assemblage) */
+  /* 5. Améliorer le scroll horizontal tactile pour les zones complexes (Assemblage) */
   .configurator-grid div[style*="overflow"] {
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none; /* Hide scrollbar for cleaner look */
   }
   .configurator-grid div[style*="overflow"]::-webkit-scrollbar {
     display: none;
+  }
+
+  /* 6. Collapse/Expand Table Details logic */
+  .details-content.tablet-collapsed {
+    display: none;
+  }
+  .tablet-only-icon {
+    display: inline-block;
+  }
+  .details-toggle-btn {
+    cursor: pointer;
+  }
+}
+
+/* Ensure desktop and mobile views do not show the tablet icon or hide content */
+@media (min-width: 1025px) {
+  .tablet-only-icon {
+    display: none !important;
+  }
+  .details-content.tablet-collapsed {
+    display: block !important;
+  }
+  .details-toggle-btn {
+    cursor: default;
+  }
+}
+
+@media (max-width: 640px) {
+  .tablet-only-icon {
+    display: none !important;
+  }
+  .details-content.tablet-collapsed {
+    display: block !important;
+  }
+  .details-toggle-btn {
+    cursor: default;
   }
 }
