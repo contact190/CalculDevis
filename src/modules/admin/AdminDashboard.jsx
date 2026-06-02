@@ -254,6 +254,23 @@ const AdminDashboard = ({ data, setData }) => {
     });
   };
 
+  const duplicateShutterItem = (family, idx) => {
+    setData(prev => {
+      const components = prev.shutterComponents || {};
+      const list = components[family] || [];
+      const itemToDuplicate = list[idx];
+      if (!itemToDuplicate) return prev;
+      
+      const newId = `${family.slice(0,3).toUpperCase()}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      const duplicatedItem = { ...itemToDuplicate, id: newId, name: `${itemToDuplicate.name} (Copie)`, _isNew: true };
+      
+      const updated = [...list];
+      updated.splice(idx + 1, 0, duplicatedItem);
+      return { ...prev, shutterComponents: { ...components, [family]: updated } };
+    });
+  };
+
+
   const addShutterItem = (family) => {
     const id = `${family.slice(0,3).toUpperCase()}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const newItem = { 
@@ -2612,7 +2629,12 @@ const AdminDashboard = ({ data, setData }) => {
                                  )}
                                </td>
                              )}
-                            <td><button className="btn" onClick={() => deleteShutterItem(key, i)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button></td>
+                            <td>
+                              <div style={{ display: 'flex', gap: '0.4rem' }}>
+                                <button className="btn" onClick={() => duplicateShutterItem(key, i)} style={{ padding: '0.4rem', color: '#6366f1' }} title="Dupliquer"><Copy size={16} /></button>
+                                <button className="btn" onClick={() => deleteShutterItem(key, i)} style={{ padding: '0.4rem', color: '#ef4444' }} title="Supprimer"><Trash2 size={16} /></button>
+                              </div>
+                            </td>
 
 
                           </tr>

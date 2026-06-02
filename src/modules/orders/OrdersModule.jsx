@@ -1874,6 +1874,19 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                       <div style={{ display: 'flex', gap: '0.5rem', alignSelf: 'flex-end', marginBottom: '4px' }}>
                         <button 
                           onClick={() => {
+                            const duplicateShutter = { ...sh, id: Date.now() + Math.random() };
+                            const newList = [...shutterMeasure.shutters];
+                            newList.splice(sIdx + 1, 0, duplicateShutter);
+                            setShutterMeasure({ ...shutterMeasure, shutters: newList });
+                          }}
+                          className="btn btn-secondary"
+                          style={{ fontSize: '0.7rem', padding: '0.4rem 0.6rem', color: '#10b981', borderColor: '#a7f3d0', background: '#ecfdf5' }}
+                          title="Dupliquer ce volet"
+                        >
+                          <Copy size={14} style={{ marginRight: '4px' }} /> Dupliquer
+                        </button>
+                        <button 
+                          onClick={() => {
                             if (!window.confirm("Appliquer cette configuration de volet à TOUTES les fenêtres de cette commande ?")) return;
                             const currentShutterCfg = { ...sh };
                             const updatedItems = selectedOrder.items.map(item => ({
