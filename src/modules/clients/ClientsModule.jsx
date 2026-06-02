@@ -186,6 +186,7 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
                     <th>N° Devis</th>
                     <th>Date</th>
                     <th>Statut</th>
+                    <th>Plan de Chantier</th>
                     <th>Produits</th>
                     <th>Montant HT</th>
                     <th>Montant TTC</th>
@@ -207,6 +208,9 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
                           {q.status || 'Brouillon'}
                           {(q.status === 'Validé' || q.status === 'Confirmé') && q.validatedAt && ` (${new Date(q.validatedAt).toLocaleDateString('fr-FR')})`}
                         </span>
+                      </td>
+                      <td data-label="Plan de Chantier" style={{ fontSize: '0.85rem', color: '#475569' }}>
+                        {editingClient.sitePlans?.find(p => p.id === q.sitePlanId)?.name || '-'}
                       </td>
                       <td data-label="Produits">{q.items?.length || 0}</td>
                       <td data-label="HT" style={{ fontWeight: 600 }}>{q.totals?.ht?.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
@@ -295,6 +299,7 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
                                   <th>N° Devis</th>
                                   <th>Date</th>
                                   <th>Statut</th>
+                                  <th>Plan de Chantier</th>
                                   <th>Produits</th>
                                   <th>Montant HT</th>
                                   <th>Montant TTC</th>
@@ -314,6 +319,9 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
                                       }}>
                                         {q.status || 'Brouillon'}
                                       </span>
+                                    </td>
+                                    <td data-label="Plan de Chantier" style={{ fontSize: '0.85rem', color: '#475569' }}>
+                                      {c.sitePlans?.find(p => p.id === q.sitePlanId)?.name || '-'}
                                     </td>
                                     <td data-label="Prd.">{q.items?.length || 0}</td>
                                     <td data-label="HT" style={{ fontWeight: 600 }}>{q.totals?.ht?.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
