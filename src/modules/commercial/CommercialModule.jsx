@@ -2192,7 +2192,16 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
           const openingPart = cfg.compoundConfig.parts.find(p => p.type === 'opening');
           const fixParts = cfg.compoundConfig.parts.filter(p => p.type === 'fixe');
           openingComp = database.compositions?.find(c => c.id === openingPart?.compositionId);
-          const fixLabel = fixParts.length > 0 ? ` + Fix (×${fixParts.length})` : '';
+          
+          let fixLabel = '';
+          if (fixParts.length > 0) {
+            const fixComps = [...new Set(fixParts.map(p => {
+              const c = database.compositions?.find(comp => comp.id === p.compositionId);
+              return c ? c.name : 'Fixe';
+            }))];
+            fixLabel = ` + Fix ${fixComps.length > 0 ? '(' + fixComps.join(', ') + ')' : ''} (×${fixParts.length})`;
+          }
+          
           descLines.push(`Système : ${openingComp?.name || comp?.name || '—'}${fixLabel}`);
         } else {
           descLines.push(`Système : ${comp?.name || '—'}`);
@@ -2207,8 +2216,29 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
         descLines.push(`Dimensions : ${cfg.L} x ${cfg.H} mm`);
 
         // Vitrage
-        if (glass) {
-          descLines.push(`Vitrage : ${glass.name} (${glass.thickness || ''}mm)`);
+        if (isCompound) {
+          const openingPart = cfg.compoundConfig.parts.find(p => p.type === 'opening');
+          const fixParts = cfg.compoundConfig.parts.filter(p => p.type === 'fixe');
+          
+          const openingGlass = database.glass?.find(g => g.id === (openingPart?.glassId || cfg.glassId)) || glass;
+          if (openingGlass) {
+            descLines.push(`Vitrage : ${openingGlass.name} (${openingGlass.thickness || ''}mm)`);
+          }
+          
+          if (fixParts.length > 0) {
+            const fixGlassStrs = fixParts.map(p => {
+               const fg = database.glass?.find(g => g.id === (p.glassId || cfg.glassId)) || glass;
+               return fg ? `${fg.name} (${fg.thickness || ''}mm)` : '';
+            }).filter(Boolean);
+            const uniqueFixGlasses = [...new Set(fixGlassStrs)];
+            if (uniqueFixGlasses.length > 0) {
+               descLines.push(`Vitrage (Fixe) : ${uniqueFixGlasses.join(', ')}`);
+            }
+          }
+        } else {
+          if (glass) {
+            descLines.push(`Vitrage : ${glass.name} (${glass.thickness || ''}mm)`);
+          }
         }
 
         // Couvre-joint
