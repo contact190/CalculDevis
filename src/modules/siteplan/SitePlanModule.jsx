@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, ClipboardList, CheckCircle, FolderOpen, ArrowRight, Building, HelpCircle, Layout, Copy } from 'lucide-react';
+import { Plus, Trash2, ClipboardList, CheckCircle, FolderOpen, ArrowRight, Building, HelpCircle, Layout, Copy, Info, X } from 'lucide-react';
+import { getTechnicalDrawingDataURL } from '../../utils/drawingUtils';
 
 /**
  * Sync tree site plan structure back to flat siteMeasurements inside order items
@@ -54,6 +55,7 @@ export default function SitePlanModule({ data, setData }) {
   const [selectedClientId, setSelectedClientId] = useState('');
   const [selectedQuoteId, setSelectedQuoteId] = useState('');
   const [selectedPlanId, setSelectedPlanId] = useState('');
+  const [infoPopupItem, setInfoPopupItem] = useState(null);
 
   const clients = data?.clients || [];
   
@@ -607,19 +609,49 @@ export default function SitePlanModule({ data, setData }) {
                                   style={{ fontSize: '0.85rem', padding: '0.2rem 0.4rem', width: '180px' }}
                                 />
                                 <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600, marginLeft: '0.5rem' }}>Assigné à la Menuiserie :</span>
-                                {selectedQuote ? (
-                                  <select
-                                    className="input"
-                                    value={v.itemId}
-                                    onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'itemId', e.target.value)}
-                                    style={{ fontSize: '0.85rem', padding: '0.2rem 0.4rem', width: '280px' }}
-                                  >
-                                    <option value="">Sélectionnez un produit...</option>
-                                    {selectedQuote.items?.map(item => (
-                                      <option key={item.id} value={item.id}>{item.label || item.type || 'Menuiserie'} ({item.config?.L || '?'}x{item.config?.H || '?'})</option>
-                                    ))}
-                                  </select>
-                                ) : (
+                                {selectedQuote ? (() => {
+                                  const selItem = selectedQuote.items?.find(i => i.id === v.itemId);
+                                  return (
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <select
+                                      className="input"
+                                      value={v.itemId}
+                                      onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'itemId', e.target.value)}
+                                      style={{ fontSize: '0.85rem', padding: '0.2rem 0.4rem', width: '350px' }}
+                                    >
+                                      <option value="">Sélectionnez un produit...</option>
+                                      {selectedQuote.items?.map(item => {
+                                        const itemComp = (data.compositions || []).find(c => c.id === item.config?.compositionId);
+                                        const itemRange = itemComp ? (data.ranges || []).find(r => r.id === itemComp.rangeId) : null;
+                                        const gammeName = itemRange?.name || itemComp?.rangeId || '—';
+                                        return (
+                                        <option key={item.id} value={item.id}>
+                                          [{item.label || '?'}] {itemComp?.name || item.categoryId || item.type || 'Prod'} - {item.config?.L || '?'}x{item.config?.H || '?'} - Gamme: {gammeName}
+                                        </option>
+                                        );
+                                      })}
+                                    </select>
+                                    <button 
+                                      onClick={() => { if (selItem) setInfoPopupItem(selItem); }}
+                                      disabled={!selItem}
+                                      style={{ 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        justifyContent: 'center',
+                                        cursor: selItem ? 'pointer' : 'not-allowed', 
+                                        color: selItem ? '#3b82f6' : '#cbd5e1',
+                                        background: selItem ? '#eff6ff' : 'transparent',
+                                        padding: '0.35rem',
+                                        borderRadius: '50%',
+                                        border: selItem ? '1px solid #bfdbfe' : '1px solid #e2e8f0',
+                                        transition: 'all 0.2s'
+                                      }}
+                                      title={selItem ? "Voir les détails du produit" : "Sélectionnez un produit pour voir les détails"}
+                                    >
+                                      <Info size={18} />
+                                    </button>
+                                  </div>
+                                )})() : (
                                   <span style={{ fontSize: '0.8rem', color: '#b45309', fontStyle: 'italic', background: '#fffbeb', border: '1px solid #fef3c7', padding: '0.2rem 0.5rem', borderRadius: '6px' }}>
                                     ⚠️ Sélectionnez un Devis ci-dessus pour assigner ce vide.
                                   </span>
@@ -660,6 +692,111 @@ export default function SitePlanModule({ data, setData }) {
           )}
         </div>
       )}
+      {/* Info Popup Modal */}
+      {infoPopupItem && (() => {
+        const popupComp = (data.compositions || []).find(c => c.id === infoPopupItem.config?.compositionId);
+        const popupRange = popupComp ? (data.ranges || []).find(r => r.id === popupComp.rangeId) : null;
+        const popupColor = (data.colors || []).find(c => c.id === infoPopupItem.config?.colorId);
+        const techDrawing = getTechnicalDrawingDataURL(infoPopupItem.config, data);
+        return (
+          <div 
+            onClick={() => setInfoPopupItem(null)}
+            style={{ 
+              position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+              background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(6px)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              zIndex: 9999, animation: 'fadeIn 0.2s ease'
+            }}
+          >
+            <div 
+              onClick={e => e.stopPropagation()}
+              style={{
+                background: 'white', borderRadius: '1.25rem', padding: '2rem',
+                width: '560px', maxWidth: '92vw', maxHeight: '85vh', overflowY: 'auto',
+                boxShadow: '0 25px 60px rgba(0,0,0,0.25)', position: 'relative',
+                animation: 'slideUp 0.25s ease'
+              }}
+            >
+              {/* Close button */}
+              <button 
+                onClick={() => setInfoPopupItem(null)}
+                style={{ 
+                  position: 'absolute', top: '1rem', right: '1rem',
+                  background: '#f1f5f9', border: 'none', borderRadius: '50%',
+                  width: '32px', height: '32px', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: '#64748b', transition: 'all 0.2s'
+                }}
+                onMouseEnter={e => { e.target.style.background = '#e2e8f0'; e.target.style.color = '#1e293b'; }}
+                onMouseLeave={e => { e.target.style.background = '#f1f5f9'; e.target.style.color = '#64748b'; }}
+              >
+                <X size={18} />
+              </button>
+
+              {/* Header */}
+              <div style={{ marginBottom: '1.25rem' }}>
+                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Info size={20} color="#3b82f6" /> Détails du Produit
+                </h3>
+                <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.85rem', color: '#64748b' }}>
+                  Informations de la menuiserie assignée à ce vide
+                </p>
+              </div>
+
+              {/* Technical Drawing */}
+              {techDrawing && (
+                <div style={{ 
+                  background: '#f8fafc', borderRadius: '0.75rem', padding: '1rem',
+                  border: '1px solid #e2e8f0', marginBottom: '1.25rem',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}>
+                  <img 
+                    src={techDrawing} 
+                    alt="Dessin technique" 
+                    style={{ maxWidth: '100%', maxHeight: '280px', objectFit: 'contain' }} 
+                  />
+                </div>
+              )}
+
+              {/* Details Grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div style={{ background: '#f0fdf4', borderRadius: '0.6rem', padding: '0.75rem', border: '1px solid #bbf7d0' }}>
+                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#15803d', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Référence</div>
+                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#166534' }}>{infoPopupItem.label || '—'}</div>
+                </div>
+                <div style={{ background: '#eff6ff', borderRadius: '0.6rem', padding: '0.75rem', border: '1px solid #bfdbfe' }}>
+                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#1d4ed8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Composition</div>
+                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#1e40af' }}>{popupComp?.name || infoPopupItem.categoryId || '—'}</div>
+                </div>
+                <div style={{ background: '#faf5ff', borderRadius: '0.6rem', padding: '0.75rem', border: '1px solid #e9d5ff' }}>
+                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#7e22ce', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Gamme</div>
+                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#6b21a8' }}>{popupRange?.name || '—'}</div>
+                </div>
+                <div style={{ background: '#fff7ed', borderRadius: '0.6rem', padding: '0.75rem', border: '1px solid #fed7aa' }}>
+                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#c2410c', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Dimensions</div>
+                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#9a3412' }}>{infoPopupItem.config?.L || '?'} × {infoPopupItem.config?.H || '?'} mm</div>
+                </div>
+                <div style={{ background: '#f0f9ff', borderRadius: '0.6rem', padding: '0.75rem', border: '1px solid #bae6fd', gridColumn: popupColor ? 'auto' : '1 / -1' }}>
+                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#0369a1', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Couleur</div>
+                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#075985' }}>{popupColor?.name || infoPopupItem.config?.colorId || '—'}</div>
+                </div>
+                {infoPopupItem.config?.openingType && (
+                  <div style={{ background: '#fefce8', borderRadius: '0.6rem', padding: '0.75rem', border: '1px solid #fef08a' }}>
+                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#a16207', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Type d'ouverture</div>
+                    <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#854d0e' }}>{infoPopupItem.config.openingType}</div>
+                  </div>
+                )}
+              </div>
+
+              {/* Quantity info */}
+              <div style={{ marginTop: '1rem', padding: '0.6rem 0.75rem', background: '#f1f5f9', borderRadius: '0.5rem', fontSize: '0.8rem', color: '#475569', display: 'flex', justifyContent: 'space-between' }}>
+                <span>Quantité devis : <strong>{infoPopupItem.qty || 1}</strong></span>
+                <span>ID : <strong style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{infoPopupItem.id}</strong></span>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
