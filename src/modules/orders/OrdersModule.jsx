@@ -1480,7 +1480,42 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
         })()}
         {activeOrderTab === 'batches' && (
           <div className="glass shadow-md">
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1.5rem' }}>Historique des Lots de Fabrication</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>Historique des Lots de Fabrication</h3>
+              <button 
+                onClick={() => {
+                  if(!window.confirm('Voulez-vous réinitialiser les lancements de production de cette commande pour pouvoir retester ?')) return;
+                  const currentPlan = activeSitePlan;
+                  const updatedPlan = {
+                    ...currentPlan,
+                    floors: (currentPlan.floors || []).map(f => ({
+                      ...f,
+                      apartments: (f.apartments || []).map(a => ({
+                        ...a,
+                        voids: (a.voids || []).map(v => ({ ...v, productionLaunched: false }))
+                      }))
+                    }))
+                  };
+                  const updatedItems = syncSitePlanToMeasurements(updatedPlan, selectedOrder.items);
+                  setData(prev => {
+                    const updatedClients = (prev.clients || []).map(c => {
+                      if (c.id !== selectedOrder.clientId) return c;
+                      const plans = c.sitePlans || [];
+                      const planExists = plans.some(p => p.id === updatedPlan.id);
+                      const newPlans = planExists ? plans.map(p => p.id === updatedPlan.id ? updatedPlan : p) : [...plans, updatedPlan];
+                      return { ...c, sitePlans: newPlans };
+                    });
+                    const updatedOrders = (prev.orders || []).map(o => o.id === selectedOrder.id ? { ...o, items: updatedItems, status: 'Mesuré', batches: [] } : o);
+                    return { ...prev, clients: updatedClients, orders: updatedOrders };
+                  });
+                  alert('Réinitialisé ! Vous pouvez maintenant relancer la production dans le portail technicien.');
+                }}
+                className="btn btn-secondary"
+                style={{ fontSize: '0.8rem', color: '#ef4444', borderColor: '#fca5a5', background: '#fef2f2' }}
+              >
+                🔧 Reset Lancement (Test)
+              </button>
+            </div>
             <div className="table-responsive">
                <table className="data-table">
                   <thead>

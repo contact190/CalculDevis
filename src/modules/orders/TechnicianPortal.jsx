@@ -397,6 +397,8 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
       }
 
       const currentPlan = activeSitePlan;
+      const newBatchItemsMap = new Map();
+
       const updatedPlan = {
         ...currentPlan,
         floors: (currentPlan.floors || []).map(f => ({
@@ -405,6 +407,41 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
             ...a,
             voids: (a.voids || []).map(v => {
               if (selectedVoidsForLaunch[v.id]) {
+                if (!newBatchItemsMap.has(v.itemId)) {
+                  const item = order.items.find(i => i.id === v.itemId);
+                  if (item) {
+                    newBatchItemsMap.set(v.itemId, {
+                      id: item.id,
+                      label: item.label,
+                      config: item.config,
+                      measurements: []
+                    });
+                  }
+                }
+                const batchItem = newBatchItemsMap.get(v.itemId);
+                if (batchItem) {
+                  const shutterList = [];
+                  if (v.shutter && v.shutter.qty > 0) {
+                    shutterList.push({
+                      id: v.shutter.id || `shutter-${v.id}`,
+                      qty: v.shutter.qty,
+                      customLV: v.shutter.customLV !== undefined ? v.shutter.customLV : (v.L !== undefined && v.L !== '' ? parseFloat(v.L) : batchItem.config.L),
+                      overrides: v.shutter.overrides || {}
+                    });
+                  }
+                  batchItem.measurements.push({
+                    id: v.id,
+                    L: v.L !== undefined && v.L !== '' ? parseFloat(v.L) : batchItem.config.L,
+                    H: v.H !== undefined && v.H !== '' ? parseFloat(v.H) : batchItem.config.H,
+                    wallDepth: v.wallDepth !== undefined && v.wallDepth !== '' ? parseFloat(v.wallDepth) : '',
+                    handleHeight: v.handleHeight !== undefined && v.handleHeight !== '' ? parseFloat(v.handleHeight) : '',
+                    qty: 1,
+                    label: `${f.name} - ${a.name} - ${v.name}`,
+                    shutterList: shutterList,
+                    instanceNames: [v.name],
+                    instanceFloors: [f.name]
+                  });
+                }
                 return { ...v, productionLaunched: true };
               }
               return v;
@@ -414,6 +451,14 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
       };
 
       const updatedItems = syncSitePlanToMeasurements(updatedPlan, order.items);
+
+      const newBatchIdNum = (order.batches?.length || 0) + 1;
+      const newBatch = {
+        id: `BATCH-${newBatchIdNum}`,
+        name: `Lot N°${newBatchIdNum} (Terrain)`,
+        createdAt: new Date().toISOString(),
+        items: Array.from(newBatchItemsMap.values())
+      };
 
       setData(prev => {
         const updatedClients = (prev.clients || []).map(c => {
@@ -426,7 +471,12 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
           return { ...c, sitePlans: newPlans };
         });
         const updatedOrders = (prev.orders || []).map(o => 
-          o.id === order.id ? { ...o, items: updatedItems, status: 'PARTIEL_PRODUCTION' } : o
+          o.id === order.id ? { 
+            ...o, 
+            items: updatedItems, 
+            status: 'PARTIEL_PRODUCTION',
+            batches: [...(o.batches || []), newBatch]
+          } : o
         );
         return { ...prev, clients: updatedClients, orders: updatedOrders };
       });
@@ -438,35 +488,105 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
     return (
       <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}>
         <div style={{ background: 'white', padding: '1.5rem', borderRadius: '1rem', maxWidth: '500px', width: '100%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#1e293b', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <ClipboardList size={24} color="#0f766e" />
-            Lancement en Production
-          </h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#1e293b', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <ClipboardList size={24} color="#0f766e" />
+              Lancement en Production
+            </h2>
+            <button 
+              onClick={() => setShowValidation(false)}
+              style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.25rem', fontSize: '1.2rem', fontWeight: 'bold' }}
+              title="Fermer"
+            >
+              ✕
+            </button>
+          </div>
           
           {validatedVoids.length === 0 ? (
             <div style={{ padding: '1rem', background: '#f8fafc', borderRadius: '0.5rem', textAlign: 'center', color: '#64748b', marginBottom: '1.5rem' }}>
               Aucune fenêtre validée en attente de lancement.
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem' }}>
-              {validatedVoids.map(({ floor, apt, void: v, item }, idx) => (
-                <div key={idx} style={{ padding: '0.75rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '0.5rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                  <input 
-                    type="checkbox" 
-                    checked={!!selectedVoidsForLaunch[v.id]}
-                    onChange={(e) => setSelectedVoidsForLaunch(prev => ({ ...prev, [v.id]: e.target.checked }))}
-                    style={{ width: '1.2rem', height: '1.2rem', cursor: 'pointer' }}
-                  />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: '0.25rem' }}>
-                      {floor.name} - {apt.name} - {v.name}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1.5rem' }}>
+              {Array.from(new Set(validatedVoids.map(v => v.floor.id))).map(floorId => {
+                const floorVoids = validatedVoids.filter(v => v.floor.id === floorId);
+                const floor = floorVoids[0].floor;
+                const isFloorFullySelected = floorVoids.every(v => selectedVoidsForLaunch[v.void.id]);
+                const isFloorPartiallySelected = !isFloorFullySelected && floorVoids.some(v => selectedVoidsForLaunch[v.void.id]);
+
+                return (
+                  <div key={floor.id} style={{ border: '1px solid #e2e8f0', borderRadius: '0.75rem', overflow: 'hidden' }}>
+                    <div style={{ background: '#f1f5f9', padding: '0.75rem 1rem', display: 'flex', alignItems: 'center', gap: '0.75rem', borderBottom: '1px solid #e2e8f0' }}>
+                      <input 
+                        type="checkbox"
+                        checked={isFloorFullySelected}
+                        ref={el => { if(el) el.indeterminate = isFloorPartiallySelected; }}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setSelectedVoidsForLaunch(prev => {
+                            const next = { ...prev };
+                            floorVoids.forEach(v => { next[v.void.id] = checked; });
+                            return next;
+                          });
+                        }}
+                        style={{ width: '1.2rem', height: '1.2rem', cursor: 'pointer' }}
+                      />
+                      <strong style={{ fontSize: '0.95rem', color: '#1e293b', textTransform: 'uppercase' }}>{floor.name}</strong>
                     </div>
-                    <div style={{ fontSize: '0.85rem' }}>
-                      Mesuré: <strong>{v.L !== undefined ? v.L : item.config.L} x {v.H !== undefined ? v.H : item.config.H}</strong>
+
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      {Array.from(new Set(floorVoids.map(v => v.apt.id))).map(aptId => {
+                        const aptVoids = floorVoids.filter(v => v.apt.id === aptId);
+                        const apt = aptVoids[0].apt;
+                        const isAptFullySelected = aptVoids.every(v => selectedVoidsForLaunch[v.void.id]);
+                        const isAptPartiallySelected = !isAptFullySelected && aptVoids.some(v => selectedVoidsForLaunch[v.void.id]);
+
+                        return (
+                          <div key={apt.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                            <div style={{ background: '#f8fafc', padding: '0.5rem 1rem 0.5rem 2.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', borderBottom: '1px solid #f1f5f9' }}>
+                              <input 
+                                type="checkbox"
+                                checked={isAptFullySelected}
+                                ref={el => { if(el) el.indeterminate = isAptPartiallySelected; }}
+                                onChange={(e) => {
+                                  const checked = e.target.checked;
+                                  setSelectedVoidsForLaunch(prev => {
+                                    const next = { ...prev };
+                                    aptVoids.forEach(v => { next[v.void.id] = checked; });
+                                    return next;
+                                  });
+                                }}
+                                style={{ width: '1rem', height: '1rem', cursor: 'pointer' }}
+                              />
+                              <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#334155' }}>{apt.name}</span>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                              {aptVoids.map(({ void: v, item }) => (
+                                <div key={v.id} style={{ padding: '0.5rem 1rem 0.5rem 4rem', display: 'flex', gap: '1rem', alignItems: 'center', background: 'white' }}>
+                                  <input 
+                                    type="checkbox" 
+                                    checked={!!selectedVoidsForLaunch[v.id]}
+                                    onChange={(e) => setSelectedVoidsForLaunch(prev => ({ ...prev, [v.id]: e.target.checked }))}
+                                    style={{ width: '1rem', height: '1rem', cursor: 'pointer' }}
+                                  />
+                                  <div style={{ flex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#475569' }}>
+                                      {v.name}
+                                    </span>
+                                    <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                                      Mesuré: <strong>{v.L !== undefined ? v.L : item.config.L} x {v.H !== undefined ? v.H : item.config.H}</strong>
+                                    </span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
