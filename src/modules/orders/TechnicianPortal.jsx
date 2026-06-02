@@ -89,6 +89,8 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
   const [showValidation, setShowValidation] = useState(false);
   const [voidToValidate, setVoidToValidate] = useState(null);
   const [selectedVoidsForLaunch, setSelectedVoidsForLaunch] = useState({});
+  const [assignPopupState, setAssignPopupState] = useState(null);
+  const [selectedVoidsForAssign, setSelectedVoidsForAssign] = useState({});
 
   const order = useMemo(() => {
     return (data.orders || []).find(o => o.id === orderId);
@@ -239,29 +241,28 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
     });
   };
 
-  const applyVoidToAllSameInApartment = (floorId, aptId, sourceVoid) => {
-    if (!order || !selectedClient) return;
+  const applyGlobalVoidAssignment = (sourceVoid) => {
+    if (!order || !selectedClient || !assignPopupState) return;
 
     const currentPlan = activeSitePlan;
     const updatedPlan = {
       ...currentPlan,
       floors: (currentPlan.floors || []).map(f => {
-        if (f.id !== floorId) return f;
         return {
           ...f,
           apartments: (f.apartments || []).map(a => {
-            if (a.id !== aptId) return a;
             return {
               ...a,
               voids: (a.voids || []).map(v => {
-                if (v.itemId === sourceVoid.itemId && v.id !== sourceVoid.id) {
+                if (selectedVoidsForAssign[v.id] && !v.productionLaunched) {
                   return {
                     ...v,
-                    L: sourceVoid.L,
-                    H: sourceVoid.H,
+                    L: sourceVoid.L !== undefined ? sourceVoid.L : v.L,
+                    H: sourceVoid.H !== undefined ? sourceVoid.H : v.H,
                     wallDepth: sourceVoid.wallDepth,
                     handleHeight: sourceVoid.handleHeight,
-                    shutter: sourceVoid.shutter ? JSON.parse(JSON.stringify(sourceVoid.shutter)) : null
+                    shutter: sourceVoid.shutter ? JSON.parse(JSON.stringify(sourceVoid.shutter)) : null,
+                    measurementsValidated: true
                   };
                 }
                 return v;
@@ -294,7 +295,9 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
       };
     });
 
-    alert("Cotes appliquées à toutes les fenêtres identiques de cet appartement !");
+    alert("Cotes appliquées et validées pour les fenêtres sélectionnées !");
+    setAssignPopupState(null);
+    setSelectedVoidsForAssign({});
   };
 
   if (!order) {
@@ -324,6 +327,15 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
       setSelectedVoidsForLaunch(initialSelection);
     }
   }, [showValidation, activeSitePlan]);
+
+  React.useEffect(() => {
+    if (assignPopupState) {
+      const { sourceVoid } = assignPopupState;
+      const initialSelection = {};
+      initialSelection[sourceVoid.id] = true;
+      setSelectedVoidsForAssign(initialSelection);
+    }
+  }, [assignPopupState]);
 
   const renderIndividualValidationPopup = () => {
     if (!voidToValidate) return null;
@@ -471,6 +483,90 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
               style={{ flex: 2, padding: '0.75rem', borderRadius: '0.5rem', border: 'none', background: validatedVoids.length === 0 ? '#94a3b8' : '#0f766e', color: 'white', fontWeight: 700, cursor: validatedVoids.length === 0 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
             >
               <CheckCircle size={18} /> Lancer la sélection
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderAssignPopup = () => {
+    if (!assignPopupState) return null;
+    const { sourceVoid } = assignPopupState;
+    const item = order.items.find(i => i.id === sourceVoid.itemId);
+    if (!item) return null;
+
+    const voidsToAssign = [];
+    (activeSitePlan.floors || []).forEach(f => {
+      (f.apartments || []).forEach(a => {
+        (a.voids || []).forEach(v => {
+          if (v.itemId === sourceVoid.itemId && !v.productionLaunched) {
+            voidsToAssign.push({ floor: f, apt: a, void: v });
+          }
+        });
+      });
+    });
+
+    return (
+      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000, padding: '1rem' }}>
+        <div style={{ background: 'white', padding: '1.5rem', borderRadius: '1rem', maxWidth: '500px', width: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#1e293b', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Save size={24} color="#0f766e" />
+            Assigner les Cotes
+          </h2>
+
+          <div style={{ fontSize: '0.85rem', color: '#475569', marginBottom: '1.5rem' }}>
+            <p style={{ margin: '0 0 0.5rem 0' }}>Assigner les dimensions de <strong>{sourceVoid.name}</strong> ({item.label})</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', background: '#f8fafc', padding: '0.75rem', borderRadius: '0.5rem' }}>
+              <div><span style={{ color: '#94a3b8' }}>Devis:</span> {item.config.L} x {item.config.H}</div>
+              <div><span style={{ color: '#0f766e' }}>Mesuré:</span> {sourceVoid.L !== undefined ? sourceVoid.L : item.config.L} x {sourceVoid.H !== undefined ? sourceVoid.H : item.config.H}</div>
+            </div>
+          </div>
+
+          <div style={{ flex: 1, overflowY: 'auto', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {voidsToAssign.length === 0 ? (
+              <div style={{ padding: '1rem', background: '#f8fafc', borderRadius: '0.5rem', textAlign: 'center', color: '#64748b' }}>
+                Aucune autre fenêtre du même type.
+              </div>
+            ) : (
+              voidsToAssign.map(({ floor, apt, void: v }, idx) => (
+                <div key={idx} style={{ padding: '0.75rem', background: v.id === sourceVoid.id ? '#f0fdfa' : '#f8fafc', border: v.id === sourceVoid.id ? '1px solid #5eead4' : '1px solid #e2e8f0', borderRadius: '0.5rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={!!selectedVoidsForAssign[v.id]}
+                    onChange={(e) => setSelectedVoidsForAssign(prev => ({ ...prev, [v.id]: e.target.checked }))}
+                    style={{ width: '1.2rem', height: '1.2rem', cursor: 'pointer' }}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: '0.25rem' }}>
+                      {floor.name} - {apt.name} - {v.name}
+                      {v.id === sourceVoid.id && <span style={{ marginLeft: '0.5rem', fontSize: '0.65rem', background: '#14b8a6', color: 'white', padding: '0.1rem 0.4rem', borderRadius: '10px' }}>Source</span>}
+                    </div>
+                    <div style={{ fontSize: '0.85rem' }}>
+                      Actuel: {v.L !== undefined ? v.L : item.config.L} x {v.H !== undefined ? v.H : item.config.H}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.75rem' }}>
+            <button 
+              onClick={() => {
+                setAssignPopupState(null);
+                setSelectedVoidsForAssign({});
+              }}
+              style={{ flex: 1, padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', background: 'white', color: '#475569', fontWeight: 700, cursor: 'pointer' }}
+            >
+              Annuler
+            </button>
+            <button 
+              onClick={() => applyGlobalVoidAssignment(sourceVoid)}
+              disabled={Object.values(selectedVoidsForAssign).filter(Boolean).length === 0}
+              style={{ flex: 2, padding: '0.75rem', borderRadius: '0.5rem', border: 'none', background: Object.values(selectedVoidsForAssign).filter(Boolean).length === 0 ? '#94a3b8' : '#0ea5e9', color: 'white', fontWeight: 700, cursor: Object.values(selectedVoidsForAssign).filter(Boolean).length === 0 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+            >
+              <CheckCircle size={18} /> Appliquer & Valider
             </button>
           </div>
         </div>
@@ -809,13 +905,13 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                     )}
                                   </div>
 
-                                  {/* Copy Button */}
+                                  {/* Assign Button */}
                                   <button 
-                                    onClick={() => applyVoidToAllSameInApartment(floor.id, apt.id, v)}
+                                    onClick={() => setAssignPopupState({ sourceVoid: v })}
                                     className="btn btn-secondary"
                                     style={{ width: '100%', padding: '0.6rem', fontSize: '0.78rem', fontWeight: 800, background: '#f0fdfa', border: '1.5px dashed #5eead4', color: '#0f766e', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', marginBottom: '0.5rem' }}
                                   >
-                                    <Save size={14} /> Appliquer à tous les vides identiques de l'appartement
+                                    <Save size={14} /> Assigner à d'autres fenêtres...
                                   </button>
 
                                   {/* Individual Validation Button */}
@@ -880,6 +976,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
         </div>
         {renderValidationPopup()}
         {renderIndividualValidationPopup()}
+        {renderAssignPopup()}
       </div>
     </div>
   );
