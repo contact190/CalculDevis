@@ -2283,8 +2283,11 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
           const liftingWeight = totalWeight;
           const scope = { L: cfg.L || 0, H: cfg.H || 0, area, totalWeight, liftingWeight, axeDiameter, lameWidth, caissonSize };
 
-          descLines.push(`Volet Roulant :`);
-          if (caisson) descLines.push(`  Caisson : ${caisson.name}`);
+          const isDoubleStr = cfg.shutterConfig?.isDoubleShutter ? ' (Double)' : '';
+          const isDouble = cfg.shutterConfig?.isDoubleShutter;
+          const doubleSuffix = isDouble ? ' (x2)' : '';
+          descLines.push(`Volet Roulant${isDoubleStr} :`);
+          if (caisson) descLines.push(`  Caisson : ${caisson.name}${doubleSuffix}`);
           if (glissiere) descLines.push(`  Glissière : ${glissiere.name}`);
           
           const processAlerts = (item) => {
@@ -2319,11 +2322,13 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
             processAlerts(lame);
           }
           if (axe) {
-            descLines.push(`  Axe : ${axe.name}`);
+            descLines.push(`  Axe : ${axe.name}${doubleSuffix}`);
             processAlerts(axe);
           }
           if (moteur) {
-            descLines.push(`  Moteur : ${moteur.name}`);
+            const motorCount = isDouble ? (cfg.shutterConfig?.motorCount || 2) : 1;
+            const motorSuffix = motorCount > 1 ? ` (x${motorCount})` : '';
+            descLines.push(`  Moteur : ${moteur.name}${motorSuffix}`);
             processAlerts(moteur);
           }
           if (extra) {
@@ -2346,7 +2351,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
               totalWrappedLines += doc.splitTextToSize(line, 60).length;
               doc.setFont('helvetica', 'normal');
            } else {
-              const isBoldLabel = line === 'Volet Roulant :';
+              const isBoldLabel = line === 'Volet Roulant :' || line === 'Volet Roulant (Double) :';
               if (isBoldLabel) doc.setFont('helvetica', 'bold');
               totalWrappedLines += doc.splitTextToSize(line, 60).length;
               doc.setFont('helvetica', 'normal');
@@ -2417,7 +2422,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
             doc.setTextColor(0, 0, 0);
             doc.setFont('helvetica', 'normal');
           } else {
-            const isBoldLabel = line === 'Volet Roulant :';
+            const isBoldLabel = line === 'Volet Roulant :' || line === 'Volet Roulant (Double) :';
             const isVoletSubItem = line.startsWith('  Caisson') || line.startsWith('  Glissière') || line.startsWith('  Lame') || line.startsWith('  Axe') || line.startsWith('  Moteur') || line.startsWith('  Kit') || line.startsWith('  Option');
             
             if (isBoldLabel) {
