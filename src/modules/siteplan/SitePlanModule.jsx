@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, ClipboardList, CheckCircle, FolderOpen, ArrowRight, Building, HelpCircle, Layout } from 'lucide-react';
+import { Plus, Trash2, ClipboardList, CheckCircle, FolderOpen, ArrowRight, Building, HelpCircle, Layout, Copy } from 'lucide-react';
 
 /**
  * Sync tree site plan structure back to flat siteMeasurements inside order items
@@ -213,6 +213,70 @@ export default function SitePlanModule({ data, setData }) {
     });
     const updatedPlan = { ...currentPlan, floors };
     handleUpdateSitePlan(updatedPlan);
+  };
+
+  const duplicateFloor = (floorId) => {
+    if (!activeSitePlan) return;
+    const currentPlan = activeSitePlan;
+    const floorToDuplicate = currentPlan.floors.find(f => f.id === floorId);
+    if (!floorToDuplicate) return;
+
+    const generateId = (prefix) => `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+    
+    const clonedFloor = JSON.parse(JSON.stringify(floorToDuplicate));
+    clonedFloor.id = generateId('floor');
+    clonedFloor.name = `${clonedFloor.name} (Copie)`;
+    
+    clonedFloor.apartments = (clonedFloor.apartments || []).map(apt => ({
+      ...apt,
+      id: generateId('apt'),
+      voids: (apt.voids || []).map(v => {
+        const newV = { ...v, id: generateId('void') };
+        if (newV.shutter) {
+           newV.shutter.id = `shutter-${newV.id}`;
+        }
+        return newV;
+      })
+    }));
+
+    const floors = [...currentPlan.floors];
+    const floorIndex = floors.findIndex(f => f.id === floorId);
+    floors.splice(floorIndex + 1, 0, clonedFloor);
+
+    handleUpdateSitePlan({ ...currentPlan, floors });
+  };
+
+  const duplicateApartment = (floorId, aptId) => {
+    if (!activeSitePlan) return;
+    const currentPlan = activeSitePlan;
+    
+    const generateId = (prefix) => `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+
+    const floors = (currentPlan.floors || []).map(f => {
+      if (f.id !== floorId) return f;
+      const aptToDuplicate = (f.apartments || []).find(a => a.id === aptId);
+      if (!aptToDuplicate) return f;
+
+      const clonedApt = JSON.parse(JSON.stringify(aptToDuplicate));
+      clonedApt.id = generateId('apt');
+      clonedApt.name = `${clonedApt.name} (Copie)`;
+      
+      clonedApt.voids = (clonedApt.voids || []).map(v => {
+        const newV = { ...v, id: generateId('void') };
+        if (newV.shutter) {
+           newV.shutter.id = `shutter-${newV.id}`;
+        }
+        return newV;
+      });
+
+      const newApts = [...(f.apartments || [])];
+      const aptIndex = newApts.findIndex(a => a.id === aptId);
+      newApts.splice(aptIndex + 1, 0, clonedApt);
+
+      return { ...f, apartments: newApts };
+    });
+
+    handleUpdateSitePlan({ ...currentPlan, floors });
   };
 
   const deleteApartment = (floorId, aptId) => {
@@ -493,9 +557,14 @@ export default function SitePlanModule({ data, setData }) {
                       <button onClick={() => addApartment(floor.id)} className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.3rem 0.6rem', display: 'flex', alignItems: 'center', gap: '0.3rem', background: 'white' }}>
                         <Plus size={14} /> Ajouter un Appartement
                       </button>
-                      <button onClick={() => deleteFloor(floor.id)} style={{ marginLeft: 'auto', color: '#ef4444', border: 'none', background: 'transparent', cursor: 'pointer' }} title="Supprimer l'étage">
-                        <Trash2 size={18} />
-                      </button>
+                      <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem' }}>
+                        <button onClick={() => duplicateFloor(floor.id)} style={{ color: '#6366f1', border: 'none', background: 'transparent', cursor: 'pointer' }} title="Dupliquer l'étage">
+                          <Copy size={18} />
+                        </button>
+                        <button onClick={() => deleteFloor(floor.id)} style={{ color: '#ef4444', border: 'none', background: 'transparent', cursor: 'pointer' }} title="Supprimer l'étage">
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
                     </div>
 
                     {/* Apartments List */}
@@ -514,9 +583,14 @@ export default function SitePlanModule({ data, setData }) {
                             <button onClick={() => addVoid(floor.id, apt.id)} className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', display: 'flex', alignItems: 'center', gap: '0.3rem', background: '#f8fafc' }}>
                               <Plus size={12} /> Ajouter un Vide
                             </button>
-                            <button onClick={() => deleteApartment(floor.id, apt.id)} style={{ marginLeft: 'auto', color: '#ef4444', border: 'none', background: 'transparent', cursor: 'pointer' }} title="Supprimer l'appartement">
-                              <Trash2 size={16} />
-                            </button>
+                            <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem' }}>
+                              <button onClick={() => duplicateApartment(floor.id, apt.id)} style={{ color: '#6366f1', border: 'none', background: 'transparent', cursor: 'pointer' }} title="Dupliquer l'appartement">
+                                <Copy size={16} />
+                              </button>
+                              <button onClick={() => deleteApartment(floor.id, apt.id)} style={{ color: '#ef4444', border: 'none', background: 'transparent', cursor: 'pointer' }} title="Supprimer l'appartement">
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
                           </div>
 
                           {/* Voids List */}
