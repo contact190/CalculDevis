@@ -40,25 +40,15 @@ export const invokeFunction = async (name, payload) => {
   return response.json();
 };
 
+
+
 export const syncDatabase = {
   /**
    * Load full data from Cloud (returns null if nothing exists)
    */
   async load() {
-    try {
-      const [mainRes, quotesRes] = await Promise.all([
-         supabaseFetch('app_state?id=eq.main-db', { method: 'GET' }),
-         supabaseFetch('app_state?id=eq.quotes-db', { method: 'GET' })
-      ]);
-      const mainData = mainRes && mainRes.length > 0 ? mainRes[0].data : null;
-      if (mainData && quotesRes && quotesRes.length > 0) {
-         mainData.quotes = quotesRes[0].data || [];
-      }
-      return mainData;
-    } catch (e) {
-      console.error("Failed to load from Supabase:", e);
-      return null;
-    }
+    const res = await this.loadWithMeta();
+    return res.data;
   },
 
   /**
@@ -67,18 +57,48 @@ export const syncDatabase = {
    */
   async loadWithMeta() {
     try {
+      // 1. Try to load chunked data
+      const metaRes = await supabaseFetch('app_state?id=eq.chunk-meta&select=data,updated_at', { method: 'GET' });
+      const metaRow = metaRes && metaRes.length > 0 ? metaRes[0] : null;
+      
+      if (metaRow && metaRow.data && metaRow.data.totalChunks) {
+        const totalChunks = metaRow.data.totalChunks;
+        const promises = [];
+        for (let i = 0; i < totalChunks; i++) {
+          promises.push(supabaseFetch(`app_state?id=eq.chunk-${i}&select=data`, { method: 'GET' }));
+        }
+        const results = await Promise.all(promises);
+        let fullStr = '';
+        for (let i = 0; i < totalChunks; i++) {
+          const res = results[i];
+          if (res && res.length > 0 && res[0].data && res[0].data.text) {
+            fullStr += res[0].data.text;
+          }
+        }
+        try {
+          const parsed = JSON.parse(fullStr);
+          if (parsed.mainDb) {
+            parsed.mainDb.quotes = parsed.quotes || [];
+            return { data: parsed.mainDb, updatedAt: metaRow.updated_at };
+          }
+        } catch(e) {
+          console.error("Failed to parse chunked JSON", e);
+        }
+      }
+
+      // 2. Fallback to old non-chunked method
       const [mainRes, quotesRes] = await Promise.all([
         supabaseFetch('app_state?id=eq.main-db&select=data,updated_at', { method: 'GET' }),
         supabaseFetch('app_state?id=eq.quotes-db&select=data,updated_at', { method: 'GET' })
       ]);
-      const mainRow = mainRes && mainRes.length > 0 ? mainRes[0] : null;
-      if (!mainRow || !mainRow.data) return { data: null, updatedAt: null };
+      const mainRowOld = mainRes && mainRes.length > 0 ? mainRes[0] : null;
+      if (!mainRowOld || !mainRowOld.data) return { data: null, updatedAt: null };
       
-      const mainData = mainRow.data;
+      const mainData = mainRowOld.data;
       if (quotesRes && quotesRes.length > 0) {
         mainData.quotes = quotesRes[0].data || [];
       }
-      return { data: mainData, updatedAt: mainRow.updated_at || null };
+      return { data: mainData, updatedAt: mainRowOld.updated_at || null };
     } catch (e) {
       console.error("Failed to loadWithMeta from Supabase:", e);
       return { data: null, updatedAt: null };
@@ -91,6 +111,10 @@ export const syncDatabase = {
    */
   async getCloudTimestamp() {
     try {
+      // Check chunk-meta first
+      const metaRes = await supabaseFetch('app_state?id=eq.chunk-meta&select=updated_at', { method: 'GET' });
+      if (metaRes && metaRes.length > 0) return metaRes[0].updated_at;
+
       const res = await supabaseFetch('app_state?id=eq.main-db&select=updated_at', { method: 'GET' });
       return res && res.length > 0 ? res[0].updated_at : null;
     } catch (e) {
@@ -100,23 +124,39 @@ export const syncDatabase = {
   },
 
   /**
-   * Save data to Cloud with a shared timestamp
+   * Save data to Cloud with a shared timestamp.
+   * Splits large payload into ~3MB chunks to bypass Supabase request size limits.
    */
   async save({ mainDb, quotes }) {
     const now = new Date().toISOString();
+    
     try {
-      await Promise.all([
+      const fullJson = JSON.stringify({ mainDb, quotes });
+      const MAX_CHUNK_LENGTH = 3000000; // ~3MB per chunk
+      const totalChunks = Math.ceil(fullJson.length / MAX_CHUNK_LENGTH);
+      
+      const requests = [];
+      for (let i = 0; i < totalChunks; i++) {
+        const chunkStr = fullJson.substring(i * MAX_CHUNK_LENGTH, (i + 1) * MAX_CHUNK_LENGTH);
+        requests.push(
+          supabaseFetch('app_state', {
+            method: 'POST',
+            headers: { 'Prefer': 'resolution=merge-duplicates' },
+            body: JSON.stringify({ id: `chunk-${i}`, data: { text: chunkStr }, updated_at: now })
+          })
+        );
+      }
+      
+      // Save metadata last so load doesn't trigger prematurely if possible
+      requests.push(
         supabaseFetch('app_state', {
           method: 'POST',
           headers: { 'Prefer': 'resolution=merge-duplicates' },
-          body: JSON.stringify({ id: 'main-db', data: mainDb, updated_at: now })
-        }),
-        supabaseFetch('app_state', {
-          method: 'POST',
-          headers: { 'Prefer': 'resolution=merge-duplicates' },
-          body: JSON.stringify({ id: 'quotes-db', data: quotes || [], updated_at: now })
+          body: JSON.stringify({ id: 'chunk-meta', data: { totalChunks }, updated_at: now })
         })
-      ]);
+      );
+      
+      await Promise.all(requests);
       return now; // Return the timestamp used
     } catch (e) {
       console.error("Failed to save to Supabase:", e);
