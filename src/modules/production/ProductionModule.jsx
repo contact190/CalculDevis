@@ -167,6 +167,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                     L: m.L, 
                     H: m.H, 
                     wallDepth: m.wallDepth,
+                    handleHeight: m.handleHeight,
                     partOverrides: m.partOverrides,
                     hasShutter: true,
                     shutterConfig: {
@@ -191,7 +192,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
               if (instancesProcessed.has(i)) continue;
               
               configs.push({
-                config: { ...item.config, L: m.L, H: m.H, wallDepth: m.wallDepth, partOverrides: m.partOverrides },
+                config: { ...item.config, L: m.L, H: m.H, wallDepth: m.wallDepth, handleHeight: m.handleHeight, partOverrides: m.partOverrides },
                 qty: 1,
                 label: item.label,
                 allLabels: [m.instanceNames?.[i] || `${item.label}-${i + 1}`],
@@ -786,9 +787,13 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
         
         const openingComp = database.compositions?.find(c => c.id === openingPart?.compositionId);
         
-        // Find range for fix parts
-        const firstFix = fixParts[0];
-        const fixRange = database.ranges?.find(r => r.id === firstFix?.rangeId);
+        // Resolve range for opening part via its composition's rangeId
+        const openingRange = openingComp ? database.ranges?.find(r => r.id === openingComp.rangeId) : null;
+        const openingRangeName = openingRange?.name || '';
+        
+        // Resolve range for fix parts via their composition's rangeId
+        const firstFixComp = fixParts[0] ? database.compositions?.find(c => c.id === fixParts[0].compositionId) : null;
+        const fixRange = firstFixComp ? database.ranges?.find(r => r.id === firstFixComp.rangeId) : null;
         const globalRange = database.ranges?.find(r => r.id === cfg.rangeId);
         const fixRangeName = fixRange?.name || globalRange?.name || 'Fix';
         const fixLabel = fixParts.length > 0 ? `${fixRangeName} (×${fixParts.length})` : '';
@@ -801,7 +806,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
         
         doc.setTextColor(0, 0, 0);
         
-        // Per-part breakdown
+        // Per-part breakdown with gamme info
         doc.setFontSize(8);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(71, 85, 105);
@@ -810,13 +815,17 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
         if (openingPart) {
           const w = openingPart.width || cfg.L;
           const h = openingPart.height || cfg.H;
-          doc.text(`↳ Ouverture: ${w} x ${h} mm`, startX, partY);
+          const gammeTag = openingRangeName ? ` [Gamme: ${openingRangeName}]` : '';
+          doc.text(`↳ Ouvrant: ${w} x ${h} mm${gammeTag}`, startX, partY);
           partY += 6;
         }
         fixParts.forEach((fp, fi) => {
           const w = fp.width || 0;
           const h = fp.height || cfg.H;
-          doc.text(`↳ Fix ${fi + 1}: ${w} x ${h} mm`, startX, partY);
+          const fpComp = database.compositions?.find(c => c.id === fp.compositionId);
+          const fpRange = fpComp ? database.ranges?.find(r => r.id === fpComp.rangeId) : null;
+          const fpRangeName = fpRange?.name || fixRangeName;
+          doc.text(`↳ Fix ${fi + 1}: ${w} x ${h} mm [Gamme: ${fpRangeName}]`, startX, partY);
           partY += 6;
         });
         
@@ -893,10 +902,16 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
       doc.text(`DIM: ${cfg.L} x ${cfg.H} mm`, startX, nextY);
       nextY += 7;
       if (cfg.wallDepth) {
-        doc.setFontSize(10);
-        doc.text(`Prof. Mur: ${cfg.wallDepth} mm`, startX, nextY);
+        doc.setFontSize(13);
+        doc.setTextColor(239, 68, 68); // Red alert
+        doc.text(`+ Prof. Mur: ${cfg.wallDepth} mm`, startX, nextY);
         nextY += 7;
       }
+      doc.setTextColor(30, 41, 59);
+      const hPoignee = cfg.handleHeight || Math.round(cfg.H / 2);
+      doc.setFontSize(11);
+      doc.text(`Hauteur Poignée: ${hPoignee} mm`, startX, nextY);
+      nextY += 7;
       doc.setTextColor(0, 0, 0);
       
       // Update currentY dynamically based on how much technical info was written

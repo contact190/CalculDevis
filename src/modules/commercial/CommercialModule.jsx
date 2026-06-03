@@ -2071,8 +2071,14 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
     // Left: Logo
     if (quoteSettings?.logoBase64) {
       try {
-        doc.addImage(quoteSettings.logoBase64, 'PNG', 15, y, 60, 25, '', 'FAST');
-      } catch (e) {}
+        const imgProps = doc.getImageProperties(quoteSettings.logoBase64);
+        const maxW = 60;
+        const maxH = 25;
+        const ratio = Math.min(maxW / imgProps.width, maxH / imgProps.height);
+        doc.addImage(quoteSettings.logoBase64, 'PNG', 15, y, imgProps.width * ratio, imgProps.height * ratio, '', 'FAST');
+      } catch (e) {
+        try { doc.addImage(quoteSettings.logoBase64, 'PNG', 15, y, 60, 25, '', 'FAST'); } catch(e2) {}
+      }
     }
     
     // Top Right: Title

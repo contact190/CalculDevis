@@ -764,8 +764,14 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
     // Header Branding
     if (quoteSettings?.logoBase64) {
       try {
-        doc.addImage(quoteSettings.logoBase64, 'PNG', 15, y, 35, 20);
-      } catch (e) { console.error("Logo error", e); }
+        const imgProps = doc.getImageProperties(quoteSettings.logoBase64);
+        const maxW = 35;
+        const maxH = 20;
+        const ratio = Math.min(maxW / imgProps.width, maxH / imgProps.height);
+        doc.addImage(quoteSettings.logoBase64, 'PNG', 15, y, imgProps.width * ratio, imgProps.height * ratio, '', 'FAST');
+      } catch (e) {
+        try { doc.addImage(quoteSettings.logoBase64, 'PNG', 15, y, 35, 20); } catch(e2) {}
+      }
     }
 
     doc.setFontSize(9);
@@ -979,7 +985,15 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
 
     // Header Branding
     if (quoteSettings?.logoBase64) {
-      try { doc.addImage(quoteSettings.logoBase64, 'PNG', 15, y, 35, 20); } catch (e) {}
+      try {
+        const imgProps = doc.getImageProperties(quoteSettings.logoBase64);
+        const maxW = 35;
+        const maxH = 20;
+        const ratio = Math.min(maxW / imgProps.width, maxH / imgProps.height);
+        doc.addImage(quoteSettings.logoBase64, 'PNG', 15, y, imgProps.width * ratio, imgProps.height * ratio, '', 'FAST');
+      } catch (e) {
+        try { doc.addImage(quoteSettings.logoBase64, 'PNG', 15, y, 35, 20); } catch (e2) {}
+      }
     }
     doc.setFontSize(9); doc.setFont('helvetica', 'bold');
     doc.text(quoteSettings?.companyName || 'MA SOCIETE', 55, y + 5);
