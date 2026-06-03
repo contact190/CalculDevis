@@ -834,33 +834,74 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
     const pw = doc.internal.pageSize.getWidth();
     let y = 15;
 
-    // Header Branding
+    // ----- HEADER SECTION -----
     if (quoteSettings?.logoBase64) {
-      try { doc.addImage(quoteSettings.logoBase64, 'PNG', 15, y, 35, 20); } catch (e) {}
+      try {
+        const imgProps = doc.getImageProperties(quoteSettings.logoBase64);
+        const maxW = 60;
+        const maxH = 25;
+        const ratio = Math.min(maxW / imgProps.width, maxH / imgProps.height);
+        doc.addImage(quoteSettings.logoBase64, 'PNG', 15, y, imgProps.width * ratio, imgProps.height * ratio, '', 'FAST');
+      } catch (e) {
+        try { doc.addImage(quoteSettings.logoBase64, 'PNG', 15, y, 60, 25, '', 'FAST'); } catch(e2) {}
+      }
     }
-
-    doc.setFontSize(9);
+    
+    doc.setFontSize(22);
     doc.setFont('helvetica', 'bold');
-    doc.text(quoteSettings?.companyName || 'MA SOCIETE', 55, y + 5);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.text(quoteSettings?.companyAddress || '', 55, y + 10);
-    doc.text(`${quoteSettings?.companyPhone || ''} ${quoteSettings?.companyEmail ? ' | ' + quoteSettings.companyEmail : ''}`, 55, y + 15);
-    y += 25;
-
-    // Title
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(37, 99, 235);
-    doc.text('DEMANDE DE PRIX / PROFORMA', pw / 2, y, { align: 'center' });
-    doc.setTextColor(0, 0, 0);
-    y += 12;
+    doc.text('DEMANDE DE PRIX / PROFORMA', pw - 15, y + 15, { align: 'right' });
+    
+    y += 35;
+    
+    const boxY = y;
+    const boxWidth = (pw - 35) / 2;
+    
+    // Company Box
+    doc.setDrawColor(150, 150, 150);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(15, boxY, boxWidth, 42, 2, 2);
     
     doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(quoteSettings?.companyName || 'Mon Entreprise', 18, boxY + 6);
+    doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Proforma liée à la commande : ${selectedOrder.id}`, 15, y);
-    doc.text(`Date : ${new Date().toLocaleDateString('fr-FR')}`, pw - 15, y, { align: 'right' });
-    y += 15;
+    let cy = boxY + 11;
+    if (quoteSettings?.companyAddress) {
+      const addressLines = doc.splitTextToSize(quoteSettings.companyAddress, boxWidth - 6);
+      doc.text(addressLines, 18, cy);
+      cy += addressLines.length * 4;
+    }
+    const phone = quoteSettings?.companyPhone || '';
+    const email = quoteSettings?.companyEmail || '';
+    if (phone || email) {
+      doc.text(`${phone} ${email ? ' - ' + email : ''}`, 18, cy);
+      cy += 5;
+    }
+    doc.setTextColor(80, 80, 80);
+    if (quoteSettings?.companyRC) { doc.text(`RC N°: ${quoteSettings.companyRC}`, 18, cy); cy += 4; }
+    if (quoteSettings?.companyIMP) { doc.text(`AI N°: ${quoteSettings.companyIMP}`, 18, cy); cy += 4; }
+    if (quoteSettings?.companyMF) { doc.text(`NIF N°: ${quoteSettings.companyMF}`, 18, cy); cy += 4; }
+    doc.setTextColor(0, 0, 0);
+
+    // Supplier Box
+    const rightBoxXHeader = 15 + boxWidth + 5;
+    doc.roundedRect(rightBoxXHeader, boxY, boxWidth, 42, 2, 2);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Destinataire / Fournisseur :', rightBoxXHeader + 3, boxY + 6);
+    doc.setFontSize(10);
+    doc.text('_________________________', rightBoxXHeader + 3, boxY + 11);
+    
+    y = boxY + 48;
+
+    const client = data?.clients?.find(c => c.id === selectedOrder.clientId);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Chantier : ${selectedOrder.id}`, 15, y);
+    doc.text(`Client Final : ${client?.nom || '—'}`, 15, y + 6);
+    doc.text(`Date : ${new Date().toLocaleDateString('fr-FR')}`, 15, y + 12);
+    y += 20;
 
     // Section: Profiles
     doc.setFont('helvetica', 'bold');

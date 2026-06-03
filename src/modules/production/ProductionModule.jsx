@@ -52,7 +52,7 @@ const calculateBarsNeeded = (pieces, bLength, stockOffcuts = []) => {
   return currentBars.filter(b => !b.isStock).length;
 };
 
-const ProductionModule = ({ currentConfig, currentQuote, database, setData }) => {
+const ProductionModule = ({ currentConfig, currentQuote, database, setData, quoteSettings }) => {
   const engine = useMemo(() => new FormulaEngine(database), [database]);
   const resolveRef = useCallback((itemId) => {
     if (!itemId) return '---';
@@ -119,17 +119,6 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
   const [offcutInputs, setOffcutInputs] = useState({}); // { [barKey]: "" }
   const [supplierName, setSupplierName] = useState('');
   const [docHeader, setDocHeader] = useState('DEMANDE DE PROFORMA');
-  const [companyInfo, setCompanyInfo] = useState({
-    name: 'MA MENUISERIE ALU',
-    address: '123 Rue de l\'Atelier, Alger',
-    phone: '0550 11 22 33',
-    email: 'contact@menuiserie.dz',
-    rc: '',
-    nif: '',
-    nis: '',
-    ai: '',
-    logo: '' // URL or DataURI
-  });
   
   const [isKitSummaryCollapsed, setIsKitSummaryCollapsed] = useState(false);
   
@@ -1564,57 +1553,8 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
           {/* Document Personalization Panel */}
           <div className="glass shadow-md" style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '1.25rem', padding: '1.5rem' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem' }}>
-              {/* Left: My Company */}
-              <div style={{ borderRight: '1px solid #e2e8f0', paddingRight: '1rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.2rem' }}>
-                  <Package size={20} color="#3b82f6" />
-                  <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0 }}>Mon Entreprise (Expéditeur)</h3>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
-                  <div style={{ gridColumn: 'span 2' }}>
-                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#64748b', marginBottom: '0.2rem' }}>Nom de la Société</label>
-                    <input type="text" className="input" value={companyInfo.name} onChange={e => setCompanyInfo({...companyInfo, name: e.target.value})} style={{ width: '100%', fontSize: '0.85rem' }} />
-                  </div>
-                  <div style={{ gridColumn: 'span 2' }}>
-                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#64748b', marginBottom: '0.2rem' }}>Adresse</label>
-                    <input type="text" className="input" value={companyInfo.address} onChange={e => setCompanyInfo({...companyInfo, address: e.target.value})} style={{ width: '100%', fontSize: '0.85rem' }} />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#64748b', marginBottom: '0.2rem' }}>Téléphone</label>
-                    <input type="text" className="input" value={companyInfo.phone} onChange={e => setCompanyInfo({...companyInfo, phone: e.target.value})} style={{ width: '100%', fontSize: '0.85rem' }} />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#64748b', marginBottom: '0.2rem' }}>Email</label>
-                    <input type="text" className="input" value={companyInfo.email} onChange={e => setCompanyInfo({...companyInfo, email: e.target.value})} style={{ width: '100%', fontSize: '0.85rem' }} />
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', gridColumn: 'span 2' }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: 700, color: '#94a3b8' }}>RC</label>
-                      <input type="text" className="input" value={companyInfo.rc} onChange={e => setCompanyInfo({...companyInfo, rc: e.target.value})} style={{ width: '100%', padding: '0.2rem 0.4rem', fontSize: '0.75rem' }} />
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: 700, color: '#94a3b8' }}>NIF</label>
-                      <input type="text" className="input" value={companyInfo.nif} onChange={e => setCompanyInfo({...companyInfo, nif: e.target.value})} style={{ width: '100%', padding: '0.2rem 0.4rem', fontSize: '0.75rem' }} />
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: 700, color: '#94a3b8' }}>NIS</label>
-                      <input type="text" className="input" value={companyInfo.nis} onChange={e => setCompanyInfo({...companyInfo, nis: e.target.value})} style={{ width: '100%', padding: '0.2rem 0.4rem', fontSize: '0.75rem' }} />
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: 700, color: '#94a3b8' }}>AI</label>
-                      <input type="text" className="input" value={companyInfo.ai} onChange={e => setCompanyInfo({...companyInfo, ai: e.target.value})} style={{ width: '100%', padding: '0.2rem 0.4rem', fontSize: '0.75rem' }} />
-                    </div>
-                  </div>
-                  <div style={{ gridColumn: 'span 2' }}>
-                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#64748b', marginBottom: '0.2rem' }}>URL Logo (Optionnel)</label>
-                    <input type="text" className="input" placeholder="https://..." value={companyInfo.logo} onChange={e => setCompanyInfo({...companyInfo, logo: e.target.value})} style={{ width: '100%', fontSize: '0.85rem' }} />
-                  </div>
-                </div>
-              </div>
-
-              {/* Right: Supplier & Document Info */}
-              <div>
+              {/* Right: Supplier & Document Info - Centered or full width now */}
+              <div style={{ gridColumn: '1 / -1' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.2rem' }}>
                   <ShoppingCart size={20} color="#8b5cf6" />
                   <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0 }}>Cible & Document</h3>
@@ -1630,7 +1570,6 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                   </div>
                 </div>
               </div>
-            </div>
           </div>
 
           {/* Table: Achats Profilés */}
@@ -1642,47 +1581,80 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                 <button 
                   onClick={() => {
                     const doc = new jsPDF();
+                    const pw = doc.internal.pageSize.getWidth();
+                    let y = 15;
                     
-                    // --- HEADER: Company Info & Logo ---
-                    if (companyInfo.logo) {
-                       try { doc.addImage(companyInfo.logo, 'PNG', 10, 10, 30, 30); } catch(e) {}
+                    // --- HEADER SECTION ---
+                    if (quoteSettings?.logoBase64) {
+                      try {
+                        const imgProps = doc.getImageProperties(quoteSettings.logoBase64);
+                        const maxW = 60;
+                        const maxH = 25;
+                        const ratio = Math.min(maxW / imgProps.width, maxH / imgProps.height);
+                        doc.addImage(quoteSettings.logoBase64, 'PNG', 15, y, imgProps.width * ratio, imgProps.height * ratio, '', 'FAST');
+                      } catch (e) {
+                        try { doc.addImage(quoteSettings.logoBase64, 'PNG', 15, y, 60, 25, '', 'FAST'); } catch(e2) {}
+                      }
                     }
-                    doc.setFontSize(14);
-                    doc.setTextColor(30, 41, 59);
-                    doc.text(companyInfo.name.toUpperCase(), 10, companyInfo.logo ? 45 : 20);
-                    doc.setFontSize(8);
-                    doc.setTextColor(100, 116, 139);
-                    doc.text(companyInfo.address, 10, companyInfo.logo ? 50 : 25);
-                    doc.text(`${companyInfo.phone} | ${companyInfo.email}`, 10, companyInfo.logo ? 54 : 29);
                     
-                    if (companyInfo.rc || companyInfo.nif) {
-                       doc.setFontSize(7);
-                       doc.text(`RC: ${companyInfo.rc} | NIF: ${companyInfo.nif} | NIS: ${companyInfo.nis} | AI: ${companyInfo.ai}`, 10, companyInfo.logo ? 59 : 34);
-                    }
-
-                    // --- DOCUMENT TITLE ---
                     doc.setFontSize(22);
-                    doc.setTextColor(30, 41, 59);
-                    doc.text(docHeader.toUpperCase(), 105, 75, { align: 'center' });
+                    doc.setFont('helvetica', 'bold');
+                    doc.text(docHeader.toUpperCase(), pw - 15, y + 15, { align: 'right' });
                     
-                    doc.setDrawColor(226, 232, 240);
-                    doc.line(10, 80, 200, 80);
-
-                    // --- SUPPLIER INFO (Right side) ---
-                    doc.setFontSize(10);
-                    doc.setTextColor(100, 116, 139);
-                    doc.text("DESTINATAIRE / FOURNISSEUR :", 120, 45);
-                    doc.setFontSize(14);
-                    doc.setTextColor(30, 41, 59);
-                    doc.text(supplierName || "Non spécifié", 120, 52);
-
-                    // --- PROJECT INFO (Left side) ---
-                    doc.setFontSize(10);
-                    doc.setTextColor(100, 116, 139);
-                    doc.text(`Chantier: ${activeQuote?.number || 'Non spécifié'}`, 120, 60);
-                    doc.text(`Date: ${new Date().toLocaleDateString()}`, 120, 65);
+                    y += 35;
+                    const boxY = y;
+                    const boxWidth = (pw - 35) / 2;
                     
-                    let y = 95;
+                    // Company Box
+                    doc.setDrawColor(150, 150, 150);
+                    doc.setLineWidth(0.3);
+                    doc.roundedRect(15, boxY, boxWidth, 42, 2, 2);
+                    
+                    doc.setFontSize(10);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text(quoteSettings?.companyName || 'Mon Entreprise', 18, boxY + 6);
+                    doc.setFontSize(8);
+                    doc.setFont('helvetica', 'normal');
+                    let cy = boxY + 11;
+                    if (quoteSettings?.companyAddress) {
+                      const addressLines = doc.splitTextToSize(quoteSettings.companyAddress, boxWidth - 6);
+                      doc.text(addressLines, 18, cy);
+                      cy += addressLines.length * 4;
+                    }
+                    const phone = quoteSettings?.companyPhone || '';
+                    const email = quoteSettings?.companyEmail || '';
+                    if (phone || email) {
+                      doc.text(`${phone} ${email ? ' - ' + email : ''}`, 18, cy);
+                      cy += 5;
+                    }
+                    doc.setTextColor(80, 80, 80);
+                    if (quoteSettings?.companyRC) { doc.text(`RC N°: ${quoteSettings.companyRC}`, 18, cy); cy += 4; }
+                    if (quoteSettings?.companyIMP) { doc.text(`AI N°: ${quoteSettings.companyIMP}`, 18, cy); cy += 4; }
+                    if (quoteSettings?.companyMF) { doc.text(`NIF N°: ${quoteSettings.companyMF}`, 18, cy); cy += 4; }
+                    doc.setTextColor(0, 0, 0);
+
+                    // Supplier Box
+                    const rightBoxXHeader = 15 + boxWidth + 5;
+                    doc.roundedRect(rightBoxXHeader, boxY, boxWidth, 42, 2, 2);
+                    doc.setFontSize(9);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text('Destinataire / Fournisseur :', rightBoxXHeader + 3, boxY + 6);
+                    doc.setFontSize(10);
+                    doc.text(supplierName || 'Non spécifié', rightBoxXHeader + 3, boxY + 11);
+                    
+                    y = boxY + 48;
+
+                    // Project Info
+                    doc.setFontSize(10);
+                    doc.setFont('helvetica', 'bold');
+                    const clientName = database.clients?.find(c => c.id === activeQuote?.clientId)?.nom || '—';
+                    const refName = activeQuote?.id?.startsWith('CMD') ? activeQuote.id : (activeQuote?.number || 'Non spécifié');
+                    doc.text(`Chantier : ${refName}`, 15, y);
+                    doc.text(`Client Final : ${clientName}`, 15, y + 6);
+                    doc.text(`Date : ${new Date().toLocaleDateString('fr-FR')}`, 15, y + 12);
+                    
+                    y += 20;
+                    
                     doc.setFontSize(11);
                     doc.setFillColor(30, 41, 59);
                     doc.rect(10, y-6, 190, 8, 'F');
@@ -1756,31 +1728,77 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData }) =>
                     const doc = new jsPDF();
                     
                     const renderHeader = (isSummary, compName = '') => {
-                      if (companyInfo.logo) {
-                         try { doc.addImage(companyInfo.logo, 'PNG', 10, 10, 30, 30); } catch(e) {}
-                      }
-                      doc.setFontSize(14); doc.setTextColor(30, 41, 59); doc.setFont('helvetica', 'bold');
-                      doc.text(companyInfo.name.toUpperCase(), 10, companyInfo.logo ? 45 : 20);
-                      doc.setFontSize(8); doc.setTextColor(100, 116, 139); doc.setFont('helvetica', 'normal');
-                      doc.text(companyInfo.address, 10, companyInfo.logo ? 50 : 25);
-                      doc.text(`${companyInfo.phone} | ${companyInfo.email}`, 10, companyInfo.logo ? 54 : 29);
+                      const pw = doc.internal.pageSize.getWidth();
+                      let y = 15;
                       
-                      if (companyInfo.rc || companyInfo.nif) {
-                         doc.setFontSize(7);
-                         doc.text(`RC: ${companyInfo.rc} | NIF: ${companyInfo.nif} | NIS: ${companyInfo.nis} | AI: ${companyInfo.ai}`, 10, companyInfo.logo ? 59 : 34);
+                      if (quoteSettings?.logoBase64) {
+                        try {
+                          const imgProps = doc.getImageProperties(quoteSettings.logoBase64);
+                          const maxW = 60;
+                          const maxH = 25;
+                          const ratio = Math.min(maxW / imgProps.width, maxH / imgProps.height);
+                          doc.addImage(quoteSettings.logoBase64, 'PNG', 15, y, imgProps.width * ratio, imgProps.height * ratio, '', 'FAST');
+                        } catch (e) {
+                          try { doc.addImage(quoteSettings.logoBase64, 'PNG', 15, y, 60, 25, '', 'FAST'); } catch(e2) {}
+                        }
                       }
-
-                      doc.setFontSize(18); doc.setTextColor(30, 41, 59); doc.setFont('helvetica', 'bold');
-                      doc.text(isSummary ? "BON DE COMMANDE VITRAGE (RÉCAPITULATIF)" : `VITRAGE : ${compName}`, 105, 75, { align: 'center' });
                       
-                      doc.setDrawColor(226, 232, 240); doc.line(10, 80, 200, 80);
+                      doc.setFontSize(22);
+                      doc.setFont('helvetica', 'bold');
+                      doc.text(isSummary ? "BON DE COMMANDE VITRAGE" : `VITRAGE : ${compName}`, pw - 15, y + 15, { align: 'right' });
+                      
+                      y += 35;
+                      const boxY = y;
+                      const boxWidth = (pw - 35) / 2;
+                      
+                      doc.setDrawColor(150, 150, 150);
+                      doc.setLineWidth(0.3);
+                      doc.roundedRect(15, boxY, boxWidth, 42, 2, 2);
+                      
+                      doc.setFontSize(10);
+                      doc.setFont('helvetica', 'bold');
+                      doc.text(quoteSettings?.companyName || 'Mon Entreprise', 18, boxY + 6);
+                      doc.setFontSize(8);
+                      doc.setFont('helvetica', 'normal');
+                      let cy = boxY + 11;
+                      if (quoteSettings?.companyAddress) {
+                        const addressLines = doc.splitTextToSize(quoteSettings.companyAddress, boxWidth - 6);
+                        doc.text(addressLines, 18, cy);
+                        cy += addressLines.length * 4;
+                      }
+                      const phone = quoteSettings?.companyPhone || '';
+                      const email = quoteSettings?.companyEmail || '';
+                      if (phone || email) {
+                        doc.text(`${phone} ${email ? ' - ' + email : ''}`, 18, cy);
+                        cy += 5;
+                      }
+                      doc.setTextColor(80, 80, 80);
+                      if (quoteSettings?.companyRC) { doc.text(`RC N°: ${quoteSettings.companyRC}`, 18, cy); cy += 4; }
+                      if (quoteSettings?.companyIMP) { doc.text(`AI N°: ${quoteSettings.companyIMP}`, 18, cy); cy += 4; }
+                      if (quoteSettings?.companyMF) { doc.text(`NIF N°: ${quoteSettings.companyMF}`, 18, cy); cy += 4; }
+                      doc.setTextColor(0, 0, 0);
 
-                      doc.setFontSize(10); doc.setTextColor(100, 116, 139); doc.setFont('helvetica', 'normal');
-                      doc.text(`Chantier: ${activeQuote?.number || 'Non spécifié'}`, 120, 50);
-                      doc.text(`Client Final: ${database.clients?.find(c => c.id === activeQuote?.clientId)?.nom || '—'}`, 120, 55);
-                      doc.text(`Date: ${new Date().toLocaleDateString()}`, 120, 60);
+                      const rightBoxXHeader = 15 + boxWidth + 5;
+                      doc.roundedRect(rightBoxXHeader, boxY, boxWidth, 42, 2, 2);
+                      doc.setFontSize(9);
+                      doc.setFont('helvetica', 'bold');
+                      doc.text('Destinataire / Fournisseur :', rightBoxXHeader + 3, boxY + 6);
+                      doc.setFontSize(10);
+                      doc.text(supplierName || 'Non spécifié', rightBoxXHeader + 3, boxY + 11);
+                      
+                      y = boxY + 48;
 
-                      let headerY = 95;
+                      doc.setFontSize(10);
+                      doc.setFont('helvetica', 'bold');
+                      const clientName = database.clients?.find(c => c.id === activeQuote?.clientId)?.nom || '—';
+                      const refName = activeQuote?.id?.startsWith('CMD') ? activeQuote.id : (activeQuote?.number || 'Non spécifié');
+                      doc.text(`Chantier : ${refName}`, 15, y);
+                      doc.text(`Client Final : ${clientName}`, 15, y + 6);
+                      doc.text(`Date : ${new Date().toLocaleDateString('fr-FR')}`, 15, y + 12);
+                      
+                      y += 20;
+
+                      let headerY = y;
                       doc.setFontSize(11); doc.setFillColor(30, 41, 59); doc.rect(10, headerY-6, 190, 7, 'F');
                       doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold');
                       doc.text("Désignation", 15, headerY);

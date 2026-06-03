@@ -5,7 +5,7 @@ import jsPDF from 'jspdf';
 import QRScanner from './QRScanner';
 
 // Module version: 1.0.1 - Logistic & Installation Tracking
-const ShippingModule = ({ data, setData, refetchData }) => {
+const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
   const [selectedOrderId, setSelectedOrderId] = useState(null);
   const [selectedBatchIds, setSelectedBatchIds] = useState(new Set());
   const [activeView, setActiveView] = useState('list'); // 'list' | 'details' | 'scanner' | 'zones'
@@ -23,9 +23,15 @@ const ShippingModule = ({ data, setData, refetchData }) => {
   const [showPVModal, setShowPVModal] = useState(false);
   const [pvSelectedFloors, setPvSelectedFloors] = useState(new Set());
   const [senderEmail, setSenderEmail] = useState('contact@entreprise.com');
-  const [companyName, setCompanyName] = useState('ALU DESIGN'); // Nom par défaut
+  const [companyName, setCompanyName] = useState(quoteSettings?.companyName || 'ALU DESIGN'); // Nom depuis config ou par défaut
   const [recipientEmail, setRecipientEmail] = useState('');
   const [sendByEmail, setSendByEmail] = useState(false);
+
+  React.useEffect(() => {
+    if (quoteSettings?.companyName) {
+      setCompanyName(quoteSettings.companyName);
+    }
+  }, [quoteSettings?.companyName]);
   const handleRefresh = async () => {
     setIsSyncing(true);
     try {

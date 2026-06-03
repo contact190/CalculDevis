@@ -52,14 +52,10 @@ function App() {
   const [lastCloudSync, setLastCloudSync] = useState(null);
   const saveTimerRef = useRef(null);
   const cloudSyncTimerRef = useRef(null);
+  const lastSyncedDataRef = useRef(null);
   const isFirstLoad = useRef(true);
 
-  const [quoteSettings, setQuoteSettings] = useState(() => {
-    try {
-      const saved = localStorage.getItem('quoteSettings');
-      return saved ? { ...DEFAULT_QUOTE_SETTINGS, ...JSON.parse(saved) } : DEFAULT_QUOTE_SETTINGS;
-    } catch { return DEFAULT_QUOTE_SETTINGS; }
-  });
+  const [quoteSettings, setQuoteSettings] = useState(DEFAULT_QUOTE_SETTINGS);
 
   const [currentQuote, setCurrentQuote] = useState(() => makeNewQuote(DEFAULT_QUOTE_SETTINGS));
 
@@ -131,6 +127,21 @@ function App() {
     const loadLocal = async () => {
       setIsLoading(true);
       try {
+        // Load settings first
+        const settingsData = await persistentStorage.load('quoteSettings');
+        if (settingsData) {
+          setQuoteSettings({ ...DEFAULT_QUOTE_SETTINGS, ...settingsData });
+        } else {
+          try {
+            const savedSettings = localStorage.getItem('quoteSettings');
+            if (savedSettings) {
+              const parsedSettings = JSON.parse(savedSettings);
+              setQuoteSettings({ ...DEFAULT_QUOTE_SETTINGS, ...parsedSettings });
+              await persistentStorage.save('quoteSettings', parsedSettings);
+            }
+          } catch(e) {}
+        }
+
         const localData = await persistentStorage.load(LOCAL_KEY);
         if (localData) {
           console.log('✅ Données locales chargées depuis IndexedDB');
@@ -164,6 +175,14 @@ function App() {
     loadLocal();
   }, [repairDatabase]);
 
+  const updateQuoteSettings = useCallback((newSettings) => {
+    setQuoteSettings(prev => {
+      const next = typeof newSettings === 'function' ? newSettings(prev) : newSettings;
+      persistentStorage.save('quoteSettings', next).catch(e => console.error(e));
+      return next;
+    });
+  }, []);
+
   // ─── STEP 2: Save to IndexedDB on every change (instant) ─────────────────
   useEffect(() => {
     if (!database || isLoading) return;
@@ -184,21 +203,26 @@ function App() {
       }
     }, 300);
 
-    // Cloud sync (5s debounce, best-effort)
+    // Cloud sync (60s debounce, best-effort)
     if (cloudSyncTimerRef.current) clearTimeout(cloudSyncTimerRef.current);
     cloudSyncTimerRef.current = setTimeout(async () => {
       if (!navigator.onLine) { setCloudSyncStatus('offline'); return; }
+      
+      const payloadStr = JSON.stringify(database);
+      if (lastSyncedDataRef.current === payloadStr) return; // Skip if identical
+
       setCloudSyncStatus('syncing');
       try {
         const { quotes, ...mainDb } = database;
         await syncDatabase.save({ mainDb, quotes });
         setCloudSyncStatus('ok');
         setLastCloudSync(new Date());
+        lastSyncedDataRef.current = payloadStr;
       } catch (e) {
         console.warn('Cloud sync failed (non-critical):', e.message);
         setCloudSyncStatus('offline');
       }
-    }, 5000);
+    }, 60000);
 
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -251,6 +275,7 @@ function App() {
       await syncDatabase.save({ mainDb, quotes });
       setCloudSyncStatus('ok');
       setLastCloudSync(new Date());
+      lastSyncedDataRef.current = JSON.stringify(database);
       alert('Synchronisation Cloud réussie !');
     } catch (e) {
       setCloudSyncStatus('offline');
@@ -452,18 +477,7 @@ function App() {
             currentQuote={currentQuote}
             setCurrentQuote={setCurrentQuote}
             quoteSettings={quoteSettings}
-            setQuoteSettings={(newSettings) => {
-              setQuoteSettings(prev => {
-                const next = typeof newSettings === 'function' ? newSettings(prev) : newSettings;
-                try {
-                  localStorage.setItem('quoteSettings', JSON.stringify(next));
-                } catch (e) {
-                  console.error('LocalStorage quota exceeded:', e);
-                  alert("Erreur de sauvegarde : l'image du logo est trop volumineuse (limite 5 Mo).");
-                }
-                return next;
-              });
-            }}
+            setQuoteSettings={updateQuoteSettings}
             onNewQuote={() => setCurrentQuote(makeNewQuote(quoteSettings))}
           />
         )}
@@ -473,12 +487,14 @@ function App() {
             currentQuote={currentQuote}
             database={database}
             setData={setDatabase}
+            quoteSettings={quoteSettings}
           />
         )}
         {activeTab === 'clients' && (
           <ClientsModule 
             data={database}
             setData={setDatabase}
+            quoteSettings={quoteSettings}
             onOpenQuote={(quote) => {
               setCurrentQuote(quote);
               setActiveTab('commercial');
@@ -489,6 +505,7 @@ function App() {
           <SitePlanModule 
             data={database}
             setData={setDatabase}
+            quoteSettings={quoteSettings}
           />
         )}
         {activeTab === 'orders' && (
@@ -496,24 +513,14 @@ function App() {
             data={database}
             setData={setDatabase}
             quoteSettings={quoteSettings}
-            setQuoteSettings={(newSettings) => {
-              setQuoteSettings(prev => {
-                const next = typeof newSettings === 'function' ? newSettings(prev) : newSettings;
-                try {
-                  localStorage.setItem('quoteSettings', JSON.stringify(next));
-                } catch (e) {
-                  console.error('LocalStorage quota exceeded:', e);
-                  alert("Erreur de sauvegarde : l'image du logo est trop volumineuse (limite 5 Mo).");
-                }
-                return next;
-              });
-            }}
+            setQuoteSettings={updateQuoteSettings}
           />
         )}
         {activeTab === 'shipping' && (
           <ShippingModule 
             data={database}
             setData={setDatabase}
+            quoteSettings={quoteSettings}
             refetchData={() => {}}
           />
         )}
@@ -521,6 +528,7 @@ function App() {
           <AdminDashboard 
             data={database}
             setData={setDatabase}
+            quoteSettings={quoteSettings}
           />
         )}
       </main>
