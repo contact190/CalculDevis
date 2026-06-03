@@ -46,14 +46,18 @@ function App() {
   const [activeTab, setActiveTab] = useState('commercial');
   const [database, setDatabase] = useState(null); // null = loading
   const [isLoading, setIsLoading] = useState(true);
+  const [loadingMessage, setLoadingMessage] = useState('Chargement de vos données locales...');
   const [saveStatus, setSaveStatus] = useState('idle'); // 'idle' | 'saving' | 'saved' | 'error'
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [cloudSyncStatus, setCloudSyncStatus] = useState('idle'); // 'idle' | 'syncing' | 'ok' | 'offline'
   const [lastCloudSync, setLastCloudSync] = useState(null);
   const saveTimerRef = useRef(null);
-  const cloudSyncTimerRef = useRef(null);
+  const cloudSyncIntervalRef = useRef(null);
   const lastSyncedDataRef = useRef(null);
+  const lastLocalModifiedRef = useRef(null); // ISO timestamp of last local modification
+  const lastCloudTimestampRef = useRef(null); // ISO timestamp of last known cloud version
   const isFirstLoad = useRef(true);
+  const databaseRef = useRef(null); // Always-current ref for interval access
 
   const [quoteSettings, setQuoteSettings] = useState(DEFAULT_QUOTE_SETTINGS);
 
@@ -122,12 +126,13 @@ function App() {
     return repaired;
   }, []);
 
-  // ─── STEP 1: Load from IndexedDB on mount ───────────────────────────────
+  // ─── STEP 1: Load local + Cloud comparison on mount ──────────────────────
   useEffect(() => {
-    const loadLocal = async () => {
+    const loadAndSync = async () => {
       setIsLoading(true);
       try {
-        // Load settings first
+        // 1) Load settings first
+        setLoadingMessage('Chargement des paramètres...');
         const settingsData = await persistentStorage.load('quoteSettings');
         if (settingsData) {
           setQuoteSettings({ ...DEFAULT_QUOTE_SETTINGS, ...settingsData });
@@ -142,12 +147,13 @@ function App() {
           } catch(e) {}
         }
 
-        const localData = await persistentStorage.load(LOCAL_KEY);
-        if (localData) {
-          console.log('✅ Données locales chargées depuis IndexedDB');
-          setDatabase(repairDatabase(localData));
-        } else {
-          // Migrate from old localStorage if present
+        // 2) Load local data
+        setLoadingMessage('Chargement des données locales...');
+        let localData = await persistentStorage.load(LOCAL_KEY);
+        const localTimestamp = await persistentStorage.load('calculDevis_lastModified');
+
+        // Migrate from old localStorage if no IndexedDB data
+        if (!localData) {
           try {
             const oldMain = localStorage.getItem('calculDevisDB');
             const oldQuotes = localStorage.getItem('calculDevisQuotes');
@@ -155,24 +161,110 @@ function App() {
               const parsed = JSON.parse(oldMain);
               if (oldQuotes) parsed.quotes = JSON.parse(oldQuotes);
               console.log('🔄 Migration depuis localStorage vers IndexedDB');
-              const repaired = repairDatabase(parsed);
+              localData = parsed;
+              await persistentStorage.save(LOCAL_KEY, localData);
+            }
+          } catch(e) {}
+        }
+
+        // 3) Check if we have user data locally (not just default/empty)
+        const hasLocalUserData = localData && (
+          (localData.clients && localData.clients.length > 0) ||
+          (localData.quotes && localData.quotes.length > 0) ||
+          (localData.orders && localData.orders.length > 0)
+        );
+
+        // 4) Try to load from Cloud
+        if (navigator.onLine) {
+          setLoadingMessage('Vérification du Cloud...');
+          try {
+            const { data: cloudData, updatedAt: cloudTimestamp } = await syncDatabase.loadWithMeta();
+
+            if (!hasLocalUserData && cloudData) {
+              // ── CAS 1: Stockage local vide (nouvel appareil) → Charger depuis le Cloud
+              console.log('☁️ Nouvel appareil détecté — chargement depuis le Cloud');
+              setLoadingMessage('Chargement des données depuis le Cloud...');
+              const repaired = repairDatabase(cloudData);
               setDatabase(repaired);
               await persistentStorage.save(LOCAL_KEY, repaired);
+              lastLocalModifiedRef.current = cloudTimestamp;
+              lastCloudTimestampRef.current = cloudTimestamp;
+              await persistentStorage.save('calculDevis_lastModified', cloudTimestamp);
+              lastSyncedDataRef.current = JSON.stringify(repaired);
+              setCloudSyncStatus('ok');
+              setLastCloudSync(new Date());
+            } else if (hasLocalUserData && cloudData && cloudTimestamp) {
+              // ── CAS 2: Les deux existent → Comparer les dates
+              const cloudDate = new Date(cloudTimestamp);
+              const localDate = localTimestamp ? new Date(localTimestamp) : new Date(0);
+
+              if (cloudDate > localDate) {
+                // Cloud est plus récent → demander à l'utilisateur
+                const cloudDateStr = cloudDate.toLocaleString('fr-FR');
+                const localDateStr = localDate.getTime() > 0 ? localDate.toLocaleString('fr-FR') : 'inconnue';
+                const useCloud = window.confirm(
+                  `Des données plus récentes ont été trouvées sur le Cloud.\n\n` +
+                  `☁️ Cloud : ${cloudDateStr}\n` +
+                  `💾 Local : ${localDateStr}\n\n` +
+                  `Voulez-vous charger les données du Cloud ?\n` +
+                  `("Annuler" = garder vos données locales)`
+                );
+
+                if (useCloud) {
+                  console.log('☁️ Utilisateur a choisi les données Cloud');
+                  const repaired = repairDatabase(cloudData);
+                  setDatabase(repaired);
+                  await persistentStorage.save(LOCAL_KEY, repaired);
+                  lastLocalModifiedRef.current = cloudTimestamp;
+                  lastCloudTimestampRef.current = cloudTimestamp;
+                  await persistentStorage.save('calculDevis_lastModified', cloudTimestamp);
+                  lastSyncedDataRef.current = JSON.stringify(repaired);
+                  setCloudSyncStatus('ok');
+                  setLastCloudSync(new Date());
+                } else {
+                  console.log('💾 Utilisateur a gardé les données locales');
+                  const repaired = repairDatabase(localData);
+                  setDatabase(repaired);
+                  lastLocalModifiedRef.current = localTimestamp || new Date().toISOString();
+                  lastCloudTimestampRef.current = cloudTimestamp;
+                }
+              } else {
+                // Local est plus récent ou identique → garder local
+                console.log('✅ Données locales à jour');
+                const repaired = repairDatabase(localData);
+                setDatabase(repaired);
+                lastLocalModifiedRef.current = localTimestamp || new Date().toISOString();
+                lastCloudTimestampRef.current = cloudTimestamp;
+              }
             } else {
-              setDatabase(DEFAULT_DATA);
+              // Pas de données Cloud, on utilise le local (ou DEFAULT_DATA)
+              const repaired = repairDatabase(localData || DEFAULT_DATA);
+              setDatabase(repaired);
+              lastLocalModifiedRef.current = localTimestamp || null;
             }
-          } catch(e) {
-            setDatabase(DEFAULT_DATA);
+          } catch (cloudErr) {
+            console.warn('☁️ Cloud inaccessible au démarrage:', cloudErr.message);
+            const repaired = repairDatabase(localData || DEFAULT_DATA);
+            setDatabase(repaired);
+            lastLocalModifiedRef.current = localTimestamp || null;
+            setCloudSyncStatus('offline');
           }
+        } else {
+          // Hors-ligne → charger local uniquement
+          console.log('📴 Hors-ligne — données locales uniquement');
+          const repaired = repairDatabase(localData || DEFAULT_DATA);
+          setDatabase(repaired);
+          lastLocalModifiedRef.current = localTimestamp || null;
+          setCloudSyncStatus('offline');
         }
       } catch (e) {
-        console.error('Erreur chargement local:', e);
+        console.error('Erreur chargement:', e);
         setDatabase(DEFAULT_DATA);
       } finally {
         setIsLoading(false);
       }
     };
-    loadLocal();
+    loadAndSync();
   }, [repairDatabase]);
 
   const updateQuoteSettings = useCallback((newSettings) => {
@@ -183,7 +275,12 @@ function App() {
     });
   }, []);
 
-  // ─── STEP 2: Save to IndexedDB on every change (instant) ─────────────────
+  // ─── Keep databaseRef in sync ───────────────────────────────────────────
+  useEffect(() => {
+    databaseRef.current = database;
+  }, [database]);
+
+  // ─── STEP 2: Save to IndexedDB on every change (instant, local only) ─────
   useEffect(() => {
     if (!database || isLoading) return;
     if (isFirstLoad.current) { isFirstLoad.current = false; return; }
@@ -193,8 +290,11 @@ function App() {
 
     saveTimerRef.current = setTimeout(async () => {
       try {
+        const now = new Date().toISOString();
         await persistentStorage.save(LOCAL_KEY, database);
-        await persistentStorage.save(BACKUP_KEY, { ...database, _backupTime: new Date().toISOString() });
+        await persistentStorage.save(BACKUP_KEY, { ...database, _backupTime: now });
+        await persistentStorage.save('calculDevis_lastModified', now);
+        lastLocalModifiedRef.current = now;
         setSaveStatus('saved');
         setTimeout(() => setSaveStatus('idle'), 2000);
       } catch (e) {
@@ -203,32 +303,49 @@ function App() {
       }
     }, 300);
 
-    // Cloud sync (60s debounce, best-effort)
-    if (cloudSyncTimerRef.current) clearTimeout(cloudSyncTimerRef.current);
-    cloudSyncTimerRef.current = setTimeout(async () => {
-      if (!navigator.onLine) { setCloudSyncStatus('offline'); return; }
-      
-      const payloadStr = JSON.stringify(database);
-      if (lastSyncedDataRef.current === payloadStr) return; // Skip if identical
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [database, isLoading]);
+
+  // ─── STEP 3: Periodic Cloud sync every 60 seconds ─────────────────────────
+  useEffect(() => {
+    if (isLoading) return;
+
+    const doCloudSync = async () => {
+      const db = databaseRef.current;
+      if (!db || !navigator.onLine) {
+        if (!navigator.onLine) setCloudSyncStatus('offline');
+        return;
+      }
+
+      const payloadStr = JSON.stringify(db);
+      if (lastSyncedDataRef.current === payloadStr) return; // Skip if nothing changed
 
       setCloudSyncStatus('syncing');
       try {
-        const { quotes, ...mainDb } = database;
-        await syncDatabase.save({ mainDb, quotes });
+        const { quotes, ...mainDb } = db;
+        const savedTimestamp = await syncDatabase.save({ mainDb, quotes });
         setCloudSyncStatus('ok');
         setLastCloudSync(new Date());
         lastSyncedDataRef.current = payloadStr;
+        lastCloudTimestampRef.current = savedTimestamp;
+        console.log('☁️ Cloud sync automatique réussi');
       } catch (e) {
         console.warn('Cloud sync failed (non-critical):', e.message);
         setCloudSyncStatus('offline');
       }
-    }, 60000);
+    };
+
+    // Run once immediately after load, then every 60s
+    const initialTimeout = setTimeout(doCloudSync, 5000);
+    cloudSyncIntervalRef.current = setInterval(doCloudSync, 60000);
 
     return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-      if (cloudSyncTimerRef.current) clearTimeout(cloudSyncTimerRef.current);
+      clearTimeout(initialTimeout);
+      if (cloudSyncIntervalRef.current) clearInterval(cloudSyncIntervalRef.current);
     };
-  }, [database, isLoading]);
+  }, [isLoading]);
 
   // ─── Network listeners ────────────────────────────────────────────────────
   useEffect(() => {
@@ -272,10 +389,11 @@ function App() {
     setCloudSyncStatus('syncing');
     try {
       const { quotes, ...mainDb } = database;
-      await syncDatabase.save({ mainDb, quotes });
+      const savedTimestamp = await syncDatabase.save({ mainDb, quotes });
       setCloudSyncStatus('ok');
       setLastCloudSync(new Date());
       lastSyncedDataRef.current = JSON.stringify(database);
+      lastCloudTimestampRef.current = savedTimestamp;
       alert('Synchronisation Cloud réussie !');
     } catch (e) {
       setCloudSyncStatus('offline');
@@ -288,7 +406,7 @@ function App() {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', flexDirection: 'column', gap: '1rem', background: '#0f172a', color: 'white' }}>
         <div style={{ width: '48px', height: '48px', border: '4px solid #334155', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
-        <p style={{ fontSize: '1rem', color: '#94a3b8' }}>Chargement de vos données locales...</p>
+        <p style={{ fontSize: '1rem', color: '#94a3b8' }}>{loadingMessage}</p>
       </div>
     );
   }
