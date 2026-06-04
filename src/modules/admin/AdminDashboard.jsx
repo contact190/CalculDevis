@@ -728,7 +728,24 @@ const AdminDashboard = ({ data, setData }) => {
               Connecter un appareil
             </button>
           )}
-          <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <button 
+            id="save-admin-btn"
+            className="btn btn-primary" 
+            onClick={() => {
+              const btn = document.getElementById('save-admin-btn');
+              if (btn) {
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '✅ Enregistré !';
+                btn.style.backgroundColor = '#10b981';
+                btn.style.borderColor = '#10b981';
+                setTimeout(() => {
+                  btn.innerHTML = originalText;
+                  btn.style.backgroundColor = '';
+                  btn.style.borderColor = '';
+                }, 2000);
+              }
+            }}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', transition: 'all 0.2s' }}>
             <Save size={18} />
             Sauvegarder les modifications
           </button>
