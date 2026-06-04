@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Home, Package, Settings, ChevronRight, LayoutDashboard, Users, RefreshCw, ShoppingBag, Truck, CheckCircle, Building } from 'lucide-react';
+import { Home, Package, Settings, ChevronRight, LayoutDashboard, Users, RefreshCw, ShoppingBag, Truck, CheckCircle, Building, Wifi, WifiOff } from 'lucide-react';
 import CommercialModule from './modules/commercial/CommercialModule';
 import ProductionModule from './modules/production/ProductionModule';
 import AdminDashboard from './modules/admin/AdminDashboard';
@@ -12,6 +12,9 @@ import SitePlanModule from './modules/siteplan/SitePlanModule';
 import { DEFAULT_DATA } from './data/default-data';
 import { syncDatabase } from './utils/supabaseClient';
 import { persistentStorage } from './utils/storage';
+import { localSync } from './utils/localSync';
+import { smartMerge } from './utils/smartMerge';
+import { applyOps, generateOps, getDeviceId } from './utils/patchEngine';
 
 const LOCAL_KEY = 'calculDevis_main';
 const BACKUP_KEY = 'calculDevis_backup';
@@ -51,6 +54,7 @@ function App() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [cloudSyncStatus, setCloudSyncStatus] = useState('idle'); // 'idle' | 'syncing' | 'ok' | 'offline'
   const [lastCloudSync, setLastCloudSync] = useState(null);
+  const [connectedClients, setConnectedClients] = useState(0);
   const saveTimerRef = useRef(null);
   const cloudSyncIntervalRef = useRef(null);
   const lastSyncedDataRef = useRef(null);
@@ -58,6 +62,8 @@ function App() {
   const lastCloudTimestampRef = useRef(null); // ISO timestamp of last known cloud version
   const isFirstLoad = useRef(true);
   const databaseRef = useRef(null); // Always-current ref for interval access
+  const isApplyingRemoteOps = useRef(false); // Flag to prevent sync loops
+  const previousDbRef = useRef(null); // Previous db state for diffing
 
   const [quoteSettings, setQuoteSettings] = useState(DEFAULT_QUOTE_SETTINGS);
 
@@ -126,12 +132,11 @@ function App() {
     return repaired;
   }, []);
 
-  // ─── STEP 1: Load local + Cloud comparison on mount ──────────────────────
+  // ─── STEP 1: Load local + Network comparison on mount ──────────────────────
   useEffect(() => {
     const loadAndSync = async () => {
       setIsLoading(true);
       try {
-        // 1) Load settings first
         setLoadingMessage('Chargement des paramètres...');
         const settingsData = await persistentStorage.load('quoteSettings');
         if (settingsData) {
@@ -147,12 +152,10 @@ function App() {
           } catch(e) {}
         }
 
-        // 2) Load local data
         setLoadingMessage('Chargement des données locales...');
         let localData = await persistentStorage.load(LOCAL_KEY);
         const localTimestamp = await persistentStorage.load('calculDevis_lastModified');
 
-        // Migrate from old localStorage if no IndexedDB data
         if (!localData) {
           try {
             const oldMain = localStorage.getItem('calculDevisDB');
@@ -160,98 +163,48 @@ function App() {
             if (oldMain) {
               const parsed = JSON.parse(oldMain);
               if (oldQuotes) parsed.quotes = JSON.parse(oldQuotes);
-              console.log('🔄 Migration depuis localStorage vers IndexedDB');
               localData = parsed;
               await persistentStorage.save(LOCAL_KEY, localData);
             }
           } catch(e) {}
         }
 
-        // 3) Check if we have user data locally (not just default/empty)
         const hasLocalUserData = localData && (
           (localData.clients && localData.clients.length > 0) ||
           (localData.quotes && localData.quotes.length > 0) ||
           (localData.orders && localData.orders.length > 0)
         );
 
-        // 4) Try to load from Cloud
-        if (navigator.onLine) {
-          setLoadingMessage('Vérification du Cloud...');
-          try {
-            const { data: cloudData, updatedAt: cloudTimestamp } = await syncDatabase.loadWithMeta();
+        // Try local server first
+        setLoadingMessage('Recherche du Serveur Local...');
+        let serverData = null;
+        try {
+          serverData = await localSync.fetchData();
+        } catch(e) {
+          console.warn("Local server not found, falling back to offline mode");
+        }
 
-            if (!hasLocalUserData && cloudData) {
-              // ── CAS 1: Stockage local vide (nouvel appareil) → Charger depuis le Cloud
-              console.log('☁️ Nouvel appareil détecté — chargement depuis le Cloud');
-              setLoadingMessage('Chargement des données depuis le Cloud...');
-              const repaired = repairDatabase(cloudData);
-              setDatabase(repaired);
-              await persistentStorage.save(LOCAL_KEY, repaired);
-              lastLocalModifiedRef.current = cloudTimestamp;
-              lastCloudTimestampRef.current = cloudTimestamp;
-              await persistentStorage.save('calculDevis_lastModified', cloudTimestamp);
-              lastSyncedDataRef.current = JSON.stringify(repaired);
-              setCloudSyncStatus('ok');
-              setLastCloudSync(new Date());
-            } else if (hasLocalUserData && cloudData && cloudTimestamp) {
-              // ── CAS 2: Les deux existent → Comparer les dates
-              const cloudDate = new Date(cloudTimestamp);
-              const localDate = localTimestamp ? new Date(localTimestamp) : new Date(0);
-
-              if (cloudDate > localDate) {
-                // Cloud est plus récent → demander à l'utilisateur
-                const cloudDateStr = cloudDate.toLocaleString('fr-FR');
-                const localDateStr = localDate.getTime() > 0 ? localDate.toLocaleString('fr-FR') : 'inconnue';
-                const useCloud = window.confirm(
-                  `Des données plus récentes ont été trouvées sur le Cloud.\n\n` +
-                  `☁️ Cloud : ${cloudDateStr}\n` +
-                  `💾 Local : ${localDateStr}\n\n` +
-                  `Voulez-vous charger les données du Cloud ?\n` +
-                  `("Annuler" = garder vos données locales)`
-                );
-
-                if (useCloud) {
-                  console.log('☁️ Utilisateur a choisi les données Cloud');
-                  const repaired = repairDatabase(cloudData);
-                  setDatabase(repaired);
-                  await persistentStorage.save(LOCAL_KEY, repaired);
-                  lastLocalModifiedRef.current = cloudTimestamp;
-                  lastCloudTimestampRef.current = cloudTimestamp;
-                  await persistentStorage.save('calculDevis_lastModified', cloudTimestamp);
-                  lastSyncedDataRef.current = JSON.stringify(repaired);
-                  setCloudSyncStatus('ok');
-                  setLastCloudSync(new Date());
-                } else {
-                  console.log('💾 Utilisateur a gardé les données locales');
-                  const repaired = repairDatabase(localData);
-                  setDatabase(repaired);
-                  lastLocalModifiedRef.current = localTimestamp || new Date().toISOString();
-                  lastCloudTimestampRef.current = cloudTimestamp;
-                }
-              } else {
-                // Local est plus récent ou identique → garder local
-                console.log('✅ Données locales à jour');
-                const repaired = repairDatabase(localData);
-                setDatabase(repaired);
-                lastLocalModifiedRef.current = localTimestamp || new Date().toISOString();
-                lastCloudTimestampRef.current = cloudTimestamp;
-              }
-            } else {
-              // Pas de données Cloud, on utilise le local (ou DEFAULT_DATA)
-              const repaired = repairDatabase(localData || DEFAULT_DATA);
-              setDatabase(repaired);
-              lastLocalModifiedRef.current = localTimestamp || null;
-            }
-          } catch (cloudErr) {
-            console.warn('☁️ Cloud inaccessible au démarrage:', cloudErr.message);
-            const repaired = repairDatabase(localData || DEFAULT_DATA);
+        if (serverData) {
+          console.log('🔗 Serveur local trouvé !');
+          if (hasLocalUserData) {
+            console.log('🔄 Fusion Intelligente (Smart Merge) des données locales avec le serveur...');
+            const merged = smartMerge(localData, serverData);
+            const repaired = repairDatabase(merged);
             setDatabase(repaired);
-            lastLocalModifiedRef.current = localTimestamp || null;
-            setCloudSyncStatus('offline');
+            await persistentStorage.save(LOCAL_KEY, repaired);
+            lastLocalModifiedRef.current = new Date().toISOString();
+            setCloudSyncStatus('ok');
+          } else {
+            console.log('📥 Chargement depuis le Serveur Local...');
+            const repaired = repairDatabase(serverData);
+            setDatabase(repaired);
+            await persistentStorage.save(LOCAL_KEY, repaired);
+            lastLocalModifiedRef.current = new Date().toISOString();
+            setCloudSyncStatus('ok');
           }
         } else {
-          // Hors-ligne → charger local uniquement
-          console.log('📴 Hors-ligne — données locales uniquement');
+          // Fallback to purely local
+          console.log('📴 Mode Offline / Serveur Local injoignable');
           const repaired = repairDatabase(localData || DEFAULT_DATA);
           setDatabase(repaired);
           lastLocalModifiedRef.current = localTimestamp || null;
@@ -280,10 +233,10 @@ function App() {
     databaseRef.current = database;
   }, [database]);
 
-  // ─── STEP 2: Save to IndexedDB on every change (instant, local only) ─────
+  // ─── STEP 2: Save to IndexedDB + Push Delta Ops on every change ─────
   useEffect(() => {
     if (!database || isLoading) return;
-    if (isFirstLoad.current) { isFirstLoad.current = false; return; }
+    if (isFirstLoad.current) { isFirstLoad.current = false; previousDbRef.current = database; return; }
 
     setSaveStatus('saving');
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -297,55 +250,114 @@ function App() {
         lastLocalModifiedRef.current = now;
         setSaveStatus('saved');
         setTimeout(() => setSaveStatus('idle'), 2000);
+
+        // ─── Push delta ops to server (only if this is a LOCAL change) ─────
+        if (!isApplyingRemoteOps.current && previousDbRef.current) {
+          const result = await localSync.pushOps(database, previousDbRef.current);
+          if (result && result.success) {
+            if (result.applied > 0) {
+              setCloudSyncStatus('ok');
+              setLastCloudSync(new Date());
+              console.log(`🔗 ${result.applied} ops synchronisées en temps réel`);
+            }
+          } else if (result && result.queued) {
+            setCloudSyncStatus('offline');
+          }
+        }
+        previousDbRef.current = database;
       } catch (e) {
         console.error('IndexedDB save error:', e);
         setSaveStatus('error');
       }
-    }, 300);
+    }, 150); // Reduced debounce from 300ms to 150ms for faster sync
 
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
   }, [database, isLoading]);
 
-  // ─── STEP 3: Periodic Cloud sync every 60 seconds ─────────────────────────
+  // ─── STEP 3: Connect to Local Server WebSocket (Real-time Delta Sync) ───────
   useEffect(() => {
     if (isLoading) return;
 
-    const doCloudSync = async () => {
+    // Connect with delta-aware callbacks
+    localSync.connect({
+      // ─── Receive individual operations from other clients ─────
+      onOpsReceived: (ops) => {
+        if (!databaseRef.current || !Array.isArray(ops) || ops.length === 0) return;
+        
+        console.log(`📥 Application de ${ops.length} ops distantes en temps réel...`);
+        isApplyingRemoteOps.current = true;
+        
+        const { db: newDb, appliedCount } = applyOps(databaseRef.current, ops);
+        if (appliedCount > 0) {
+          const repaired = repairDatabase(newDb);
+          setDatabase(repaired);
+          // Update the snapshot so we don't re-send these ops back
+          localSync.updateSnapshot(repaired);
+          previousDbRef.current = repaired;
+          setCloudSyncStatus('ok');
+          setLastCloudSync(new Date());
+        }
+        
+        // Reset flag after React batches the state update
+        setTimeout(() => { isApplyingRemoteOps.current = false; }, 50);
+      },
+
+      // ─── Full refresh needed (backup restored, etc.) ─────
+      onFullRefresh: async () => {
+        console.log('🔄 Refresh complet depuis le serveur...');
+        setCloudSyncStatus('syncing');
+        const serverData = await localSync.fetchData();
+        if (serverData && databaseRef.current) {
+          isApplyingRemoteOps.current = true;
+          const merged = smartMerge(databaseRef.current, serverData);
+          const repaired = repairDatabase(merged);
+          setDatabase(repaired);
+          localSync.updateSnapshot(repaired);
+          previousDbRef.current = repaired;
+          setCloudSyncStatus('ok');
+          setLastCloudSync(new Date());
+          setTimeout(() => { isApplyingRemoteOps.current = false; }, 50);
+        }
+      },
+
+      // ─── Connection status updates ─────
+      onConnectionChange: (connected) => {
+        setCloudSyncStatus(connected ? 'ok' : 'offline');
+        if (connected) {
+          // On reconnect, fetch status to see how many clients
+          localSync.getStatus().then(status => {
+            if (status) setConnectedClients(status.connectedClients || 0);
+          });
+        }
+      },
+
+      // ─── Sync acknowledgement ─────
+      onSyncAck: (ack) => {
+        if (ack.applied > 0) {
+          setConnectedClients(prev => prev); // Force update
+        }
+      }
+    });
+
+    // Periodic Supabase cloud backup (every 2 minutes)
+    cloudSyncIntervalRef.current = setInterval(async () => {
       const db = databaseRef.current;
-      if (!db || !navigator.onLine) {
-        if (!navigator.onLine) setCloudSyncStatus('offline');
-        return;
-      }
-
-      const payloadStr = JSON.stringify(db);
-      if (lastSyncedDataRef.current === payloadStr) return; // Skip if nothing changed
-
-      setCloudSyncStatus('syncing');
+      if (!db) return;
       try {
-        const { quotes, ...mainDb } = db;
-        const savedTimestamp = await syncDatabase.save({ mainDb, quotes });
-        setCloudSyncStatus('ok');
-        setLastCloudSync(new Date());
-        lastSyncedDataRef.current = payloadStr;
-        lastCloudTimestampRef.current = savedTimestamp;
-        console.log('☁️ Cloud sync automatique réussi');
+        await syncDatabase.save({ mainDb: db, quotes: db.quotes || [] });
+        console.log('☁️ Backup Supabase effectué');
       } catch (e) {
-        console.warn('Cloud sync failed (non-critical):', e.message);
-        setCloudSyncStatus('offline');
+        // Silent fail for cloud backup — not critical
       }
-    };
-
-    // Run once immediately after load, then every 60s
-    const initialTimeout = setTimeout(doCloudSync, 5000);
-    cloudSyncIntervalRef.current = setInterval(doCloudSync, 60000);
+    }, 120000); // 2 minutes
 
     return () => {
-      clearTimeout(initialTimeout);
+      localSync.disconnect();
       if (cloudSyncIntervalRef.current) clearInterval(cloudSyncIntervalRef.current);
     };
-  }, [isLoading]);
+  }, [isLoading, repairDatabase]);
 
   // ─── Network listeners ────────────────────────────────────────────────────
   useEffect(() => {
@@ -383,21 +395,23 @@ function App() {
     }
   };
 
-  // ─── Force cloud sync ─────────────────────────────────────────────────────
+  // ─── Force local sync (full push) ─────────────────────────────────────────
   const handleForceCloudSync = async () => {
     if (!database) return;
     setCloudSyncStatus('syncing');
     try {
-      const { quotes, ...mainDb } = database;
-      const savedTimestamp = await syncDatabase.save({ mainDb, quotes });
-      setCloudSyncStatus('ok');
-      setLastCloudSync(new Date());
-      lastSyncedDataRef.current = JSON.stringify(database);
-      lastCloudTimestampRef.current = savedTimestamp;
-      alert('Synchronisation Cloud réussie !');
+      const result = await localSync.pushDataFull(database);
+      if (result) {
+        setCloudSyncStatus('ok');
+        setLastCloudSync(new Date());
+        previousDbRef.current = database;
+        alert('✅ Synchronisation complète réussie !');
+      } else {
+        throw new Error('Échec du serveur');
+      }
     } catch (e) {
       setCloudSyncStatus('offline');
-      alert('Échec Cloud. Données sauvegardées en local.');
+      alert('❌ Échec Réseau. Données sauvegardées en local.');
     }
   };
 
@@ -509,16 +523,19 @@ function App() {
             </span>
           </div>
 
-          {/* Cloud Sync Status */}
+          {/* Real-time Sync Status */}
           <div style={{ padding: '0.5rem 0.75rem', borderRadius: '0.4rem', background: 'rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-            <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: isOnline ? '#10b981' : '#ef4444', flexShrink: 0 }} />
+            <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: cloudSyncStatus === 'ok' ? '#10b981' : cloudSyncStatus === 'syncing' ? '#f59e0b' : '#ef4444', flexShrink: 0, boxShadow: cloudSyncStatus === 'ok' ? '0 0 6px #10b981' : 'none' }} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <p style={{ margin: 0, fontSize: '0.68rem', color: cloudColor, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {cloudSyncStatus === 'ok' ? '☁️ Cloud synchronisé' : cloudSyncStatus === 'syncing' ? '☁️ Sync en cours...' : isOnline ? '☁️ En attente sync' : '📴 Hors-ligne'}
+                {cloudSyncStatus === 'ok' ? '⚡ Temps Réel' : cloudSyncStatus === 'syncing' ? '🔄 Synchronisation...' : '📴 Hors-ligne'}
               </p>
-              {lastCloudSync && <p style={{ margin: 0, fontSize: '0.58rem', color: '#64748b' }}>{lastCloudSync.toLocaleTimeString()}</p>}
+              <p style={{ margin: 0, fontSize: '0.55rem', color: '#64748b' }}>
+                {lastCloudSync ? `Dernière sync: ${lastCloudSync.toLocaleTimeString()}` : ''}
+                {localSync.getPendingCount() > 0 ? ` • ${localSync.getPendingCount()} ops en attente` : ''}
+              </p>
             </div>
-            <button onClick={handleForceCloudSync} title="Forcer la synchro" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', flexShrink: 0 }}>
+            <button onClick={handleForceCloudSync} title="Forcer sync complète" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', flexShrink: 0 }}>
               <RefreshCw size={12} color="#64748b" />
             </button>
           </div>

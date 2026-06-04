@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Package, Search, Plus, Trash2, Save, Download, Upload, AlertCircle, RefreshCw, Layers, Edit2, ChevronDown, Check, FileSpreadsheet, Info, Copy, Image as ImageIcon } from 'lucide-react';
+import { Package, Search, Plus, Trash2, Save, Download, Upload, AlertCircle, RefreshCw, Layers, Edit2, ChevronDown, Check, FileSpreadsheet, Info, Copy, Image as ImageIcon, Smartphone } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { DEFAULT_DATA } from '../../data/default-data';
 import * as XLSX from 'xlsx';
 import { create, all } from 'mathjs';
@@ -211,6 +212,24 @@ const AdminDashboard = ({ data, setData }) => {
   const [activeTab, setActiveTab] = useState('ranges');
   const [editingAddonItem, setEditingAddonItem] = useState(null); // { family, idx, item }
   const [editingComposition, setEditingComposition] = useState(null);
+  const [localIpUrl, setLocalIpUrl] = useState('');
+
+  useEffect(() => {
+    // Fetch local IP from the server to generate accurate QR code
+    let serverUrl = window.location.origin;
+    if (window.location.port === '5173') serverUrl = `http://${window.location.hostname}:3001`;
+    
+    fetch(`${serverUrl}/api/ip`)
+      .then(r => r.json())
+      .then(data => {
+        const port = window.location.port === '5173' ? '3001' : (window.location.port || '80');
+        const url = `http://${data.ip}${port !== '80' ? `:${port}` : ''}`;
+        setLocalIpUrl(url);
+      })
+      .catch(() => {
+        setLocalIpUrl(window.location.origin);
+      });
+  }, []);
 
   const handleAddComposition = () => {
     const newComp = {
@@ -703,12 +722,41 @@ const AdminDashboard = ({ data, setData }) => {
           </div>
         </div>
         <div style={{ display: 'flex', gap: '1rem' }}>
+          {localIpUrl && (
+            <button className="btn btn-secondary" onClick={() => document.getElementById('qr-modal').showModal()} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Smartphone size={18} />
+              Connecter un appareil
+            </button>
+          )}
           <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <Save size={18} />
             Sauvegarder les modifications
           </button>
         </div>
       </header>
+
+      {/* QR Code Modal */}
+      <dialog id="qr-modal" className="glass shadow-2xl" style={{ padding: '2rem', borderRadius: '1rem', border: 'none', maxWidth: '400px', width: '100%' }}>
+        <div style={{ textAlign: 'center' }}>
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1e293b', marginBottom: '0.5rem' }}>Connecter une tablette ou un mobile</h2>
+          <p style={{ color: '#64748b', fontSize: '0.875rem', marginBottom: '1.5rem' }}>
+            Scannez ce QR Code avec l'appareil photo de votre téléphone/tablette pour ouvrir le logiciel instantanément. L'appareil doit être connecté au même réseau Wi-Fi.
+          </p>
+          
+          <div style={{ background: 'white', padding: '1rem', borderRadius: '0.5rem', display: 'inline-block', border: '1px solid #e2e8f0', marginBottom: '1.5rem' }}>
+            {localIpUrl && <QRCodeSVG value={localIpUrl} size={200} level="M" />}
+          </div>
+          
+          <div style={{ background: '#f1f5f9', padding: '0.75rem', borderRadius: '0.5rem', marginBottom: '1.5rem' }}>
+            <p style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '0.25rem', fontWeight: 600 }}>Lien direct :</p>
+            <p style={{ fontSize: '1rem', color: '#3b82f6', fontWeight: 700, margin: 0, wordBreak: 'break-all' }}>{localIpUrl}</p>
+          </div>
+
+          <button className="btn btn-secondary" style={{ width: '100%' }} onClick={() => document.getElementById('qr-modal').close()}>
+            Fermer
+          </button>
+        </div>
+      </dialog>
 
       <div className="glass shadow-lg" style={{ padding: 0 }}>
         {/* Tabs */}
