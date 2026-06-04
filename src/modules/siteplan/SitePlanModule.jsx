@@ -23,6 +23,8 @@ function syncSitePlanToMeasurements(sitePlan, orderItems) {
           });
         }
 
+        const autoName = `${floor.name}${apt.name}${apt.voids.indexOf(v) + 1}`;
+
         flat.push({
           id: v.id,
           itemId: v.itemId,
@@ -32,7 +34,7 @@ function syncSitePlanToMeasurements(sitePlan, orderItems) {
           handleHeight: v.handleHeight !== undefined ? v.handleHeight : undefined,
           qty: 1,
           instanceFloors: [floor.name],
-          instanceNames: [v.name],
+          instanceNames: [autoName],
           shutterList: shutterList,
           partOverrides: v.partOverrides || {}
         });
@@ -174,7 +176,7 @@ export default function SitePlanModule({ data, setData }) {
     const floors = [...(currentPlan.floors || [])];
     const newFloor = {
       id: `floor-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      name: `Étage ${floors.length + 1}`,
+      name: `${floors.length + 1}`,
       apartments: []
     };
     const updatedPlan = { ...currentPlan, floors: [...floors, newFloor] };
@@ -206,9 +208,10 @@ export default function SitePlanModule({ data, setData }) {
     const floors = (currentPlan.floors || []).map(f => {
       if (f.id !== floorId) return f;
       const apts = f.apartments || [];
+      const newAptName = String.fromCharCode(65 + apts.length);
       const newApt = {
         id: `apt-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-        name: `Appartement ${apts.length + 1}`,
+        name: newAptName,
         voids: []
       };
       return { ...f, apartments: [...apts, newApt] };
@@ -323,7 +326,7 @@ export default function SitePlanModule({ data, setData }) {
           const voids = a.voids || [];
           const newV = {
             id: `void-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-            name: `Vide ${voids.length + 1}`,
+            name: ``,
             itemId: '',
             L: defaultItem?.config?.L || undefined,
             H: defaultItem?.config?.H || undefined,
@@ -548,13 +551,13 @@ export default function SitePlanModule({ data, setData }) {
                     
                     {/* Floor Header */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem' }}>
-                      <span style={{ fontSize: '1.1rem' }}>🏢</span>
+                      <span style={{ fontSize: '1.1rem' }}>🏢 Étage</span>
                       <input
-                        type="text"
+                        type="number"
                         className="input"
                         value={floor.name}
                         onChange={e => updateFloorName(floor.id, e.target.value)}
-                        style={{ fontWeight: 700, fontSize: '1.05rem', padding: '0.3rem 0.6rem', width: '220px' }}
+                        style={{ fontWeight: 700, fontSize: '1.05rem', padding: '0.3rem 0.6rem', width: '80px' }}
                       />
                       <button onClick={() => addApartment(floor.id)} className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.3rem 0.6rem', display: 'flex', alignItems: 'center', gap: '0.3rem', background: 'white' }}>
                         <Plus size={14} /> Ajouter un Appartement
@@ -574,13 +577,13 @@ export default function SitePlanModule({ data, setData }) {
                       {(floor.apartments || []).map(apt => (
                         <div key={apt.id} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '0.75rem', padding: '1rem' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-                            <span style={{ fontSize: '1rem' }}>🚪</span>
+                            <span style={{ fontSize: '1rem' }}>🚪 Appartement</span>
                             <input
                               type="text"
                               className="input"
                               value={apt.name}
                               onChange={e => updateApartmentName(floor.id, apt.id, e.target.value)}
-                              style={{ fontWeight: 600, fontSize: '0.95rem', padding: '0.25rem 0.5rem', width: '200px' }}
+                              style={{ fontWeight: 600, fontSize: '0.95rem', padding: '0.25rem 0.5rem', width: '120px' }}
                             />
                             <button onClick={() => addVoid(floor.id, apt.id)} className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', display: 'flex', alignItems: 'center', gap: '0.3rem', background: '#f8fafc' }}>
                               <Plus size={12} /> Ajouter un Vide
@@ -597,17 +600,14 @@ export default function SitePlanModule({ data, setData }) {
 
                           {/* Voids List */}
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', paddingLeft: '1.5rem' }}>
-                            {(apt.voids || []).map(v => (
+                            {(apt.voids || []).map((v, vIndex) => {
+                              const autoName = `${floor.name}${apt.name}${vIndex + 1}`;
+                              return (
                               <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: '#f8fafc', padding: '0.5rem 0.75rem', borderRadius: '0.5rem', border: '1px dashed #cbd5e1' }}>
-                                <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>Nom du Vide :</span>
-                                <input
-                                  type="text"
-                                  className="input"
-                                  value={v.name}
-                                  onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'name', e.target.value)}
-                                  placeholder="Ex: Vide 1 ou Salon..."
-                                  style={{ fontSize: '0.85rem', padding: '0.2rem 0.4rem', width: '180px' }}
-                                />
+                                <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>Vide :</span>
+                                <div style={{ fontSize: '0.9rem', fontWeight: 700, padding: '0.2rem 0.4rem', width: '60px', color: '#334155', background: '#e2e8f0', borderRadius: '4px', textAlign: 'center' }}>
+                                  {autoName}
+                                </div>
                                 <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600, marginLeft: '0.5rem' }}>Assigné à la Menuiserie :</span>
                                 {selectedQuote ? (() => {
                                   const selItem = selectedQuote.items?.find(i => i.id === v.itemId);
@@ -661,7 +661,8 @@ export default function SitePlanModule({ data, setData }) {
                                   <Trash2 size={14} />
                                 </button>
                               </div>
-                            ))}
+                            );
+                            })}
                             {(apt.voids || []).length === 0 && (
                               <div style={{ fontSize: '0.8rem', color: '#94a3b8', fontStyle: 'italic', padding: '0.25rem 0' }}>Aucun vide créé dans cet appartement.</div>
                             )}
