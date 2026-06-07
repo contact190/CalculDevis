@@ -168,6 +168,7 @@ const ClauseEditor = ({ clauses, setClauses, readOnly }) => {
 // ─── Contract Generator Main Component ───────────────────────────────────────
 const ContractGenerator = ({ data, setData, quoteSettings }) => {
   const [selectedOrderId, setSelectedOrderId] = useState('');
+  const [selectedClientId, setSelectedClientId] = useState('');
   const [editingContract, setEditingContract] = useState(null);
   const [clauses, setClauses] = useState([...DEFAULT_CLAUSES]);
   const [montantHT, setMontantHT] = useState(0);
@@ -192,18 +193,19 @@ const ContractGenerator = ({ data, setData, quoteSettings }) => {
     return clients.find(c => c.id === selectedOrder.clientId) || null;
   }, [selectedOrder, clients]);
 
-  const handleStartNewContract = () => {
-    if (!selectedOrderId) { alert('Veuillez sélectionner une commande.'); return; }
-    const existingContract = contracts.find(c => c.orderId === selectedOrderId && c.status !== 'Annulé');
+  const handleStartNewContract = (targetOrderId) => {
+    const idToUse = targetOrderId || selectedOrderId;
+    if (!idToUse) { alert('Veuillez sélectionner une commande.'); return; }
+    const existingContract = contracts.find(c => c.orderId === idToUse && c.status !== 'Annulé');
     if (existingContract) {
       alert(`Un contrat existe déjà pour cette commande (${existingContract.id}).`);
       return;
     }
-    const order = orders.find(o => o.id === selectedOrderId);
+    const order = orders.find(o => o.id === idToUse);
     const newContractId = `CTR-${Date.now().toString().slice(-6)}`;
     const draft = {
       id: newContractId,
-      orderId: selectedOrderId,
+      orderId: idToUse,
       clientId: order?.clientId || '',
       status: 'Brouillon',
       createdAt: new Date().toISOString(),
@@ -405,27 +407,92 @@ const ContractGenerator = ({ data, setData, quoteSettings }) => {
 
       {/* New contract creation bar */}
       {!editingContract && (
-        <div className="glass" style={{ marginBottom: '1.5rem', padding: '1.25rem', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-          <select
-            value={selectedOrderId}
-            onChange={e => setSelectedOrderId(e.target.value)}
-            style={{ flex: 1, minWidth: '200px', padding: '0.6rem 0.75rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0', fontSize: '0.9rem', background: 'white' }}
-          >
-            <option value="">— Sélectionner une commande —</option>
-            {orders.map(o => {
-              const client = clients.find(c => c.id === o.clientId);
-              const hasContract = (data.contracts || []).some(ct => ct.orderId === o.id && ct.status !== 'Annulé');
-              return (
-                <option key={o.id} value={o.id}>
-                  {o.id} — {client?.nom || 'Client inconnu'} {hasContract ? '(contrat existant)' : ''}
-                </option>
-              );
-            })}
-          </select>
-          <button onClick={handleStartNewContract}
-            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1.25rem', background: 'linear-gradient(135deg, #0f4c75, #1b6ca8)', color: 'white', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem' }}>
-            <Plus size={16} /> Nouveau Contrat
-          </button>
+        <div className="glass" style={{ marginBottom: '1.5rem', padding: '1.25rem' }}>
+          <h3 style={{ margin: '0 0 1rem', fontSize: '1.1rem', fontWeight: 700, color: '#1e293b' }}>📝 Créer un nouveau contrat</h3>
+          
+          <div className="form-group" style={{ marginBottom: '1.25rem', maxWidth: '400px' }}>
+            <label className="label">1. Sélectionner un Client</label>
+            <select
+              value={selectedClientId}
+              onChange={e => { setSelectedClientId(e.target.value); setSelectedOrderId(''); }}
+              style={{ width: '100%', padding: '0.6rem 0.75rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0', fontSize: '0.9rem', background: 'white' }}
+            >
+              <option value="">— Choisir un client —</option>
+              {clients.map(c => (
+                <option key={c.id} value={c.id}>{c.nom}</option>
+              ))}
+            </select>
+          </div>
+
+          {selectedClientId && (
+            <div>
+              <label className="label" style={{ marginBottom: '0.75rem', display: 'block' }}>2. Devis / Commandes du client</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {orders.filter(o => o.clientId === selectedClientId).map(o => {
+                  const hasContract = (data.contracts || []).some(ct => ct.orderId === o.id && ct.status !== 'Annulé');
+                  
+                  // Déterminer le plan de chantier
+                  let sitePlanName = 'Aucun plan rattaché';
+                  const client = clients.find(c => c.id === selectedClientId);
+                  if (client && client.sitePlans) {
+                    if (o.sitePlanId) {
+                      const plan = client.sitePlans.find(p => p.id === o.sitePlanId);
+                      if (plan) sitePlanName = plan.name || 'Plan sans nom';
+                    } else {
+                      // Recherche si une mesure de la commande est dans un plan
+                      for (const plan of client.sitePlans) {
+                        for (const floor of (plan.floors || [])) {
+                          for (const apt of (floor.apartments || [])) {
+                            for (const voidItem of (apt.voids || [])) {
+                              if (o.items?.some(i => i.id === voidItem.itemId)) {
+                                sitePlanName = plan.name || 'Plan sans nom';
+                                break;
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+
+                  return (
+                    <div key={o.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem', background: '#f8fafc', borderRadius: '0.5rem', border: '1px solid #e2e8f0' }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.35rem' }}>
+                          <strong style={{ color: '#0f4c75', fontSize: '1.05rem' }}>Commande {o.id}</strong>
+                          <span style={{ fontSize: '0.75rem', padding: '0.15rem 0.5rem', background: '#e2e8f0', borderRadius: '999px', color: '#475569', fontWeight: 600 }}>
+                            {o.status || 'Nouveau'}
+                          </span>
+                        </div>
+                        <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                          📍 Plan de chantier : <strong>{sitePlanName}</strong>
+                        </p>
+                      </div>
+                      <div>
+                        {hasContract ? (
+                          <span style={{ fontSize: '0.85rem', color: '#059669', fontWeight: 700, padding: '0.5rem 1rem', background: '#f0fdf4', borderRadius: '0.5rem', border: '1px solid #a7f3d0' }}>
+                            ✓ Contrat existant
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => { setSelectedOrderId(o.id); setTimeout(() => handleStartNewContract(o.id), 0); }}
+                            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1.25rem', background: 'linear-gradient(135deg, #0f4c75, #1b6ca8)', color: 'white', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem' }}
+                          >
+                            <Plus size={16} /> Créer Contrat
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+                {orders.filter(o => o.clientId === selectedClientId).length === 0 && (
+                  <div style={{ padding: '1.5rem', textAlign: 'center', background: '#f8fafc', borderRadius: '0.5rem', border: '1px dashed #cbd5e1' }}>
+                    <p style={{ margin: 0, color: '#64748b', fontSize: '0.9rem' }}>Ce client n'a aucune commande / devis.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

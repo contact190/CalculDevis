@@ -107,10 +107,27 @@ function setupGracefulShutdown() {
 
 const TRACKABLE_COLLECTIONS = [
   'clients', 'quotes', 'orders', 'compositions', 'glass', 'colors',
-  'options', 'accessories', 'shutterCaissons', 'shutterLames',
-  'shutterLamesFinales', 'shutterGlissieres', 'shutterAxes', 'shutterKits',
-  'profiles', 'joints', 'reinforcements', 'hardwareSets'
+  'options', 'accessories', 'profiles', 'joints', 'reinforcements', 'hardwareSets',
+  'ranges', 'categories', 'traverses',
+  'shutterComponents.caissons', 'shutterComponents.lames',
+  'shutterComponents.lamesFinales', 'shutterComponents.glissieres',
+  'shutterComponents.axes', 'shutterComponents.kits'
 ];
+
+function getPath(obj, path) {
+  return path.split('.').reduce((acc, part) => acc && acc[part], obj);
+}
+
+function setPath(obj, path, value) {
+  const parts = path.split('.');
+  const last = parts.pop();
+  const target = parts.reduce((acc, part) => {
+    if (!acc[part]) acc[part] = {};
+    return acc[part];
+  }, obj);
+  target[last] = value;
+  return obj;
+}
 
 function applyOpToDb(op) {
   if (!dbInMemory || !op) return false;
@@ -119,18 +136,18 @@ function applyOpToDb(op) {
 
   // Handle non-collection key replacements
   if (opType === 'replace_key') {
-    dbInMemory[collection] = data;
+    setPath(dbInMemory, collection, data);
     dbDirty = true;
     return true;
   }
 
   if (!TRACKABLE_COLLECTIONS.includes(collection)) return false;
 
-  if (!Array.isArray(dbInMemory[collection])) {
-    dbInMemory[collection] = [];
+  let arr = getPath(dbInMemory, collection);
+  if (!Array.isArray(arr)) {
+    arr = [];
+    setPath(dbInMemory, collection, arr);
   }
-
-  const arr = dbInMemory[collection];
 
   switch (opType) {
     case 'add': {

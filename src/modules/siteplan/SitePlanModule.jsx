@@ -697,6 +697,26 @@ export default function SitePlanModule({ data, setData }) {
       {infoPopupItem && (() => {
         const popupComp = (data.compositions || []).find(c => c.id === infoPopupItem.config?.compositionId);
         const popupRange = popupComp ? (data.ranges || []).find(r => r.id === popupComp.rangeId) : null;
+        let gammeDisplay = popupRange?.name || '—';
+
+        if (infoPopupItem.config?.compoundType && infoPopupItem.config.compoundType !== 'none' && infoPopupItem.config.compoundConfig?.parts) {
+           const parts = infoPopupItem.config.compoundConfig.parts;
+           const ouvrantCompId = parts.find(p => p.type === 'opening')?.compositionId;
+           const fixeCompId = parts.find(p => p.type === 'fixe')?.compositionId;
+           
+           const ouvrantComp = (data.compositions || []).find(c => c.id === ouvrantCompId);
+           const fixeComp = (data.compositions || []).find(c => c.id === fixeCompId);
+           
+           const ouvrantRange = ouvrantComp ? (data.ranges || []).find(r => r.id === ouvrantComp.rangeId)?.name : '';
+           const fixeRange = fixeComp ? (data.ranges || []).find(r => r.id === fixeComp.rangeId)?.name : '';
+           
+           if (ouvrantRange && fixeRange && ouvrantRange !== fixeRange) {
+              gammeDisplay = `${ouvrantRange} (Ouvrant) + ${fixeRange} (Fixe)`;
+           } else if (ouvrantRange || fixeRange) {
+              gammeDisplay = ouvrantRange || fixeRange;
+           }
+        }
+
         const popupColor = (data.colors || []).find(c => c.id === infoPopupItem.config?.colorId);
         const techDrawing = getTechnicalDrawingDataURL(infoPopupItem.config, data);
         return (
@@ -771,7 +791,7 @@ export default function SitePlanModule({ data, setData }) {
                 </div>
                 <div style={{ background: '#faf5ff', borderRadius: '0.6rem', padding: '0.75rem', border: '1px solid #e9d5ff' }}>
                   <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#7e22ce', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Gamme</div>
-                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#6b21a8' }}>{popupRange?.name || '—'}</div>
+                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#6b21a8' }}>{gammeDisplay}</div>
                 </div>
                 <div style={{ background: '#fff7ed', borderRadius: '0.6rem', padding: '0.75rem', border: '1px solid #fed7aa' }}>
                   <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#c2410c', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Dimensions</div>
@@ -785,6 +805,20 @@ export default function SitePlanModule({ data, setData }) {
                   <div style={{ background: '#fefce8', borderRadius: '0.6rem', padding: '0.75rem', border: '1px solid #fef08a' }}>
                     <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#a16207', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Type d'ouverture</div>
                     <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#854d0e' }}>{infoPopupItem.config.openingType}</div>
+                  </div>
+                )}
+                {infoPopupItem.config?.hasShutter && (
+                  <div style={{ background: '#fdf4ff', borderRadius: '0.6rem', padding: '0.75rem', border: '1px solid #f5d0fe', gridColumn: '1 / -1' }}>
+                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#86198f', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Détails du Volet</div>
+                    <div style={{ fontSize: '0.85rem', color: '#701a75' }}>
+                      {(() => {
+                        const sCfg = infoPopupItem.config?.shutterConfig || {};
+                        const caisson = (data.accessories || []).find(a => a.id === sCfg.caissonId)?.name || sCfg.caissonId;
+                        const lame = (data.accessories || []).find(a => a.id === sCfg.lameId)?.name || sCfg.lameId;
+                        const moteur = (data.accessories || []).find(a => a.id === sCfg.kitId)?.name || sCfg.kitId;
+                        return `Caisson: ${caisson || '-'} | Lame: ${lame || '-'} | Motorisation: ${moteur || '-'}`;
+                      })()}
+                    </div>
                   </div>
                 )}
               </div>

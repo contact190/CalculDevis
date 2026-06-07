@@ -37,10 +37,27 @@ export function getDeviceId() {
  */
 const TRACKABLE_COLLECTIONS = [
   'clients', 'quotes', 'orders', 'compositions', 'glass', 'colors',
-  'options', 'accessories', 'shutterCaissons', 'shutterLames',
-  'shutterLamesFinales', 'shutterGlissieres', 'shutterAxes', 'shutterKits',
-  'profiles', 'joints', 'reinforcements', 'hardwareSets'
+  'options', 'accessories', 'profiles', 'joints', 'reinforcements', 'hardwareSets',
+  'ranges', 'categories', 'traverses',
+  'shutterComponents.caissons', 'shutterComponents.lames',
+  'shutterComponents.lamesFinales', 'shutterComponents.glissieres',
+  'shutterComponents.axes', 'shutterComponents.kits'
 ];
+
+function getPath(obj, path) {
+  return path.split('.').reduce((acc, part) => acc && acc[part], obj);
+}
+
+function setPath(obj, path, value) {
+  const parts = path.split('.');
+  const last = parts.pop();
+  const target = parts.reduce((acc, part) => {
+    if (!acc[part]) acc[part] = {};
+    return acc[part];
+  }, obj);
+  target[last] = value;
+  return obj;
+}
 
 /**
  * Stamp an item with _lastModified metadata
@@ -97,8 +114,8 @@ export function generateOps(oldDb, newDb) {
   const deviceId = getDeviceId();
   
   for (const collection of TRACKABLE_COLLECTIONS) {
-    const oldArr = oldDb[collection];
-    const newArr = newDb[collection];
+    const oldArr = getPath(oldDb, collection);
+    const newArr = getPath(newDb, collection);
     
     // Skip if both are missing or not arrays
     if (!Array.isArray(oldArr) && !Array.isArray(newArr)) continue;
@@ -205,7 +222,7 @@ export function applyOp(db, op) {
     };
   }
   
-  const arr = db[collection];
+  const arr = getPath(db, collection);
   if (!TRACKABLE_COLLECTIONS.includes(collection)) {
     return { db, applied: false };
   }
@@ -227,8 +244,10 @@ export function applyOp(db, op) {
       } else {
         currentArr.push(data);
       }
+      const newDb = JSON.parse(JSON.stringify(db)); // clone to allow deep set
+      setPath(newDb, collection, currentArr);
       return {
-        db: { ...db, [collection]: currentArr },
+        db: newDb,
         applied: true
       };
     }
@@ -238,8 +257,10 @@ export function applyOp(db, op) {
       if (idx < 0) {
         // Item doesn't exist locally — add it
         currentArr.push(data);
+        const newDb = JSON.parse(JSON.stringify(db));
+        setPath(newDb, collection, currentArr);
         return {
-          db: { ...db, [collection]: currentArr },
+          db: newDb,
           applied: true
         };
       }
@@ -251,8 +272,10 @@ export function applyOp(db, op) {
       }
       
       currentArr[idx] = data;
+      const newDb = JSON.parse(JSON.stringify(db));
+      setPath(newDb, collection, currentArr);
       return {
-        db: { ...db, [collection]: currentArr },
+        db: newDb,
         applied: true
       };
     }
@@ -270,8 +293,10 @@ export function applyOp(db, op) {
       }
       
       currentArr.splice(deleteIdx, 1);
+      const newDb = JSON.parse(JSON.stringify(db));
+      setPath(newDb, collection, currentArr);
       return {
-        db: { ...db, [collection]: currentArr },
+        db: newDb,
         applied: true
       };
     }
@@ -310,7 +335,7 @@ export function dbFingerprint(db) {
   
   const parts = [];
   for (const col of TRACKABLE_COLLECTIONS) {
-    const arr = db[col];
+    const arr = getPath(db, col);
     if (!Array.isArray(arr)) continue;
     
     let latestMod = '';

@@ -30,6 +30,8 @@ const InvoiceGenerator = ({ data, setData, quoteSettings }) => {
     const units = [];
     (selectedOrder.batches || []).forEach(batch => {
       (batch.items || []).forEach(item => {
+        const originalItem = selectedOrder.items?.find(i => i.id === item.id) || {};
+        const itemPriceHT = originalItem.unitPriceHT || originalItem.priceData?.priceHT || 0;
         (item.measurements || []).forEach(m => {
           for (let i = 0; i < (m.qty || 1); i++) {
             const unitId = `${selectedOrder.id}-${batch.id}-${item.id}-${m.id}-${i}`;
@@ -43,7 +45,7 @@ const InvoiceGenerator = ({ data, setData, quoteSettings }) => {
               label: item.label,
               dimensions: `${m.L} x ${m.H}`,
               isReceptionne,
-              unitPriceHT: item.unitPriceHT || 0,
+              unitPriceHT: itemPriceHT,
               batchId: batch.id,
             });
           }

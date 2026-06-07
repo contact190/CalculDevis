@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Calculator, Package, Settings, FileText, Info, LayoutGrid, Plus, Edit2, Trash2, Copy, ArrowLeft, Save, ChevronDown, ChevronUp, Building2, Phone, Mail, MapPin, Calendar, Clock, GitCompare, Search, Layers, AlertTriangle } from 'lucide-react';
+import { Calculator, Package, Settings, FileText, Info, LayoutGrid, Plus, Edit2, Trash2, Copy, ArrowLeft, Save, ChevronDown, ChevronUp, Building2, Phone, Mail, MapPin, Calendar, Clock, GitCompare, Search, Layers, AlertTriangle, X } from 'lucide-react';
 import { FormulaEngine } from '../../engine/formula-engine';
 import JoineryCanvas from '../../components/shared/JoineryCanvas';
 import LayoutComposer, { defaultLayout, rescaleTree } from '../../components/shared/LayoutComposer';
@@ -1797,6 +1797,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
   const engine = useMemo(() => new FormulaEngine(database), [database]);
   const [localView, setLocalView] = useState('list'); // 'list' | 'configure'
   const [editingItemId, setEditingItemId] = useState(null);
+  const [infoPopupItem, setInfoPopupItem] = useState(null);
   const [draftConfig, setDraftConfig] = useState({ ...EMPTY_CONFIG });
   const [draftLabel, setDraftLabel] = useState('');
   const [draftQty, setDraftQty] = useState(1);
@@ -2829,6 +2830,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
                           <td data-label="Total HT" style={{ fontWeight: 700, color: '#2563eb' }}>{totalHT.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
                           <td data-label="Actions">
                             <div style={{ display: 'flex', gap: '0.3rem', justifyContent: 'flex-end' }}>
+                              <button onClick={() => setInfoPopupItem(item)} title="Détails" style={{ padding: '0.3rem', border: '1px solid #e2e8f0', borderRadius: '0.3rem', background: 'white', cursor: 'pointer', color: '#3b82f6' }}><Info size={14} /></button>
                               <button onClick={() => startEditProduct(item)} title={isQuoteFrozen ? "Voir (Lecture seule)" : "Modifier"} style={{ padding: '0.3rem', border: '1px solid #e2e8f0', borderRadius: '0.3rem', background: 'white', cursor: 'pointer', color: '#2563eb' }}>{isQuoteFrozen ? <FileText size={14} /> : <Edit2 size={14} />}</button>
                               {!isQuoteFrozen && (
                                 <>
@@ -3161,6 +3163,145 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
           )}
         </div>
       )}
+      {/* Info Popup Modal */}
+      {infoPopupItem && (() => {
+        const popupComp = (database.compositions || []).find(c => c.id === infoPopupItem.config?.compositionId);
+        const popupRange = popupComp ? (database.ranges || []).find(r => r.id === popupComp.rangeId) : null;
+        let gammeDisplay = popupRange?.name || '—';
+
+        if (infoPopupItem.config?.compoundType && infoPopupItem.config.compoundType !== 'none' && infoPopupItem.config.compoundConfig?.parts) {
+           const parts = infoPopupItem.config.compoundConfig.parts;
+           const ouvrantCompId = parts.find(p => p.type === 'opening')?.compositionId;
+           const fixeCompId = parts.find(p => p.type === 'fixe')?.compositionId;
+           
+           const ouvrantComp = (database.compositions || []).find(c => c.id === ouvrantCompId);
+           const fixeComp = (database.compositions || []).find(c => c.id === fixeCompId);
+           
+           const ouvrantRange = ouvrantComp ? (database.ranges || []).find(r => r.id === ouvrantComp.rangeId)?.name : '';
+           const fixeRange = fixeComp ? (database.ranges || []).find(r => r.id === fixeComp.rangeId)?.name : '';
+           
+           if (ouvrantRange && fixeRange && ouvrantRange !== fixeRange) {
+              gammeDisplay = `${ouvrantRange} (Ouvrant) + ${fixeRange} (Fixe)`;
+           } else if (ouvrantRange || fixeRange) {
+              gammeDisplay = ouvrantRange || fixeRange;
+           }
+        }
+
+        const popupColor = (database.colors || []).find(c => c.id === infoPopupItem.config?.colorId);
+        const techDrawing = getTechnicalDrawingDataURL(infoPopupItem.config, database);
+        return (
+          <div 
+            onClick={() => setInfoPopupItem(null)}
+            style={{ 
+              position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+              background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(6px)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              zIndex: 9999, animation: 'fadeIn 0.2s ease'
+            }}
+          >
+            <div 
+              onClick={e => e.stopPropagation()}
+              style={{
+                background: 'white', borderRadius: '1.25rem', padding: '2rem',
+                width: '560px', maxWidth: '92vw', maxHeight: '85vh', overflowY: 'auto',
+                boxShadow: '0 25px 60px rgba(0,0,0,0.25)', position: 'relative',
+                animation: 'slideUp 0.25s ease'
+              }}
+            >
+              {/* Close button */}
+              <button 
+                onClick={() => setInfoPopupItem(null)}
+                style={{ 
+                  position: 'absolute', top: '1rem', right: '1rem',
+                  background: '#f1f5f9', border: 'none', borderRadius: '50%',
+                  width: '32px', height: '32px', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: '#64748b', transition: 'all 0.2s'
+                }}
+                onMouseEnter={e => { e.target.style.background = '#e2e8f0'; e.target.style.color = '#1e293b'; }}
+                onMouseLeave={e => { e.target.style.background = '#f1f5f9'; e.target.style.color = '#64748b'; }}
+              >
+                <X size={18} />
+              </button>
+
+              {/* Header */}
+              <div style={{ marginBottom: '1.25rem' }}>
+                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Info size={20} color="#3b82f6" /> Détails du Produit
+                </h3>
+                <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.85rem', color: '#64748b' }}>
+                  Aperçu et spécifications de l'article
+                </p>
+              </div>
+
+              {/* Technical Drawing */}
+              {techDrawing && (
+                <div style={{ 
+                  background: '#f8fafc', borderRadius: '0.75rem', padding: '1rem',
+                  border: '1px solid #e2e8f0', marginBottom: '1.25rem',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}>
+                  <img 
+                    src={techDrawing} 
+                    alt="Dessin technique" 
+                    style={{ maxWidth: '100%', maxHeight: '280px', objectFit: 'contain' }} 
+                  />
+                </div>
+              )}
+
+              {/* Details Grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div style={{ background: '#f0fdf4', borderRadius: '0.6rem', padding: '0.75rem', border: '1px solid #bbf7d0' }}>
+                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#15803d', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Désignation</div>
+                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#166534' }}>{infoPopupItem.label || '—'}</div>
+                </div>
+                <div style={{ background: '#eff6ff', borderRadius: '0.6rem', padding: '0.75rem', border: '1px solid #bfdbfe' }}>
+                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#1d4ed8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Composition</div>
+                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#1e40af' }}>{popupComp?.name || infoPopupItem.categoryId || '—'}</div>
+                </div>
+                <div style={{ background: '#faf5ff', borderRadius: '0.6rem', padding: '0.75rem', border: '1px solid #e9d5ff' }}>
+                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#7e22ce', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Gamme</div>
+                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#6b21a8' }}>{gammeDisplay}</div>
+                </div>
+                <div style={{ background: '#fff7ed', borderRadius: '0.6rem', padding: '0.75rem', border: '1px solid #fed7aa' }}>
+                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#c2410c', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Dimensions</div>
+                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#9a3412' }}>{infoPopupItem.config?.L || '?'} × {infoPopupItem.config?.H || '?'} mm</div>
+                </div>
+                <div style={{ background: '#f0f9ff', borderRadius: '0.6rem', padding: '0.75rem', border: '1px solid #bae6fd', gridColumn: popupColor ? 'auto' : '1 / -1' }}>
+                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#0369a1', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Couleur</div>
+                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#075985' }}>{popupColor?.name || infoPopupItem.config?.colorId || '—'}</div>
+                </div>
+                {infoPopupItem.config?.openingType && (
+                  <div style={{ background: '#fefce8', borderRadius: '0.6rem', padding: '0.75rem', border: '1px solid #fef08a' }}>
+                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#a16207', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Type d'ouverture</div>
+                    <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#854d0e' }}>{infoPopupItem.config.openingType}</div>
+                  </div>
+                )}
+                {infoPopupItem.config?.hasShutter && (
+                  <div style={{ background: '#fdf4ff', borderRadius: '0.6rem', padding: '0.75rem', border: '1px solid #f5d0fe', gridColumn: '1 / -1' }}>
+                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#86198f', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Détails du Volet</div>
+                    <div style={{ fontSize: '0.85rem', color: '#701a75' }}>
+                      {(() => {
+                        const sCfg = infoPopupItem.config?.shutterConfig || {};
+                        const caisson = (database.accessories || []).find(a => a.id === sCfg.caissonId)?.name || sCfg.caissonId;
+                        const lame = (database.accessories || []).find(a => a.id === sCfg.lameId)?.name || sCfg.lameId;
+                        const moteur = (database.accessories || []).find(a => a.id === sCfg.kitId)?.name || sCfg.kitId;
+                        return `Caisson: ${caisson || '-'} | Lame: ${lame || '-'} | Motorisation: ${moteur || '-'}`;
+                      })()}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Quantity info */}
+              <div style={{ marginTop: '1rem', padding: '0.6rem 0.75rem', background: '#f1f5f9', borderRadius: '0.5rem', fontSize: '0.8rem', color: '#475569', display: 'flex', justifyContent: 'space-between' }}>
+                <span>Quantité devis : <strong>{infoPopupItem.qty || 1}</strong></span>
+                <span>ID : <strong style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{infoPopupItem.id}</strong></span>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

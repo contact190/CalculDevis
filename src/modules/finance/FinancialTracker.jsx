@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { CreditCard, Plus, Upload, ExternalLink, CheckCircle, Clock, AlertTriangle, ChevronDown, ChevronUp, Trash2, FileText, Link, X } from 'lucide-react';
+import jsPDF from 'jspdf';
+import { CreditCard, Plus, Upload, ExternalLink, CheckCircle, Clock, AlertTriangle, ChevronDown, ChevronUp, Trash2, FileText, Link, X, Download } from 'lucide-react';
 
 const paymentStatuses = {
   'Payé': { color: '#10b981', bg: '#d1fae5', icon: '✅' },
@@ -53,23 +54,64 @@ const AttachmentInput = ({ value, onChange, label = 'Pièce jointe' }) => {
 };
 
 // ─── Versement Row ────────────────────────────────────────────
-const VersementRow = ({ versement, onUpdate, onDelete, delaiPaiementJours }) => {
+const VersementRow = ({ versement, onUpdate, onDelete, delaiPaiementJours, onGenerateSituation, onGenerateAttachement }) => {
   const [expanded, setExpanded] = useState(false);
 
   const pvBloque = versement.pvId && versement.pvStatus !== 'Validé';
+  const isPV = !!versement.pvId;
+
+  // Support for partial payments
+  const paiements = versement.paiements || [];
+  let effectivePaiements = [...paiements];
+
+  // Migration on the fly for old "Payé" versements
+  if (isPV && versement.statut === 'Payé' && effectivePaiements.length === 0) {
+    effectivePaiements = [{
+      id: `PAI-LEGACY`,
+      montant: versement.montant || 0,
+      date: versement.datePaiement || new Date().toISOString(),
+      attachment: versement.attachment || null
+    }];
+  }
+
+  const totalPayePV = isPV ? effectivePaiements.reduce((sum, p) => sum + (p.montant || 0), 0) : 0;
+  const restePV = (versement.montant || 0) - totalPayePV;
 
   // Auto compute status based on PV status and deadline
   const computedStatus = useMemo(() => {
     if (pvBloque) return 'Bloqué PV';
-    if (versement.statut === 'Payé') return 'Payé';
-    if (!versement.dateEcheance) return 'En attente';
-    const echeance = new Date(versement.dateEcheance);
-    const now = new Date();
-    if (now > echeance) return 'Retard';
-    return 'En attente';
-  }, [versement, pvBloque]);
+    if (isPV) {
+      if (effectivePaiements.length > 0 && restePV <= 0) return 'Payé';
+      if (!versement.dateEcheance) return 'En attente';
+      const echeance = new Date(versement.dateEcheance);
+      if (new Date() > echeance && restePV > 0) return 'Retard';
+      return 'En attente';
+    } else {
+      if (versement.statut === 'Payé') return 'Payé';
+      if (!versement.dateEcheance) return 'En attente';
+      const echeance = new Date(versement.dateEcheance);
+      if (new Date() > echeance) return 'Retard';
+      return 'En attente';
+    }
+  }, [versement, pvBloque, isPV, effectivePaiements.length, restePV]);
 
   const status = paymentStatuses[computedStatus] || paymentStatuses['En attente'];
+
+  const handleAddPaiement = () => {
+    const newP = { id: `PAI-${Date.now().toString().slice(-5)}`, montant: restePV > 0 ? restePV : 0, date: new Date().toISOString(), attachment: null };
+    onUpdate({ ...versement, paiements: [...effectivePaiements, newP], statut: 'Partiel' });
+  };
+
+  const handleUpdatePaiement = (idx, field, value) => {
+    const newPaiements = [...effectivePaiements];
+    newPaiements[idx] = { ...newPaiements[idx], [field]: value };
+    onUpdate({ ...versement, paiements: newPaiements });
+  };
+
+  const handleDeletePaiement = (idx) => {
+    const newPaiements = effectivePaiements.filter((_, i) => i !== idx);
+    onUpdate({ ...versement, paiements: newPaiements });
+  };
 
   return (
     <div style={{ border: `1px solid ${status.color}30`, borderRadius: '0.75rem', overflow: 'hidden', background: 'white' }}>
@@ -92,7 +134,7 @@ const VersementRow = ({ versement, onUpdate, onDelete, delaiPaiementJours }) => 
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
             <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#1e293b' }}>{versement.id}</span>
-            {versement.pvId && (
+            {isPV && (
               <span style={{
                 fontSize: '0.72rem', padding: '0.1rem 0.5rem', borderRadius: '999px', fontWeight: 700,
                 background: versement.pvStatus === 'Validé' ? '#dcfce7' : '#ede9fe',
@@ -106,29 +148,21 @@ const VersementRow = ({ versement, onUpdate, onDelete, delaiPaiementJours }) => 
             </span>
           </div>
           <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.15rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-            <span>Montant: <strong>{(versement.montant || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</strong></span>
+            <span>Montant Total: <strong>{(versement.montant || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</strong></span>
+            {isPV && <span>Payé: <strong style={{ color: '#059669' }}>{totalPayePV.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</strong></span>}
+            {isPV && restePV > 0 && <span>Reste: <strong style={{ color: '#ef4444' }}>{restePV.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</strong></span>}
             {versement.dateEcheance && <span>Échéance: {new Date(versement.dateEcheance).toLocaleDateString('fr-FR')}</span>}
-            {versement.datePaiement && <span style={{ color: '#10b981' }}>Payé le: {new Date(versement.datePaiement).toLocaleDateString('fr-FR')}</span>}
+            {!isPV && versement.datePaiement && <span style={{ color: '#10b981' }}>Payé le: {new Date(versement.datePaiement).toLocaleDateString('fr-FR')}</span>}
             {(versement.etages || []).length > 0 && <span>Étages : {versement.etages.join(', ')}</span>}
           </div>
         </div>
         <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
           {/* Bouton Marqué Payé — bloqué si PV non validé */}
-          {computedStatus !== 'Payé' && (
-            pvBloque ? (
-              <span title="Déblouez le PV d'abord dans Expédition" style={{
-                padding: '0.3rem 0.65rem', background: '#f3f4f6', border: '1px solid #e5e7eb',
-                borderRadius: '0.4rem', fontSize: '0.78rem', color: '#9ca3af', cursor: 'not-allowed',
-                display: 'flex', alignItems: 'center', gap: '0.3rem',
-              }}>
-                🔒 En attente PV
-              </span>
-            ) : (
-              <button onClick={e => { e.stopPropagation(); onUpdate({ ...versement, statut: 'Payé', datePaiement: new Date().toISOString() }); }}
-                style={{ padding: '0.3rem 0.65rem', background: '#10b981', border: 'none', borderRadius: '0.4rem', cursor: 'pointer', color: 'white', fontSize: '0.78rem', fontWeight: 700 }}>
-                Marquer Payé
-              </button>
-            )
+          {computedStatus !== 'Payé' && !isPV && (
+            <button onClick={e => { e.stopPropagation(); onUpdate({ ...versement, statut: 'Payé', datePaiement: new Date().toISOString() }); }}
+              style={{ padding: '0.3rem 0.65rem', background: '#10b981', border: 'none', borderRadius: '0.4rem', cursor: 'pointer', color: 'white', fontSize: '0.78rem', fontWeight: 700 }}>
+              Marquer Payé
+            </button>
           )}
           <button onClick={e => { e.stopPropagation(); onDelete(versement.id); }}
             style={{ padding: '0.3rem 0.5rem', background: '#fee2e2', border: 'none', borderRadius: '0.4rem', cursor: 'pointer', color: '#ef4444' }}>
@@ -138,38 +172,126 @@ const VersementRow = ({ versement, onUpdate, onDelete, delaiPaiementJours }) => 
         </div>
       </div>
       {expanded && (
-        <div style={{ padding: '1rem', borderTop: '1px solid #f1f5f9', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem', opacity: pvBloque ? 0.6 : 1 }}>
-          <div className="form-group">
-            <label className="label">Montant (DZD)</label>
-            <input className="input" type="number" value={versement.montant || 0} disabled={pvBloque}
-              onChange={e => onUpdate({ ...versement, montant: parseFloat(e.target.value) || 0 })} />
-          </div>
-          <div className="form-group">
-            <label className="label">Date d'échéance</label>
-            <input className="input" type="date" value={versement.dateEcheance ? versement.dateEcheance.slice(0, 10) : ''}
-              onChange={e => onUpdate({ ...versement, dateEcheance: e.target.value ? new Date(e.target.value).toISOString() : null })} />
-          </div>
-          {!pvBloque && (
-            <div className="form-group">
-              <label className="label">Statut</label>
-              <select className="input" value={versement.statut || 'En attente'}
-                onChange={e => onUpdate({ ...versement, statut: e.target.value, datePaiement: e.target.value === 'Payé' ? new Date().toISOString() : versement.datePaiement })}>
-                <option>En attente</option>
-                <option>Payé</option>
-              </select>
+        <div style={{ padding: '1rem', borderTop: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column', gap: '1rem', opacity: pvBloque ? 0.6 : 1 }}>
+          {isPV && !pvBloque && (
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+               <button onClick={(e) => { e.stopPropagation(); onGenerateSituation(versement); }}
+                 style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.8rem', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '0.4rem', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600, color: '#334155' }}>
+                 <Download size={14} /> Situation des travaux
+               </button>
+               <button onClick={(e) => { e.stopPropagation(); onGenerateAttachement(versement); }}
+                 style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.8rem', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '0.4rem', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600, color: '#334155' }}>
+                 <Download size={14} /> Attachement des travaux
+               </button>
             </div>
           )}
-          {versement.statut === 'Payé' && (
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
             <div className="form-group">
-              <label className="label">Date de paiement</label>
-              <input className="input" type="date" value={versement.datePaiement ? versement.datePaiement.slice(0, 10) : ''}
-                onChange={e => onUpdate({ ...versement, datePaiement: e.target.value ? new Date(e.target.value).toISOString() : null })} />
+              <label className="label">Montant Total PV (DZD)</label>
+              <input className="input" type="number" value={versement.montant || 0} disabled={pvBloque || isPV}
+                onChange={e => onUpdate({ ...versement, montant: parseFloat(e.target.value) || 0 })} />
+            </div>
+            <div className="form-group">
+              <label className="label">Date d'échéance</label>
+              <input className="input" type="date" value={versement.dateEcheance ? versement.dateEcheance.slice(0, 10) : ''}
+                onChange={e => onUpdate({ ...versement, dateEcheance: e.target.value ? new Date(e.target.value).toISOString() : null })} />
+            </div>
+            {!isPV && (
+              <>
+                <div className="form-group">
+                  <label className="label">Statut</label>
+                  <select className="input" value={versement.statut || 'En attente'} disabled={versement.isConfirmed}
+                    onChange={e => onUpdate({ ...versement, statut: e.target.value, datePaiement: e.target.value === 'Payé' ? new Date().toISOString() : versement.datePaiement })}>
+                    <option>En attente</option>
+                    <option>Payé</option>
+                  </select>
+                </div>
+                {versement.statut === 'Payé' && (
+                  <div className="form-group">
+                    <label className="label">Date de paiement</label>
+                    <input className="input" type="date" value={versement.datePaiement ? versement.datePaiement.slice(0, 10) : ''} disabled={versement.isConfirmed}
+                      onChange={e => onUpdate({ ...versement, datePaiement: e.target.value ? new Date(e.target.value).toISOString() : null })} />
+                  </div>
+                )}
+                <div style={{ gridColumn: '1 / -1' }}>
+                  {!versement.isConfirmed ? (
+                    <AttachmentInput label="Pièce jointe / Lien Drive" value={versement.attachment}
+                      onChange={v => onUpdate({ ...versement, attachment: v })} />
+                  ) : (
+                    versement.attachment ? <div style={{ fontSize: '0.8rem', marginTop: '0.5rem' }}>Pièce jointe: {versement.attachment.type === 'drive' ? <a href={versement.attachment.url} target="_blank" rel="noreferrer">Lien Drive</a> : versement.attachment.name}</div> : <div style={{ fontSize: '0.8rem', marginTop: '0.5rem', color: '#94a3b8' }}>Aucune pièce jointe</div>
+                  )}
+                </div>
+                {!versement.isConfirmed && versement.statut === 'Payé' && (
+                  <div style={{ gridColumn: '1 / -1', textAlign: 'right', marginTop: '0.5rem' }}>
+                    <button onClick={() => { if(window.confirm('Confirmer définitivement ce versement ?')) onUpdate({...versement, isConfirmed: true}); }} style={{ padding: '0.4rem 0.8rem', background: '#059669', color: 'white', border: 'none', borderRadius: '0.4rem', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600 }}>
+                      ✓ Confirmer le versement
+                    </button>
+                  </div>
+                )}
+                {versement.isConfirmed && (
+                   <div style={{ gridColumn: '1 / -1', textAlign: 'right', marginTop: '0.5rem' }}>
+                      <span style={{ fontSize: '0.8rem', color: '#059669', fontWeight: 'bold' }}>🔒 Versement Confirmé</span>
+                   </div>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Sous-Paiements pour les PVs */}
+          {isPV && (
+            <div style={{ marginTop: '1rem', padding: '1rem', background: '#f8fafc', borderRadius: '0.5rem', border: '1px dashed #cbd5e1' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <h4 style={{ margin: 0, fontSize: '0.9rem', color: '#1e293b' }}>Paiements associés au PV</h4>
+                <button onClick={handleAddPaiement} disabled={pvBloque}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.6rem', background: '#0f4c75', color: 'white', border: 'none', borderRadius: '0.3rem', fontSize: '0.75rem', cursor: pvBloque ? 'not-allowed' : 'pointer', opacity: pvBloque ? 0.5 : 1 }}>
+                  <Plus size={12} /> Ajouter un paiement
+                </button>
+              </div>
+              
+              {effectivePaiements.length === 0 ? (
+                <p style={{ fontSize: '0.8rem', color: '#64748b', fontStyle: 'italic', margin: 0 }}>Aucun paiement enregistré pour ce PV.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  {effectivePaiements.map((p, idx) => (
+                    <div key={p.id || idx} style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start', background: 'white', padding: '0.75rem', borderRadius: '0.4rem', border: '1px solid #e2e8f0' }}>
+                      <div className="form-group" style={{ flex: 1 }}>
+                        <label className="label" style={{ fontSize: '0.7rem' }}>Montant</label>
+                        <input className="input" type="number" value={p.montant || 0} disabled={p.isConfirmed}
+                          onChange={e => handleUpdatePaiement(idx, 'montant', parseFloat(e.target.value) || 0)} />
+                      </div>
+                      <div className="form-group" style={{ flex: 1 }}>
+                        <label className="label" style={{ fontSize: '0.7rem' }}>Date</label>
+                        <input className="input" type="date" value={p.date ? p.date.slice(0, 10) : ''} disabled={p.isConfirmed}
+                          onChange={e => handleUpdatePaiement(idx, 'date', e.target.value ? new Date(e.target.value).toISOString() : null)} />
+                      </div>
+                      <div style={{ flex: 2 }}>
+                         {!p.isConfirmed ? (
+                           <AttachmentInput label="Pièce jointe" value={p.attachment} onChange={v => handleUpdatePaiement(idx, 'attachment', v)} />
+                         ) : (
+                           p.attachment ? <div style={{ fontSize: '0.75rem', marginTop: '1.2rem' }}>{p.attachment.type === 'drive' ? <a href={p.attachment.url} target="_blank" rel="noreferrer">Lien Drive</a> : p.attachment.name}</div> : <div style={{ fontSize: '0.75rem', marginTop: '1.2rem', color: '#94a3b8' }}>Aucune pièce jointe</div>
+                         )}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '1.2rem' }}>
+                        {!p.isConfirmed && (
+                          <button onClick={() => { if(window.confirm('Confirmer ce paiement définitivement ?')) handleUpdatePaiement(idx, 'isConfirmed', true); }} style={{ background: '#059669', border: 'none', color: 'white', borderRadius: '0.3rem', cursor: 'pointer', padding: '0.3rem 0.5rem', fontSize: '0.7rem', fontWeight: 600 }}>
+                            Confirmer
+                          </button>
+                        )}
+                        {p.isConfirmed && <span style={{ fontSize: '0.75rem', color: '#059669', fontWeight: 'bold', alignSelf: 'center' }}>🔒 Confirmé</span>}
+                        {!p.isConfirmed && (
+                          <button onClick={() => handleDeletePaiement(idx)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '0.3rem', alignSelf: 'center' }}>
+                            <Trash2 size={15} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
-          <div style={{ gridColumn: '1 / -1' }}>
-            <AttachmentInput label="Pièce jointe / Lien Drive" value={versement.attachment}
-              onChange={v => onUpdate({ ...versement, attachment: v })} />
-          </div>
+
         </div>
       )}
     </div>
@@ -186,7 +308,14 @@ const TrackerView = ({ tracker, data, setData, onBack }) => {
   const avance = tracker.avance || { montant: 0, date: null, fichier: null, lienDrive: '' };
 
   const totalVerse = useMemo(() => {
-    const totalV = versements.filter(v => v.statut === 'Payé').reduce((s, v) => s + (v.montant || 0), 0);
+    const totalV = versements.reduce((s, v) => {
+      if (v.pvId) {
+        const pvPaiements = v.paiements || [];
+        return s + pvPaiements.reduce((sum, p) => sum + (p.montant || 0), 0);
+      } else {
+        return s + (v.statut === 'Payé' ? (v.montant || 0) : 0);
+      }
+    }, 0);
     return totalV + (avance.montant || 0);
   }, [versements, avance]);
 
@@ -231,6 +360,103 @@ const TrackerView = ({ tracker, data, setData, onBack }) => {
     updateTracker({ ...tracker, versements: versements.filter(v => v.id !== id) });
   };
 
+  const handleGenerateSituation = (versement) => {
+    const doc = new jsPDF();
+    const pw = doc.internal.pageSize.getWidth();
+    
+    // Header
+    doc.setFontSize(16); doc.setFont('helvetica', 'bold');
+    doc.text('EURL IDEAL ALUMINIUM', 15, 20);
+    doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+    doc.text('SITUATION DES TRAVAUX', pw / 2, 35, { align: 'center' });
+    
+    // Info
+    doc.text(`Entreprise : ${client?.nom || 'Client inconnu'}`, 15, 50);
+    doc.text(`Projet : Commande ${tracker.orderId}`, 15, 55);
+    doc.text(`Montant du contrat en TTC: ${montantContrat.toLocaleString('fr-FR')} DZD`, 15, 65);
+
+    // Table calculations
+    let y = 80;
+    
+    doc.setDrawColor(0,0,0);
+    doc.rect(15, y, pw - 30, 80);
+    
+    const montantHT = (versement.montant || 0) / 1.09; // Assuming 9% TVA
+    
+    doc.setFont('helvetica', 'bold');
+    doc.text('Montant en Dinars', pw - 45, y + 6);
+    doc.line(15, y + 8, pw - 15, y + 8);
+    
+    doc.setFont('helvetica', 'normal');
+    y += 15;
+    doc.text('Montant des travaux cumulés en HT', 17, y);
+    doc.text(montantHT.toLocaleString('fr-FR', {maximumFractionDigits:2}), pw - 40, y);
+    
+    y += 15;
+    doc.text('Montant des travaux réalisés précédemment en HT', 17, y);
+    const totalPrec = (versement.paiements || []).reduce((sum, p) => sum + (p.montant || 0), 0) / 1.09;
+    doc.text(totalPrec.toLocaleString('fr-FR', {maximumFractionDigits:2}), pw - 40, y);
+
+    y += 20;
+    doc.setFont('helvetica', 'bold');
+    const tva = (versement.montant || 0) - montantHT;
+    doc.text('Montant de la TVA 9%', 17, y);
+    doc.text(tva.toLocaleString('fr-FR', {maximumFractionDigits:2}), pw - 40, y);
+
+    y += 10;
+    doc.text('Montant Brut de la situation en TTC:', 17, y);
+    doc.text((versement.montant || 0).toLocaleString('fr-FR', {maximumFractionDigits:2}), pw - 40, y);
+    
+    doc.save(`Situation_${versement.pvId || versement.id}.pdf`);
+  };
+
+  const handleGenerateAttachement = (versement) => {
+    const doc = new jsPDF();
+    const pw = doc.internal.pageSize.getWidth();
+    
+    doc.setFontSize(16); doc.setFont('helvetica', 'bold');
+    doc.text('EURL IDEAL ALUMINIUM', 15, 20);
+    doc.setFontSize(12);
+    doc.text('ATTACHEMENT DES TRAVAUX', pw / 2, 35, { align: 'center' });
+    
+    doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+    doc.text(`Projet : Commande ${tracker.orderId}`, 15, 50);
+
+    // Get order details to build table
+    let y = 60;
+    doc.setFillColor(241, 245, 249);
+    doc.rect(15, y, pw - 30, 10, 'FD');
+    doc.text('N°', 17, y + 6);
+    doc.text('Désignation des Ouvrages', 30, y + 6);
+    doc.text('U', 130, y + 6);
+    doc.text('Quantité', 150, y + 6);
+    
+    y += 10;
+    
+    if (order && order.batches) {
+      let index = 1;
+      order.batches.forEach(b => {
+        (b.items || []).forEach(item => {
+           let totalQty = 0;
+           (item.measurements || []).forEach(m => totalQty += m.qty);
+           
+           if (y > 270) { doc.addPage(); y = 20; }
+           
+           doc.text(`1-0${index}`, 17, y + 6);
+           const designation = doc.splitTextToSize(`Fourniture et pose de ${item.label} en aluminium`, 90);
+           doc.text(designation, 30, y + 6);
+           doc.text('U', 130, y + 6);
+           doc.text(`${totalQty}`, 150, y + 6);
+           
+           y += 5 * designation.length + 5;
+           index++;
+        });
+      });
+    }
+
+    doc.save(`Attachement_${versement.pvId || versement.id}.pdf`);
+  };
+
   return (
     <div>
       <button onClick={onBack} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', marginBottom: '1.25rem', fontWeight: 600 }}>
@@ -271,21 +497,34 @@ const TrackerView = ({ tracker, data, setData, onBack }) => {
         </div>
         {/* Avance section */}
         <div className="glass" style={{ padding: '1rem' }}>
-          <p style={{ margin: '0 0 0.75rem', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>💵 Avance</p>
-          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+            <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>💵 Avance</p>
+            {!avance.isConfirmed && (
+              <button onClick={() => { if(window.confirm('Confirmer définitivement cette avance ?')) handleAvanceChange('isConfirmed', true); }}
+                style={{ padding: '0.2rem 0.5rem', background: '#059669', color: 'white', border: 'none', borderRadius: '0.3rem', fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600 }}>
+                ✓ Confirmer
+              </button>
+            )}
+            {avance.isConfirmed && <span style={{ fontSize: '0.75rem', color: '#059669', fontWeight: 'bold' }}>🔒 Confirmé</span>}
+          </div>
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
             <div className="form-group" style={{ flex: 1, minWidth: '130px' }}>
               <label className="label">Montant avance (DZD)</label>
-              <input className="input" type="number" value={avance.montant || 0}
+              <input className="input" type="number" value={avance.montant || 0} disabled={avance.isConfirmed}
                 onChange={e => handleAvanceChange('montant', parseFloat(e.target.value) || 0)} />
             </div>
             <div className="form-group" style={{ flex: 1, minWidth: '130px' }}>
               <label className="label">Date de versement</label>
-              <input className="input" type="date" value={avance.date ? avance.date.slice(0, 10) : ''}
+              <input className="input" type="date" value={avance.date ? avance.date.slice(0, 10) : ''} disabled={avance.isConfirmed}
                 onChange={e => handleAvanceChange('date', e.target.value ? new Date(e.target.value).toISOString() : null)} />
             </div>
           </div>
-          <AttachmentInput label="Pièce jointe / Lien Drive (avance)" value={avance.attachment}
-            onChange={v => handleAvanceChange('attachment', v)} />
+          {!avance.isConfirmed ? (
+            <AttachmentInput label="Pièce jointe / Lien Drive (avance)" value={avance.attachment}
+              onChange={v => handleAvanceChange('attachment', v)} />
+          ) : (
+            avance.attachment ? <div style={{ fontSize: '0.8rem', marginTop: '0.5rem' }}>Pièce jointe: {avance.attachment.type === 'drive' ? <a href={avance.attachment.url} target="_blank" rel="noreferrer">Lien Drive</a> : avance.attachment.name}</div> : <div style={{ fontSize: '0.8rem', marginTop: '0.5rem', color: '#94a3b8' }}>Aucune pièce jointe</div>
+          )}
         </div>
       </div>
 
@@ -305,15 +544,18 @@ const TrackerView = ({ tracker, data, setData, onBack }) => {
             </p>
           ) : versements.map(v => (
             <VersementRow key={v.id} versement={v} onUpdate={handleUpdateVersement} onDelete={handleDeleteVersement}
-              delaiPaiementJours={contract?.delaiPaiementJours || 30} />
+              delaiPaiementJours={contract?.delaiPaiementJours || 30} 
+              onGenerateSituation={handleGenerateSituation}
+              onGenerateAttachement={handleGenerateAttachement}
+            />
           ))}
         </div>
         {/* Summary */}
         {versements.length > 0 && (
           <div style={{ marginTop: '1rem', padding: '0.75rem 1rem', background: '#f8fafc', borderRadius: '0.5rem', display: 'flex', gap: '2rem', fontSize: '0.85rem' }}>
-            <span>Versements payés : <strong style={{ color: '#059669' }}>{versements.filter(v => v.statut === 'Payé').length}</strong></span>
-            <span>En attente : <strong style={{ color: '#d97706' }}>{versements.filter(v => v.statut !== 'Payé').length}</strong></span>
-            <span>Total versements : <strong>{versements.reduce((s, v) => s + (v.montant || 0), 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</strong></span>
+            <span>Versements soldés : <strong style={{ color: '#059669' }}>{versements.filter(v => v.statut === 'Payé' || (v.pvId && (v.paiements||[]).reduce((s,p)=>s+p.montant,0)>=v.montant)).length}</strong></span>
+            <span>En cours / Attente : <strong style={{ color: '#d97706' }}>{versements.filter(v => !(v.statut === 'Payé' || (v.pvId && (v.paiements||[]).reduce((s,p)=>s+p.montant,0)>=v.montant))).length}</strong></span>
+            <span>Total versements prévus : <strong>{versements.reduce((s, v) => s + (v.montant || 0), 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</strong></span>
           </div>
         )}
       </div>
@@ -364,11 +606,23 @@ const FinancialTracker = ({ data, setData, quoteSettings }) => {
                   const client = clients.find(c => c.id === t.clientId);
                   const versements = t.versements || [];
                   const avanceMontant = t.avance?.montant || 0;
-                  const totalVerse = versements.filter(v => v.statut === 'Payé').reduce((s, v) => s + (v.montant || 0), 0) + avanceMontant;
+                  const totalVerse = versements.reduce((s, v) => {
+                    if (v.pvId) {
+                      return s + (v.paiements || []).reduce((sum, p) => sum + (p.montant || 0), 0);
+                    } else {
+                      return s + (v.statut === 'Payé' ? (v.montant || 0) : 0);
+                    }
+                  }, 0) + avanceMontant;
                   const reste = (t.montantContrat || 0) - totalVerse;
                   const pct = t.montantContrat > 0 ? Math.min(100, (totalVerse / t.montantContrat) * 100) : 0;
                   const hasRetard = versements.some(v => {
-                    if (v.statut === 'Payé') return false;
+                    if (v.pvId) {
+                      const pvPaiements = v.paiements || [];
+                      const pvTotalPaye = pvPaiements.reduce((s, p) => s + (p.montant || 0), 0);
+                      if (v.montant && pvTotalPaye >= v.montant) return false;
+                    } else {
+                      if (v.statut === 'Payé') return false;
+                    }
                     if (v.pvId && v.pvStatus !== 'Validé') return false; // ignorer bloqués PV
                     if (!v.dateEcheance) return false;
                     return new Date() > new Date(v.dateEcheance);

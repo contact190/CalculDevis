@@ -789,13 +789,15 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
         const order = { ...orders[oIdx] };
         (order.batches || []).forEach(batch => {
           (batch.items || []).forEach(item => {
+            const originalItem = order.items?.find(i => i.id === item.id) || {};
+            const itemPriceHT = originalItem.unitPriceHT || originalItem.priceData?.priceHT || 0;
             (item.measurements || []).forEach(m => {
               for (let i = 0; i < (m.qty || 1); i++) {
                 const floor = m.instanceFloors?.[i] || 'N/A';
                 if (!pvFloors.includes(floor)) continue;
                 const unitId = `${order.id}-${batch.id}-${item.id}-${m.id}-${i}`;
                 const ds = order.unitStatusesDual?.[unitId] || {};
-                if (ds.alu === 'Fini' || ds.alu === 'Pos\u00e9') montantVersement += (item.unitPriceHT || 0);
+                if (ds.alu === 'Fini' || ds.alu === 'Pos\u00e9') montantVersement += itemPriceHT;
               }
             });
           });
