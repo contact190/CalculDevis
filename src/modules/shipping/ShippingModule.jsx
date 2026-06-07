@@ -769,27 +769,87 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
     doc.setFontSize(9); doc.setFont('helvetica', 'bold');
     doc.text('POUR L\'ENTREPRISE', 20, y + 8);
     doc.text('POUR LE CLIENT (BON POUR ACCORD)', pw - 95, y + 8);
-    
     doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 116, 139);
-    doc.text('Fait à ....................................... le .........................', 20, y + 35);
+    doc.text('Fait \u00e0 ....................................... le .........................', 20, y + 35);
     doc.text('Signature et cachet', 20, y + 20);
     doc.text('Signature du client', pw - 95, y + 20);
 
     doc.save(`PV_RECEPTION_${selectedOrder.id}_${new Date().getTime()}.pdf`);
-    
+
+    // ─── Stocker le PV sur la commande + créer versement bloqué ──────────────
+    const pvId = `PV-${Date.now().toString().slice(-6)}`;
+    const pvFloors = Array.from(pvSelectedFloors);
+    setData(prev => {
+      const orders = [...(prev.orders || [])];
+      const oIdx = orders.findIndex(o => o.id === selectedOrder.id);
+      
+      // 1. Stocker le PV sur la commande
+      let montantVersement = 0;
+      if (oIdx !== -1) {
+        const order = { ...orders[oIdx] };
+        (order.batches || []).forEach(batch => {
+          (batch.items || []).forEach(item => {
+            (item.measurements || []).forEach(m => {
+              for (let i = 0; i < (m.qty || 1); i++) {
+                const floor = m.instanceFloors?.[i] || 'N/A';
+                if (!pvFloors.includes(floor)) continue;
+                const unitId = `${order.id}-${batch.id}-${item.id}-${m.id}-${i}`;
+                const ds = order.unitStatusesDual?.[unitId] || {};
+                if (ds.alu === 'Fini' || ds.alu === 'Pos\u00e9') montantVersement += (item.unitPriceHT || 0);
+              }
+            });
+          });
+        });
+        order.pvList = [...(order.pvList || []), {
+          id: pvId,
+          pvStatus: 'En attente',
+          etages: pvFloors,
+          montant: montantVersement,
+          createdAt: new Date().toISOString(),
+          validatedAt: null,
+          attachment: null,
+        }];
+        orders[oIdx] = order;
+      }
+
+      // 2. Créer versement bloqué dans le suivi financier
+      const trackers = [...(prev.financialTrackers || [])];
+      const tIdx = trackers.findIndex(t => t.orderId === selectedOrder.id);
+      if (tIdx !== -1) {
+        const tracker = { ...trackers[tIdx] };
+        const contract = (prev.contracts || []).find(c => c.id === tracker.contractId);
+        const delaiJours = contract?.delaiPaiementJours || 30;
+        const dateEcheance = new Date();
+        dateEcheance.setDate(dateEcheance.getDate() + delaiJours);
+        tracker.versements = [...(tracker.versements || []), {
+          id: `VRS-${Date.now().toString().slice(-5)}`,
+          pvId,
+          pvStatus: 'En attente',   // 'En attente' | 'Validé'
+          montant: montantVersement,
+          statut: 'En attente',     // statut paiement, débloqué après validation PV
+          dateEcheance: dateEcheance.toISOString(),
+          datePaiement: null,
+          attachment: null,
+          etages: pvFloors,
+          createdAt: new Date().toISOString(),
+        }];
+        trackers[tIdx] = tracker;
+      }
+
+      return { ...prev, orders, financialTrackers: trackers };
+    });
+
     // Automatic Email Sending (API Call to Supabase Function)
     if (sendByEmail) {
       if (!recipientEmail || !recipientEmail.includes('@')) {
-        alert("Veuillez entrer une adresse email client valide.");
+        alert('Veuillez entrer une adresse email client valide.');
         return;
       }
-      
       const sendEmail = async () => {
         try {
-          console.log(`[Email Service] Envoi du PV à ${recipientEmail}...`);
+          console.log(`[Email Service] Envoi du PV \u00e0 ${recipientEmail}...`);
           const pdfBase64 = doc.output('datauristring').split(',')[1];
           const floorsStr = Array.from(pvSelectedFloors).join(', ');
-          
           await invokeFunction('send-pv-email', {
             sender: senderEmail,
             recipient: recipientEmail,
@@ -799,14 +859,12 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
             orderId: selectedOrder.id,
             pdfBase64: pdfBase64
           });
-          
-          alert(`📧 PV de Réception envoyé avec succès à ${recipientEmail}`);
+          alert(`\ud83d\udce7 PV de R\u00e9ception envoy\u00e9 avec succ\u00e8s \u00e0 ${recipientEmail}`);
         } catch (error) {
-          console.error("Erreur envoi email:", error);
-          alert("Erreur lors de l'envoi de l'email. Vérifiez la configuration de la fonction Supabase.");
+          console.error('Erreur envoi email:', error);
+          alert("Erreur lors de l'envoi de l'email. V\u00e9rifiez la configuration de la fonction Supabase.");
         }
       };
-
       sendEmail();
     }
 
@@ -920,6 +978,168 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
                </div>
           </div>
         </header>
+
+        {/* ── Panneau PV de Réception ─────────────────────────────────────────── */}
+        {(selectedOrder.pvList || []).length > 0 && (
+          <div className="glass" style={{ marginBottom: '1.5rem', padding: '1.25rem', borderLeft: '4px solid #f59e0b' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+              <ClipboardCheck size={18} color="#d97706" />
+              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#1e293b' }}>
+                PV de Réception — Suivi des validations
+              </h3>
+              <span style={{ fontSize: '0.8rem', color: '#64748b', background: '#f1f5f9', padding: '0.15rem 0.6rem', borderRadius: '999px' }}>
+                {(selectedOrder.pvList || []).length} PV généré(s)
+              </span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {(selectedOrder.pvList || []).map((pv, idx) => {
+                const isValide = pv.pvStatus === 'Validé';
+                return (
+                  <div key={pv.id} style={{
+                    display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap',
+                    padding: '0.85rem 1rem',
+                    borderRadius: '0.65rem',
+                    background: isValide ? '#f0fdf4' : '#fffbeb',
+                    border: `1px solid ${isValide ? '#a7f3d0' : '#fde68a'}`,
+                  }}>
+                    {/* Statut badge */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: '160px' }}>
+                      <div style={{
+                        width: '10px', height: '10px', borderRadius: '50%',
+                        background: isValide ? '#10b981' : '#f59e0b',
+                        flexShrink: 0,
+                        boxShadow: isValide ? '0 0 0 3px #d1fae5' : '0 0 0 3px #fef3c7',
+                      }} />
+                      <span style={{ fontWeight: 700, fontSize: '0.85rem', color: isValide ? '#065f46' : '#92400e' }}>
+                        {isValide ? '✅ Validé' : '⏳ En attente de validation'}
+                      </span>
+                    </div>
+
+                    {/* Infos PV */}
+                    <div style={{ flex: 1, display: 'flex', gap: '1.5rem', flexWrap: 'wrap', fontSize: '0.82rem', color: '#475569' }}>
+                      <span><strong>{pv.id}</strong></span>
+                      <span>Généré le : {new Date(pv.createdAt).toLocaleDateString('fr-FR')}</span>
+                      <span>Étages : <strong>{(pv.etages || []).join(', ') || '—'}</strong></span>
+                      <span>Montant : <strong>{(pv.montant || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</strong></span>
+                      {isValide && pv.validatedAt && (
+                        <span style={{ color: '#059669' }}>Validé le : {new Date(pv.validatedAt).toLocaleDateString('fr-FR')}</span>
+                      )}
+                    </div>
+
+                    {/* Pièce jointe */}
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      {pv.attachment ? (
+                        pv.attachment.type === 'drive' ? (
+                          <a href={pv.attachment.url} target="_blank" rel="noopener noreferrer"
+                            style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem', color: '#1e88e5' }}>
+                            <FileText size={13} /> Drive
+                          </a>
+                        ) : (
+                          <span style={{ fontSize: '0.8rem', color: '#059669', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                            <FileText size={13} /> {pv.attachment.name}
+                          </span>
+                        )
+                      ) : !isValide && (
+                        <div style={{ display: 'flex', gap: '0.4rem' }}>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.65rem', background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '0.4rem', cursor: 'pointer', fontSize: '0.78rem', color: '#64748b' }}>
+                            <FileText size={12} /> Fichier
+                            <input type="file" style={{ display: 'none' }} onChange={e => {
+                              const file = e.target.files[0];
+                              if (!file) return;
+                              const reader = new FileReader();
+                              reader.onload = ev => {
+                                setData(prev => {
+                                  const orders = [...(prev.orders || [])];
+                                  const oIdx = orders.findIndex(o => o.id === selectedOrder.id);
+                                  if (oIdx === -1) return prev;
+                                  const order = { ...orders[oIdx] };
+                                  order.pvList = (order.pvList || []).map(p =>
+                                    p.id === pv.id ? { ...p, attachment: { type: 'file', name: file.name, data: ev.target.result } } : p
+                                  );
+                                  orders[oIdx] = order;
+                                  return { ...prev, orders };
+                                });
+                              };
+                              reader.readAsDataURL(file);
+                            }} />
+                          </label>
+                          <button onClick={() => {
+                            const url = window.prompt('Lien Google Drive :');
+                            if (!url) return;
+                            setData(prev => {
+                              const orders = [...(prev.orders || [])];
+                              const oIdx = orders.findIndex(o => o.id === selectedOrder.id);
+                              if (oIdx === -1) return prev;
+                              const order = { ...orders[oIdx] };
+                              order.pvList = (order.pvList || []).map(p =>
+                                p.id === pv.id ? { ...p, attachment: { type: 'drive', url } } : p
+                              );
+                              orders[oIdx] = order;
+                              return { ...prev, orders };
+                            });
+                          }} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.65rem', background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '0.4rem', cursor: 'pointer', fontSize: '0.78rem', color: '#64748b' }}>
+                            🔗 Drive
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Bouton Valider */}
+                    {!isValide && (
+                      <button
+                        onClick={() => {
+                          if (!window.confirm(`Valider le PV ${pv.id} ? Cette action va débloquer le versement correspondant en Finance.`)) return;
+                          setData(prev => {
+                            // 1. Valider le PV sur la commande
+                            const orders = [...(prev.orders || [])];
+                            const oIdx = orders.findIndex(o => o.id === selectedOrder.id);
+                            if (oIdx !== -1) {
+                              const order = { ...orders[oIdx] };
+                              order.pvList = (order.pvList || []).map(p =>
+                                p.id === pv.id ? { ...p, pvStatus: 'Validé', validatedAt: new Date().toISOString() } : p
+                              );
+                              orders[oIdx] = order;
+                            }
+
+                            // 2. Débloquer le versement Finance lié
+                            const trackers = [...(prev.financialTrackers || [])];
+                            const tIdx = trackers.findIndex(t => t.orderId === selectedOrder.id);
+                            if (tIdx !== -1) {
+                              const tracker = { ...trackers[tIdx] };
+                              tracker.versements = (tracker.versements || []).map(v =>
+                                v.pvId === pv.id
+                                  ? { ...v, pvStatus: 'Validé', statut: 'En attente' }
+                                  : v
+                              );
+                              trackers[tIdx] = tracker;
+                            }
+                            return { ...prev, orders, financialTrackers: trackers };
+                          });
+                        }}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: '0.5rem',
+                          padding: '0.5rem 1.1rem',
+                          background: 'linear-gradient(135deg, #059669, #047857)',
+                          border: 'none', borderRadius: '0.5rem',
+                          color: 'white', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer',
+                          boxShadow: '0 2px 8px rgba(5,150,105,0.3)',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        <CheckCircle size={15} /> Valider le PV
+                      </button>
+                    )}
+                    {isValide && (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', color: '#059669', fontWeight: 700, padding: '0.4rem 0.8rem', background: '#dcfce7', borderRadius: '0.5rem' }}>
+                        <CheckCircle size={14} /> Versement débloqué
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <div className="glass" style={{ padding: '1rem', marginBottom: '1.5rem', background: '#f8fafc', display: 'flex', gap: '1rem', alignItems: 'center' }}>
             <div style={{ flex: 1 }}>

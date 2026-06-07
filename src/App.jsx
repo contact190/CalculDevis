@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Home, Package, Settings, ChevronRight, LayoutDashboard, Users, RefreshCw, ShoppingBag, Truck, CheckCircle, Building, Wifi, WifiOff } from 'lucide-react';
+import { Home, Package, Settings, ChevronRight, LayoutDashboard, Users, RefreshCw, ShoppingBag, Truck, CheckCircle, Building, Wifi, WifiOff, TrendingUp } from 'lucide-react';
 import CommercialModule from './modules/commercial/CommercialModule';
 import ProductionModule from './modules/production/ProductionModule';
 import AdminDashboard from './modules/admin/AdminDashboard';
@@ -9,6 +9,7 @@ import ShippingModule from './modules/shipping/ShippingModule';
 import InstallerPortal from './modules/shipping/InstallerPortal';
 import TechnicianPortal from './modules/orders/TechnicianPortal';
 import SitePlanModule from './modules/siteplan/SitePlanModule';
+import FinanceModule from './modules/finance/FinanceModule';
 import { DEFAULT_DATA } from './data/default-data';
 import { syncDatabase } from './utils/supabaseClient';
 import { persistentStorage } from './utils/storage';
@@ -129,6 +130,8 @@ function App() {
     }
     if (!repaired.orders) repaired.orders = [];
     if (!repaired.quotes) repaired.quotes = [];
+    if (!repaired.contracts) repaired.contracts = [];
+    if (!repaired.financialTrackers) repaired.financialTrackers = [];
     return repaired;
   }, []);
 
@@ -432,6 +435,7 @@ function App() {
     { id: 'production', label: 'Atelier / Production', icon: Package },
     { id: 'shipping', label: 'Expédition & Colisage', icon: Truck },
     { id: 'clients', label: 'Clients', icon: Users },
+    { id: 'finance', label: 'Finance', icon: TrendingUp },
     { id: 'admin', label: 'Administration', icon: Settings },
   ];
 
@@ -661,6 +665,13 @@ function App() {
         )}
         {activeTab === 'admin' && (
           <AdminDashboard 
+            data={database}
+            setData={setDatabase}
+            quoteSettings={quoteSettings}
+          />
+        )}
+        {activeTab === 'finance' && (
+          <FinanceModule
             data={database}
             setData={setDatabase}
             quoteSettings={quoteSettings}

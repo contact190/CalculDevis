@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Users, Plus, Edit2, Trash2, FileText, ChevronDown, ChevronUp, CheckCircle, Copy } from 'lucide-react';
+import { Users, Plus, Edit2, Trash2, FileText, ChevronDown, ChevronUp, CheckCircle, Copy, Link, ExternalLink } from 'lucide-react';
 
 const ClientsModule = ({ data, setData, onOpenQuote }) => {
   const [editingClient, setEditingClient] = useState(null);
@@ -15,7 +15,8 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
       nif: '',
       nis: '',
       ai: '',
-      rc: ''
+      rc: '',
+      driveLink: ''
     };
     setData(prev => ({ ...prev, clients: [...(prev.clients || []), newClient] }));
     setEditingClient(newClient);
@@ -175,6 +176,28 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
                 </div>
               </div>
             </div>
+
+            <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <h3 style={{ fontSize: '0.875rem', fontWeight: 600, color: '#475569', margin: '0 0 0.25rem 0', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <Link size={14} /> Lien Google Drive
+              </h3>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <input
+                  className="input"
+                  placeholder="https://drive.google.com/drive/folders/..."
+                  value={editingClient.driveLink || ''}
+                  onChange={e => { const u = {...editingClient, driveLink: e.target.value}; setEditingClient(u); handleUpdateClient(u); }}
+                  style={{ flex: 1 }}
+                />
+                {editingClient.driveLink && (
+                  <a href={editingClient.driveLink} target="_blank" rel="noopener noreferrer"
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.5rem 0.75rem', background: '#1e88e5', color: 'white', borderRadius: '0.5rem', textDecoration: 'none', fontSize: '0.8rem', fontWeight: 600, whiteSpace: 'nowrap' }}
+                  >
+                    <ExternalLink size={14} /> Ouvrir Drive
+                  </a>
+                )}
+              </div>
+            </div>
           </div>
           
           <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid #e2e8f0' }}>
@@ -254,6 +277,7 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
               <th>Téléphone</th>
               <th>Email</th>
               <th>NIF</th>
+              <th>Drive</th>
               <th style={{ width: '80px', textAlign: 'center' }}>Actions</th>
             </tr>
           </thead>
@@ -268,6 +292,15 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
                   <td data-label="Tél.">{c.telephone || '-'}</td>
                   <td data-label="Email">{c.email || '-'}</td>
                   <td data-label="NIF">{c.nif || '-'}</td>
+                  <td data-label="Drive" style={{ textAlign: 'center' }}>
+                    {c.driveLink ? (
+                      <a href={c.driveLink} target="_blank" rel="noopener noreferrer" title="Ouvrir le Drive client"
+                        style={{ color: '#1e88e5', display: 'inline-flex', alignItems: 'center' }}
+                      >
+                        <ExternalLink size={15} />
+                      </a>
+                    ) : <span style={{ color: '#cbd5e1' }}>—</span>}
+                  </td>
                   <td data-label="Actions" style={{ textAlign: 'center' }}>
                     <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'center' }}>
                       <button className="btn" onClick={() => setExpandedClient(expandedClient === c.id ? null : c.id)} title="Voir les devis" style={{ padding: '0.4rem', color: clientQuotes.length > 0 ? '#3b82f6' : '#94a3b8', background: expandedClient === c.id ? '#e0f2fe' : 'transparent' }}>
