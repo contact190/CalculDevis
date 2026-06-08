@@ -448,11 +448,11 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                   H: defaultItem?.config?.H || 1200,
                   wallDepth: '',
                   handleHeight: '',
-                  shutter: {
+                  shutter: defaultItem?.config?.hasShutter ? {
                     qty: 1,
                     customLV: defaultItem?.config?.L || 1200,
                     overrides: {}
-                  }
+                  } : null
                 }
               ]
             };
@@ -515,11 +515,11 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                     itemId: value,
                     L: item?.config?.L || v.L,
                     H: item?.config?.H || v.H,
-                    shutter: {
+                    shutter: item?.config?.hasShutter ? {
                       qty: 1,
                       customLV: item?.config?.L || v.L,
                       overrides: {}
-                    }
+                    } : null
                   };
                 }
 

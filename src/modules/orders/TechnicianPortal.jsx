@@ -165,11 +165,11 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                     itemId: value,
                     L: item?.config?.L || v.L,
                     H: item?.config?.H || v.H,
-                    shutter: {
+                    shutter: item?.config?.hasShutter ? {
                       qty: 1,
                       customLV: item?.config?.L || v.L,
                       overrides: {}
-                    }
+                    } : null
                   };
                 }
 
