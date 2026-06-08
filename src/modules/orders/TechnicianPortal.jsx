@@ -906,13 +906,13 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                       <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#475569' }}>🌀 Volet Roulant</span>
                                       <button
                                         onClick={() => {
-                                          const hasShutter = !!v.shutter;
-                                          updateVoidProperty(floor.id, apt.id, v.id, 'shutter', hasShutter ? null : { qty: 1, customLV: v.L || item.config.L, overrides: {} });
+                                          
+                                          updateVoidProperty(floor.id, apt.id, v.id, 'shutter', isShutterActive ? null : { qty: 1, customLV: v.L || item.config.L, overrides: {} });
                                         }}
                                         style={{
                                           border: 'none',
-                                          background: v.shutter ? '#fee2e2' : '#e2e8f0',
-                                          color: v.shutter ? '#ef4444' : '#475569',
+                                          background: isShutterActive ? '#fee2e2' : '#e2e8f0',
+                                          color: isShutterActive ? '#ef4444' : '#475569',
                                           fontSize: '0.75rem',
                                           fontWeight: 800,
                                           padding: '0.3rem 0.7rem',
@@ -920,18 +920,18 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                           cursor: 'pointer'
                                         }}
                                       >
-                                        {v.shutter ? '✕ Désactiver' : '＋ Activer'}
+                                        {isShutterActive ? '✕ Désactiver' : '＋ Activer'}
                                       </button>
                                     </div>
 
-                                    {v.shutter && (
+                                    {isShutterActive && (
                                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginTop: '0.75rem' }}>
                                         <div>
                                           <label style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', marginBottom: '0.2rem', fontWeight: 600 }}>QUANTITÉ VOLET</label>
                                           <input
                                             type="number"
                                             className="input"
-                                            value={v.shutter.qty !== undefined ? v.shutter.qty : 1}
+                                            value={actualShutter.qty !== undefined ? actualShutter.qty : 1}
                                             onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.qty', e.target.value)}
                                             style={{ fontSize: '0.85rem', padding: '0.35rem 0.5rem', textAlign: 'center' }}
                                           />
@@ -941,7 +941,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                           <input
                                             type="number"
                                             className="input"
-                                            value={v.shutter.customLV !== undefined ? v.shutter.customLV : ''}
+                                            value={actualShutter.customLV !== undefined ? actualShutter.customLV : ''}
                                             onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.customLV', e.target.value)}
                                             style={{ fontSize: '0.85rem', padding: '0.35rem 0.5rem', textAlign: 'center' }}
                                             placeholder={v.L || item.config.L}
@@ -951,7 +951,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                           <label style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', marginBottom: '0.2rem', fontWeight: 600 }}>MANOEUVRE</label>
                                           <select
                                             className="input"
-                                            value={v.shutter.overrides?.controlPosition || ''}
+                                            value={actualShutter.overrides?.controlPosition || ''}
                                             onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.controlPosition', e.target.value)}
                                             style={{ fontSize: '0.85rem', padding: '0.35rem 0.5rem', fontWeight: 700 }}
                                           >
@@ -964,7 +964,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                           <label style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', marginBottom: '0.2rem', fontWeight: 600 }}>CAISSON</label>
                                           <select
                                             className="input"
-                                            value={v.shutter.overrides?.caissonId || ''}
+                                            value={actualShutter.overrides?.caissonId || ''}
                                             onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.caissonId', e.target.value)}
                                             style={{ fontSize: '0.85rem', padding: '0.35rem 0.5rem' }}
                                           >
@@ -976,7 +976,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                           <label style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', marginBottom: '0.2rem', fontWeight: 600 }}>LAME</label>
                                           <select
                                             className="input"
-                                            value={v.shutter.overrides?.lameId || ''}
+                                            value={actualShutter.overrides?.lameId || ''}
                                             onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.lameId', e.target.value)}
                                             style={{ fontSize: '0.85rem', padding: '0.35rem 0.5rem' }}
                                           >
@@ -988,7 +988,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                           <label style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', marginBottom: '0.2rem', fontWeight: 600 }}>GLISSIÈRE</label>
                                           <select
                                             className="input"
-                                            value={v.shutter.overrides?.glissiereId || ''}
+                                            value={actualShutter.overrides?.glissiereId || ''}
                                             onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.glissiereId', e.target.value)}
                                             style={{ fontSize: '0.85rem', padding: '0.35rem 0.5rem' }}
                                           >
@@ -1000,7 +1000,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                           <label style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', marginBottom: '0.2rem', fontWeight: 600 }}>AXE</label>
                                           <select
                                             className="input"
-                                            value={v.shutter.overrides?.axeId || ''}
+                                            value={actualShutter.overrides?.axeId || ''}
                                             onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.axeId', e.target.value)}
                                             style={{ fontSize: '0.85rem', padding: '0.35rem 0.5rem' }}
                                           >
@@ -1012,7 +1012,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                            <label style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', marginBottom: '0.2rem', fontWeight: 600 }}>KIT</label>
                                            <select
                                              className="input"
-                                             value={v.shutter.overrides?.kitId || ''}
+                                             value={actualShutter.overrides?.kitId || ''}
                                              onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.kitId', e.target.value)}
                                              style={{ fontSize: '0.85rem', padding: '0.35rem 0.5rem' }}
                                            >
@@ -1021,8 +1021,8 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                            </select>
                                          </div>
                                          {(() => {
-                                           const selectedKitId = v.shutter.overrides?.kitId !== undefined && v.shutter.overrides?.kitId !== '' 
-                                             ? v.shutter.overrides?.kitId 
+                                           const selectedKitId = actualShutter.overrides?.kitId !== undefined && actualShutter.overrides?.kitId !== '' 
+                                             ? actualShutter.overrides?.kitId 
                                              : (item.config?.shutterConfig?.kitId || '');
                                            const selectedKit = (data.shutterComponents?.kits || []).find(k => k.id === selectedKitId);
                                            const isMotor = selectedKit?.type === 'MOTEUR' || 
@@ -1034,7 +1034,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                                <label style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', marginBottom: '0.2rem', fontWeight: 600 }}>MOTEUR</label>
                                                <select
                                                  className="input"
-                                                 value={v.shutter.overrides?.moteurId || ''}
+                                                 value={actualShutter.overrides?.moteurId || ''}
                                                  onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.moteurId', e.target.value)}
                                                  style={{ fontSize: '0.85rem', padding: '0.35rem 0.5rem' }}
                                                >

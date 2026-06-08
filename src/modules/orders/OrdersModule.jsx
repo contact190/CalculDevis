@@ -1282,7 +1282,10 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                 const item = selectedOrder.items.find(i => i.id === v.itemId);
                                 if (!item) return null;
 
-                                const previewConfig = {
+                                
+                                const actualShutter = v.shutter !== undefined ? v.shutter : (item.config.hasShutter ? { qty: 1, customLV: '', overrides: {} } : null);
+                                const isShutterActive = actualShutter !== null;
+const previewConfig = {
                                   ...item.config,
                                   L: v.L !== undefined && v.L !== '' ? parseFloat(v.L) : item.config.L,
                                   H: v.H !== undefined && v.H !== '' ? parseFloat(v.H) : item.config.H,
@@ -1379,13 +1382,13 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                           <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>🌀 Configuration du Volet</span>
                                           <button
                                             onClick={() => {
-                                              const hasShutter = !!v.shutter;
-                                              updateVoidProperty(floor.id, apt.id, v.id, 'shutter', hasShutter ? null : { qty: 1, customLV: v.L || item.config.L, overrides: {} });
+                                              
+                                              updateVoidProperty(floor.id, apt.id, v.id, 'shutter', isShutterActive ? null : { qty: 1, customLV: v.L || item.config.L, overrides: {} });
                                             }}
                                             style={{
                                               border: 'none',
-                                              background: v.shutter ? '#fef3c7' : '#e2e8f0',
-                                              color: v.shutter ? '#d97706' : '#475569',
+                                              background: isShutterActive ? '#fef3c7' : '#e2e8f0',
+                                              color: isShutterActive ? '#d97706' : '#475569',
                                               fontSize: '0.7rem',
                                               fontWeight: 700,
                                               padding: '0.2rem 0.6rem',
@@ -1393,18 +1396,18 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                               cursor: 'pointer'
                                             }}
                                           >
-                                            {v.shutter ? '❌ Retirer le volet' : '➕ Activer le volet'}
+                                            {isShutterActive ? '❌ Retirer le volet' : '➕ Activer le volet'}
                                           </button>
                                         </div>
 
-                                        {v.shutter && (
+                                        {isShutterActive && (
                                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem' }}>
                                             <div>
                                               <label style={{ fontSize: '0.65rem', color: '#64748b', display: 'block' }}>Quantité</label>
                                               <input
                                                 type="number"
                                                 className="input"
-                                                value={v.shutter.qty}
+                                                value={actualShutter.qty}
                                                 onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.qty', e.target.value)}
                                                 style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', minHeight: 'auto' }}
                                               />
@@ -1414,7 +1417,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                               <input
                                                 type="number"
                                                 className="input"
-                                                value={v.shutter.customLV || ''}
+                                                value={actualShutter.customLV || ''}
                                                 placeholder="Auto"
                                                 onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.customLV', e.target.value)}
                                                 style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', minHeight: 'auto' }}
@@ -1424,7 +1427,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                               <label style={{ fontSize: '0.65rem', color: '#64748b', display: 'block' }}>Manoeuvre</label>
                                               <select
                                                 className="input"
-                                                value={v.shutter.overrides?.controlPosition || ''}
+                                                value={actualShutter.overrides?.controlPosition || ''}
                                                 onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.controlPosition', e.target.value)}
                                                 style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', minHeight: 'auto', fontWeight: 700 }}
                                               >
@@ -1437,7 +1440,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                               <label style={{ fontSize: '0.65rem', color: '#64748b', display: 'block' }}>Caisson</label>
                                               <select
                                                 className="input"
-                                                value={v.shutter.overrides?.caissonId || ''}
+                                                value={actualShutter.overrides?.caissonId || ''}
                                                 onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.caissonId', e.target.value)}
                                                 style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', minHeight: 'auto' }}
                                               >
@@ -1449,7 +1452,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                               <label style={{ fontSize: '0.65rem', color: '#64748b', display: 'block' }}>Lame</label>
                                               <select
                                                 className="input"
-                                                value={v.shutter.overrides?.lameId || ''}
+                                                value={actualShutter.overrides?.lameId || ''}
                                                 onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.lameId', e.target.value)}
                                                 style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', minHeight: 'auto' }}
                                               >
@@ -1461,7 +1464,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                               <label style={{ fontSize: '0.65rem', color: '#64748b', display: 'block' }}>Glissière</label>
                                               <select
                                                 className="input"
-                                                value={v.shutter.overrides?.glissiereId || ''}
+                                                value={actualShutter.overrides?.glissiereId || ''}
                                                 onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.glissiereId', e.target.value)}
                                                 style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', minHeight: 'auto' }}
                                               >
@@ -1473,7 +1476,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                               <label style={{ fontSize: '0.65rem', color: '#64748b', display: 'block' }}>Axe</label>
                                               <select
                                                 className="input"
-                                                value={v.shutter.overrides?.axeId || ''}
+                                                value={actualShutter.overrides?.axeId || ''}
                                                 onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.axeId', e.target.value)}
                                                 style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', minHeight: 'auto' }}
                                               >
@@ -1485,7 +1488,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                                <label style={{ fontSize: '0.65rem', color: '#64748b', display: 'block' }}>Kit</label>
                                                <select
                                                  className="input"
-                                                 value={v.shutter.overrides?.kitId || ''}
+                                                 value={actualShutter.overrides?.kitId || ''}
                                                  onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.kitId', e.target.value)}
                                                  style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', minHeight: 'auto' }}
                                                >
@@ -1494,8 +1497,8 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                                </select>
                                              </div>
                                              {(() => {
-                                               const selectedKitId = v.shutter.overrides?.kitId !== undefined && v.shutter.overrides?.kitId !== '' 
-                                                 ? v.shutter.overrides?.kitId 
+                                               const selectedKitId = actualShutter.overrides?.kitId !== undefined && actualShutter.overrides?.kitId !== '' 
+                                                 ? actualShutter.overrides?.kitId 
                                                  : (item.config?.shutterConfig?.kitId || '');
                                                const selectedKit = (data.shutterComponents?.kits || []).find(k => k.id === selectedKitId);
                                                const isMotor = selectedKit?.type === 'MOTEUR' || 
@@ -1507,7 +1510,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                                    <label style={{ fontSize: '0.65rem', color: '#64748b', display: 'block' }}>Moteur</label>
                                                    <select
                                                      className="input"
-                                                     value={v.shutter.overrides?.moteurId || ''}
+                                                     value={actualShutter.overrides?.moteurId || ''}
                                                      onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.moteurId', e.target.value)}
                                                      style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', minHeight: 'auto' }}
                                                    >
