@@ -1282,11 +1282,23 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                 const item = selectedOrder.items.find(i => i.id === v.itemId);
                                 if (!item) return null;
 
+                                const previewConfig = {
+                                  ...item.config,
+                                  L: v.L !== undefined && v.L !== '' ? parseFloat(v.L) : item.config.L,
+                                  H: v.H !== undefined && v.H !== '' ? parseFloat(v.H) : item.config.H,
+                                  openingDirection: v.openingDirection || item.config.openingDirection || 'gauche',
+                                  hasShutter: v.shutter !== undefined ? !!v.shutter : item.config.hasShutter,
+                                  shutterConfig: v.shutter ? {
+                                    ...(item.config.shutterConfig || {}),
+                                    ...(v.shutter.overrides || {})
+                                  } : (v.shutter === null ? null : item.config.shutterConfig)
+                                };
+
                                 return (
                                   <div key={v.id} style={{ display: 'flex', background: 'white', borderRadius: '1rem', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}>
                                     {/* Visual Preview */}
                                     <div style={{ width: '220px', background: '#f8fafc', borderRight: '1px solid #e2e8f0', flexShrink: 0 }}>
-                                      <ItemPreview config={item.config} database={data} />
+                                      <ItemPreview config={previewConfig} database={data} />
                                     </div>
 
                                     {/* Form Panel */}
@@ -1301,7 +1313,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                       </div>
 
                                       {/* Real Dimensions Grid */}
-                                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem', marginBottom: '1rem' }}>
+                                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.75rem', marginBottom: '1rem' }}>
                                         <div>
                                           <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '0.25rem' }}>Largeur Réelle (L) mm</label>
                                           <input
@@ -1345,6 +1357,19 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                             style={{ fontSize: '0.85rem', padding: '0.35rem 0.6rem' }}
                                             placeholder="Auto"
                                           />
+                                        </div>
+                                        <div>
+                                          <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '0.25rem' }}>Sens Ouv.</label>
+                                          <select
+                                            className="input"
+                                            value={v.openingDirection || item.config.openingDirection || ''}
+                                            onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'openingDirection', e.target.value)}
+                                            style={{ fontSize: '0.85rem', padding: '0.35rem 0.6rem' }}
+                                          >
+                                            <option value="">Auto ({item.config.openingDirection || 'gauche'})</option>
+                                            <option value="gauche">Gauche</option>
+                                            <option value="droit">Droit</option>
+                                          </select>
                                         </div>
                                       </div>
 

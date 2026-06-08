@@ -826,7 +826,17 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                   
                                   {/* Drawing Preview */}
                                   <div style={{ flex: 1, background: '#f8fafc', border: '1px solid #f1f5f9', borderRadius: '0.5rem' }}>
-                                    <ItemPreview config={item.config} database={data} />
+                                    <ItemPreview config={{
+                                      ...item.config,
+                                      L: v.L !== undefined && v.L !== '' ? parseFloat(v.L) : item.config.L,
+                                      H: v.H !== undefined && v.H !== '' ? parseFloat(v.H) : item.config.H,
+                                      openingDirection: v.openingDirection || item.config.openingDirection || 'gauche',
+                                      hasShutter: v.shutter !== undefined ? !!v.shutter : item.config.hasShutter,
+                                      shutterConfig: v.shutter ? {
+                                        ...(item.config.shutterConfig || {}),
+                                        ...(v.shutter.overrides || {})
+                                      } : (v.shutter === null ? null : item.config.shutterConfig)
+                                    }} database={data} />
                                   </div>
 
                                   {/* Inputs Grid */}
@@ -874,6 +884,19 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                         style={{ fontSize: '0.9rem', padding: '0.5rem', border: '1.5px solid #cbd5e1', fontWeight: 700, textAlign: 'center' }}
                                         placeholder="Auto"
                                       />
+                                    </div>
+                                    <div style={{ gridColumn: '1 / -1' }}>
+                                      <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '0.25rem' }}>SENS D'OUVERTURE</label>
+                                      <select
+                                        className="input"
+                                        value={v.openingDirection || item.config.openingDirection || ''}
+                                        onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'openingDirection', e.target.value)}
+                                        style={{ fontSize: '0.9rem', padding: '0.5rem', border: '1.5px solid #cbd5e1', fontWeight: 800, textAlign: 'center' }}
+                                      >
+                                        <option value="">Auto ({item.config.openingDirection || 'gauche'})</option>
+                                        <option value="gauche">Gauche</option>
+                                        <option value="droit">Droit</option>
+                                      </select>
                                     </div>
                                   </div>
 
