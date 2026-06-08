@@ -212,9 +212,8 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
           // Calculate height needed
           const descLines = [];
           if (matchedItem) {
-            const displayRef = matchedItem.pairedGroupRef || matchedItem.ref || '—';
-            descLines.push(`Réf: ${displayRef}`);
-            descLines.push(`Désignation: ${matchedItem.label}`);
+            const displayRef = matchedItem.pairedGroupId ? matchedItem.pairedGroupRef : matchedItem.label;
+            descLines.push(`Désignation: ${displayRef}`);
             
             const comp = data.compositions?.find(c => c.id === matchedItem.config?.compositionId);
             descLines.push(`Système: ${comp?.name || '—'}`);

@@ -345,12 +345,6 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
             value={label}
             onChange={e => setLabel(e.target.value)}
             placeholder="Désignation du produit (ex: Fenêtre salon)"
-            style={{ flex: 2, padding: '0.5rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '0.5rem', fontSize: '0.95rem', fontWeight: 600 }}
-          />
-          <input
-            value={itemRef || ''}
-            onChange={e => setItemRef(e.target.value)}
-            placeholder="Référence (ex: REF-001)"
             style={{ flex: 1, padding: '0.5rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '0.5rem', fontSize: '0.95rem', fontWeight: 600 }}
           />
         </div>
@@ -2285,15 +2279,15 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
                 isGroup: true,
                 id: item.pairedGroupId,
                 label: item.pairedGroupRef || 'Ensemble',
-                qty: 1,
-                unitPriceHT: 0,
+                qty: 0,
+                unitPriceHT: item.unitPriceHT,
                 config: item.config || {},
                 originalItems: []
              };
              pdfItems.push(groupsMap[item.pairedGroupId]);
           }
           groupsMap[item.pairedGroupId].originalItems.push(item);
-          groupsMap[item.pairedGroupId].unitPriceHT += (item.unitPriceHT * item.qty);
+          groupsMap[item.pairedGroupId].qty += item.qty;
         } else {
           pdfItems.push(item);
         }
@@ -2309,7 +2303,6 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
         // Désignation
         descLines.push(`Désignation : ${item.label || '—'}`);
         
-        if (!item.isGroup) {
           // Système / Modèle
           const isCompound = cfg.compoundType && cfg.compoundType !== 'none' && cfg.compoundConfig?.parts?.length > 0;
         if (isCompound) {
@@ -2464,7 +2457,6 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
             processAlerts(kit);
           }
         }
-        } // Fin de !item.isGroup
 
         // Calculate total lines after wrapping to get accurate row height
         doc.setFontSize(8);
@@ -3193,15 +3185,13 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
                     </div>
 
                     <div style={{ background: 'white', borderRadius: '0.5rem', border: '1px solid #e2e8f0', padding: '0.5rem 1rem' }}>
-                      <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.25rem', marginBottom: '0.4rem', display: 'grid', gridTemplateColumns: '1fr 1fr 80px' }}>
+                      <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.25rem', marginBottom: '0.4rem', display: 'grid', gridTemplateColumns: '1fr 80px' }}>
                         <span>Désignation</span>
-                        <span>Référence Individuelle</span>
                         <span style={{ textAlign: 'right' }}>Quantité</span>
                       </div>
                       {group.map(item => (
-                        <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 80px', fontSize: '0.8rem', padding: '0.3rem 0', borderBottom: '1px solid #f8fafc', alignItems: 'center' }}>
+                        <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '1fr 80px', fontSize: '0.8rem', padding: '0.3rem 0', borderBottom: '1px solid #f8fafc', alignItems: 'center' }}>
                           <span style={{ fontWeight: 600, color: '#334155' }}>{item.label}</span>
-                          <span style={{ color: '#64748b', fontFamily: 'monospace' }}>{item.ref || '—'}</span>
                           <span style={{ textAlign: 'right', fontWeight: 700, color: '#1e293b' }}>×{item.qty}</span>
                         </div>
                       ))}
