@@ -363,7 +363,11 @@ export default function SitePlanModule({ data, setData }) {
             H: defaultItem?.config?.H || undefined,
             wallDepth: undefined,
             handleHeight: undefined,
-            shutter: null
+            shutter: defaultItem?.config?.hasShutter ? {
+              qty: 1,
+              customLV: defaultItem?.config?.L || 1200,
+              overrides: {}
+            } : null
           };
           return { ...a, voids: [...voids, newV] };
         })
@@ -416,6 +420,11 @@ export default function SitePlanModule({ data, setData }) {
                 if (matchedItem) {
                   updatedVoid.L = matchedItem.config?.L;
                   updatedVoid.H = matchedItem.config?.H;
+                  updatedVoid.shutter = matchedItem.config?.hasShutter ? {
+                    qty: 1,
+                    customLV: matchedItem.config?.L,
+                    overrides: {}
+                  } : null;
                 }
               }
 
