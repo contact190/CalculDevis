@@ -782,6 +782,9 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                             const item = order.items.find(i => i.id === v.itemId);
                             if (!item) return null;
 
+                            const actualShutter = v.shutter !== undefined ? v.shutter : (item.config.hasShutter ? { qty: 1, customLV: '', overrides: {} } : null);
+                            const isShutterActive = actualShutter !== null;
+
                             return (
                               <div key={v.id} className="glass shadow-sm" style={{ 
                                 background: 'white', 
