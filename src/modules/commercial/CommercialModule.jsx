@@ -2274,19 +2274,44 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
     doc.setLineWidth(0.2);
 
     if (quote.items && quote.items.length > 0) {
-      quote.items.forEach((item, idx) => {
+      // Group items before rendering
+      const pdfItems = [];
+      const groupsMap = {};
+      
+      quote.items.forEach(item => {
+        if (item.pairedGroupId) {
+          if (!groupsMap[item.pairedGroupId]) {
+             groupsMap[item.pairedGroupId] = {
+                isGroup: true,
+                id: item.pairedGroupId,
+                label: item.pairedGroupRef || 'Ensemble',
+                qty: 1,
+                unitPriceHT: 0,
+                config: item.config || {},
+                originalItems: []
+             };
+             pdfItems.push(groupsMap[item.pairedGroupId]);
+          }
+          groupsMap[item.pairedGroupId].originalItems.push(item);
+          groupsMap[item.pairedGroupId].unitPriceHT += (item.unitPriceHT * item.qty);
+        } else {
+          pdfItems.push(item);
+        }
+      });
+
+      pdfItems.forEach((item, idx) => {
         // Build description lines dynamically
         const cfg = item.config || {};
         let comp = database.compositions?.find(c => c.id === cfg.compositionId);
         let openingComp = null;
         const descLines = [];
         
-        // Référence
-        const displayRef = item.pairedGroupRef || item.ref || '—';
-        descLines.push(`Référence : ${displayRef}`);
+        // Désignation
+        descLines.push(`Désignation : ${item.label || '—'}`);
         
-        // Système / Modèle
-        const isCompound = cfg.compoundType && cfg.compoundType !== 'none' && cfg.compoundConfig?.parts?.length > 0;
+        if (!item.isGroup) {
+          // Système / Modèle
+          const isCompound = cfg.compoundType && cfg.compoundType !== 'none' && cfg.compoundConfig?.parts?.length > 0;
         if (isCompound) {
           const openingPart = cfg.compoundConfig.parts.find(p => p.type === 'opening');
           const fixParts = cfg.compoundConfig.parts.filter(p => p.type === 'fixe');
@@ -2439,6 +2464,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
             processAlerts(kit);
           }
         }
+        } // Fin de !item.isGroup
 
         // Calculate total lines after wrapping to get accurate row height
         doc.setFontSize(8);
@@ -2562,7 +2588,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
       });
       
       // Total QTE Box at the end of the table
-      const totalQte = quote.items.reduce((sum, item) => sum + item.qty, 0);
+      const totalQte = pdfItems.reduce((sum, item) => sum + item.qty, 0);
       
       // Page break check for total box
       if (y + 10 > 280) {
