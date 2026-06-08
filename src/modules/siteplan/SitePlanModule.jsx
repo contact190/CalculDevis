@@ -144,6 +144,37 @@ export default function SitePlanModule({ data, setData }) {
     handleUpdateSitePlan({ ...activeSitePlan, name });
   };
 
+  const duplicatePlan = () => {
+    if (!activeSitePlan) return;
+    const name = window.prompt("Nom du plan dupliqué :", `${activeSitePlan.name} (Copie)`);
+    if (!name) return;
+
+    const generateId = (prefix) => `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+    
+    const clonedPlan = JSON.parse(JSON.stringify(activeSitePlan));
+    clonedPlan.id = generateId('plan');
+    clonedPlan.name = name;
+
+    clonedPlan.floors = (clonedPlan.floors || []).map(floor => ({
+      ...floor,
+      id: generateId('floor'),
+      apartments: (floor.apartments || []).map(apt => ({
+        ...apt,
+        id: generateId('apt'),
+        voids: (apt.voids || []).map(v => {
+          const newV = { ...v, id: generateId('void') };
+          if (newV.shutter) {
+             newV.shutter.id = `shutter-${newV.id}`;
+          }
+          return newV;
+        })
+      }))
+    }));
+
+    handleUpdateSitePlan(clonedPlan);
+    setSelectedPlanId(clonedPlan.id);
+  };
+
   const assignQuoteToPlan = () => {
     if (!selectedQuoteId || !activeSitePlan) return;
     setData(prev => {
@@ -537,6 +568,7 @@ export default function SitePlanModule({ data, setData }) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                   <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800 }}>🧱 Plan actif : {activeSitePlan.name}</h3>
                   <button onClick={renamePlan} className="btn" style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', color: '#64748b' }}>Renommer</button>
+                  <button onClick={duplicatePlan} className="btn" style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', color: '#6366f1' }}>Dupliquer</button>
                   <button onClick={() => deletePlan(activeSitePlan.id)} className="btn" style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', color: '#ef4444' }}>Supprimer</button>
                 </div>
                 <button onClick={addFloor} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: '#10b981' }}>

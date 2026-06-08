@@ -1183,7 +1183,7 @@ export class FormulaEngine {
         if (gDef.thickness != null && gDef.thickness !== '') {
           widthReduction = parseFloat(gDef.thickness) || 0;
         } else if (gDef.shutterType === 'MONO') {
-          widthReduction = 90;
+          widthReduction = 92;
         }
       }
     }
