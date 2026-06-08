@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, ClipboardList, CheckCircle, FolderOpen, ArrowRight, Building, HelpCircle, Layout, Copy, Info, X } from 'lucide-react';
+import { Plus, Trash2, ClipboardList, CheckCircle, FolderOpen, ArrowRight, Building, HelpCircle, Layout, Copy, Info, X, FileText } from 'lucide-react';
 import { getTechnicalDrawingDataURL } from '../../utils/drawingUtils';
+import jsPDF from 'jspdf';
 
 /**
  * Sync tree site plan structure back to flat siteMeasurements inside order items
@@ -53,7 +54,7 @@ function syncSitePlanToMeasurements(sitePlan, orderItems) {
   });
 }
 
-export default function SitePlanModule({ data, setData }) {
+export default function SitePlanModule({ data, setData, quoteSettings }) {
   const [selectedClientId, setSelectedClientId] = useState('');
   const [selectedQuoteId, setSelectedQuoteId] = useState('');
   const [selectedPlanId, setSelectedPlanId] = useState('');
@@ -77,6 +78,255 @@ export default function SitePlanModule({ data, setData }) {
   const selectedQuote = selectedQuoteId 
     ? clientQuotes.find(o => o.id === selectedQuoteId)
     : null;
+
+  const generateSitePlanPDF = () => {
+    if (!activeSitePlan || !selectedClient) return;
+
+    const doc = new jsPDF({ format: 'a4' });
+    const pw = doc.internal.pageSize.getWidth();
+    let y = 15;
+
+    // ----- HEADER SECTION -----
+    // Left: Logo
+    if (quoteSettings?.logoBase64) {
+      try {
+        const imgProps = doc.getImageProperties(quoteSettings.logoBase64);
+        const maxW = 60;
+        const maxH = 25;
+        const ratio = Math.min(maxW / imgProps.width, maxH / imgProps.height);
+        doc.addImage(quoteSettings.logoBase64, 'PNG', 15, y, imgProps.width * ratio, imgProps.height * ratio, '', 'FAST');
+      } catch (e) {
+        try { doc.addImage(quoteSettings.logoBase64, 'PNG', 15, y, 60, 25, '', 'FAST'); } catch(e2) {}
+      }
+    }
+    
+    // Top Right: Title
+    doc.setFontSize(22);
+    doc.setFont('helvetica', 'bold');
+    doc.text('PLAN DE CHANTIER', pw - 15, y + 15, { align: 'right' });
+    
+    // Gauche: Quote number and date (or Plan name/date)
+    y += 35;
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    const quoteLabel = selectedQuote ? `Devis N° : ${selectedQuote.number}` : `Plan de Chantier`;
+    doc.text(`${quoteLabel} - ${activeSitePlan.name}`, 15, y);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Date d'export : ${new Date().toLocaleDateString('fr-FR')}`, 15, y + 5);
+    
+    y += 8;
+    
+    const boxY = y;
+    const boxWidth = (pw - 35) / 2; // 15 margin L/R, 5 gap = 35
+    
+    // Company box (Left)
+    doc.setDrawColor(150, 150, 150);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(15, boxY, boxWidth, 42, 2, 2);
+    
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(quoteSettings?.companyName || 'Mon Entreprise', 18, boxY + 6);
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    let cy = boxY + 11;
+    if (quoteSettings?.companyAddress) {
+      const addressLines = doc.splitTextToSize(quoteSettings.companyAddress, boxWidth - 6);
+      doc.text(addressLines, 18, cy);
+      cy += addressLines.length * 4;
+    }
+    const phone = quoteSettings?.companyPhone || '';
+    const email = quoteSettings?.companyEmail || '';
+    if (phone || email) {
+      doc.text(`${phone} ${email ? ' - ' + email : ''}`, 18, cy);
+      cy += 5;
+    }
+    doc.setTextColor(80, 80, 80);
+    if (quoteSettings?.companyRC) { doc.text(`RC N°: ${quoteSettings.companyRC}`, 18, cy); cy += 4; }
+    if (quoteSettings?.companyIMP) { doc.text(`AI N°: ${quoteSettings.companyIMP}`, 18, cy); cy += 4; }
+    if (quoteSettings?.companyMF) { doc.text(`NIF N°: ${quoteSettings.companyMF}`, 18, cy); cy += 4; }
+    doc.setTextColor(0, 0, 0);
+
+    // Client box (Right)
+    const rightBoxXHeader = 15 + boxWidth + 5;
+    doc.roundedRect(rightBoxXHeader, boxY, boxWidth, 42, 2, 2);
+    
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Client / Destinataire :', rightBoxXHeader + 3, boxY + 6);
+    doc.setFontSize(10);
+    doc.text(selectedClient.nom || 'Client', rightBoxXHeader + 3, boxY + 11);
+    
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    let cly = boxY + 16;
+    if (selectedClient.adresse) {
+      const addrLines = doc.splitTextToSize(selectedClient.adresse, boxWidth - 6);
+      doc.text(addrLines, rightBoxXHeader + 3, cly);
+      cly += addrLines.length * 4;
+    }
+    if (selectedClient.telephone) {
+      doc.text(`Tél : ${selectedClient.telephone}`, rightBoxXHeader + 3, cly);
+      cly += 4;
+    }
+    if (selectedClient.email) {
+      doc.text(`Email : ${selectedClient.email}`, rightBoxXHeader + 3, cly);
+      cly += 5;
+    }
+    doc.setTextColor(80, 80, 80);
+    if (selectedClient.rc) { doc.text(`RC : ${selectedClient.rc}`, rightBoxXHeader + 3, cly); cly += 4; }
+    if (selectedClient.nif) { doc.text(`NIF : ${selectedClient.nif}`, rightBoxXHeader + 3, cly); cly += 4; }
+    if (selectedClient.nis) { doc.text(`NIS : ${selectedClient.nis}`, rightBoxXHeader + 3, cly); cly += 4; }
+    if (selectedClient.ai) { doc.text(`AI : ${selectedClient.ai}`, rightBoxXHeader + 3, cly); cly += 4; }
+    doc.setTextColor(0, 0, 0);
+
+    y = boxY + 48;
+
+    // ----- PLAN DETAILS -----
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`DÉTAILS DES OUVERTURES ET EMPLACEMENTS`, 15, y);
+    y += 8;
+
+    // Table Header
+    doc.setFillColor(40, 40, 40);
+    doc.rect(15, y, pw - 30, 8, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Emplacement', 17, y + 5.5);
+    doc.text('Dessin', 47, y + 5.5);
+    doc.text('Description de la Menuiserie', 92, y + 5.5);
+    doc.text('Mesures Chantier (mm)', pw - 17, y + 5.5, { align: 'right' });
+    doc.setTextColor(0, 0, 0);
+    y += 8;
+
+    // List all floors -> apartments -> voids
+    (activeSitePlan.floors || []).forEach(floor => {
+      (floor.apartments || []).forEach(apt => {
+        (apt.voids || []).forEach((v, vIndex) => {
+          const autoName = `${floor.name}${apt.name}${vIndex + 1}`;
+          const matchedItem = selectedQuote?.items?.find(i => i.id === v.itemId);
+
+          // Calculate height needed
+          const descLines = [];
+          if (matchedItem) {
+            const displayRef = matchedItem.pairedGroupRef || matchedItem.ref || '—';
+            descLines.push(`Réf: ${displayRef}`);
+            descLines.push(`Désignation: ${matchedItem.label}`);
+            
+            const comp = data.compositions?.find(c => c.id === matchedItem.config?.compositionId);
+            descLines.push(`Système: ${comp?.name || '—'}`);
+            descLines.push(`Dimensions Devis: ${matchedItem.config?.L} × ${matchedItem.config?.H} mm`);
+            
+            const color = data.colors?.find(c => c.id === matchedItem.config?.colorId);
+            descLines.push(`Couleur: ${color?.name || matchedItem.config?.colorId || '—'}`);
+
+            if (matchedItem.config?.hasShutter) {
+              descLines.push(`Volet Roulant: Oui`);
+            }
+          } else {
+            descLines.push(`Non assigné`);
+          }
+
+          // Measure Description height
+          doc.setFontSize(7.5);
+          doc.setFont('helvetica', 'normal');
+          let totalWrappedLines = 0;
+          descLines.forEach(line => {
+            totalWrappedLines += doc.splitTextToSize(line, 70).length;
+          });
+          const rowHeight = Math.max(38, totalWrappedLines * 4.5 + 8);
+
+          // Page break check
+          if (y + rowHeight > 280) {
+            doc.addPage();
+            y = 20;
+          }
+
+          // Draw row border
+          doc.rect(15, y, pw - 30, rowHeight);
+
+          // Col 1: Emplacement
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(9);
+          doc.text(`Étage: ${floor.name}`, 17, y + 6);
+          doc.text(`Apt: ${apt.name}`, 17, y + 11);
+          doc.setFontSize(10);
+          doc.setTextColor(16, 185, 129); // green
+          doc.text(`Vide ${autoName}`, 17, y + 18);
+          doc.setTextColor(0, 0, 0);
+
+          // Col 2: Drawing
+          let imgData = null;
+          if (matchedItem?.config) {
+            try {
+              imgData = getTechnicalDrawingDataURL(matchedItem.config, data);
+            } catch(e) {}
+            if (!imgData) {
+              const comp = data.compositions?.find(c => c.id === matchedItem.config?.compositionId);
+              imgData = matchedItem.config?.thumbnail || comp?.image;
+            }
+          }
+          if (imgData) {
+            try {
+              let format = 'JPEG';
+              if (imgData.includes('png') || imgData.startsWith('data:image/png')) format = 'PNG';
+              else if (imgData.includes('webp') || imgData.startsWith('data:image/webp')) format = 'WEBP';
+              doc.addImage(imgData, format, 47, y + 2.5, 33, 33, '', 'FAST');
+            } catch(e) {
+              doc.rect(47, y + 2.5, 33, 33);
+            }
+          } else {
+            doc.setDrawColor(240, 240, 240);
+            doc.rect(47, y + 2.5, 33, 33);
+            doc.setDrawColor(0, 0, 0);
+          }
+
+          // Col 3: Description
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(7.5);
+          let descY = y + 6;
+          descLines.forEach(line => {
+            const lines = doc.splitTextToSize(line, 70);
+            lines.forEach((l, i) => {
+              if (line.startsWith('Réf:')) doc.setFont('helvetica', 'bold');
+              else doc.setFont('helvetica', 'normal');
+              doc.text(l, 87, descY);
+              if (i < lines.length - 1) descY += 4.5;
+            });
+            descY += 4.5;
+          });
+
+          // Col 4: Mesures chantiers
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(8);
+          let mesY = y + 6;
+          const rL = v.L !== undefined ? v.L : '—';
+          const rH = v.H !== undefined ? v.H : '—';
+          const rD = v.wallDepth !== undefined ? v.wallDepth : '—';
+          const rP = v.handleHeight !== undefined ? v.handleHeight : '—';
+
+          doc.text(`Larg. réelle : ${rL}`, pw - 17, mesY, { align: 'right' });
+          doc.text(`Haut. réelle : ${rH}`, pw - 17, mesY + 5, { align: 'right' });
+          doc.text(`Ép. mur : ${rD}`, pw - 17, mesY + 10, { align: 'right' });
+          doc.text(`H. poignée : ${rP}`, pw - 17, mesY + 15, { align: 'right' });
+
+          if (v.shutter && v.shutter.qty > 0) {
+            doc.setFont('helvetica', 'bold');
+            doc.text(`LV Volet : ${v.shutter.customLV || '—'}`, pw - 17, mesY + 22, { align: 'right' });
+            doc.setFont('helvetica', 'normal');
+          }
+
+          y += rowHeight;
+        });
+      });
+    });
+
+    // Save
+    doc.save(`Plan_Chantier_${activeSitePlan.name.replace(/\s+/g, '_')}.pdf`);
+  };
 
   // DB update helper for client site plan & syncing
   const handleUpdateSitePlan = (updatedPlan) => {
@@ -580,9 +830,14 @@ export default function SitePlanModule({ data, setData }) {
                   <button onClick={duplicatePlan} className="btn" style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', color: '#6366f1' }}>Dupliquer</button>
                   <button onClick={() => deletePlan(activeSitePlan.id)} className="btn" style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', color: '#ef4444' }}>Supprimer</button>
                 </div>
-                <button onClick={addFloor} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: '#10b981' }}>
-                  <Plus size={16} /> Ajouter un Étage
-                </button>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button onClick={generateSitePlanPDF} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: '#3b82f6', color: 'white', border: 'none' }}>
+                    <FileText size={16} /> Exporter Plan PDF
+                  </button>
+                  <button onClick={addFloor} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: '#10b981' }}>
+                    <Plus size={16} /> Ajouter un Étage
+                  </button>
+                </div>
               </div>
 
               {/* Tree Container */}

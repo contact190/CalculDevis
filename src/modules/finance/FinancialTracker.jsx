@@ -10,51 +10,23 @@ const paymentStatuses = {
 };
 
 // ─── Attachment input (file or Drive link) ───────────────────────────────────
-const AttachmentInput = ({ value, onChange, label = 'Pièce jointe' }) => {
-  const handleFile = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => onChange({ type: 'file', name: file.name, data: ev.target.result });
-    reader.readAsDataURL(file);
-  };
-
+const AttachmentInput = ({ value, onChange, label = 'Lien Drive' }) => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
       <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748b' }}>{label}</label>
-      {value?.type === 'file' ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0.75rem', background: '#f0fdf4', border: '1px solid #a7f3d0', borderRadius: '0.5rem' }}>
-          <FileText size={14} color="#059669" />
-          <span style={{ fontSize: '0.8rem', color: '#059669', flex: 1 }}>{value.name}</span>
-          <button onClick={() => onChange(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: 0 }}><X size={14} /></button>
-        </div>
-      ) : value?.type === 'drive' ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <input value={value.url || ''} onChange={e => onChange({ type: 'drive', url: e.target.value })}
-            placeholder="Lien Google Drive..."
-            style={{ flex: 1, padding: '0.4rem 0.75rem', border: '1px solid #e2e8f0', borderRadius: '0.5rem', fontSize: '0.8rem' }}
-          />
-          {value.url && <a href={value.url} target="_blank" rel="noopener noreferrer" style={{ color: '#1e88e5' }}><ExternalLink size={14} /></a>}
-          <button onClick={() => onChange(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: 0 }}><X size={14} /></button>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', gap: '0.4rem' }}>
-          <label style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.75rem', background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '0.5rem', cursor: 'pointer', fontSize: '0.8rem', color: '#64748b' }}>
-            <Upload size={13} /> Fichier
-            <input type="file" style={{ display: 'none' }} onChange={handleFile} />
-          </label>
-          <button onClick={() => onChange({ type: 'drive', url: '' })}
-            style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.75rem', background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '0.5rem', cursor: 'pointer', fontSize: '0.8rem', color: '#64748b' }}>
-            <Link size={13} /> Drive
-          </button>
-        </div>
-      )}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <input value={value?.url || ''} onChange={e => onChange(e.target.value ? { type: 'drive', url: e.target.value } : null)}
+          placeholder="Lien Google Drive..."
+          style={{ flex: 1, padding: '0.4rem 0.75rem', border: '1px solid #e2e8f0', borderRadius: '0.5rem', fontSize: '0.8rem' }}
+        />
+        {value?.url && <a href={value.url} target="_blank" rel="noopener noreferrer" style={{ color: '#1e88e5' }}><ExternalLink size={14} /></a>}
+      </div>
     </div>
   );
 };
 
 // ─── Versement Row ────────────────────────────────────────────
-const VersementRow = ({ versement, onUpdate, onDelete, delaiPaiementJours, onGenerateSituation, onGenerateAttachement }) => {
+const VersementRow = ({ versement, onUpdate, onDelete, delaiPaiementJours, onGenerateSituation, onGenerateAttachement, onGenerateOrdreVersement }) => {
   const [expanded, setExpanded] = useState(false);
 
   const pvBloque = versement.pvId && versement.pvStatus !== 'Validé';
@@ -207,21 +179,36 @@ const VersementRow = ({ versement, onUpdate, onDelete, delaiPaiementJours, onGen
                     <option>Payé</option>
                   </select>
                 </div>
-                {versement.statut === 'Payé' && (
-                  <div className="form-group">
-                    <label className="label">Date de paiement</label>
-                    <input className="input" type="date" value={versement.datePaiement ? versement.datePaiement.slice(0, 10) : ''} disabled={versement.isConfirmed}
-                      onChange={e => onUpdate({ ...versement, datePaiement: e.target.value ? new Date(e.target.value).toISOString() : null })} />
-                  </div>
-                )}
+                <div className="form-group">
+                  <label className="label">Date de paiement</label>
+                  <input className="input" type="date" value={versement.datePaiement ? versement.datePaiement.slice(0, 10) : ''} disabled={versement.isConfirmed}
+                    onChange={e => onUpdate({ ...versement, datePaiement: e.target.value ? new Date(e.target.value).toISOString() : null })} />
+                </div>
+                <div className="form-group">
+                  <label className="label">Mode de paiement</label>
+                  <select className="input" value={versement.modePaiement || ''} disabled={versement.isConfirmed}
+                    onChange={e => onUpdate({ ...versement, modePaiement: e.target.value })}>
+                    <option value="">Sélectionner</option>
+                    <option value="Espèce">Espèce</option>
+                    <option value="Chèque">Chèque</option>
+                  </select>
+                </div>
                 <div style={{ gridColumn: '1 / -1' }}>
                   {!versement.isConfirmed ? (
-                    <AttachmentInput label="Pièce jointe / Lien Drive" value={versement.attachment}
+                    <AttachmentInput label="Lien Drive" value={versement.attachment}
                       onChange={v => onUpdate({ ...versement, attachment: v })} />
                   ) : (
-                    versement.attachment ? <div style={{ fontSize: '0.8rem', marginTop: '0.5rem' }}>Pièce jointe: {versement.attachment.type === 'drive' ? <a href={versement.attachment.url} target="_blank" rel="noreferrer">Lien Drive</a> : versement.attachment.name}</div> : <div style={{ fontSize: '0.8rem', marginTop: '0.5rem', color: '#94a3b8' }}>Aucune pièce jointe</div>
+                    versement.attachment?.url ? <div style={{ fontSize: '0.8rem', marginTop: '0.5rem' }}><a href={versement.attachment.url} target="_blank" rel="noreferrer">Ouvrir le Lien Drive</a></div> : <div style={{ fontSize: '0.8rem', marginTop: '0.5rem', color: '#94a3b8' }}>Aucun lien Drive</div>
                   )}
                 </div>
+                {versement.modePaiement === 'Espèce' && (
+                  <div style={{ gridColumn: '1 / -1', marginTop: '0.5rem' }}>
+                    <button onClick={(e) => { e.stopPropagation(); onGenerateOrdreVersement(versement.montant, versement.datePaiement, versement.modePaiement); }}
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.8rem', background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '0.4rem', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600, color: '#334155' }}>
+                      <FileText size={14} /> Générer Ordre de Versement
+                    </button>
+                  </div>
+                )}
                 {!versement.isConfirmed && versement.statut === 'Payé' && (
                   <div style={{ gridColumn: '1 / -1', textAlign: 'right', marginTop: '0.5rem' }}>
                     <button onClick={() => { if(window.confirm('Confirmer définitivement ce versement ?')) onUpdate({...versement, isConfirmed: true}); }} style={{ padding: '0.4rem 0.8rem', background: '#059669', color: 'white', border: 'none', borderRadius: '0.4rem', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600 }}>
@@ -265,11 +252,26 @@ const VersementRow = ({ versement, onUpdate, onDelete, delaiPaiementJours, onGen
                         <input className="input" type="date" value={p.date ? p.date.slice(0, 10) : ''} disabled={p.isConfirmed}
                           onChange={e => handleUpdatePaiement(idx, 'date', e.target.value ? new Date(e.target.value).toISOString() : null)} />
                       </div>
+                      <div className="form-group" style={{ flex: 1 }}>
+                        <label className="label" style={{ fontSize: '0.7rem' }}>Mode</label>
+                        <select className="input" value={p.modePaiement || ''} disabled={p.isConfirmed}
+                          onChange={e => handleUpdatePaiement(idx, 'modePaiement', e.target.value)}>
+                          <option value="">Sél.</option>
+                          <option value="Espèce">Espèce</option>
+                          <option value="Chèque">Chèque</option>
+                        </select>
+                      </div>
                       <div style={{ flex: 2 }}>
                          {!p.isConfirmed ? (
-                           <AttachmentInput label="Pièce jointe" value={p.attachment} onChange={v => handleUpdatePaiement(idx, 'attachment', v)} />
+                           <AttachmentInput label="Lien Drive" value={p.attachment} onChange={v => handleUpdatePaiement(idx, 'attachment', v)} />
                          ) : (
-                           p.attachment ? <div style={{ fontSize: '0.75rem', marginTop: '1.2rem' }}>{p.attachment.type === 'drive' ? <a href={p.attachment.url} target="_blank" rel="noreferrer">Lien Drive</a> : p.attachment.name}</div> : <div style={{ fontSize: '0.75rem', marginTop: '1.2rem', color: '#94a3b8' }}>Aucune pièce jointe</div>
+                           p.attachment?.url ? <div style={{ fontSize: '0.75rem', marginTop: '1.2rem' }}><a href={p.attachment.url} target="_blank" rel="noreferrer">Ouvrir le Lien Drive</a></div> : <div style={{ fontSize: '0.75rem', marginTop: '1.2rem', color: '#94a3b8' }}>Aucun lien Drive</div>
+                         )}
+                         {p.modePaiement === 'Espèce' && (
+                           <button onClick={(e) => { e.stopPropagation(); onGenerateOrdreVersement(p.montant, p.date, p.modePaiement); }}
+                             style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.3rem 0.5rem', background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '0.3rem', cursor: 'pointer', fontSize: '0.7rem', fontWeight: 600, color: '#334155', alignSelf: 'flex-start' }}>
+                             <FileText size={12} /> Ordre Versement
+                           </button>
                          )}
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '1.2rem' }}>
@@ -457,6 +459,28 @@ const TrackerView = ({ tracker, data, setData, onBack }) => {
     doc.save(`Attachement_${versement.pvId || versement.id}.pdf`);
   };
 
+  const handleGenerateOrdreVersement = (montant, date, clientNom, orderId, mode) => {
+    const doc = new jsPDF();
+    const pw = doc.internal.pageSize.getWidth();
+    
+    doc.setFontSize(16); doc.setFont('helvetica', 'bold');
+    doc.text('EURL IDEAL ALUMINIUM', 15, 20);
+    
+    doc.setFontSize(14);
+    doc.text('ORDRE DE VERSEMENT', pw / 2, 40, { align: 'center' });
+    
+    doc.setFontSize(12); doc.setFont('helvetica', 'normal');
+    doc.text(`Reçu de : ${clientNom || 'Client'}`, 15, 60);
+    doc.text(`Commande N° : ${orderId}`, 15, 70);
+    doc.text(`Date : ${new Date(date || Date.now()).toLocaleDateString('fr-FR')}`, 15, 80);
+    doc.text(`Montant : ${Number(montant).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD`, 15, 90);
+    doc.text(`Mode de paiement : ${mode}`, 15, 100);
+    
+    doc.text('Signature / Cachet :', 15, 130);
+    
+    doc.save(`Ordre_Versement_${orderId}.pdf`);
+  };
+
   return (
     <div>
       <button onClick={onBack} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', marginBottom: '1.25rem', fontWeight: 600 }}>
@@ -519,11 +543,28 @@ const TrackerView = ({ tracker, data, setData, onBack }) => {
                 onChange={e => handleAvanceChange('date', e.target.value ? new Date(e.target.value).toISOString() : null)} />
             </div>
           </div>
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+            <div className="form-group" style={{ flex: 1, minWidth: '130px' }}>
+              <label className="label">Mode de paiement</label>
+              <select className="input" value={avance.modePaiement || ''} disabled={avance.isConfirmed}
+                onChange={e => handleAvanceChange('modePaiement', e.target.value)}>
+                <option value="">Sélectionner</option>
+                <option value="Espèce">Espèce</option>
+                <option value="Chèque">Chèque</option>
+              </select>
+            </div>
+            {avance.modePaiement === 'Espèce' && (avance.montant || 0) > 0 && (
+               <button onClick={(e) => { e.stopPropagation(); handleGenerateOrdreVersement(avance.montant, avance.date, client?.nom, tracker.orderId, avance.modePaiement); }}
+                 style={{ alignSelf: 'flex-end', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.8rem', background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '0.4rem', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600, color: '#334155', height: 'fit-content' }}>
+                 <FileText size={14} /> Ordre de Versement
+               </button>
+            )}
+          </div>
           {!avance.isConfirmed ? (
-            <AttachmentInput label="Pièce jointe / Lien Drive (avance)" value={avance.attachment}
+            <AttachmentInput label="Lien Drive (avance)" value={avance.attachment}
               onChange={v => handleAvanceChange('attachment', v)} />
           ) : (
-            avance.attachment ? <div style={{ fontSize: '0.8rem', marginTop: '0.5rem' }}>Pièce jointe: {avance.attachment.type === 'drive' ? <a href={avance.attachment.url} target="_blank" rel="noreferrer">Lien Drive</a> : avance.attachment.name}</div> : <div style={{ fontSize: '0.8rem', marginTop: '0.5rem', color: '#94a3b8' }}>Aucune pièce jointe</div>
+            avance.attachment?.url ? <div style={{ fontSize: '0.8rem', marginTop: '0.5rem' }}><a href={avance.attachment.url} target="_blank" rel="noreferrer">Ouvrir le Lien Drive</a></div> : <div style={{ fontSize: '0.8rem', marginTop: '0.5rem', color: '#94a3b8' }}>Aucun lien Drive</div>
           )}
         </div>
       </div>
@@ -547,6 +588,7 @@ const TrackerView = ({ tracker, data, setData, onBack }) => {
               delaiPaiementJours={contract?.delaiPaiementJours || 30} 
               onGenerateSituation={handleGenerateSituation}
               onGenerateAttachement={handleGenerateAttachement}
+              onGenerateOrdreVersement={(montant, date, mode) => handleGenerateOrdreVersement(montant, date, client?.nom, tracker.orderId, mode)}
             />
           ))}
         </div>

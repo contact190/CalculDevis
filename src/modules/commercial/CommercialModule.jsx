@@ -33,6 +33,28 @@ const EMPTY_CONFIG = {
   }
 };
 
+const getCanonicalConfigKey = (config) => {
+  if (!config) return '';
+  const copy = {
+    L: config.L,
+    H: config.H,
+    compositionId: config.compositionId,
+    colorId: config.colorId,
+    glassId: config.glassId,
+    openingDirection: config.openingDirection,
+    optionalSides: config.optionalSides,
+    selectedOptions: Array.isArray(config.selectedOptions) ? [...config.selectedOptions].sort() : [],
+    hasShutter: config.hasShutter,
+    shutterConfig: config.shutterConfig,
+    compoundType: config.compoundType,
+    compoundConfig: config.compoundConfig,
+    doorConfig: config.doorConfig,
+    useCustomLayout: config.useCustomLayout,
+    customLayout: config.customLayout
+  };
+  return JSON.stringify(copy);
+};
+
 // ─── REUSABLE COMPONENT: SearchableDropdown ────────────────────────────────
 const SearchableDropdown = ({ value, onChange, options, placeholder, style = {}, compact = false }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -158,7 +180,7 @@ const SearchableDropdown = ({ value, onChange, options, placeholder, style = {},
 };
 
 // ─── SUB-COMPONENT: Product Configurator (View B) ──────────────────────────
-const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, label, setLabel, qty, setQty, globalMargin }) => {
+const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, label, setLabel, itemRef, setItemRef, qty, setQty, globalMargin }) => {
   const engine = useMemo(() => new FormulaEngine(database), [database]);
   const [validation, setValidation] = useState({ valid: true });
   const [priceData, setPriceData] = useState(null);
@@ -318,12 +340,18 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
         <button onClick={onCancel} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', border: '1px solid #e2e8f0', borderRadius: '0.5rem', background: 'white', cursor: 'pointer', color: '#64748b', fontSize: '0.875rem' }}>
           <ArrowLeft size={16} /> Retour
         </button>
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, display: 'flex', gap: '0.5rem' }}>
           <input
             value={label}
             onChange={e => setLabel(e.target.value)}
             placeholder="Désignation du produit (ex: Fenêtre salon)"
-            style={{ width: '100%', padding: '0.5rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '0.5rem', fontSize: '0.95rem', fontWeight: 600 }}
+            style={{ flex: 2, padding: '0.5rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '0.5rem', fontSize: '0.95rem', fontWeight: 600 }}
+          />
+          <input
+            value={itemRef || ''}
+            onChange={e => setItemRef(e.target.value)}
+            placeholder="Référence (ex: REF-001)"
+            style={{ flex: 1, padding: '0.5rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '0.5rem', fontSize: '0.95rem', fontWeight: 600 }}
           />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -1800,6 +1828,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
   const [infoPopupItem, setInfoPopupItem] = useState(null);
   const [draftConfig, setDraftConfig] = useState({ ...EMPTY_CONFIG });
   const [draftLabel, setDraftLabel] = useState('');
+  const [draftRef, setDraftRef] = useState('');
   const [draftQty, setDraftQty] = useState(1);
   const [activeListTab, setActiveListTab] = useState('quote'); // 'quote' | 'consumables'
   const [showSettings, setShowSettings] = useState(false);
@@ -1904,6 +1933,58 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
     return Object.values(map);
   }, [allBoms, quote.items]);
 
+  const identicalGroups = useMemo(() => {
+    const groups = {};
+    (quote.items || []).forEach(item => {
+      const key = getCanonicalConfigKey(item.config);
+      if (!key) return;
+      if (!groups[key]) {
+        groups[key] = [];
+      }
+      groups[key].push(item);
+    });
+    return Object.values(groups).filter(g => g.length > 1);
+  }, [quote.items]);
+
+  const handlePairItems = (items, groupRefInput) => {
+    const groupId = `group-${Date.now()}`;
+    const groupRef = groupRefInput || `JUM-${Date.now().toString().slice(-4)}`;
+    const itemIds = items.map(i => i.id);
+    setCurrentQuote(prev => {
+      const updatedItems = (prev.items || []).map(item => {
+        if (itemIds.includes(item.id)) {
+          return { ...item, pairedGroupId: groupId, pairedGroupRef: groupRef };
+        }
+        return item;
+      });
+      return { ...prev, items: updatedItems };
+    });
+  };
+
+  const handleUnpairItems = (groupId) => {
+    setCurrentQuote(prev => {
+      const updatedItems = (prev.items || []).map(item => {
+        if (item.pairedGroupId === groupId) {
+          return { ...item, pairedGroupId: null, pairedGroupRef: null };
+        }
+        return item;
+      });
+      return { ...prev, items: updatedItems };
+    });
+  };
+
+  const handleUpdateGroupRef = (groupId, newRef) => {
+    setCurrentQuote(prev => {
+      const updatedItems = (prev.items || []).map(item => {
+        if (item.pairedGroupId === groupId) {
+          return { ...item, pairedGroupRef: newRef };
+        }
+        return item;
+      });
+      return { ...prev, items: updatedItems };
+    });
+  };
+
   const startNewProduct = () => {
     const firstComp = database.compositions?.[0];
     setDraftConfig({
@@ -1913,6 +1994,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
       glassId: database.glass?.[0]?.id || '',
     });
     setDraftLabel('');
+    setDraftRef('');
     setDraftQty(1);
     setEditingItemId(null);
     setLocalView('configure');
@@ -1921,6 +2003,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
   const startEditProduct = (item) => {
     setDraftConfig({ ...item.config });
     setDraftLabel(item.label);
+    setDraftRef(item.ref || '');
     setDraftQty(item.qty);
     setEditingItemId(item.id);
     setLocalView('configure');
@@ -1929,9 +2012,13 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
   const handleSaveProduct = () => {
     const tempConfig = { ...draftConfig, margin: quoteSettings?.globalMargin || 2.2 };
     const priceData = engine.calculatePrice(tempConfig);
+    const existingItem = editingItemId ? (quote.items || []).find(i => i.id === editingItemId) : null;
     const newItem = {
       id: editingItemId || `ITEM-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       label: draftLabel || `Produit ${(quote.items?.length || 0) + 1}`,
+      ref: draftRef || '',
+      pairedGroupId: existingItem ? (existingItem.pairedGroupId || null) : null,
+      pairedGroupRef: existingItem ? (existingItem.pairedGroupRef || null) : null,
       qty: draftQty || 1,
       config: JSON.parse(JSON.stringify(draftConfig)), // Snapshot config (Prices at the time)
       unitPriceHT: priceData?.priceHT || 0,
@@ -1976,7 +2063,6 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
 
   const filteredBoms = consumableFilter === 'all' ? allBoms : allBoms.filter(b => b.itemId === consumableFilter);
 
-  // ── RENDER: CONFIGURE VIEW ──
   if (localView === 'configure') {
     return (
       <ProductConfigurator
@@ -1987,6 +2073,8 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
         onCancel={() => setLocalView('list')}
         label={draftLabel}
         setLabel={setDraftLabel}
+        itemRef={draftRef}
+        setItemRef={setDraftRef}
         qty={draftQty}
         setQty={setDraftQty}
         globalMargin={quoteSettings?.globalMargin || 2.2}
@@ -2192,6 +2280,10 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
         let comp = database.compositions?.find(c => c.id === cfg.compositionId);
         let openingComp = null;
         const descLines = [];
+        
+        // Référence
+        const displayRef = item.pairedGroupRef || item.ref || '—';
+        descLines.push(`Référence : ${displayRef}`);
         
         // Système / Modèle
         const isCompound = cfg.compoundType && cfg.compoundType !== 'none' && cfg.compoundConfig?.parts?.length > 0;
@@ -2754,6 +2846,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
       <div className="tabs-container">
         {[
           { id: 'quote', label: '📋 Lignes du Devis', count: quote.items?.length || 0 },
+          { id: 'jumelage', label: '🔗 Jumelage des produits', count: identicalGroups.length || null },
           { id: 'consumables', label: '🔩 Consommables (Interne)', count: null },
         ].map(tab => (
           <button key={tab.id} onClick={() => setActiveListTab(tab.id)}
@@ -2812,7 +2905,14 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
                       <React.Fragment key={item.id}>
                         <tr>
                           <td data-label="Désignation" style={{ fontWeight: 600 }}>
-                            <div>{item.label}</div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                              <span>{item.label}</span>
+                              {(item.pairedGroupRef || item.ref) && (
+                                <span style={{ padding: '0.1rem 0.3rem', background: item.pairedGroupRef ? '#e0f2fe' : '#f1f5f9', color: item.pairedGroupRef ? '#0369a1' : '#475569', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 700 }}>
+                                  {item.pairedGroupRef ? `Gr: ${item.pairedGroupRef}` : `Ref: ${item.ref}`}
+                                </span>
+                              )}
+                            </div>
                             <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{comp?.name}</div>
                           </td>
                           <td data-label="Modèle / Dim." style={{ fontSize: '0.85rem' }}>
@@ -2990,6 +3090,102 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
           </div>
         </div>
         </>
+      )}
+
+
+      {/* Jumelage Tab */}
+      {activeListTab === 'jumelage' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', background: 'white', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #e2e8f0', minHeight: '300px' }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Layers size={20} color="#2563eb" /> Jumelage des produits identiques
+            </h3>
+            <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.85rem', color: '#64748b' }}>
+              Regroupez les menuiseries ayant des dimensions, vitrages et configurations de volet 100% identiques pour leur attribuer une référence unique sur le devis PDF.
+            </p>
+          </div>
+
+          {identicalGroups.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '3rem 1.5rem', background: '#f8fafc', borderRadius: '0.75rem', border: '1px dashed #cbd5e1' }}>
+              <Layers size={32} color="#94a3b8" style={{ marginBottom: '0.75rem' }} />
+              <p style={{ margin: 0, fontSize: '0.9rem', color: '#64748b', fontWeight: 600 }}>Aucun lot de produits identiques détecté</p>
+              <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.8rem', color: '#94a3b8' }}>
+                Ajoutez des produits avec la même configuration (dimensions, couleur, volet, vitrage, etc.) pour pouvoir les jumeler.
+              </p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              {identicalGroups.map((group, gIdx) => {
+                const sampleItem = group[0];
+                const comp = database.compositions?.find(c => c.id === sampleItem.config?.compositionId);
+                const color = database.colors?.find(c => c.id === sampleItem.config?.colorId);
+                const isGrouped = !!sampleItem.pairedGroupId;
+
+                return (
+                  <div key={gIdx} style={{ border: '1px solid #e2e8f0', borderRadius: '0.75rem', padding: '1.25rem', background: isGrouped ? '#f0fdf4' : '#f8fafc', borderLeft: isGrouped ? '4px solid #10b981' : '4px solid #3b82f6', transition: 'all 0.25s' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
+                      <div>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: isGrouped ? '#15803d' : '#2563eb', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          {isGrouped ? 'Menuiseries Jumelées' : 'Jumelage Disponible'}
+                        </span>
+                        <h4 style={{ margin: '0.2rem 0 0 0', fontSize: '1rem', fontWeight: 800, color: '#1e293b' }}>
+                          {comp?.name} — {sampleItem.config?.L} × {sampleItem.config?.H} mm ({color?.name || sampleItem.config?.colorId})
+                        </h4>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        {isGrouped ? (
+                          <>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155' }}>Référence de groupe :</label>
+                              <input 
+                                type="text"
+                                className="input"
+                                value={sampleItem.pairedGroupRef || ''}
+                                onChange={e => handleUpdateGroupRef(sampleItem.pairedGroupId, e.target.value)}
+                                style={{ width: '150px', padding: '0.35rem 0.6rem', fontSize: '0.85rem', fontWeight: 700, background: 'white' }}
+                              />
+                            </div>
+                            <button 
+                              onClick={() => handleUnpairItems(sampleItem.pairedGroupId)}
+                              className="btn"
+                              style={{ padding: '0.35rem 0.75rem', background: '#fef2f2', color: '#ef4444', borderColor: '#fca5a5', fontSize: '0.8rem', fontWeight: 600 }}
+                            >
+                              Dissocier
+                            </button>
+                          </>
+                        ) : (
+                          <button 
+                            onClick={() => handlePairItems(group)}
+                            className="btn btn-primary"
+                            style={{ padding: '0.4rem 1rem', fontSize: '0.8rem', fontWeight: 600, background: '#3b82f6', color: 'white', border: 'none' }}
+                          >
+                            🔗 Jumeler les {group.length} produits
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div style={{ background: 'white', borderRadius: '0.5rem', border: '1px solid #e2e8f0', padding: '0.5rem 1rem' }}>
+                      <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.25rem', marginBottom: '0.4rem', display: 'grid', gridTemplateColumns: '1fr 1fr 80px' }}>
+                        <span>Désignation</span>
+                        <span>Référence Individuelle</span>
+                        <span style={{ textAlign: 'right' }}>Quantité</span>
+                      </div>
+                      {group.map(item => (
+                        <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 80px', fontSize: '0.8rem', padding: '0.3rem 0', borderBottom: '1px solid #f8fafc', alignItems: 'center' }}>
+                          <span style={{ fontWeight: 600, color: '#334155' }}>{item.label}</span>
+                          <span style={{ color: '#64748b', fontFamily: 'monospace' }}>{item.ref || '—'}</span>
+                          <span style={{ textAlign: 'right', fontWeight: 700, color: '#1e293b' }}>×{item.qty}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       )}
 
 
