@@ -1,6 +1,17 @@
 import React, { useState, useMemo } from 'react';
 import jsPDF from 'jspdf';
 import { CreditCard, Plus, Upload, ExternalLink, CheckCircle, Clock, AlertTriangle, ChevronDown, ChevronUp, Trash2, FileText, Link, X, Download } from 'lucide-react';
+import {
+  drawDocumentHeader,
+  formatAmountFR,
+  amountToWordsFR,
+  getCityFromAddress,
+  buildAttachementRows,
+  getSituationNumber,
+  resolveClientRecord,
+  drawSituationClientBlock,
+  drawSituationTable,
+} from '../../utils/pdfDocumentUtils';
 
 const paymentStatuses = {
   'Payé': { color: '#10b981', bg: '#d1fae5', icon: '✅' },
@@ -301,7 +312,7 @@ const VersementRow = ({ versement, onUpdate, onDelete, delaiPaiementJours, onGen
 };
 
 // ─── Single Tracker View ──────────────────────────────────────────────────────
-const TrackerView = ({ tracker, data, setData, onBack }) => {
+const TrackerView = ({ tracker, data, setData, onBack, quoteSettings }) => {
   const contract = (data.contracts || []).find(c => c.id === tracker.contractId);
   const client = (data.clients || []).find(c => c.id === tracker.clientId);
   const order = (data.orders || []).find(o => o.id === tracker.orderId);
@@ -363,100 +374,199 @@ const TrackerView = ({ tracker, data, setData, onBack }) => {
   };
 
   const handleGenerateSituation = (versement) => {
-    const doc = new jsPDF();
+    const doc = new jsPDF({ format: 'a4' });
     const pw = doc.internal.pageSize.getWidth();
-    
-    // Header
-    doc.setFontSize(16); doc.setFont('helvetica', 'bold');
-    doc.text('EURL IDEAL ALUMINIUM', 15, 20);
-    doc.setFontSize(10); doc.setFont('helvetica', 'normal');
-    doc.text('SITUATION DES TRAVAUX', pw / 2, 35, { align: 'center' });
-    
-    // Info
-    doc.text(`Entreprise : ${client?.nom || 'Client inconnu'}`, 15, 50);
-    doc.text(`Projet : Commande ${tracker.orderId}`, 15, 55);
-    doc.text(`Montant du contrat en TTC: ${montantContrat.toLocaleString('fr-FR')} DZD`, 15, 65);
+    const ph = doc.internal.pageSize.getHeight();
+    const clientRecord = resolveClientRecord(tracker, order, contract, data.clients, data.quotes);
+    const situationNum = getSituationNumber(versements, versement);
+    const versementIndex = versements.findIndex(v => v.id === versement.id);
+    const prevVersements = versements.slice(0, versementIndex);
+    const currentAndPrev = versements.slice(0, versementIndex + 1);
+    const tvaRate = contract?.tauxTVA ?? quoteSettings?.tvaRate ?? 9;
+    const tvaMultiplier = 1 + tvaRate / 100;
 
-    // Table calculations
-    let y = 80;
-    
-    doc.setDrawColor(0,0,0);
-    doc.rect(15, y, pw - 30, 80);
-    
-    const montantHT = (versement.montant || 0) / 1.09; // Assuming 9% TVA
-    
+    const cumulHT = currentAndPrev.reduce((s, v) => s + (v.montant || 0) / tvaMultiplier, 0);
+    const prevHT = prevVersements.reduce((s, v) => s + (v.montant || 0) / tvaMultiplier, 0);
+    const currentHT = (versement.montant || 0) / tvaMultiplier;
+    const avanceTTC = avance.montant || 0;
+    const total1 = cumulHT * tvaMultiplier - avanceTTC;
+    const total2 = prevHT * tvaMultiplier;
+    const total3 = avanceTTC > 0 && versementIndex === 0 ? avanceTTC : 0;
+    const tvaAmount = currentHT * (tvaRate / 100);
+    const brutTTC = versement.montant || 0;
+    const netTTC = Math.max(0, total1 - total2 + total3);
+
+    let y = drawDocumentHeader(doc, quoteSettings, clientRecord, { showClientBox: false });
+
+    doc.setFontSize(13);
     doc.setFont('helvetica', 'bold');
-    doc.text('Montant en Dinars', pw - 45, y + 6);
-    doc.line(15, y + 8, pw - 15, y + 8);
-    
+    doc.text(`SITUATION DES TRAVAUX N° ${situationNum}`, pw / 2, y + 4, { align: 'center' });
+    const city = getCityFromAddress(quoteSettings?.companyAddress);
+    doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
-    y += 15;
-    doc.text('Montant des travaux cumulés en HT', 17, y);
-    doc.text(montantHT.toLocaleString('fr-FR', {maximumFractionDigits:2}), pw - 40, y);
-    
-    y += 15;
-    doc.text('Montant des travaux réalisés précédemment en HT', 17, y);
-    const totalPrec = (versement.paiements || []).reduce((sum, p) => sum + (p.montant || 0), 0) / 1.09;
-    doc.text(totalPrec.toLocaleString('fr-FR', {maximumFractionDigits:2}), pw - 40, y);
+    doc.text(`${city} le : ${new Date().toLocaleDateString('fr-FR')}`, pw - 15, y + 4, { align: 'right' });
+    y += 12;
 
-    y += 20;
-    doc.setFont('helvetica', 'bold');
-    const tva = (versement.montant || 0) - montantHT;
-    doc.text('Montant de la TVA 9%', 17, y);
-    doc.text(tva.toLocaleString('fr-FR', {maximumFractionDigits:2}), pw - 40, y);
+    y = drawSituationClientBlock(doc, clientRecord, y, pw, {
+      projet: order?.projectName || order?.sitePlanName || tracker.orderId,
+      lot: 'Fourniture et pose de menuiserie aluminium (Fenêtres et Portes-fenêtres)',
+      montantContrat,
+    });
 
+    const prevDate = prevVersements.length > 0
+      ? new Date(prevVersements[prevVersements.length - 1].createdAt || Date.now()).toLocaleDateString('fr-FR')
+      : new Date(tracker.createdAt || Date.now()).toLocaleDateString('fr-FR');
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.text(`Arrêtée le : ${prevDate}`, 15, y);
+    y += 6;
+
+    y = drawSituationTable(doc, y, pw, [
+      { label: 'Montant des travaux cumulés en HT', amount: cumulHT },
+      { label: 'Avances perçues à ce jour en TTC', amount: avanceTTC > 0 ? -avanceTTC : 0 },
+      { label: 'Total (1)', amount: total1, bold: true, isSectionEnd: true },
+      { label: 'A déduire', amount: null, sectionTitle: true },
+      { label: 'Montant des travaux réalisés précédemment en HT', amount: prevHT, indent: 4 },
+      { label: 'Avances perçues antérieurement en TTC', amount: versementIndex > 0 ? 0 : (avanceTTC > 0 ? -avanceTTC : 0), indent: 4 },
+      { label: 'Total (2)', amount: total2, bold: true, indent: 4, isSectionEnd: true },
+      { label: 'Remboursement à effectuer', amount: null, sectionTitle: true },
+      { label: 'Avances perçues antérieurement en TTC', amount: total3, indent: 4 },
+      { label: 'Total (3)', amount: total3, bold: true, indent: 4, isSectionEnd: true },
+      { label: `Montant de la TVA ${tvaRate}%`, amount: tvaAmount, bold: true },
+      { label: 'Montant Brut de la situation en TTC', amount: brutTTC, bold: true },
+      { label: 'Montant net à payer à l\'entreprise en TTC', amount: netTTC, bold: true },
+    ]);
+
+    y += 8;
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'italic');
+    doc.text(amountToWordsFR(netTTC), 15, y);
     y += 10;
-    doc.text('Montant Brut de la situation en TTC:', 17, y);
-    doc.text((versement.montant || 0).toLocaleString('fr-FR', {maximumFractionDigits:2}), pw - 40, y);
-    
-    doc.save(`Situation_${versement.pvId || versement.id}.pdf`);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Fait à ${city} le ${new Date().toLocaleDateString('fr-FR')}`, 15, y);
+
+    y = Math.max(y + 20, ph - 45);
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Entreprise', 15, y);
+    doc.text('Maître de l\'ouvrage', pw - 70, y);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.text('Signature et cachet', 15, y + 15);
+    doc.text('Signature', pw - 70, y + 15);
+
+    doc.save(`Situation_${situationNum}_${versement.pvId || versement.id}.pdf`);
+  };
+
+  const drawAttachementTableHeader = (doc, y, pw) => {
+    const tableX = 15;
+    const tableW = pw - 30;
+    const colNum = tableX + 1;
+    const colDes = tableX + 10;
+    const colU = 108;
+    const colQC = 116;
+    const colQP = 131;
+    const colQM = 146;
+    const colQCu = 161;
+    const colObs = 176;
+
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.3);
+    doc.rect(tableX, y, tableW, 16);
+    doc.line(colDes - 1, y, colDes - 1, y + 16);
+    doc.line(colU - 1, y, colU - 1, y + 16);
+    doc.line(colQC - 1, y + 8, colQCu + 14, y + 8);
+    doc.line(colQC - 1, y, colQC - 1, y + 16);
+    doc.line(colQP - 1, y + 8, colQP - 1, y + 16);
+    doc.line(colQM - 1, y + 8, colQM - 1, y + 16);
+    doc.line(colQCu - 1, y + 8, colQCu - 1, y + 16);
+    doc.line(colObs - 1, y, colObs - 1, y + 16);
+
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'bold');
+    doc.text('N°', colNum + 1, y + 5);
+    doc.text('Désignation des Ouvrages', colDes + 1, y + 5);
+    doc.text('U', colU + 2, y + 5);
+    doc.text('Quantité', colQC + 8, y + 4);
+    doc.text('QTE', colQC + 1, y + 11);
+    doc.text('Contrat', colQC, y + 15);
+    doc.text('QTE', colQP + 1, y + 11);
+    doc.text('Préce', colQP, y + 15);
+    doc.text('QTE', colQM + 1, y + 11);
+    doc.text('Mois', colQM + 1, y + 15);
+    doc.text('QTE', colQCu + 1, y + 11);
+    doc.text('Cumul', colQCu, y + 15);
+    doc.text('Observations', colObs + 1, y + 5);
+
+    return { y: y + 16, colNum, colDes, colU, colQC, colQP, colQM, colQCu, colObs, tableX, tableW };
   };
 
   const handleGenerateAttachement = (versement) => {
-    const doc = new jsPDF();
+    const doc = new jsPDF({ format: 'a4' });
     const pw = doc.internal.pageSize.getWidth();
-    
-    doc.setFontSize(16); doc.setFont('helvetica', 'bold');
-    doc.text('EURL IDEAL ALUMINIUM', 15, 20);
-    doc.setFontSize(12);
-    doc.text('ATTACHEMENT DES TRAVAUX', pw / 2, 35, { align: 'center' });
-    
-    doc.setFontSize(10); doc.setFont('helvetica', 'normal');
-    doc.text(`Projet : Commande ${tracker.orderId}`, 15, 50);
+    const clientRecord = resolveClientRecord(tracker, order, contract, data.clients, data.quotes);
+    const situationNum = getSituationNumber(versements, versement);
+    const versementIndex = versements.findIndex(v => v.id === versement.id);
+    const prevVersements = versements.slice(0, versementIndex);
+    const rows = buildAttachementRows(order, versement, prevVersements);
 
-    // Get order details to build table
-    let y = 60;
-    doc.setFillColor(241, 245, 249);
-    doc.rect(15, y, pw - 30, 10, 'FD');
-    doc.text('N°', 17, y + 6);
-    doc.text('Désignation des Ouvrages', 30, y + 6);
-    doc.text('U', 130, y + 6);
-    doc.text('Quantité', 150, y + 6);
-    
-    y += 10;
-    
-    if (order && order.batches) {
-      let index = 1;
-      order.batches.forEach(b => {
-        (b.items || []).forEach(item => {
-           let totalQty = 0;
-           (item.measurements || []).forEach(m => totalQty += m.qty);
-           
-           if (y > 270) { doc.addPage(); y = 20; }
-           
-           doc.text(`1-0${index}`, 17, y + 6);
-           const designation = doc.splitTextToSize(`Fourniture et pose de ${item.label} en aluminium`, 90);
-           doc.text(designation, 30, y + 6);
-           doc.text('U', 130, y + 6);
-           doc.text(`${totalQty}`, 150, y + 6);
-           
-           y += 5 * designation.length + 5;
-           index++;
-        });
-      });
+    let y = drawDocumentHeader(doc, quoteSettings, clientRecord, { showClientBox: false });
+
+    doc.setFontSize(13);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`ATTACHEMENT DES TRAVAUX N° ${situationNum}`, pw / 2, y + 4, { align: 'center' });
+    const city = getCityFromAddress(quoteSettings?.companyAddress);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`${city} le : ${new Date().toLocaleDateString('fr-FR')}`, pw - 15, y + 4, { align: 'right' });
+    y += 12;
+    doc.text(`Projet : ${order?.projectName || clientRecord?.nom || tracker.orderId}`, 15, y);
+    y += 8;
+
+    let cols = drawAttachementTableHeader(doc, y, pw);
+    y = cols.y;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.5);
+
+    rows.forEach(row => {
+      const desLines = doc.splitTextToSize(row.designation, 88);
+      const rowH = Math.max(desLines.length * 3.5, 8);
+      if (y + rowH > 275) {
+        doc.addPage();
+        cols = drawAttachementTableHeader(doc, 20, pw);
+        y = cols.y;
+      }
+
+      doc.rect(cols.tableX, y, cols.tableW, rowH);
+      doc.line(cols.colDes - 1, y, cols.colDes - 1, y + rowH);
+      doc.line(cols.colU - 1, y, cols.colU - 1, y + rowH);
+      doc.line(cols.colQC - 1, y, cols.colQC - 1, y + rowH);
+      doc.line(cols.colQP - 1, y, cols.colQP - 1, y + rowH);
+      doc.line(cols.colQM - 1, y, cols.colQM - 1, y + rowH);
+      doc.line(cols.colQCu - 1, y, cols.colQCu - 1, y + rowH);
+      doc.line(cols.colObs - 1, y, cols.colObs - 1, y + rowH);
+
+      doc.text(row.num, cols.colNum + 1, y + 4);
+      doc.text(desLines, cols.colDes + 1, y + 4);
+      doc.text(row.unit, cols.colU + 2, y + 4);
+      doc.text(formatAmountFR(row.qteContrat, 0), cols.colQC + 7, y + 4, { align: 'right' });
+      doc.text(formatAmountFR(row.qtePrece, 2), cols.colQP + 7, y + 4, { align: 'right' });
+      doc.text(formatAmountFR(row.qteMois, 2), cols.colQM + 7, y + 4, { align: 'right' });
+      doc.text(formatAmountFR(row.qteCumul, 2), cols.colQCu + 7, y + 4, { align: 'right' });
+      if (row.observations) {
+        doc.text(doc.splitTextToSize(row.observations, 18), cols.colObs + 1, y + 4);
+      }
+
+      y += rowH;
+    });
+
+    if (rows.length === 0) {
+      doc.rect(cols.tableX, y, cols.tableW, 10);
+      doc.text('Aucun ouvrage réceptionné pour ce PV.', cols.colDes + 1, y + 6);
     }
 
-    doc.save(`Attachement_${versement.pvId || versement.id}.pdf`);
+    doc.save(`Attachement_${situationNum}_${versement.pvId || versement.id}.pdf`);
   };
 
   const handleGenerateOrdreVersement = (montant, date, clientNom, orderId, mode) => {
@@ -616,7 +726,7 @@ const FinancialTracker = ({ data, setData, quoteSettings }) => {
   const selectedTracker = trackers.find(t => t.id === selectedTrackerId);
 
   if (selectedTracker) {
-    return <TrackerView tracker={selectedTracker} data={data} setData={setData} onBack={() => setSelectedTrackerId(null)} />;
+    return <TrackerView tracker={selectedTracker} data={data} setData={setData} onBack={() => setSelectedTrackerId(null)} quoteSettings={quoteSettings} />;
   }
 
   return (

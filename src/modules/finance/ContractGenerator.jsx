@@ -214,9 +214,9 @@ const ContractGenerator = ({ data, setData, quoteSettings }) => {
   const handleStartNewContract = (targetOrderId) => {
     const idToUse = targetOrderId || selectedOrderId;
     if (!idToUse) { alert('Veuillez sélectionner une commande.'); return; }
-    const existingContract = contracts.find(c => c.orderId === idToUse && c.status !== 'Annulé');
+    const existingContract = contracts.find(c => c.orderId === idToUse && c.status === 'Figé');
     if (existingContract) {
-      alert(`Un contrat existe déjà pour cette commande (${existingContract.id}).`);
+      alert(`Un contrat est déjà figé pour cette commande (${existingContract.id}).`);
       return;
     }
     const order = orders.find(o => o.id === idToUse);
@@ -323,10 +323,21 @@ const ContractGenerator = ({ data, setData, quoteSettings }) => {
     };
 
     setData(prev => {
-      const existing = (prev.contracts || []).find(c => c.id === finalContract.id);
-      const contracts = existing
-        ? (prev.contracts || []).map(c => c.id === finalContract.id ? finalContract : c)
-        : [...(prev.contracts || []), finalContract];
+      const contracts = (prev.contracts || []).map(c => {
+        if (c.id === finalContract.id) {
+          return finalContract;
+        }
+        if (c.orderId === finalContract.orderId && c.status === 'Brouillon') {
+          return { ...c, status: 'Annulé' };
+        }
+        return c;
+      });
+      
+      const exists = contracts.some(c => c.id === finalContract.id);
+      if (!exists) {
+        contracts.push(finalContract);
+      }
+
       const trackers = [...(prev.financialTrackers || []).filter(t => t.contractId !== finalContract.id), newTracker];
       return { ...prev, contracts, financialTrackers: trackers };
     });
