@@ -425,7 +425,13 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                 <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1.5fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
                    <div className="form-group">
                       <label className="label">Modèle Structurel</label>
-                      <select className="input" value={config.compoundType} onChange={e => setConfig(prev => ({ ...prev, compoundType: e.target.value }))}>
+                      <select className="input" value={config.compoundType} onChange={e => {
+                         const newType = e.target.value;
+                         if (config.compoundType && config.compoundType !== newType) {
+                            alert("Veuillez retaper la valeur de la partie fixe");
+                         }
+                         setConfig(prev => ({ ...prev, compoundType: newType }));
+                      }}>
                         <option value="fix_coulissant">Multi-Châssis (Unions)</option>
                         <option value="fix_ouvrant">Châssis Divisé (Traverses)</option>
                       </select>
@@ -963,7 +969,12 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
               ⚡ Volet Double (Séparé)
             </label>
 
-            {config.shutterConfig?.isDoubleShutter && config.shutterConfig?.kitId?.startsWith('KIT-MOTE') && (
+            {config.shutterConfig?.isDoubleShutter && (() => {
+              const kitId = config.shutterConfig?.kitId || '';
+              const kitObj = (database.shutterComponents?.kits || []).find(k => k.id === kitId);
+              const kitName = kitObj?.name || kitId;
+              return kitObj?.type === 'MOTEUR' || kitId.startsWith('KIT-MOTE') || kitId.toLowerCase().includes('mot') || kitName.toLowerCase().includes('moteur');
+            })() && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginLeft: '0.5rem', borderLeft: '2px solid #3b82f6', paddingLeft: '0.75rem' }}>
                 <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#1e40af' }}>Nb Moteurs :</span>
                 <select 
@@ -1466,11 +1477,26 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                 })}
 
                 {/* Control Position (Motor/Strap/Crank) */}
-                {(config.shutterConfig?.kitId === 'KIT-MOTE' || config.shutterConfig?.kitId === 'KIT-SANG' || config.shutterConfig?.kitId === 'KIT-MANI') && (
+                {(() => {
+                  const kitId = config.shutterConfig?.kitId || '';
+                  if (!kitId) return false;
+                  const kitObj = (database.shutterComponents?.kits || []).find(k => k.id === kitId);
+                  const kitName = kitObj?.name || kitId;
+                  const isMotor = kitObj?.type === 'MOTEUR' || kitId.startsWith('KIT-MOTE') || kitId.toLowerCase().includes('mot') || kitName.toLowerCase().includes('moteur');
+                  const isSangle = kitObj?.type === 'SANGLE' || kitId.startsWith('KIT-SANG') || kitId.toLowerCase().includes('sang') || kitName.toLowerCase().includes('sangle');
+                  const isMani = kitObj?.type === 'MANIVELLE' || kitId.startsWith('KIT-MANI') || kitId.toLowerCase().includes('mani') || kitName.toLowerCase().includes('manivelle');
+                  return isMotor || isSangle || isMani;
+                })() && (
                   <div className="form-group" style={{ gridColumn: 'span 2' }}>
                     <label className="label" style={{ fontSize: '0.8rem', fontWeight: 700 }}>
-                      {config.shutterConfig?.kitId === 'KIT-MOTE' ? 'Position du Câble Moteur' : 
-                       config.shutterConfig?.kitId === 'KIT-SANG' ? 'Position de la Sangle' : 'Position de la Manivelle'}
+                      {(() => {
+                        const kitId = config.shutterConfig?.kitId || '';
+                        const kitObj = (database.shutterComponents?.kits || []).find(k => k.id === kitId);
+                        const kitName = kitObj?.name || kitId;
+                        if (kitObj?.type === 'MOTEUR' || kitId.startsWith('KIT-MOTE') || kitId.toLowerCase().includes('mot') || kitName.toLowerCase().includes('moteur')) return 'Position du Câble Moteur';
+                        if (kitObj?.type === 'SANGLE' || kitId.startsWith('KIT-SANG') || kitId.toLowerCase().includes('sang') || kitName.toLowerCase().includes('sangle')) return 'Position de la Sangle';
+                        return 'Position de la Manivelle';
+                      })()}
                     </label>
                     <div style={{ display: 'flex', gap: '1rem' }}>
                       {['Gauche', 'Droite'].map(pos => {
