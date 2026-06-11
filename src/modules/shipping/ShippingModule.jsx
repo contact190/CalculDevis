@@ -22,6 +22,10 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
   const [unitRemarks, setUnitRemarks] = useState({});
   const [showPVModal, setShowPVModal] = useState(false);
   const [pvSelectedFloors, setPvSelectedFloors] = useState(new Set());
+  const [isFinalPV, setIsFinalPV] = useState(false);
+  const [pvTeamMember, setPvTeamMember] = useState('');
+  const [pvCustomName, setPvCustomName] = useState('');
+  const [pvCustomRole, setPvCustomRole] = useState('');
   const [senderEmail, setSenderEmail] = useState('contact@entreprise.com');
   const [companyName, setCompanyName] = useState(quoteSettings?.companyName || 'ALU DESIGN'); // Nom depuis config ou par défaut
   const [recipientEmail, setRecipientEmail] = useState('');
@@ -71,14 +75,123 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
   const allUnits = useMemo(() => {
     if (!selectedOrder) return [];
     const units = [];
+
+    // Find active site plan
+    const client = data?.clients?.find(c => c.id === selectedOrder.clientId);
+    const plans = client?.sitePlans || [];
+    let activeSitePlan = null;
+    if (selectedOrder.sitePlanId) {
+      activeSitePlan = plans.find(p => p.id === selectedOrder.sitePlanId);
+    }
+    if (!activeSitePlan) {
+      for (const plan of plans) {
+         for (const floor of (plan.floors || [])) {
+            for (const apt of (floor.apartments || [])) {
+               for (const voidItem of (apt.voids || [])) {
+                  if (selectedOrder.items?.some(i => i.id === voidItem.itemId)) {
+                     activeSitePlan = plan;
+                     break;
+                  }
+               }
+               if (activeSitePlan) break;
+            }
+            if (activeSitePlan) break;
+         }
+         if (activeSitePlan) break;
+      }
+    }
+    if (!activeSitePlan && plans.length > 0) {
+      activeSitePlan = plans[0];
+    }
+
     (selectedOrder.batches || []).forEach(batch => {
       if (selectedBatchIds.size > 0 && !selectedBatchIds.has(batch.id)) return;
       (batch.items || []).forEach(item => {
         (item.measurements || []).forEach(m => {
           for (let i = 0; i < m.qty; i++) {
             const unitId = `${selectedOrder.id}-${batch.id}-${item.id}-${m.id}-${i}`;
-            const name = m.instanceNames?.[i] || `${item.label} #${i + 1}`;
-            const floor = m.instanceFloors?.[i] || '';
+            
+            // Look up from activeSitePlan if possible
+            let activeFloor = null;
+            let activeApt = null;
+            let voidIndex = -1;
+            if (activeSitePlan?.floors) {
+              // Try finding by measurement ID
+              for (const f of activeSitePlan.floors) {
+                for (const a of (f.apartments || [])) {
+                  const idx = (a.voids || []).findIndex(v => v.id === m.id);
+                  if (idx !== -1) {
+                    activeFloor = f;
+                    activeApt = a;
+                    voidIndex = idx;
+                    break;
+                  }
+                }
+                if (activeFloor) break;
+              }
+              
+              // If not found by ID, try parsing from the label matching site plan
+              if (!activeFloor && m.label && m.label.includes(' - ')) {
+                const parts = m.label.split(' - ');
+                if (parts.length >= 3) {
+                  const fName = parts[0].trim();
+                  const aName = parts[1].trim();
+                  const vName = parts[2].trim();
+                  
+                  const f = activeSitePlan.floors.find(fl => fl.name === fName);
+                  if (f) {
+                    const a = (f.apartments || []).find(ap => ap.name === aName);
+                    if (a) {
+                      const idx = (a.voids || []).findIndex(v => v.name === vName);
+                      if (idx !== -1) {
+                        activeFloor = f;
+                        activeApt = a;
+                        voidIndex = idx;
+                      }
+                    }
+                  }
+                }
+              }
+            }
+
+            let name = m.instanceNames?.[i] || `${item.label} #${i + 1}`;
+            let floor = m.instanceFloors?.[i] || '';
+            let aptName = '';
+
+            if (activeFloor && activeApt && voidIndex !== -1) {
+              name = `${activeFloor.name}${activeApt.name}${voidIndex + 1}`;
+              floor = activeFloor.name;
+              aptName = activeApt.name;
+            } else if (m.label && m.label.includes(' - ')) {
+              const parts = m.label.split(' - ');
+              if (parts.length >= 3) {
+                const fName = parts[0].trim();
+                const aName = parts[1].trim();
+                const vName = parts[2].trim();
+                const voidNumMatch = vName.match(/\d+/);
+                const voidNum = voidNumMatch ? voidNumMatch[0] : '1';
+                name = `${fName}${aName}${voidNum}`;
+                floor = fName;
+                aptName = aName;
+              }
+            }
+
+            if (!aptName && name) {
+              // Try extracting apartment from name (e.g. "1A1" -> apt "A")
+              const match = name.match(/^(.*?[^A-Za-z])?([A-Za-z])(\d+)$/);
+              if (match) {
+                if (!floor) floor = (match[1] || '').trim().replace(/[-_]$/, '');
+                aptName = match[2];
+              } else {
+                 const simpleMatch = name.match(/^([0-9]+)([A-Za-z])([0-9]+)$/);
+                 if (simpleMatch) {
+                    if (!floor) floor = simpleMatch[1];
+                    aptName = simpleMatch[2];
+                 }
+              }
+            }
+
+
             const dualStatus = selectedOrder.unitStatusesDual?.[unitId] || { alu: 'Produit', vitrage: 'Produit' };
             const storageZoneId = selectedOrder.unitStorageZones?.[unitId];
             const zone = storageZones.find(z => z.id === storageZoneId);
@@ -88,6 +201,25 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
             let shutterInfo = 'SANS VOLET';
             let offset = 0;
             const shutterOverridden = (m.shutterList || []).length > 0;
+
+            const itemComp = (data.compositions || []).find(c => c.id === item.config?.compositionId);
+            const itemRange = itemComp ? (data.ranges || []).find(r => r.id === itemComp.rangeId) : null;
+            let gammeName = itemRange?.name || itemComp?.rangeId || '—';
+            
+            if (item.config?.compoundType && item.config.compoundType !== 'none' && item.config.compoundConfig?.parts) {
+               const parts = item.config.compoundConfig.parts;
+               const ouvrantCompId = parts.find(p => p.type === 'opening')?.compositionId;
+               const fixeCompId = parts.find(p => p.type === 'fixe')?.compositionId;
+               const ouvrantComp = (data.compositions || []).find(c => c.id === ouvrantCompId);
+               const fixeComp = (data.compositions || []).find(c => c.id === fixeCompId);
+               const ouvrantRange = ouvrantComp ? (data.ranges || []).find(r => r.id === ouvrantComp.rangeId)?.name : '';
+               const fixeRange = fixeComp ? (data.ranges || []).find(r => r.id === fixeComp.rangeId)?.name : '';
+               if (ouvrantRange && fixeRange && ouvrantRange !== fixeRange) {
+                  gammeName = `${ouvrantRange} + ${fixeRange}`;
+               } else if (ouvrantRange || fixeRange) {
+                  gammeName = ouvrantRange || fixeRange;
+               }
+            }
             
             if (shutterOverridden) {
               (m.shutterList || []).forEach(sh => {
@@ -124,7 +256,9 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
               index: i,
               name: name,
               floor: floor,
+              aptName: aptName,
               label: item.label,
+              gammeName: gammeName,
               dimensions: `${m.L} x ${m.H}`,
               statusAlu: dualStatus.alu,
               statusVitrage: dualStatus.vitrage,
@@ -711,102 +845,262 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
     const pw = doc.internal.pageSize.getWidth();
     const ph = doc.internal.pageSize.getHeight();
 
+    const unitPVs = selectedOrder.unitPVs || {};
+
     // Filter units: Selected Floors AND (Alu Fini + Vitrage Fini)
-    const filteredUnits = allUnits.filter(u => 
-      pvSelectedFloors.has(u.floor || 'N/A') && 
-      (u.statusAlu === 'Posé' || u.statusAlu === 'Fini') && 
-      u.statusVitrage === 'Fini'
-    );
+    const filteredUnits = allUnits.filter(u => {
+      const floorMatch = isFinalPV ? true : pvSelectedFloors.has(u.floor || 'N/A');
+      const isFini = (u.statusAlu === 'Posé' || u.statusAlu === 'Fini') && u.statusVitrage === 'Fini';
+      const notAlreadyInPV = isFinalPV ? true : !unitPVs[u.id];
+      return floorMatch && isFini && notAlreadyInPV;
+    });
 
     if (filteredUnits.length === 0) {
-      alert("Aucune unité terminée (Alu + Vitrage) n'a été trouvée pour les étages sélectionnés.");
+      alert(isFinalPV 
+        ? "Aucune unité terminée n'a été trouvée pour le PV final." 
+        : "Aucune NOUVELLE unité terminée (non incluse dans un PV précédent) n'a été trouvée pour les étages sélectionnés.");
       return;
     }
 
+    // ─── NOUVEAU FORMAT DU PV DE RÉCEPTION ──────────────────────────────────────────
     // Header
-    doc.setFillColor(30, 41, 59); doc.rect(0, 0, pw, 50, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(22); doc.setFont('helvetica', 'bold');
-    doc.text('PROCÈS-VERBAL DE RÉCEPTION', 15, 25);
+    doc.setFillColor(255, 255, 255); 
+    doc.rect(0, 0, pw, ph, 'F');
+    
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.3);
+    
+    // Header boxes
+    doc.rect(15, 15, pw - 30, 30); 
+    doc.line(15 + (pw-30)*0.30, 15, 15 + (pw-30)*0.30, 45); 
+    doc.line(15 + (pw-30)*0.70, 15, 15 + (pw-30)*0.70, 45); 
+    doc.line(15 + (pw-30)*0.85, 15, 15 + (pw-30)*0.85, 45);
+
+    // Left box: Logo
+    let logoDrawn = false;
+    if (quoteSettings && quoteSettings.logoBase64) {
+      try {
+        const imgProps = doc.getImageProperties(quoteSettings.logoBase64);
+        const ratio = Math.min(45 / imgProps.width, 25 / imgProps.height);
+        doc.addImage(quoteSettings.logoBase64, 'PNG', 18, 17, imgProps.width * ratio, imgProps.height * ratio, '', 'FAST');
+        logoDrawn = true;
+      } catch(e) {}
+    }
+    if (!logoDrawn) {
+      doc.setFontSize(14); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 41, 59);
+      doc.text((companyName || 'LOGO').substring(0, 15), 20, 30);
+      doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 100, 100);
+      doc.text('Menuiserie', 20, 36);
+    }
+
+    // Center box: Title
+    doc.setFontSize(14); doc.setFont('helvetica', 'bold'); doc.setTextColor(0, 0, 0);
+    const title = isFinalPV ? 'PV DE RECEPTION\nFINAL' : 'PV DE RECEPTION\nPROVISOIRE';
+    doc.text(title, 15 + (pw-30)*0.50, 26, { align: 'center' });
     doc.setFontSize(10); doc.setFont('helvetica', 'normal');
-    doc.text(`CHANTIER : ${selectedOrder.id} | CLIENT : ${selectedOrder.clientName}`, 15, 35);
-    doc.text(`DATE : ${new Date().toLocaleDateString('fr-FR')} | ÉTAGES : ${Array.from(pvSelectedFloors).join(', ')}`, 15, 40);
+    doc.text('« Réalisation des Menuiseries »', 15 + (pw-30)*0.50, 40, { align: 'center' });
 
-    let y = 65;
-    doc.setTextColor(30, 41, 59);
-    doc.setFontSize(14); doc.setFont('helvetica', 'bold');
-    doc.text('LISTE DES OUVRAGES RÉCEPTIONNÉS', 15, y);
-    doc.line(15, y + 2, 45, y + 2);
-    y += 15;
+    // Right box: Date & Projet
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold');
+    doc.text('Date', 15 + (pw-30)*0.70 + 5, 23);
+    doc.text('Projet', 15 + (pw-30)*0.85 + 5, 23);
+    
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+    doc.setTextColor(0, 50, 150);
+    doc.text(new Date().toLocaleDateString('fr-FR'), 15 + (pw-30)*0.70 + 5, 33);
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(8);
+    const projName = selectedOrder.clientName || selectedOrder.id;
+    const splitProj = doc.splitTextToSize(projName, (pw-30)*0.15 - 5);
+    doc.text(splitProj, 15 + (pw-30)*0.85 + 5, 33);
 
-    // Table Header
-    doc.setFillColor(241, 245, 249); doc.rect(15, y - 7, pw - 30, 10, 'F');
-    doc.setFontSize(9); doc.text('UNITÉ', 20, y);
-    doc.text('TYPE / DIMENSIONS', 60, y);
-    doc.text('ÉTAGE', 130, y);
-    doc.text('STATUT', 165, y);
-    y += 10;
-
+    // Grouping by Apartment from plan chantier names
+    // Plan chantier names follow the pattern: [floor][apt][voidIndex], e.g. "1A1", "1A2", "2B3"
+    // We extract the apartment part (e.g. "A" or "B") to group units together
+    const zonesMap = {};
     filteredUnits.forEach(u => {
-      doc.setFont('helvetica', 'normal');
-      doc.text(u.name, 20, y);
-      doc.text(`${u.label} (${u.dimensions}mm)`, 60, y);
-      doc.text(u.floor || 'N/A', 130, y);
-      doc.setTextColor(16, 185, 129); doc.setFont('helvetica', 'bold');
-      doc.text('TERMINÉ', 165, y);
-      doc.setTextColor(30, 41, 59);
-      doc.setDrawColor(241, 245, 249); doc.line(15, y + 4, pw - 15, y + 4);
-      y += 12;
-      if (y > ph - 80) { doc.addPage(); y = 30; }
+      const aptKey = u.aptName || u.storageZone || (u.floor ? `Etage ${u.floor}` : 'Général');
+      if (!zonesMap[aptKey]) zonesMap[aptKey] = [];
+      zonesMap[aptKey].push(u);
+    });
+    const groupedZones = Object.keys(zonesMap).map(z => ({
+      zoneName: z,
+      units: zonesMap[z]
+    }));
+
+    let isFirstPage = true;
+    let y = 50;
+
+    const col1W = (pw-30)*0.45;
+    const col2W = (pw-30)*0.275;
+    const col3W = (pw-30)*0.275;
+
+    const drawPageHeader = () => {
+        if (isFirstPage) {
+          doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+          const floorsStr = isFinalPV ? 'Tous' : Array.from(pvSelectedFloors).join(', ');
+          doc.text(`Projet : ${projName} ;`, 15, 52);
+          doc.text(`Etage : ${floorsStr} ;`, 15 + (pw-30)*0.6, 52);
+
+          y = 56;
+          doc.rect(15, y, pw - 30, 8); 
+          doc.text('RECEPTION DES TRAVAUX', pw / 2, y + 5.5, { align: 'center' });
+          y += 8;
+        }
+
+        doc.rect(15, y, col1W, 8);
+        doc.rect(15 + col1W, y, col2W, 16); 
+        doc.rect(15 + col1W + col2W, y, col3W, 16);
+
+        doc.rect(18, y + 2, 4, 4);
+
+        doc.setFontSize(9); doc.setFont('helvetica', 'bold');
+        doc.text('Conforme', 25, y + 5.5);
+        doc.text(`Représentant ${companyName || 'Fournisseur'}`, 15 + col1W + col2W/2, y + 9, { align: 'center' });
+        doc.text('Client', 15 + col1W + col2W + col3W/2, y + 9, { align: 'center' });
+
+        doc.rect(15, y + 8, col1W, 8);
+        doc.rect(18, y + 10, 4, 4); 
+        doc.text('Avec Réserves (*)', 25, y + 13.5);
+        
+        return y + 16;
+    };
+
+    let tableStartY = drawPageHeader();
+    let currentY = tableStartY;
+
+    const drawPageFooter = () => {
+        const minHeight = 110;
+        if (currentY - tableStartY < minHeight) {
+            currentY = tableStartY + minHeight;
+        }
+
+        doc.rect(15, tableStartY, col1W, currentY - tableStartY);
+        doc.rect(15 + col1W, tableStartY, col2W, currentY - tableStartY);
+        doc.rect(15 + col1W + col2W, tableStartY, col3W, currentY - tableStartY);
+
+        const repName = pvTeamMember === 'Autre' ? pvCustomName : pvTeamMember;
+        const repRole = pvTeamMember === 'Autre' ? pvCustomRole : (pvTeamMember ? 'Technicien de pose' : '');
+
+        doc.setFontSize(8); doc.setFont('helvetica', 'bold');
+        doc.text('Nom et prénom :', 15 + col1W + 5, tableStartY + 8);
+        if (repName) {
+           doc.setFont('helvetica', 'normal');
+           doc.text(repName, 15 + col1W + 25, tableStartY + 13);
+        }
+        doc.setFont('helvetica', 'bold');
+        doc.text('Nom et prénom :', 15 + col1W + col2W + 5, tableStartY + 8);
+        
+        doc.line(15 + col1W, tableStartY + 18, 15 + col1W + col2W + col3W, tableStartY + 18);
+        
+        doc.text('Fonction :', 15 + col1W + 5, tableStartY + 24);
+        if (repRole) {
+           doc.setFont('helvetica', 'normal');
+           doc.text(repRole, 15 + col1W + 25, tableStartY + 29);
+        }
+        doc.setFont('helvetica', 'bold');
+        doc.text('Fonction :', 15 + col1W + col2W + 5, tableStartY + 24);
+        
+        doc.line(15 + col1W, tableStartY + 34, 15 + col1W + col2W + col3W, tableStartY + 34);
+        
+        doc.text('Date et Visas', 15 + col1W + 5, tableStartY + 50);
+        doc.text('Date et Visas', 15 + col1W + col2W + 5, tableStartY + 50);
+
+        doc.setFont('helvetica', 'normal');
+        doc.text('....... / ....... / .......', 15 + col1W + 15, tableStartY + 100);
+        doc.text('....... / ....... / .......', 15 + col1W + col2W + 15, tableStartY + 100);
+    };
+
+    groupedZones.forEach(group => {
+        // Build positions list line-by-line: "1A1 : H36 2OV"
+        const positionLines = group.units.map(u => `${u.name} : ${u.gammeName || u.label}`);
+        const positionsText = positionLines.join('\n');
+        const splitPos = doc.splitTextToSize(positionsText, col1W - 10);
+        let linesHeight = splitPos.length * 3.5;
+        const requiredSpace = 20 + linesHeight;
+
+        if (currentY + requiredSpace > ph - 20) {
+            drawPageFooter();
+            doc.addPage();
+            isFirstPage = false;
+            y = 15;
+            tableStartY = drawPageHeader();
+            currentY = tableStartY;
+        }
+
+        doc.setFontSize(8); doc.setFont('helvetica', 'bold');
+        doc.text(`(*) Détail réserves Appartement ${group.zoneName}`, 18, currentY + 5);
+        
+        doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(60, 60, 60);
+        doc.text(splitPos, 20, currentY + 10);
+
+        const contentBottom = currentY + 12 + linesHeight;
+
+        doc.setDrawColor(150, 150, 150); doc.setLineDash([1, 1], 0); doc.setLineWidth(0.2);
+        doc.line(20, contentBottom + 2, 15 + col1W - 5, contentBottom + 2);
+        doc.line(20, contentBottom + 8, 15 + col1W - 5, contentBottom + 8);
+        doc.line(20, contentBottom + 14, 15 + col1W - 5, contentBottom + 14);
+        
+        doc.setDrawColor(0, 0, 0); doc.setLineDash([], 0); doc.setLineWidth(0.3);
+        doc.setTextColor(0, 0, 0);
+        
+        currentY = contentBottom + 18;
+        doc.line(15, currentY, 15 + col1W, currentY);
     });
 
-    // Signature Area
-    y = Math.max(y + 20, ph - 60);
-    doc.setDrawColor(203, 213, 225);
-    doc.rect(15, y, 85, 40, 'S');
-    doc.rect(pw - 100, y, 85, 40, 'S');
-    
-    doc.setFontSize(9); doc.setFont('helvetica', 'bold');
-    doc.text('POUR L\'ENTREPRISE', 20, y + 8);
-    doc.text('POUR LE CLIENT (BON POUR ACCORD)', pw - 95, y + 8);
-    doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 116, 139);
-    doc.text('Fait \u00e0 ....................................... le .........................', 20, y + 35);
-    doc.text('Signature et cachet', 20, y + 20);
-    doc.text('Signature du client', pw - 95, y + 20);
+    drawPageFooter();
+
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8); doc.setTextColor(150, 150, 150);
+      doc.text(`Page ${i} / ${pageCount}`, pw - 20, ph - 10, { align: 'right' });
+    }
 
     doc.save(`PV_RECEPTION_${selectedOrder.id}_${new Date().getTime()}.pdf`);
 
     // ─── Stocker le PV sur la commande + créer versement bloqué ──────────────
-    const pvId = `PV-${Date.now().toString().slice(-6)}`;
-    const pvFloors = Array.from(pvSelectedFloors);
+    const pvId = isFinalPV ? `PVF-${Date.now().toString().slice(-6)}` : `PV-${Date.now().toString().slice(-6)}`;
+    const pvFloors = isFinalPV ? uniqueFloors : Array.from(pvSelectedFloors);
+
     setData(prev => {
       const orders = [...(prev.orders || [])];
       const oIdx = orders.findIndex(o => o.id === selectedOrder.id);
       
-      // 1. Stocker le PV sur la commande
       let montantVersement = 0;
       if (oIdx !== -1) {
         const order = { ...orders[oIdx] };
-        (order.batches || []).forEach(batch => {
-          (batch.items || []).forEach(item => {
-            const originalItem = order.items?.find(i => i.id === item.id) || {};
-            const itemPriceHT = originalItem.unitPriceHT || originalItem.priceData?.priceHT || 0;
-            (item.measurements || []).forEach(m => {
-              for (let i = 0; i < (m.qty || 1); i++) {
-                const floor = m.instanceFloors?.[i] || 'N/A';
-                if (!pvFloors.includes(floor)) continue;
-                const unitId = `${order.id}-${batch.id}-${item.id}-${m.id}-${i}`;
-                const ds = order.unitStatusesDual?.[unitId] || {};
-                if (ds.alu === 'Fini' || ds.alu === 'Pos\u00e9') montantVersement += itemPriceHT;
-              }
+        const updatedUnitPVs = { ...(order.unitPVs || {}) };
+
+        if (!isFinalPV) {
+          (order.batches || []).forEach(batch => {
+            (batch.items || []).forEach(item => {
+              const originalItem = order.items?.find(i => i.id === item.id) || {};
+              const itemPriceHT = originalItem.unitPriceHT || originalItem.priceData?.priceHT || 0;
+              (item.measurements || []).forEach(m => {
+                for (let i = 0; i < (m.qty || 1); i++) {
+                  const floor = m.instanceFloors?.[i] || 'N/A';
+                  if (!pvFloors.includes(floor)) continue;
+                  const unitId = `${order.id}-${batch.id}-${item.id}-${m.id}-${i}`;
+                  const ds = order.unitStatusesDual?.[unitId] || {};
+                  const isFini = (ds.alu === 'Fini' || ds.alu === 'Pos\u00e9') && ds.vitrage === 'Fini';
+                  if (isFini && !updatedUnitPVs[unitId]) {
+                    montantVersement += itemPriceHT;
+                    updatedUnitPVs[unitId] = pvId;
+                  }
+                }
+              });
             });
           });
-        });
+          order.unitPVs = updatedUnitPVs;
+        }
+
         order.pvList = [...(order.pvList || []), {
           id: pvId,
           pvStatus: 'En attente',
           etages: pvFloors,
           montant: montantVersement,
+          isFinal: isFinalPV,
           createdAt: new Date().toISOString(),
           validatedAt: null,
           attachment: null,
@@ -814,28 +1108,29 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
         orders[oIdx] = order;
       }
 
-      // 2. Créer versement bloqué dans le suivi financier
       const trackers = [...(prev.financialTrackers || [])];
-      const tIdx = trackers.findIndex(t => t.orderId === selectedOrder.id);
-      if (tIdx !== -1) {
-        const tracker = { ...trackers[tIdx] };
-        const contract = (prev.contracts || []).find(c => c.id === tracker.contractId);
-        const delaiJours = contract?.delaiPaiementJours || 30;
-        const dateEcheance = new Date();
-        dateEcheance.setDate(dateEcheance.getDate() + delaiJours);
-        tracker.versements = [...(tracker.versements || []), {
-          id: `VRS-${Date.now().toString().slice(-5)}`,
-          pvId,
-          pvStatus: 'En attente',   // 'En attente' | 'Validé'
-          montant: montantVersement,
-          statut: 'En attente',     // statut paiement, débloqué après validation PV
-          dateEcheance: dateEcheance.toISOString(),
-          datePaiement: null,
-          attachment: null,
-          etages: pvFloors,
-          createdAt: new Date().toISOString(),
-        }];
-        trackers[tIdx] = tracker;
+      if (!isFinalPV && montantVersement > 0) {
+        const tIdx = trackers.findIndex(t => t.orderId === selectedOrder.id);
+        if (tIdx !== -1) {
+          const tracker = { ...trackers[tIdx] };
+          const contract = (prev.contracts || []).find(c => c.id === tracker.contractId);
+          const delaiJours = contract?.delaiPaiementJours || 30;
+          const dateEcheance = new Date();
+          dateEcheance.setDate(dateEcheance.getDate() + delaiJours);
+          tracker.versements = [...(tracker.versements || []), {
+            id: `VRS-${Date.now().toString().slice(-5)}`,
+            pvId,
+            pvStatus: 'En attente',   // 'En attente' | 'Validé'
+            montant: montantVersement,
+            statut: 'En attente',     // statut paiement, débloqué après validation PV
+            dateEcheance: dateEcheance.toISOString(),
+            datePaiement: null,
+            attachment: null,
+            etages: pvFloors,
+            createdAt: new Date().toISOString(),
+          }];
+          trackers[tIdx] = tracker;
+        }
       }
 
       return { ...prev, orders, financialTrackers: trackers };
@@ -1019,9 +1314,10 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
 
                     {/* Infos PV */}
                     <div style={{ flex: 1, display: 'flex', gap: '1.5rem', flexWrap: 'wrap', fontSize: '0.82rem', color: '#475569' }}>
-                      <span><strong>{pv.id}</strong></span>
+                      <span><strong>{pv.id}</strong> {pv.isFinal && <span style={{ color: '#b45309', fontWeight: 'bold' }}>(FINAL)</span>}</span>
                       <span>Généré le : {new Date(pv.createdAt).toLocaleDateString('fr-FR')}</span>
-                      <span>Étages : <strong>{(pv.etages || []).join(', ') || '—'}</strong></span>
+                      {!pv.isFinal && <span>Étages : <strong>{(pv.etages || []).join(', ') || '—'}</strong></span>}
+                      {pv.isFinal && <span><strong>TOUS LES ÉTAGES</strong></span>}
                       <span>Montant : <strong>{(pv.montant || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</strong></span>
                       {isValide && pv.validatedAt && (
                         <span style={{ color: '#059669' }}>Validé le : {new Date(pv.validatedAt).toLocaleDateString('fr-FR')}</span>
@@ -1325,6 +1621,11 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                            <span style={{ padding: '0.1rem 0.5rem', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 800, background: unit.statusAlu === 'Produit' ? '#f1f5f9' : '#dcfce7', color: unit.statusAlu === 'Produit' ? '#64748b' : '#166534' }}>ALU: {unit.statusAlu}</span>
                            <span style={{ padding: '0.1rem 0.5rem', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 800, background: unit.statusVitrage === 'Produit' ? '#f1f5f9' : '#dbeafe', color: unit.statusVitrage === 'Produit' ? '#64748b' : '#1e40af' }}>VIT: {unit.statusVitrage}</span>
+                           {selectedOrder.unitPVs?.[unit.id] && (
+                             <span style={{ padding: '0.1rem 0.5rem', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 800, background: '#fef3c7', color: '#b45309', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                               <CheckCircle size={10} /> Réceptionné
+                             </span>
+                           )}
                          </div>
                        </td>
                        <td>
@@ -1564,6 +1865,35 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
                 </div>
               </div>
 
+              <div style={{ padding: '1rem', background: '#f8fafc', borderRadius: '1rem', border: '1px solid #e2e8f0', marginBottom: '1rem' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={isFinalPV} onChange={e => setIsFinalPV(e.target.checked)} style={{ width: '18px', height: '18px' }} />
+                  <span style={{ fontWeight: 800, fontSize: '0.9rem', color: '#0f172a' }}>PV de Réception Final (Aucun versement financier)</span>
+                </label>
+              </div>
+
+              <div style={{ padding: '1rem', background: '#f8fafc', borderRadius: '1rem', border: '1px solid #e2e8f0', marginBottom: '1rem' }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', display: 'block', marginBottom: '0.5rem' }}>Représentant Fournisseur</label>
+                <select 
+                  className="input" 
+                  value={pvTeamMember} 
+                  onChange={e => setPvTeamMember(e.target.value)}
+                  style={{ width: '100%', marginBottom: pvTeamMember === 'Autre' ? '0.75rem' : '0' }}
+                >
+                  <option value="">Sélectionnez un membre de l'équipe...</option>
+                  {(selectedOrder.installers || []).map(inst => (
+                    <option key={inst} value={inst}>{inst} (Technicien de pose)</option>
+                  ))}
+                  <option value="Autre">Autre (Saisie manuelle)</option>
+                </select>
+                {pvTeamMember === 'Autre' && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                    <input type="text" className="input" placeholder="Nom et prénom" value={pvCustomName} onChange={e => setPvCustomName(e.target.value)} />
+                    <input type="text" className="input" placeholder="Fonction" value={pvCustomRole} onChange={e => setPvCustomRole(e.target.value)} />
+                  </div>
+                )}
+              </div>
+
               <div style={{ padding: '1rem', background: '#f8fafc', borderRadius: '1rem', border: '1px solid #e2e8f0', marginBottom: '2rem' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', marginBottom: '1rem' }}>
                   <input type="checkbox" checked={sendByEmail} onChange={e => setSendByEmail(e.target.checked)} style={{ width: '18px', height: '18px' }} />
@@ -1597,7 +1927,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
                 </button>
                 <button 
                   onClick={generatePVReception}
-                  disabled={pvSelectedFloors.size === 0}
+                  disabled={!isFinalPV && pvSelectedFloors.size === 0}
                   className="btn btn-primary" style={{ flex: 2, padding: '1rem', background: '#b45309', border: 'none', boxShadow: '0 4px 12px rgba(180, 83, 9, 0.2)' }}
                 >
                   Générer le PDF
