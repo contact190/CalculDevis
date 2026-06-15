@@ -991,6 +991,9 @@ export class FormulaEngine {
 
     // --- 3. RECURSIVE PROCESSING ---
     const processPartList = (partList, boxL, boxH, direction, depth = 0) => {
+      if (isMultiChassis && depth === 0) {
+        boxH -= 3;
+      }
       const isDividerHorizontal = direction === 'vertical';
       const divQty = (partList || []).length - 1;
 
@@ -1040,6 +1043,9 @@ export class FormulaEngine {
         });
       }
 
+      // Pre-calculate divider thickness (must be before items map)
+      const divThickNum = Number(currentDivThick || 0);
+
       // 1. Pre-calculate raw dimensions for all parts
       const items = (partList || []).map((part, idx) => {
         const overrideW = config.partOverrides?.[part.id]?.width;
@@ -1052,10 +1058,10 @@ export class FormulaEngine {
         };
       });
 
-      // 2. Adjust dimensions if they exceed available space (e.g. caisson deduction)
-      // Deduct divider thickness from available space for part calculation
-      const divThickNum = Number(currentDivThick || 0);
-      const available = (direction === 'horizontal' ? boxL : boxH) - (divQty * divThickNum);
+      // 2. Adjust dimensions if they exceed available space
+      // For Multi-Châssis (fix_coulissant): parts are independent, don't deduct union from
+      // the available distribution space (the overall height reduction is already handled by subtracting 3mm from boxH at the start).
+      const available = (direction === 'horizontal' ? boxL : boxH) - (isMultiChassis ? 0 : divQty * divThickNum);
       const totalRequested = items.reduce((sum, item) => sum + (direction === 'horizontal' ? item.rawL : item.rawH), 0);
 
       if (totalRequested > available + 0.1) {

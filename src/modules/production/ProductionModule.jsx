@@ -139,6 +139,42 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
 
   // Determine which config(s) to aggregate
   const activeConfigs = useMemo(() => {
+    // Resolve site plan if possible
+    let activeSitePlan = null;
+    if (activeQuote) {
+      const client = database?.clients?.find(c => c.id === activeQuote.clientId);
+      if (client) {
+        activeSitePlan = (client.sitePlans || []).find(p => p.id === activeQuote.sitePlanId);
+      }
+    }
+
+    const getPositionLabel = (item, m, idx) => {
+      // 1. If explicit instanceNames exists
+      if (m.instanceNames?.[idx]) return m.instanceNames[idx];
+
+      // 2. If matching activeSitePlan void
+      if (activeSitePlan?.floors) {
+        for (const f of activeSitePlan.floors) {
+          for (const a of (f.apartments || [])) {
+            const voidIdx = (a.voids || []).findIndex(v => v.id === m.id);
+            if (voidIdx !== -1) {
+              return `${f.name}${a.name}${voidIdx + 1}`;
+            }
+          }
+        }
+      }
+
+      // 3. Check item.siteMeasurements fallback
+      if (item?.siteMeasurements) {
+        const sm = item.siteMeasurements.find(x => x.id === m.id);
+        if (sm?.instanceNames?.[idx]) return sm.instanceNames[idx];
+        if (sm?.instanceNames?.[0]) return sm.instanceNames[0];
+      }
+
+      // 4. Default fallback
+      return `${item.label}-${idx + 1}`;
+    };
+
     // 1. If it's an order/batch system
     if (activeQuote?.batches && activeQuote.batches.length > 0) {
       let configs = [];
@@ -178,7 +214,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                   },
                   qty: 1,
                   label: item.label,
-                  allLabels: [m.instanceNames?.[globalIdx] || `${item.label}-${globalIdx + 1}`],
+                  allLabels: [getPositionLabel(item, m, globalIdx)],
                   itemId: item.id,
                   measureId: `${m.id}-sh${shIdx}-i${i}`
                 });
@@ -195,7 +231,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                 config: { ...item.config, L: m.L, H: m.H, wallDepth: m.wallDepth, handleHeight: m.handleHeight, partOverrides: m.partOverrides },
                 qty: 1,
                 label: item.label,
-                allLabels: [m.instanceNames?.[i] || `${item.label}-${i + 1}`],
+                allLabels: [getPositionLabel(item, m, i)],
                 itemId: item.id,
                 measureId: `${m.id}-base-i${i}`
               });
@@ -211,14 +247,42 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
 
     // 2. Fallback to standard quote items
     if (quoteItems.length > 0) {
-      if (productFilter === 'total') return quoteItems.map(i => ({ config: i.config, qty: i.qty || 1, label: i.label, itemId: i.id }));
-      const found = quoteItems.find(i => i.id === productFilter);
-      return found ? [{ config: found.config, qty: found.qty || 1, label: found.label, itemId: found.id }] : [];
+      let configs = [];
+      quoteItems.forEach(item => {
+        const measurements = item.siteMeasurements || item.measurements || [];
+        if (measurements.length > 0) {
+          measurements.forEach(m => {
+            const totalQty = m.qty || 1;
+            for (let i = 0; i < totalQty; i++) {
+              configs.push({
+                config: { ...item.config, L: m.L, H: m.H, wallDepth: m.wallDepth, handleHeight: m.handleHeight, partOverrides: m.partOverrides },
+                qty: 1,
+                label: item.label,
+                allLabels: [getPositionLabel(item, m, i)],
+                itemId: item.id,
+                measureId: `${m.id}-base-i${i}`
+              });
+            }
+          });
+        } else {
+          configs.push({
+            config: item.config,
+            qty: item.qty || 1,
+            label: item.label,
+            allLabels: [item.label],
+            itemId: item.id
+          });
+        }
+      });
+
+      if (productFilter === 'total') return configs;
+      const found = configs.filter(c => c.itemId === productFilter || c.measureId === productFilter);
+      return found.length > 0 ? found : configs;
     }
 
     // 3. Fallback: single currentConfig
     return currentConfig ? [{ config: currentConfig, qty: 1, label: 'Produit courant' }] : [];
-  }, [activeQuote, quoteItems, productFilter, currentConfig, selectedBatchId]);
+  }, [activeQuote, quoteItems, productFilter, currentConfig, selectedBatchId, database]);
 
   const bomResult = useMemo(() => {
     const cfg = activeConfigs[0]?.config || currentConfig;
