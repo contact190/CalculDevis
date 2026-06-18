@@ -859,7 +859,30 @@ export class FormulaEngine {
         qty_lame: parentQty,
         nb_volets: isDouble ? 2 : 1,
       };
+
+      // Pass 1: Determine which add-on names are replaced by active precadre add-ons
+      const addonsToSkip = new Set();
       item.addOns.forEach(addon => {
+        // Skip add-ons that require precadre when precadre is not active
+        if (addon.requiresPrecadre && !config.hasPrecadre) return;
+        // Check compatibility
+        if (addon.compatibilityFormula) {
+          const isCompatible = this.evaluate(addon.compatibilityFormula, addonScope, `Compatibilité Add-on ${addon.name}`, errors);
+          if (!isCompatible) return;
+        }
+        // Collect names of add-ons that this active add-on replaces
+        if (Array.isArray(addon.replacesAddons)) {
+          addon.replacesAddons.forEach(name => addonsToSkip.add(name));
+        }
+      });
+
+      // Pass 2: Process add-ons, skipping replaced ones
+      item.addOns.forEach(addon => {
+        // Skip add-ons that require precadre when precadre is not active
+        if (addon.requiresPrecadre && !config.hasPrecadre) return;
+        // Skip add-ons whose name is in the replaced set
+        if (addonsToSkip.has(addon.name)) return;
+
         if (addon.compatibilityFormula) {
           const isCompatible = this.evaluate(addon.compatibilityFormula, addonScope, `Compatibilité Add-on ${addon.name}`, errors);
           if (!isCompatible) return;

@@ -853,6 +853,8 @@ const AdminDashboard = ({ data, setData }) => {
                       <th>Alerte Technique (Optionnel)</th>
                       <th>Prix Unit. (DZD)</th>
                       <th>Unité</th>
+                      <th style={{ width: '70px', fontSize: '0.75rem', textAlign: 'center' }}>Requiert<br/>Précadre</th>
+                      <th>Remplace options</th>
                       <th>Action</th>
                     </tr>
                   </thead>
@@ -989,6 +991,54 @@ const AdminDashboard = ({ data, setData }) => {
                             <option value="Kit">Kit</option>
                           </select>
                         </td>
+                        <td style={{ textAlign: 'center' }}>
+                          <input 
+                            type="checkbox" 
+                            checked={addon.requiresPrecadre || false} 
+                            onChange={e => {
+                              const newAddons = [...(currentItem.addOns || [])];
+                              newAddons[ai].requiresPrecadre = e.target.checked;
+                              if (editingAddonItem.isShutter) {
+                                updateShutterItem(editingAddonItem.family, editingAddonItem.idx, 'addOns', newAddons);
+                              } else {
+                                handleUpdateItem(editingAddonItem.family, currentItem.id, 'addOns', newAddons, editingAddonItem.idx);
+                              }
+                            }}
+                            style={{ width: '1.2rem', height: '1.2rem', cursor: 'pointer' }}
+                          />
+                        </td>
+                        <td>
+                          <div style={{ maxHeight: '80px', overflowY: 'auto', border: '1px solid #cbd5e1', borderRadius: '4px', padding: '0.25rem', background: '#f8fafc', minWidth: '150px' }}>
+                            {currentItem.addOns.filter((_, idx) => idx !== ai).map((otherAddon, oidx) => {
+                              const isChecked = (addon.replacesAddons || []).includes(otherAddon.name);
+                              return (
+                                <label key={oidx} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.75rem', marginBottom: '0.2rem', cursor: 'pointer' }}>
+                                  <input 
+                                    type="checkbox" 
+                                    checked={isChecked}
+                                    onChange={e => {
+                                      const newAddons = [...(currentItem.addOns || [])];
+                                      let currentReplaces = [...(newAddons[ai].replacesAddons || [])];
+                                      if (e.target.checked) {
+                                        currentReplaces.push(otherAddon.name);
+                                      } else {
+                                        currentReplaces = currentReplaces.filter(n => n !== otherAddon.name);
+                                      }
+                                      newAddons[ai].replacesAddons = currentReplaces;
+                                      if (editingAddonItem.isShutter) {
+                                        updateShutterItem(editingAddonItem.family, editingAddonItem.idx, 'addOns', newAddons);
+                                      } else {
+                                        handleUpdateItem(editingAddonItem.family, currentItem.id, 'addOns', newAddons, editingAddonItem.idx);
+                                      }
+                                    }}
+                                  />
+                                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={otherAddon.name}>{otherAddon.name}</span>
+                                </label>
+                              );
+                            })}
+                            {currentItem.addOns.length <= 1 && <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Aucune autre option</span>}
+                          </div>
+                        </td>
                         <td><button className="btn" onClick={() => {
                           const newAddons = (currentItem.addOns || []).filter((_, i) => i !== ai);
                           if (editingAddonItem.isShutter) {
@@ -1000,9 +1050,9 @@ const AdminDashboard = ({ data, setData }) => {
                       </tr>
                     ))}
                     <tr>
-                      <td colSpan="10">
+                      <td colSpan="12">
                         <button className="btn btn-secondary" style={{ width: '100%', padding: '1rem', fontWeight: 'bold' }} onClick={() => {
-                          const newAddons = [...(currentItem.addOns || []), { name: 'Nouvel add-on', formula: '1', compatibilityFormula: '', price: 0, unit: 'Unité' }];
+                          const newAddons = [...(currentItem.addOns || []), { name: 'Nouvel add-on', formula: '1', compatibilityFormula: '', price: 0, unit: 'Unité', requiresPrecadre: false, replacesAddons: [] }];
                           if (editingAddonItem.isShutter) {
                             updateShutterItem(editingAddonItem.family, editingAddonItem.idx, 'addOns', newAddons);
                           } else {
