@@ -1382,7 +1382,6 @@ const previewConfig = {
                                           <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>🌀 Configuration du Volet</span>
                                           <button
                                             onClick={() => {
-                                              
                                               updateVoidProperty(floor.id, apt.id, v.id, 'shutter', isShutterActive ? null : { qty: 1, customLV: v.L || item.config.L, overrides: {} });
                                             }}
                                             style={{
@@ -1418,7 +1417,7 @@ const previewConfig = {
                                                 type="number"
                                                 className="input"
                                                 value={actualShutter.customLV || ''}
-                                                placeholder="Auto"
+                                                placeholder={v.L || item.config.L}
                                                 onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.customLV', e.target.value)}
                                                 style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', minHeight: 'auto' }}
                                               />
@@ -1503,9 +1502,15 @@ const previewConfig = {
                                                const selectedKit = (data.shutterComponents?.kits || []).find(k => k.id === selectedKitId);
                                                const isMotor = selectedKit?.type === 'MOTEUR' || 
                                                (selectedKitId && selectedKitId.toLowerCase().includes('mote')) || 
-                                               (selectedKit?.name && selectedKit.name.toLowerCase().includes('moteur'));
+                                               (selectedKit?.name && selectedKit.name.toLowerCase().includes('moteur')) ||
+                                               !!actualShutter.overrides?.moteurId;
+                                               
                                                if (!isMotor) return null;
+                                               
+                                               const isDouble = actualShutter.overrides?.isDoubleShutter ?? item.config?.shutterConfig?.isDoubleShutter;
+                                               
                                                return (
+                                                 <>
                                                  <div>
                                                    <label style={{ fontSize: '0.65rem', color: '#64748b', display: 'block' }}>Moteur</label>
                                                    <select
@@ -1518,6 +1523,22 @@ const previewConfig = {
                                                      {(data.shutterComponents?.moteurs || []).map(opt => <option key={opt.id} value={opt.id}>{opt.name}</option>)}
                                                    </select>
                                                  </div>
+                                                 {isDouble && (
+                                                   <div>
+                                                     <label style={{ fontSize: '0.65rem', color: '#64748b', display: 'block' }}>Nb. Moteurs</label>
+                                                     <select
+                                                       className="input"
+                                                       value={actualShutter.overrides?.motorCount || ''}
+                                                       onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.motorCount', e.target.value ? parseInt(e.target.value) : '')}
+                                                       style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', minHeight: 'auto' }}
+                                                     >
+                                                       <option value="">Auto (2)</option>
+                                                       <option value="1">1 Moteur</option>
+                                                       <option value="2">2 Moteurs</option>
+                                                     </select>
+                                                   </div>
+                                                 )}
+                                                 </>
                                                );
                                              })()}
                                            </div>

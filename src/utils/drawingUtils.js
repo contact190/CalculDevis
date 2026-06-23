@@ -263,33 +263,46 @@ export const getTechnicalDrawingDataURL = (cfg, database) => {
   }
 
   // 4. Shutter Control Position
-  if (caissonH > 0 && cfg.shutterConfig) {
+  if (cfg.hasShutter && cfg.shutterConfig) {
     const kitId = cfg.shutterConfig.kitId || '';
     const controlPos = cfg.shutterConfig.controlPosition || 'Droite';
     const isLeft = controlPos === 'Gauche';
-    const ctrlX = isLeft ? offsetX + 15 : offsetX + dW - 15;
-    const ctrlY = offsetY + dCaissonH / 2;
+    const isMotor = kitId === 'KIT-MOTE' || kitId.toLowerCase().includes('mot') || !!cfg.shutterConfig.moteurId;
+    const isDouble = cfg.shutterConfig.isDoubleShutter;
+    const motorCount = isDouble ? (cfg.shutterConfig.motorCount || 2) : 1;
 
-    if (kitId === 'KIT-MOTE' || kitId.toLowerCase().includes('mot')) {
-      ctx.beginPath();
-      ctx.arc(ctrlX, ctrlY, 10, 0, Math.PI * 2);
-      ctx.fillStyle = '#3b82f6';
-      ctx.fill();
-      ctx.fillStyle = 'white';
-      ctx.font = 'bold 10px Inter, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('M', ctrlX, ctrlY + 4);
+    const drawControl = (ctrlX, ctrlY, motor) => {
+      if (motor) {
+        ctx.beginPath();
+        ctx.arc(ctrlX, ctrlY, 10, 0, Math.PI * 2);
+        ctx.fillStyle = '#3b82f6';
+        ctx.fill();
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 10px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('M', ctrlX, ctrlY + 4);
+      } else {
+        ctx.strokeStyle = '#64748b';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(ctrlX, ctrlY);
+        ctx.lineTo(ctrlX, offsetY + dCaissonH + 30);
+        ctx.stroke();
+        ctx.fillStyle = '#475569';
+        ctx.font = '9px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(kitId.includes('MANI') ? 'Manivelle' : 'Sangle', ctrlX, offsetY + dCaissonH + 44);
+      }
+    };
+
+    const ctrlY = offsetY + (caissonH > 0 ? dCaissonH / 2 : 15);
+
+    if (isDouble && motorCount === 2) {
+      drawControl(offsetX + 15, ctrlY, isMotor);
+      drawControl(offsetX + dW - 15, ctrlY, isMotor);
     } else {
-      ctx.strokeStyle = '#64748b';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(ctrlX, ctrlY);
-      ctx.lineTo(ctrlX, offsetY + dCaissonH + 30);
-      ctx.stroke();
-      ctx.fillStyle = '#475569';
-      ctx.font = '9px Inter, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(kitId.includes('MANI') ? 'Manivelle' : 'Sangle', ctrlX, offsetY + dCaissonH + 44);
+      const ctrlX = isLeft ? offsetX + 15 : offsetX + dW - 15;
+      drawControl(ctrlX, ctrlY, isMotor);
     }
   }
 
