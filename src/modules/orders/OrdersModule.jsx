@@ -57,7 +57,7 @@ const ItemPreview = ({ config, database }) => {
           shutterList.push({
             id: v.shutter.id || `shutter-${v.id}`,
             qty: v.shutter.qty,
-            customLV: v.shutter.customLV !== undefined ? v.shutter.customLV : (v.L || item.config.L),
+            customLV: (v.shutter.customLV !== undefined && v.shutter.customLV !== '' && v.shutter.customLV !== 0) ? v.shutter.customLV : (v.L || item.config.L),
             overrides: v.shutter.overrides || {}
           });
         }
@@ -517,7 +517,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                     H: item?.config?.H || v.H,
                     shutter: item?.config?.hasShutter ? {
                       qty: 1,
-                      customLV: item?.config?.L || v.L,
+                      customLV: '',
                       overrides: {}
                     } : null
                   };
@@ -541,7 +541,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                       ...v,
                       shutter: {
                         ...currentShutter,
-                        customLV: parseFloat(value) || 0
+                        customLV: value === '' ? '' : (parseFloat(value) || '')
                       }
                     };
                   }

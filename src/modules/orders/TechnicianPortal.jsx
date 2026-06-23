@@ -58,7 +58,7 @@ const syncSitePlanToMeasurements = (sitePlan, items) => {
           shutterList.push({
             id: v.shutter.id || `shutter-${v.id}`,
             qty: v.shutter.qty,
-            customLV: v.shutter.customLV !== undefined ? v.shutter.customLV : (v.L || item.config.L),
+            customLV: (v.shutter.customLV !== undefined && v.shutter.customLV !== '' && v.shutter.customLV !== 0) ? v.shutter.customLV : (v.L || item.config.L),
             overrides: v.shutter.overrides || {}
           });
         }
@@ -167,7 +167,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                     H: item?.config?.H || v.H,
                     shutter: item?.config?.hasShutter ? {
                       qty: 1,
-                      customLV: item?.config?.L || v.L,
+                      customLV: '',
                       overrides: {}
                     } : null
                   };
@@ -191,7 +191,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                       ...v,
                       shutter: {
                         ...currentShutter,
-                        customLV: parseFloat(value) || 0
+                        customLV: value === '' ? '' : (parseFloat(value) || '')
                       }
                     };
                   }
@@ -425,7 +425,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                     shutterList.push({
                       id: v.shutter.id || `shutter-${v.id}`,
                       qty: v.shutter.qty,
-                      customLV: v.shutter.customLV !== undefined ? v.shutter.customLV : (v.L !== undefined && v.L !== '' ? parseFloat(v.L) : batchItem.config.L),
+                      customLV: (v.shutter.customLV !== undefined && v.shutter.customLV !== '' && v.shutter.customLV !== 0) ? v.shutter.customLV : (v.L !== undefined && v.L !== '' ? parseFloat(v.L) : batchItem.config.L),
                       overrides: v.shutter.overrides || {}
                     });
                   }

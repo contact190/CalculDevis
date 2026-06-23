@@ -19,7 +19,7 @@ function syncSitePlanToMeasurements(sitePlan, orderItems) {
           shutterList.push({
             id: v.shutter.id || `shutter-${v.id}`,
             qty: v.shutter.qty,
-            customLV: v.shutter.customLV !== undefined ? v.shutter.customLV : (v.L || 0),
+            customLV: (v.shutter.customLV !== undefined && v.shutter.customLV !== '' && v.shutter.customLV !== 0) ? v.shutter.customLV : (v.L || 0),
             overrides: v.shutter.overrides || {}
           });
         }
@@ -614,7 +614,7 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
             handleHeight: undefined,
             shutter: defaultItem?.config?.hasShutter ? {
               qty: 1,
-              customLV: defaultItem?.config?.L || 1200,
+              customLV: '',
               overrides: {}
             } : null
           };
@@ -671,7 +671,7 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
                   updatedVoid.H = matchedItem.config?.H;
                   updatedVoid.shutter = matchedItem.config?.hasShutter ? {
                     qty: 1,
-                    customLV: matchedItem.config?.L,
+                    customLV: '',
                     overrides: {}
                   } : null;
                 }
