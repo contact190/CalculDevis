@@ -3,6 +3,7 @@ import { Truck, Package, QrCode, CheckCircle, AlertTriangle, XCircle, Download, 
 import { syncDatabase, invokeFunction } from '../../utils/supabaseClient';
 import jsPDF from 'jspdf';
 import QRScanner from './QRScanner';
+import { FormulaEngine } from '../../engine/formula-engine';
 
 // Module version: 1.0.1 - Logistic & Installation Tracking
 const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
@@ -74,6 +75,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
 
   const allUnits = useMemo(() => {
     if (!selectedOrder) return [];
+    const engine = new FormulaEngine(data || {});
     const units = [];
 
     // Find active site plan
@@ -221,6 +223,15 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
                }
             }
             
+            let instanceConfig = {
+              ...item.config,
+              L: m.L,
+              H: m.H,
+              wallDepth: m.wallDepth,
+              handleHeight: m.handleHeight,
+              partOverrides: m.partOverrides
+            };
+
             if (shutterOverridden) {
               (m.shutterList || []).forEach(sh => {
                 const sQty = Number(sh.qty) || 0;
@@ -233,6 +244,13 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
                   const kitName = data.shutterComponents?.kits?.find(k => k.id === kit)?.name || kit || '';
                   
                   shutterInfo = `${caissonName} ${kitName}`.trim() || 'AVEC VOLET';
+
+                  instanceConfig.hasShutter = true;
+                  instanceConfig.shutterConfig = {
+                    ...(item.config?.shutterConfig || {}),
+                    ...(sh.overrides || {})
+                  };
+                  instanceConfig.shutterOverrides = { ...(sh.overrides || {}), customLV: sh.customLV };
                 }
                 offset += sQty;
               });
@@ -245,6 +263,22 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
               const kitName = data.shutterComponents?.kits?.find(k => k.id === kit)?.name || kit || '';
               
               shutterInfo = `${caissonName} ${kitName}`.trim() || 'AVEC VOLET';
+            }
+
+            let glassPanes = [];
+            try {
+              const bomResult = engine.calculateBOM(instanceConfig, []);
+              if (bomResult && bomResult.glassDetails) {
+                glassPanes = bomResult.glassDetails.map(g => ({
+                  id: g.id,
+                  name: g.name || 'Vitrage',
+                  width: Math.round(g.width || 0),
+                  height: Math.round(g.height || 0),
+                  qty: g.qty || 1
+                }));
+              }
+            } catch (e) {
+              console.warn("Glass calculation failed for unit", e);
             }
 
             units.push({
@@ -265,7 +299,8 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
               hasShutter: hasShutter,
               shutterInfo: shutterInfo,
               storageZoneId: storageZoneId,
-              storageZone: zone?.name || ''
+              storageZone: zone?.name || '',
+              glassPanes: glassPanes
             });
           }
         });
@@ -1171,6 +1206,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
   const generateDeliveryNote = (type = 'ALU') => {
     const doc = new jsPDF();
     const pw = doc.internal.pageSize.getWidth();
+    const ph = doc.internal.pageSize.getHeight();
     doc.setFontSize(22); doc.setFont('helvetica', 'bold');
     doc.text(`BON DE LIVRAISON : ${type}`, pw / 2, 20, { align: 'center' });
     doc.setFontSize(12); doc.setFont('helvetica', 'normal');
@@ -1178,16 +1214,137 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
     doc.text(`Commande N°: ${selectedOrder.id}`, 15, 42);
     doc.text(`Client: ${selectedOrder.clientName || '---'}`, 15, 49);
     doc.line(15, 55, pw - 15, 55);
+    
     let y = 65;
-    doc.setFont('helvetica', 'bold');
-    doc.text('Qté', 15, y); doc.text('Produit', 30, y); doc.text('Repère', 120, y); doc.text('Statut', 180, y);
-    y += 5; doc.line(15, y, pw - 15, y); y += 8;
-    doc.setFont('helvetica', 'normal');
+
+    // Helper to check page overflow and add a page
+    const checkPageOverflow = (neededSpace) => {
+      if (y + neededSpace > 275) {
+        doc.addPage();
+        y = 20;
+        return true;
+      }
+      return false;
+    };
+
+    // Group units by floor
+    const unitsByFloor = {};
     allUnits.forEach(u => {
-      const status = type === 'ALU' ? u.statusAlu : u.statusVitrage;
-      doc.text('1', 15, y); doc.text(u.label.substring(0, 35), 30, y); doc.text(u.name, 120, y);
-      doc.text(status !== 'Produit' ? 'LIVRÉ' : '---', 180, y);
-      y += 8; if (y > 270) { doc.addPage(); y = 20; }
+      const fl = u.floor || 'Sans étage';
+      if (!unitsByFloor[fl]) unitsByFloor[fl] = [];
+      unitsByFloor[fl].push(u);
+    });
+
+    const sortedFloors = Object.keys(unitsByFloor).sort((a, b) => {
+      const aNum = parseInt(a.replace(/\D/g, ''), 10);
+      const bNum = parseInt(b.replace(/\D/g, ''), 10);
+      if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
+      return a.localeCompare(b);
+    });
+
+    // Write the list of units grouped by floor
+    sortedFloors.forEach(floor => {
+      checkPageOverflow(25);
+      y += 4;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      doc.text(`Étage : ${floor}`, 15, y);
+      y += 5;
+      doc.line(15, y, pw - 15, y);
+      y += 6;
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.text('Qté', 15, y); doc.text('Produit', 30, y); doc.text('Repère', 120, y); doc.text('Statut', 180, y);
+      y += 4; 
+      doc.setDrawColor(200, 200, 200);
+      doc.line(15, y, pw - 15, y); 
+      y += 6;
+      doc.setDrawColor(0, 0, 0);
+
+      doc.setFont('helvetica', 'normal');
+      const floorUnits = unitsByFloor[floor];
+      floorUnits.forEach(u => {
+        const status = type === 'ALU' ? u.statusAlu : u.statusVitrage;
+        
+        if (type === 'VITRAGE') {
+          const panes = u.glassPanes && u.glassPanes.length > 0 ? u.glassPanes : [{ name: 'Vitrage Standard', width: '—', height: '—', qty: 1 }];
+          panes.forEach(g => {
+            checkPageOverflow(10);
+            
+            // Show glazing composition and dimensions
+            const glassText = `${g.name} (${g.width} x ${g.height} mm)`;
+            
+            doc.text(String(g.qty), 15, y); 
+            doc.text(glassText.substring(0, 42), 30, y); 
+            doc.text(u.name, 120, y);
+            doc.text(status !== 'Produit' ? 'LIVRÉ' : '---', 180, y);
+            y += 8;
+          });
+        } else {
+          checkPageOverflow(10);
+          const labelText = u.hasShutter ? `${u.label} (${u.shutterInfo})` : u.label;
+          doc.text('1', 15, y); 
+          doc.text(labelText.substring(0, 42), 30, y); 
+          doc.text(u.name, 120, y);
+          doc.text(status !== 'Produit' ? 'LIVRÉ' : '---', 180, y);
+          y += 8;
+        }
+      });
+
+      // Total count per floor
+      checkPageOverflow(15);
+      y += 2;
+      doc.setFont('helvetica', 'bold');
+      if (type === 'VITRAGE') {
+        const totalGlassQty = floorUnits.reduce((acc, u) => acc + (u.glassPanes && u.glassPanes.length > 0 ? u.glassPanes.reduce((sum, g) => sum + g.qty, 0) : 1), 0);
+        doc.text(`Nombre total de châssis : ${floorUnits.length} ; Total vitrages : ${totalGlassQty}`, 15, y);
+      } else {
+        doc.text(`Nombre total pour l'étage ${floor} : ${floorUnits.length}`, 15, y);
+      }
+      y += 12;
+      doc.setFont('helvetica', 'normal');
+    });
+
+    // At the end, a table containing the total quantity by Designation (according to the estimate/devis)
+    checkPageOverflow(40);
+    y += 5;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.text('Récapitulatif des Quantités Totales par Désignation (Devis)', 15, y);
+    y += 6;
+    doc.line(15, y, pw - 15, y);
+    y += 6;
+
+    // Build map of quantity by designation
+    const qtyByDesign = {};
+    allUnits.forEach(u => {
+      const origItem = selectedOrder.items?.find(item => item.id === u.itemId);
+      const design = origItem?.label || u.label || 'Produit';
+      const gamme = u.gammeName || '—';
+      const key = `${design} (${gamme})`;
+      if (!qtyByDesign[key]) {
+        qtyByDesign[key] = { qty: 0, design: design, gamme: gamme };
+      }
+      qtyByDesign[key].qty += 1;
+    });
+
+    // Table Header
+    doc.setFontSize(10);
+    doc.text('Désignation', 15, y);
+    doc.text('Gamme', 120, y);
+    doc.text('Quantité Totale', 165, y);
+    y += 4;
+    doc.line(15, y, pw - 15, y);
+    y += 6;
+
+    doc.setFont('helvetica', 'normal');
+    Object.values(qtyByDesign).forEach(info => {
+      checkPageOverflow(10);
+      doc.text(info.design.substring(0, 50), 15, y);
+      doc.text(info.gamme, 120, y);
+      doc.text(String(info.qty), 165, y);
+      y += 8;
     });
 
     setData(prev => {
