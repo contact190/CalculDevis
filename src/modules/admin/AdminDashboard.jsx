@@ -1368,6 +1368,9 @@ const AdminDashboard = ({ data, setData }) => {
                                 <td><input type="number" className="input" value={p.thickness || 0} onChange={e => handleUpdateItem('profiles', p.id, 'thickness', e.target.value, idx)} style={{ width: '50px' }} /></td>
                                 <td><MultiSelectRange selectedIds={p.rangeIds || []} allRanges={data.ranges} onChange={newR => handleUpdateItem('profiles', p.id, 'rangeIds', newR, idx)} /></td>
                                 <td style={{ display: 'flex', gap: '0.2rem' }}>
+                                  <button className="btn btn-secondary" onClick={() => setEditingAddonItem({ item: p, family: 'profiles', idx, isShutter: false })} style={{ padding: '0.4rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }} title="Gérer les add-ons spécifiques">
+                                    <Layers size={14} /> Add-ons ({p.addOns?.length || 0})
+                                  </button>
                                   <button className="btn" onClick={() => handleDuplicateItem('profiles', p)} style={{ color: '#6366f1' }} title="Dupliquer"><Copy size={16} /></button>
                                   <button className="btn" onClick={() => handleDeleteItem('profiles', p.id, idx)} style={{ color: '#ef4444' }} title="Supprimer"><Trash2 size={16} /></button>
                                 </td>

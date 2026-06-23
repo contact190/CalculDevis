@@ -37,14 +37,29 @@ const DEFAULT_QUOTE_SETTINGS = {
   quoteCounter: 1,
 };
 
-const makeNewQuote = (settings) => ({
-  id: `QUOTE-${Date.now()}`,
-  number: `${settings.quotePrefix}${String(settings.quoteCounter).padStart(3, '0')}`,
-  clientId: null,
-  createdAt: new Date().toISOString(),
-  items: [],
-  sitePlanId: null,
-});
+const makeNewQuote = (settings, db) => {
+  let counter = settings.quoteCounter || 1;
+  if (db && db.quotes) {
+    const prefix = settings.quotePrefix || 'DEV-';
+    for (const q of db.quotes) {
+      if (q.number && q.number.startsWith(prefix)) {
+        const numPart = q.number.substring(prefix.length);
+        const parsed = parseInt(numPart, 10);
+        if (!isNaN(parsed) && parsed >= counter) {
+          counter = parsed + 1;
+        }
+      }
+    }
+  }
+  return {
+    id: `QUOTE-${Date.now()}`,
+    number: `${settings.quotePrefix}${String(counter).padStart(3, '0')}`,
+    clientId: null,
+    createdAt: new Date().toISOString(),
+    items: [],
+    sitePlanId: null,
+  };
+};
 
 function App() {
   const [activeTab, setActiveTab] = useState('commercial');
@@ -134,6 +149,16 @@ function App() {
     if (!repaired.financialTrackers) repaired.financialTrackers = [];
     return repaired;
   }, []);
+
+  // ─── Initialize empty quote with latest number ──────────────────────
+  useEffect(() => {
+    if (database && currentQuote && currentQuote.items.length === 0 && !currentQuote.clientId) {
+      const newQuote = makeNewQuote(quoteSettings, database);
+      if (newQuote.number !== currentQuote.number) {
+        setCurrentQuote(prev => ({ ...prev, number: newQuote.number }));
+      }
+    }
+  }, [database, quoteSettings.quotePrefix]);
 
   // ─── STEP 1: Load local + Network comparison on mount ──────────────────────
   useEffect(() => {
@@ -617,7 +642,7 @@ function App() {
             setCurrentQuote={setCurrentQuote}
             quoteSettings={quoteSettings}
             setQuoteSettings={updateQuoteSettings}
-            onNewQuote={() => setCurrentQuote(makeNewQuote(quoteSettings))}
+            onNewQuote={() => setCurrentQuote(makeNewQuote(quoteSettings, database))}
           />
         )}
         {activeTab === 'production' && (

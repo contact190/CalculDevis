@@ -687,6 +687,22 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
     handleUpdateSitePlan(updatedPlan);
   };
 
+  const itemUsageCount = React.useMemo(() => {
+    const counts = {};
+    if (activeSitePlan) {
+      (activeSitePlan.floors || []).forEach(floor => {
+        (floor.apartments || []).forEach(apt => {
+          (apt.voids || []).forEach(v => {
+            if (v.itemId) {
+              counts[v.itemId] = (counts[v.itemId] || 0) + 1;
+            }
+          });
+        });
+      });
+    }
+    return counts;
+  }, [activeSitePlan]);
+
   return (
     <div className="animate-fade-in" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       
@@ -919,9 +935,19 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
                                         const itemComp = (data.compositions || []).find(c => c.id === item.config?.compositionId);
                                         const itemRange = itemComp ? (data.ranges || []).find(r => r.id === itemComp.rangeId) : null;
                                         const gammeName = itemRange?.name || itemComp?.rangeId || '—';
+                                        
+                                        const used = itemUsageCount[item.id] || 0;
+                                        const remaining = (item.qty || 1) - used;
+                                        const isConsumed = remaining <= 0 && v.itemId !== item.id;
+
                                         return (
-                                        <option key={item.id} value={item.id}>
-                                          [{item.label || '?'}] {itemComp?.name || item.categoryId || item.type || 'Prod'} - {item.config?.L || '?'}x{item.config?.H || '?'} - Gamme: {gammeName}
+                                        <option 
+                                          key={item.id} 
+                                          value={item.id}
+                                          disabled={isConsumed}
+                                          style={isConsumed ? { color: '#94a3b8', background: '#f1f5f9' } : {}}
+                                        >
+                                          [{item.label || '?'}] {itemComp?.name || item.categoryId || item.type || 'Prod'} - {item.config?.L || '?'}x{item.config?.H || '?'} - Gamme: {gammeName} (Restant: {Math.max(0, remaining)})
                                         </option>
                                         );
                                       })}
