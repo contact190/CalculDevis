@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Ruler, CheckCircle, ArrowLeft, QrCode, ClipboardList, RefreshCw, ShieldCheck, Save, ChevronDown, ChevronRight, Settings } from 'lucide-react';
 import { FormulaEngine } from '../../engine/formula-engine';
 import { getTechnicalDrawingDataURL } from '../../utils/drawingUtils';
@@ -82,6 +82,64 @@ const syncSitePlanToMeasurements = (sitePlan, items) => {
   });
 
   return newItems;
+};
+
+const DebouncedInput = ({ value, onChange, placeholder, type = "number", className = "input", style }) => {
+  const [localValue, setLocalValue] = useState(value);
+  const timerRef = useRef(null);
+  const [isFocused, setIsFocused] = useState(false);
+
+  // Sync local value with prop changes when not focused
+  useEffect(() => {
+    if (!isFocused) {
+      setLocalValue(value);
+    }
+  }, [value, isFocused]);
+
+  const handleChange = (e) => {
+    const val = e.target.value;
+    setLocalValue(val);
+    
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      onChange(val);
+    }, 800);
+  };
+
+  const handleBlur = () => {
+    setIsFocused(false);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (localValue !== value) {
+      onChange(localValue);
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.target.blur();
+    }
+  };
+
+  // Clean up timer on unmount
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  return (
+    <input
+      type={type}
+      className={className}
+      value={localValue !== undefined ? localValue : ''}
+      onChange={handleChange}
+      onFocus={() => setIsFocused(true)}
+      onBlur={handleBlur}
+      onKeyDown={handleKeyDown}
+      style={style}
+      placeholder={placeholder}
+    />
+  );
 };
 
 const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
@@ -846,44 +904,44 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                                     <div>
                                       <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '0.25rem' }}>LARGEUR RÉELLE (L) mm</label>
-                                      <input
+                                      <DebouncedInput
                                         type="number"
                                         className="input"
                                         value={v.L !== undefined ? v.L : ''}
-                                        onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'L', e.target.value)}
+                                        onChange={val => updateVoidProperty(floor.id, apt.id, v.id, 'L', val)}
                                         style={{ fontSize: '0.9rem', padding: '0.5rem', border: '1.5px solid #cbd5e1', fontWeight: 800, textAlign: 'center' }}
                                         placeholder={item.config.L}
                                       />
                                     </div>
                                     <div>
                                       <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '0.25rem' }}>HAUTEUR RÉELLE (H) mm</label>
-                                      <input
+                                      <DebouncedInput
                                         type="number"
                                         className="input"
                                         value={v.H !== undefined ? v.H : ''}
-                                        onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'H', e.target.value)}
+                                        onChange={val => updateVoidProperty(floor.id, apt.id, v.id, 'H', val)}
                                         style={{ fontSize: '0.9rem', padding: '0.5rem', border: '1.5px solid #cbd5e1', fontWeight: 800, textAlign: 'center' }}
                                         placeholder={item.config.H}
                                       />
                                     </div>
                                     <div>
                                       <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '0.25rem' }}>PROF. MUR mm</label>
-                                      <input
+                                      <DebouncedInput
                                         type="number"
                                         className="input"
                                         value={v.wallDepth !== undefined ? v.wallDepth : ''}
-                                        onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'wallDepth', e.target.value)}
+                                        onChange={val => updateVoidProperty(floor.id, apt.id, v.id, 'wallDepth', val)}
                                         style={{ fontSize: '0.9rem', padding: '0.5rem', border: '1.5px solid #cbd5e1', fontWeight: 700, textAlign: 'center' }}
                                         placeholder="ex: 120"
                                       />
                                     </div>
                                     <div>
                                       <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '0.25rem' }}>HT. POIGNÉE mm</label>
-                                      <input
+                                      <DebouncedInput
                                         type="number"
                                         className="input"
                                         value={v.handleHeight !== undefined ? v.handleHeight : ''}
-                                        onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'handleHeight', e.target.value)}
+                                        onChange={val => updateVoidProperty(floor.id, apt.id, v.id, 'handleHeight', val)}
                                         style={{ fontSize: '0.9rem', padding: '0.5rem', border: '1.5px solid #cbd5e1', fontWeight: 700, textAlign: 'center' }}
                                         placeholder="Auto"
                                       />
@@ -931,21 +989,21 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginTop: '0.75rem' }}>
                                         <div>
                                           <label style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', marginBottom: '0.2rem', fontWeight: 600 }}>QUANTITÉ VOLET</label>
-                                          <input
+                                          <DebouncedInput
                                             type="number"
                                             className="input"
                                             value={actualShutter.qty !== undefined ? actualShutter.qty : 1}
-                                            onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.qty', e.target.value)}
+                                            onChange={val => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.qty', val)}
                                             style={{ fontSize: '0.85rem', padding: '0.35rem 0.5rem', textAlign: 'center' }}
                                           />
                                         </div>
                                         <div>
                                           <label style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', marginBottom: '0.2rem', fontWeight: 600 }}>LARGEUR LAME (LV) mm</label>
-                                          <input
+                                          <DebouncedInput
                                             type="number"
                                             className="input"
                                             value={actualShutter.customLV !== undefined ? actualShutter.customLV : ''}
-                                            onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.customLV', e.target.value)}
+                                            onChange={val => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.customLV', val)}
                                             style={{ fontSize: '0.85rem', padding: '0.35rem 0.5rem', textAlign: 'center' }}
                                             placeholder={v.L || item.config.L}
                                           />

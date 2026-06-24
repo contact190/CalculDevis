@@ -18,8 +18,27 @@ let socket = null;
 let isConnected = false;
 let serverUrl = null;
 
+const PENDING_OPS_KEY = 'calculDevis_pendingOps';
+
+function loadPendingOps() {
+  try {
+    const saved = localStorage.getItem(PENDING_OPS_KEY);
+    return saved ? JSON.parse(saved) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function savePendingOps(queue) {
+  try {
+    localStorage.setItem(PENDING_OPS_KEY, JSON.stringify(queue));
+  } catch (e) {
+    console.error("Failed to save pending ops queue:", e);
+  }
+}
+
 // Queue for ops generated while disconnected
-let pendingOpsQueue = [];
+let pendingOpsQueue = loadPendingOps();
 
 // Snapshot of last known state (for diffing)
 let lastKnownDbSnapshot = null;
@@ -89,6 +108,7 @@ export const localSync = {
           if (ack && ack.success) {
             console.log(`✅ ${ack.applied}/${ack.total} opérations en attente appliquées`);
             pendingOpsQueue = [];
+            savePendingOps(pendingOpsQueue);
           }
         });
       }
@@ -202,6 +222,7 @@ export const localSync = {
     if (!this.isConnected()) {
       // Queue ops for later
       pendingOpsQueue.push(...ops);
+      savePendingOps(pendingOpsQueue);
       console.log(`📦 ${ops.length} ops mises en file d'attente (hors-ligne, total: ${pendingOpsQueue.length})`);
       return { success: false, applied: 0, total: ops.length, queued: true };
     }
@@ -211,6 +232,7 @@ export const localSync = {
       const timeout = setTimeout(() => {
         // If no ack within 5s, consider it failed and queue
         pendingOpsQueue.push(...ops);
+        savePendingOps(pendingOpsQueue);
         resolve({ success: false, applied: 0, total: ops.length, timeout: true });
       }, 5000);
 
@@ -229,6 +251,7 @@ export const localSync = {
           });
         } else {
           pendingOpsQueue.push(...ops);
+          savePendingOps(pendingOpsQueue);
           resolve({ success: false, applied: 0, total: ops.length });
         }
       });

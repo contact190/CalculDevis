@@ -272,8 +272,22 @@ function App() {
     saveTimerRef.current = setTimeout(async () => {
       try {
         const now = new Date().toISOString();
-        await persistentStorage.save(LOCAL_KEY, database);
-        await persistentStorage.save(BACKUP_KEY, { ...database, _backupTime: now });
+        
+        let stampedDb = database;
+        // ─── Stamp local changes in database before saving ───
+        if (!isApplyingRemoteOps.current && previousDbRef.current) {
+          const ops = generateOps(previousDbRef.current, database);
+          if (ops.length > 0) {
+            const applyResult = applyOps(database, ops);
+            if (applyResult && applyResult.appliedCount > 0) {
+              stampedDb = applyResult.db;
+              setDatabase(stampedDb);
+            }
+          }
+        }
+
+        await persistentStorage.save(LOCAL_KEY, stampedDb);
+        await persistentStorage.save(BACKUP_KEY, { ...stampedDb, _backupTime: now });
         await persistentStorage.save('calculDevis_lastModified', now);
         lastLocalModifiedRef.current = now;
         setSaveStatus('saved');
@@ -281,7 +295,7 @@ function App() {
 
         // ─── Push delta ops to server (only if this is a LOCAL change) ─────
         if (!isApplyingRemoteOps.current && previousDbRef.current) {
-          const result = await localSync.pushOps(database, previousDbRef.current);
+          const result = await localSync.pushOps(stampedDb, previousDbRef.current);
           if (result && result.success) {
             if (result.applied > 0) {
               setCloudSyncStatus('ok');
@@ -292,7 +306,7 @@ function App() {
             setCloudSyncStatus('offline');
           }
         }
-        previousDbRef.current = database;
+        previousDbRef.current = stampedDb;
       } catch (e) {
         console.error('IndexedDB save error:', e);
         setSaveStatus('error');
