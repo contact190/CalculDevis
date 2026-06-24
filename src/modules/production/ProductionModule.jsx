@@ -205,6 +205,8 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                     wallDepth: m.wallDepth,
                     handleHeight: m.handleHeight,
                     partOverrides: m.partOverrides,
+                    // Use technician optionalSides override if set, else keep item config
+                    ...(m.optionalSides !== undefined ? { optionalSides: m.optionalSides } : {}),
                     hasShutter: true,
                     shutterConfig: {
                       ...(item.config?.shutterConfig || {}),
@@ -228,7 +230,16 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
               if (instancesProcessed.has(i)) continue;
               
               configs.push({
-                config: { ...item.config, L: m.L, H: m.H, wallDepth: m.wallDepth, handleHeight: m.handleHeight, partOverrides: m.partOverrides },
+                config: { 
+                  ...item.config, 
+                  L: m.L, 
+                  H: m.H, 
+                  wallDepth: m.wallDepth, 
+                  handleHeight: m.handleHeight, 
+                  partOverrides: m.partOverrides,
+                  // Use technician optionalSides override if set, else keep item config
+                  ...(m.optionalSides !== undefined ? { optionalSides: m.optionalSides } : {})
+                },
                 qty: 1,
                 label: item.label,
                 allLabels: [getPositionLabel(item, m, i)],

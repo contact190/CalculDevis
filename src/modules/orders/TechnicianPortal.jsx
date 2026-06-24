@@ -493,6 +493,8 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                     H: v.H !== undefined && v.H !== '' ? parseFloat(v.H) : batchItem.config.H,
                     wallDepth: v.wallDepth !== undefined && v.wallDepth !== '' ? parseFloat(v.wallDepth) : '',
                     handleHeight: v.handleHeight !== undefined && v.handleHeight !== '' ? parseFloat(v.handleHeight) : '',
+                    // optionalSides: undefined = Auto (keep quote config), object = technician override
+                    optionalSides: v.optionalSides !== undefined ? v.optionalSides : undefined,
                     qty: 1,
                     label: `${f.name} - ${a.name} - ${v.name}`,
                     shutterList: shutterList,
@@ -958,6 +960,66 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                         <option value="gauche">Gauche</option>
                                         <option value="droit">Droit</option>
                                       </select>
+                                    </div>
+
+                                    {/* Couvre-joint (optionalSides) */}
+                                    <div style={{ gridColumn: '1 / -1' }}>
+                                      <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '0.4rem' }}>COUVRE-JOINT (côtés)</label>
+                                      {(() => {
+                                        // resolved optionalSides: void overrides, else item config, else all true
+                                        const quoteSides = item.config.optionalSides || { top: true, bottom: true, left: true, right: true };
+                                        const voidSides = v.optionalSides; // undefined = Auto
+                                        const isAuto = voidSides === undefined || voidSides === null;
+                                        const currentSides = isAuto ? quoteSides : voidSides;
+                                        const sides = [
+                                          { key: 'top', label: 'Haut' },
+                                          { key: 'bottom', label: 'Bas' },
+                                          { key: 'left', label: 'Gauche' },
+                                          { key: 'right', label: 'Droite' },
+                                        ];
+                                        return (
+                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                            {/* Auto toggle */}
+                                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', fontWeight: 600, color: isAuto ? '#0f766e' : '#64748b', cursor: 'pointer' }}>
+                                              <input
+                                                type="checkbox"
+                                                checked={isAuto}
+                                                onChange={e => {
+                                                  if (e.target.checked) {
+                                                    updateVoidProperty(floor.id, apt.id, v.id, 'optionalSides', undefined);
+                                                  } else {
+                                                    updateVoidProperty(floor.id, apt.id, v.id, 'optionalSides', { ...quoteSides });
+                                                  }
+                                                }}
+                                                style={{ width: '1rem', height: '1rem' }}
+                                              />
+                                              Auto (comme le devis)
+                                              {isAuto && <span style={{ fontSize: '0.65rem', background: '#ccfbf1', color: '#0f766e', padding: '0.1rem 0.4rem', borderRadius: '9999px' }}>ACTIF</span>}
+                                            </label>
+                                            {/* Per-side checkboxes — only when not Auto */}
+                                            {!isAuto && (
+                                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.3rem', paddingLeft: '0.5rem' }}>
+                                                {sides.map(({ key, label }) => (
+                                                  <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.78rem', fontWeight: 600, color: '#475569', cursor: 'pointer' }}>
+                                                    <input
+                                                      type="checkbox"
+                                                      checked={!!currentSides[key]}
+                                                      onChange={e => {
+                                                        updateVoidProperty(floor.id, apt.id, v.id, 'optionalSides', {
+                                                          ...currentSides,
+                                                          [key]: e.target.checked
+                                                        });
+                                                      }}
+                                                      style={{ width: '0.9rem', height: '0.9rem' }}
+                                                    />
+                                                    {label}
+                                                  </label>
+                                                ))}
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      })()}
                                     </div>
                                   </div>
 
