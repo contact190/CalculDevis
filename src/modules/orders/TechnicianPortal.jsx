@@ -268,6 +268,22 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                   }
                 }
 
+                if (property.startsWith('partOverrides.')) {
+                  const parts = property.split('.');
+                  const partId = parts[1];
+                  const field = parts[2];
+                  return {
+                    ...v,
+                    partOverrides: {
+                      ...(v.partOverrides || {}),
+                      [partId]: {
+                        ...(v.partOverrides?.[partId] || {}),
+                        [field]: value === '' ? undefined : parseFloat(value)
+                      }
+                    }
+                  };
+                }
+
                 return { ...v, [property]: value };
               })
             };
@@ -1022,6 +1038,47 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                       })()}
                                     </div>
                                   </div>
+
+                                  {/* Compound Parts Configuration */}
+                                  {item.config.compoundType && item.config.compoundType !== 'none' && (
+                                    <div style={{ background: '#f8fafc', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0' }}>
+                                      <div style={{ marginBottom: '0.5rem' }}>
+                                        <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#475569' }}>🧩 Dimensions des éléments (Produit Assemblé)</span>
+                                      </div>
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                        {(item.config.compoundConfig?.parts || []).map(part => {
+                                          const label = part.type === 'opening' ? 'Ouvrant' : (part.type === 'fixe' ? 'Fixe' : part.type);
+                                          const partOverride = v.partOverrides?.[part.id] || {};
+                                          return (
+                                            <div key={part.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', background: 'white', padding: '0.5rem', borderRadius: '0.25rem', border: '1px solid #cbd5e1' }}>
+                                              <div>
+                                                <label style={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748b', display: 'block', marginBottom: '0.2rem' }}>LARGEUR {label.toUpperCase()} mm</label>
+                                                <DebouncedInput
+                                                  type="number"
+                                                  className="input"
+                                                  value={partOverride.width !== undefined ? partOverride.width : ''}
+                                                  onChange={val => updateVoidProperty(floor.id, apt.id, v.id, `partOverrides.${part.id}.width`, val)}
+                                                  style={{ fontSize: '0.85rem', padding: '0.35rem 0.5rem', textAlign: 'center', border: '1.5px solid #cbd5e1' }}
+                                                  placeholder="Auto"
+                                                />
+                                              </div>
+                                              <div>
+                                                <label style={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748b', display: 'block', marginBottom: '0.2rem' }}>HAUTEUR {label.toUpperCase()} mm</label>
+                                                <DebouncedInput
+                                                  type="number"
+                                                  className="input"
+                                                  value={partOverride.height !== undefined ? partOverride.height : ''}
+                                                  onChange={val => updateVoidProperty(floor.id, apt.id, v.id, `partOverrides.${part.id}.height`, val)}
+                                                  style={{ fontSize: '0.85rem', padding: '0.35rem 0.5rem', textAlign: 'center', border: '1.5px solid #cbd5e1' }}
+                                                  placeholder="Auto"
+                                                />
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  )}
 
                                   {/* Shutter Toggle Section */}
                                   <div style={{ background: '#f8fafc', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0' }}>
