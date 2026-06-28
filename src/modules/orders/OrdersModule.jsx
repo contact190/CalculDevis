@@ -71,6 +71,7 @@ const ItemPreview = ({ config, database }) => {
           qty: 1,
           label: label,
           shutterList: shutterList,
+          partOverrides: v.partOverrides || {},
           instanceNames: [v.name],
           instanceFloors: [floor.name]
         };

@@ -72,6 +72,7 @@ const syncSitePlanToMeasurements = (sitePlan, items) => {
           qty: 1,
           label: label,
           shutterList: shutterList,
+          partOverrides: v.partOverrides || {},
           instanceNames: [v.name],
           instanceFloors: [floor.name]
         };
