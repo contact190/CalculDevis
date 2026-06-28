@@ -1070,43 +1070,71 @@ export class FormulaEngine {
       const divThickNum = Number(currentDivThick || 0);
 
       // 1. Pre-calculate raw dimensions for all parts
+      // Apply partOverrides for BOTH dimensions (splitting and non-splitting)
+      const splitKey = direction === 'horizontal' ? 'rawL' : 'rawH';
       const items = (partList || []).map((part, idx) => {
         const overrideW = config.partOverrides?.[part.id]?.width;
         const overrideH = config.partOverrides?.[part.id]?.height;
+        const hasOvW = overrideW !== undefined && overrideW !== null && !isNaN(Number(overrideW));
+        const hasOvH = overrideH !== undefined && overrideH !== null && !isNaN(Number(overrideH));
+
+        let rawL, rawH;
+        if (direction === 'horizontal') {
+          rawL = Number(hasOvW ? overrideW : (part.width || (boxL / partList.length)));
+          rawH = Number(hasOvH ? overrideH : boxH);
+        } else {
+          rawL = Number(hasOvW ? overrideW : boxL);
+          rawH = Number(hasOvH ? overrideH : (part.height || (boxH / partList.length)));
+        }
+
         return {
           ...part,
           idx,
-          rawL: Number((direction === 'horizontal') ? (overrideW || part.width || (boxL / partList.length)) : boxL),
-          rawH: Number((direction === 'vertical') ? (overrideH || part.height || (boxH / partList.length)) : boxH)
+          rawL,
+          rawH,
+          _hasOverrideSplit: direction === 'horizontal' ? hasOvW : hasOvH
         };
       });
 
-      // 2. Adjust dimensions if they exceed available space
-      // For Multi-Châssis (fix_coulissant): parts are independent, don't deduct union from
-      // the available distribution space (the overall height reduction is already handled by subtracting 3mm from boxH at the start).
+      // 2. Recalculate auto parts in the splitting dimension
+      // When some parts have explicit overrides, auto parts fill the remaining space
       const available = (direction === 'horizontal' ? boxL : boxH) - (isMultiChassis ? 0 : divQty * divThickNum);
-      const totalRequested = items.reduce((sum, item) => sum + (direction === 'horizontal' ? item.rawL : item.rawH), 0);
 
-      if (totalRequested > available + 0.1) {
-        const excess = totalRequested - available;
-        const flexibleItems = items.filter(it => it.type !== 'fixe');
-        
-        if (flexibleItems.length > 0) {
-          const totalFlex = flexibleItems.reduce((sum, it) => sum + (direction === 'horizontal' ? it.rawL : it.rawH), 0);
-          flexibleItems.forEach(it => {
-            const weight = totalFlex > 0 ? (direction === 'horizontal' ? it.rawL : it.rawH) / totalFlex : (1 / flexibleItems.length);
-            if (direction === 'horizontal') it.rawL -= excess * weight;
-            else it.rawH -= excess * weight;
-          });
-        } else {
-          // Fallback: Proportional reduction if all parts are fixed
-          const scale = available / totalRequested;
-          items.forEach(it => {
-            if (direction === 'horizontal') it.rawL *= scale;
-            else it.rawH *= scale;
-          });
+      const overriddenParts = items.filter(it => it._hasOverrideSplit);
+      const autoParts = items.filter(it => !it._hasOverrideSplit);
+
+      if (overriddenParts.length > 0 && autoParts.length > 0) {
+        // Redistribute remaining space among auto parts
+        const overriddenTotal = overriddenParts.reduce((sum, it) => sum + it[splitKey], 0);
+        const remainingSpace = Math.max(0, available - overriddenTotal);
+        const autoTotal = autoParts.reduce((sum, it) => sum + it[splitKey], 0);
+        if (autoTotal > 0) {
+          const scale = remainingSpace / autoTotal;
+          autoParts.forEach(it => { it[splitKey] *= scale; });
+        } else if (autoParts.length > 0) {
+          const perAuto = remainingSpace / autoParts.length;
+          autoParts.forEach(it => { it[splitKey] = perAuto; });
+        }
+      } else {
+        // No mixed overrides: use original overflow adjustment
+        const totalRequested = items.reduce((sum, item) => sum + item[splitKey], 0);
+        if (totalRequested > available + 0.1) {
+          const excess = totalRequested - available;
+          const flexibleItems = items.filter(it => it.type !== 'fixe');
+          
+          if (flexibleItems.length > 0) {
+            const totalFlex = flexibleItems.reduce((sum, it) => sum + it[splitKey], 0);
+            flexibleItems.forEach(it => {
+              const weight = totalFlex > 0 ? it[splitKey] / totalFlex : (1 / flexibleItems.length);
+              it[splitKey] -= excess * weight;
+            });
+          } else {
+            const scale = available / totalRequested;
+            items.forEach(it => { it[splitKey] *= scale; });
+          }
         }
       }
+
 
       // 3. Process each item with adjusted dimensions
       items.forEach((part, idx) => {
