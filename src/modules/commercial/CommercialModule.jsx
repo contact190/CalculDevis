@@ -1853,6 +1853,9 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
   const [activeListTab, setActiveListTab] = useState('quote'); // 'quote' | 'consumables'
   const [showSettings, setShowSettings] = useState(false);
   const [consumableFilter, setConsumableFilter] = useState('all'); // 'all' | item id
+  const [newManualOption, setNewManualOption] = useState('');
+  const [editingOptionId, setEditingOptionId] = useState(null);
+  const [editingOptionText, setEditingOptionText] = useState('');
 
   useEffect(() => {
     if (setCurrentQuote && !quote.clientId && database.clients?.length > 0) {
@@ -2406,6 +2409,14 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
           descLines.push(`Options : ${optNames}`);
         }
 
+        // Options manuelles du devis
+        if (quote.manualOptions?.length > 0) {
+          descLines.push(`Options supplémentaires :`);
+          quote.manualOptions.forEach(opt => {
+            descLines.push(`  • ${opt.text}`);
+          });
+        }
+
         // Volet roulant
         if (cfg.hasShutter && sc) {
           const caisson = sc.caissons?.find(c => c.id === (cfg.shutterConfig?.caissonId));
@@ -2494,7 +2505,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
               totalWrappedLines += doc.splitTextToSize(line, 60).length;
               doc.setFont('helvetica', 'normal');
            } else {
-              const isBoldLabel = line === 'Volet Roulant :' || line === 'Volet Roulant (Double) :';
+              const isBoldLabel = line === 'Volet Roulant :' || line === 'Volet Roulant (Double) :' || line === 'Options supplémentaires :';
               if (isBoldLabel) doc.setFont('helvetica', 'bold');
               totalWrappedLines += doc.splitTextToSize(line, 60).length;
               doc.setFont('helvetica', 'normal');
@@ -2566,7 +2577,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
             doc.setFont('helvetica', 'normal');
           } else {
             const isBoldLabel = line === 'Volet Roulant :' || line === 'Volet Roulant (Double) :';
-            const isVoletSubItem = line.startsWith('  Caisson') || line.startsWith('  Glissière') || line.startsWith('  Lame') || line.startsWith('  Axe') || line.startsWith('  Moteur') || line.startsWith('  Kit') || line.startsWith('  Option');
+            const isVoletSubItem = line.startsWith('  Caisson') || line.startsWith('  Glissière') || line.startsWith('  Lame') || line.startsWith('  Axe') || line.startsWith('  Moteur') || line.startsWith('  Kit') || line.startsWith('  Option') || line.startsWith('  •');
             
             if (isBoldLabel) {
               doc.setFont('helvetica', 'bold');
@@ -3008,6 +3019,153 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {/* Manual Options Section */}
+          {!isQuoteFrozen && (
+            <div className="glass shadow-md" style={{ marginTop: '1.5rem', padding: '1.25rem', borderLeft: '4px solid #8b5cf6' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <div style={{ background: 'linear-gradient(135deg, #8b5cf6, #6d28d9)', color: 'white', width: '32px', height: '32px', borderRadius: '8px', display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: '0.85rem' }}>✏️</div>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#1e293b' }}>Options Manuelles</h3>
+                    <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748b' }}>Ajoutez des options personnalisées qui apparaîtront sur le devis PDF.</p>
+                  </div>
+                </div>
+                <span style={{ background: '#f3e8ff', color: '#7c3aed', padding: '0.2rem 0.6rem', borderRadius: '999px', fontSize: '0.72rem', fontWeight: 700 }}>
+                  {(quote.manualOptions || []).length} option{(quote.manualOptions || []).length !== 1 ? 's' : ''}
+                </span>
+              </div>
+
+              {/* Existing manual options */}
+              {(quote.manualOptions || []).length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
+                  {(quote.manualOptions || []).map((opt, idx) => (
+                    <div key={opt.id} style={{
+                      display: 'flex', alignItems: 'center', gap: '0.75rem',
+                      padding: '0.6rem 0.85rem', background: '#faf5ff', borderRadius: '0.5rem',
+                      border: '1px solid #e9d5ff', transition: 'all 0.2s'
+                    }}>
+                      <span style={{ fontSize: '0.7rem', fontWeight: 800, color: '#a78bfa', minWidth: '20px' }}>#{idx + 1}</span>
+                      {editingOptionId === opt.id ? (
+                        <input
+                          autoFocus
+                          className="input"
+                          value={editingOptionText}
+                          onChange={e => setEditingOptionText(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter' && editingOptionText.trim()) {
+                              setCurrentQuote(prev => ({
+                                ...prev,
+                                manualOptions: (prev.manualOptions || []).map(o => o.id === opt.id ? { ...o, text: editingOptionText.trim() } : o)
+                              }));
+                              setEditingOptionId(null);
+                              setEditingOptionText('');
+                            }
+                            if (e.key === 'Escape') { setEditingOptionId(null); setEditingOptionText(''); }
+                          }}
+                          onBlur={() => {
+                            if (editingOptionText.trim()) {
+                              setCurrentQuote(prev => ({
+                                ...prev,
+                                manualOptions: (prev.manualOptions || []).map(o => o.id === opt.id ? { ...o, text: editingOptionText.trim() } : o)
+                              }));
+                            }
+                            setEditingOptionId(null);
+                            setEditingOptionText('');
+                          }}
+                          style={{ flex: 1, fontSize: '0.85rem', padding: '0.35rem 0.6rem', borderColor: '#8b5cf6' }}
+                        />
+                      ) : (
+                        <span style={{ flex: 1, fontSize: '0.85rem', color: '#374151', fontWeight: 500 }}>{opt.text}</span>
+                      )}
+                      <div style={{ display: 'flex', gap: '0.25rem' }}>
+                        <button
+                          onClick={() => { setEditingOptionId(opt.id); setEditingOptionText(opt.text); }}
+                          title="Modifier"
+                          style={{ padding: '0.25rem', border: '1px solid #e9d5ff', borderRadius: '0.3rem', background: 'white', cursor: 'pointer', color: '#7c3aed', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        >
+                          <Edit2 size={13} />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setCurrentQuote(prev => ({
+                              ...prev,
+                              manualOptions: (prev.manualOptions || []).filter(o => o.id !== opt.id)
+                            }));
+                          }}
+                          title="Supprimer"
+                          style={{ padding: '0.25rem', border: '1px solid #fecaca', borderRadius: '0.3rem', background: '#fef2f2', cursor: 'pointer', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add new manual option */}
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <input
+                  className="input"
+                  placeholder="Saisissez une option manuelle (ex: Moustiquaire, Grille de ventilation, Habillage...)"
+                  value={newManualOption}
+                  onChange={e => setNewManualOption(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && newManualOption.trim()) {
+                      setCurrentQuote(prev => ({
+                        ...prev,
+                        manualOptions: [...(prev.manualOptions || []), { id: `OPT-${Date.now()}-${Math.floor(Math.random() * 1000)}`, text: newManualOption.trim() }]
+                      }));
+                      setNewManualOption('');
+                    }
+                  }}
+                  style={{ flex: 1, fontSize: '0.85rem', padding: '0.55rem 0.85rem' }}
+                />
+                <button
+                  onClick={() => {
+                    if (newManualOption.trim()) {
+                      setCurrentQuote(prev => ({
+                        ...prev,
+                        manualOptions: [...(prev.manualOptions || []), { id: `OPT-${Date.now()}-${Math.floor(Math.random() * 1000)}`, text: newManualOption.trim() }]
+                      }));
+                      setNewManualOption('');
+                    }
+                  }}
+                  disabled={!newManualOption.trim()}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '0.4rem',
+                    padding: '0.55rem 1rem', border: 'none', borderRadius: '0.5rem',
+                    background: newManualOption.trim() ? 'linear-gradient(135deg, #8b5cf6, #6d28d9)' : '#e2e8f0',
+                    color: newManualOption.trim() ? 'white' : '#94a3b8',
+                    cursor: newManualOption.trim() ? 'pointer' : 'not-allowed',
+                    fontWeight: 600, fontSize: '0.85rem',
+                    transition: 'all 0.2s', whiteSpace: 'nowrap'
+                  }}
+                >
+                  <Plus size={15} /> Ajouter
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Display manual options in read-only mode when frozen */}
+          {isQuoteFrozen && (quote.manualOptions || []).length > 0 && (
+            <div className="glass shadow-md" style={{ marginTop: '1.5rem', padding: '1.25rem', borderLeft: '4px solid #8b5cf6' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                <span style={{ fontSize: '1rem' }}>✏️</span>
+                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#1e293b' }}>Options Manuelles</h3>
+                <span style={{ background: '#f3e8ff', color: '#7c3aed', padding: '0.2rem 0.6rem', borderRadius: '999px', fontSize: '0.72rem', fontWeight: 700, marginLeft: 'auto' }}>
+                  {quote.manualOptions.length} option{quote.manualOptions.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+              {quote.manualOptions.map((opt, idx) => (
+                <div key={opt.id} style={{ padding: '0.5rem 0.85rem', background: '#faf5ff', borderRadius: '0.4rem', border: '1px solid #e9d5ff', marginBottom: '0.35rem', fontSize: '0.85rem', color: '#374151' }}>
+                  <span style={{ fontWeight: 700, color: '#a78bfa', marginRight: '0.5rem' }}>#{idx + 1}</span>{opt.text}
+                </div>
+              ))}
             </div>
           )}
 
