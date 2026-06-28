@@ -2082,7 +2082,22 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
 
   const handleQtyChange = (id, val) => {
     const q = Math.max(1, parseInt(val) || 1);
-    setCurrentQuote(prev => ({ ...prev, items: prev.items.map(i => i.id === id ? { ...i, qty: q } : i) }));
+    setCurrentQuote(prev => ({ 
+      ...prev, 
+      items: prev.items.map(i => {
+        if (i.id === id) {
+          const updated = { ...i, qty: q };
+          if (updated.measurements && updated.measurements.length > 0) {
+            updated.measurements = [{ ...updated.measurements[0], qty: q }];
+          }
+          if (updated.siteMeasurements && updated.siteMeasurements.length > 0) {
+            updated.siteMeasurements = [{ ...updated.siteMeasurements[0], qty: q }];
+          }
+          return updated;
+        }
+        return i;
+      }) 
+    }));
   };
 
   const filteredBoms = consumableFilter === 'all' ? allBoms : allBoms.filter(b => b.itemId === consumableFilter);
