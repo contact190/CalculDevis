@@ -2075,7 +2075,8 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
   };
 
   const handleDuplicateItem = (item) => {
-    const copy = { ...item, id: `ITEM-${Date.now()}-${Math.floor(Math.random() * 1000)}`, label: `${item.label} (copie)` };
+    const deepClone = JSON.parse(JSON.stringify(item));
+    const copy = { ...deepClone, id: `ITEM-${Date.now()}-${Math.floor(Math.random() * 1000)}`, label: `${item.label} (copie)` };
     setCurrentQuote(prev => ({ ...prev, items: [...prev.items, copy] }));
   };
 

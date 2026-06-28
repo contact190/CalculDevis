@@ -77,13 +77,20 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
 
   const handleDuplicateQuote = (quote) => {
     const newId = `QUOTE-${Date.now()}`;
+    // Deep clone to fully decouple from the original quote (items, config, priceData, totals, etc.)
+    const deepClone = JSON.parse(JSON.stringify(quote));
     const newQuote = {
-      ...quote,
+      ...deepClone,
       id: newId,
       number: `${quote.number.split('-Copie')[0]}-Copie`,
       status: 'Brouillon',
       createdAt: new Date().toISOString(),
-      validatedAt: null
+      validatedAt: null,
+      // Give each item a new unique ID so they are fully independent from the original
+      items: (deepClone.items || []).map(item => ({
+        ...item,
+        id: `ITEM-${Date.now()}-${Math.floor(Math.random() * 10000)}`
+      }))
     };
     
     setData(prev => ({
