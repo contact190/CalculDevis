@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Home, Package, Settings, ChevronRight, LayoutDashboard, Users, RefreshCw, ShoppingBag, Truck, CheckCircle, Building, Wifi, WifiOff, TrendingUp } from 'lucide-react';
+import { Home, Package, Settings, ChevronRight, LayoutDashboard, Users, RefreshCw, ShoppingBag, Truck, CheckCircle, Building, Wifi, WifiOff, TrendingUp, Store } from 'lucide-react';
 import CommercialModule from './modules/commercial/CommercialModule';
+import ShopModule from './modules/shop/ShopModule';
 import ProductionModule from './modules/production/ProductionModule';
 import AdminDashboard from './modules/admin/AdminDashboard';
 import ClientsModule from './modules/clients/ClientsModule';
@@ -84,6 +85,7 @@ function App() {
   const [quoteSettings, setQuoteSettings] = useState(DEFAULT_QUOTE_SETTINGS);
 
   const [currentQuote, setCurrentQuote] = useState(() => makeNewQuote(DEFAULT_QUOTE_SETTINGS));
+  const [selectedShopQuote, setSelectedShopQuote] = useState(null);
 
   const [currentConfig, setCurrentConfig] = useState({
     L: 1200,
@@ -469,6 +471,7 @@ function App() {
 
   const menuItems = [
     { id: 'commercial', label: 'Commercial', icon: LayoutDashboard },
+    { id: 'shop', label: 'Shop', icon: Store },
     { id: 'siteplan', label: 'Plan de Chantier', icon: Building },
     { id: 'orders', label: 'Commandes', icon: ShoppingBag },
     { id: 'production', label: 'Atelier / Production', icon: Package },
@@ -659,6 +662,16 @@ function App() {
             onNewQuote={() => setCurrentQuote(makeNewQuote(quoteSettings, database))}
           />
         )}
+        {activeTab === 'shop' && (
+          <ShopModule 
+            database={database}
+            setDatabase={setDatabase}
+            quoteSettings={quoteSettings}
+            setQuoteSettings={updateQuoteSettings}
+            selectedQuote={selectedShopQuote}
+            onClearSelectedQuote={() => setSelectedShopQuote(null)}
+          />
+        )}
         {activeTab === 'production' && (
           <ProductionModule 
             currentConfig={currentConfig} 
@@ -674,8 +687,13 @@ function App() {
             setData={setDatabase}
             quoteSettings={quoteSettings}
             onOpenQuote={(quote) => {
-              setCurrentQuote(quote);
-              setActiveTab('commercial');
+              if (quote.type === 'shop') {
+                setSelectedShopQuote(quote);
+                setActiveTab('shop');
+              } else {
+                setCurrentQuote(quote);
+                setActiveTab('commercial');
+              }
             }}
           />
         )}

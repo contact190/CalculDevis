@@ -214,6 +214,7 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
                 <thead>
                   <tr>
                     <th>N° Devis</th>
+                    <th>Type</th>
                     <th>Date</th>
                     <th>Statut</th>
                     <th>Plan de Chantier</th>
@@ -228,6 +229,13 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
                   {(data.quotes || []).filter(q => q.clientId === editingClient.id).map(q => (
                     <tr key={q.id}>
                       <td data-label="N°" style={{ fontWeight: 700, color: '#2563eb' }}>{q.number}</td>
+                      <td data-label="Type">
+                        {q.type === 'shop' ? (
+                          <span style={{ padding: '0.2rem 0.5rem', borderRadius: '999px', fontSize: '0.7rem', fontWeight: 700, background: '#ede9fe', color: '#7c3aed' }}>Shop</span>
+                        ) : (
+                          <span style={{ padding: '0.2rem 0.5rem', borderRadius: '999px', fontSize: '0.7rem', fontWeight: 700, background: '#e0f2fe', color: '#0369a1' }}>Menuiserie</span>
+                        )}
+                      </td>
                       <td data-label="Date">{new Date(q.createdAt).toLocaleDateString('fr-FR')}</td>
                       <td data-label="Statut">
                         <span style={{ 
@@ -337,6 +345,7 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
                               <thead>
                                 <tr>
                                   <th>N° Devis</th>
+                                  <th>Type</th>
                                   <th>Date</th>
                                   <th>Statut</th>
                                   <th>Plan de Chantier</th>
@@ -350,6 +359,13 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
                                 {clientQuotes.map(q => (
                                   <tr key={q.id}>
                                     <td data-label="N°" style={{ fontWeight: 700, color: '#3b82f6' }}>{q.number}</td>
+                                    <td data-label="Type">
+                                      {q.type === 'shop' ? (
+                                        <span style={{ padding: '0.2rem 0.5rem', borderRadius: '999px', fontSize: '0.7rem', fontWeight: 700, background: '#ede9fe', color: '#7c3aed' }}>Shop</span>
+                                      ) : (
+                                        <span style={{ padding: '0.2rem 0.5rem', borderRadius: '999px', fontSize: '0.7rem', fontWeight: 700, background: '#e0f2fe', color: '#0369a1' }}>Menuiserie</span>
+                                      )}
+                                    </td>
                                     <td data-label="Date">{new Date(q.createdAt).toLocaleDateString('fr-FR')}</td>
                                     <td data-label="Statut">
                                       <span style={{ 

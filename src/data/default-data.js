@@ -43497,5 +43497,6 @@ export const DEFAULT_DATA = {
       "clientId": "CLI-9889",
       "createdAt": "2026-05-05T14:29:03.283Z"
     }
-  ]
+  ],
+  "shopProducts": []
 };
