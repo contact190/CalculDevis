@@ -4,6 +4,7 @@ import { syncDatabase, invokeFunction } from '../../utils/supabaseClient';
 import jsPDF from 'jspdf';
 import QRScanner from './QRScanner';
 import { FormulaEngine } from '../../engine/formula-engine';
+import { drawDocumentHeader } from '../../utils/pdfDocumentUtils';
 
 // Module version: 1.0.1 - Logistic & Installation Tracking
 const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
@@ -31,6 +32,9 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
   const [companyName, setCompanyName] = useState(quoteSettings?.companyName || 'ALU DESIGN'); // Nom depuis config ou par défaut
   const [recipientEmail, setRecipientEmail] = useState('');
   const [sendByEmail, setSendByEmail] = useState(false);
+  const [blModalType, setBlModalType] = useState(null); // 'ALU' | 'VITRAGE' | null
+  const [blSelectedUnitIds, setBlSelectedUnitIds] = useState(new Set());
+
 
   React.useEffect(() => {
     if (quoteSettings?.companyName) {
@@ -546,26 +550,25 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
       return 'JPEG';
     };
     
-    // Page de Garde
-    doc.setFillColor(30, 41, 59); doc.rect(0, 0, pw, ph, 'F');
-    doc.setTextColor(255, 255, 255); doc.setFontSize(28); doc.setFont('helvetica', 'bold');
-    doc.text('ÉTAT D\'AVANCEMENT CHANTIER', pw / 2, ph / 3, { align: 'center' });
-    doc.setFontSize(14); doc.setFont('helvetica', 'normal');
-    doc.text(`COMMANDE : ${selectedOrder.id}`, pw / 2, ph / 3 + 15, { align: 'center' });
-    doc.text(`CLIENT : ${selectedOrder.clientName}`, pw / 2, ph / 3 + 25, { align: 'center' });
-    doc.text(`Rapport généré le : ${new Date().toLocaleDateString('fr-FR')}`, pw / 2, ph / 3 + 35, { align: 'center' });
+    const client = (data.clients || []).find(c => c.id === selectedOrder.clientId) || { nom: selectedOrder.clientName };
+    let y = drawDocumentHeader(doc, quoteSettings, client, {
+      title: "ÉTAT D'AVANCEMENT CHANTIER",
+      docLabel: 'Commande N°',
+      docValue: selectedOrder.id,
+      docDate: new Date().toLocaleDateString('fr-FR'),
+      showClientBox: true
+    });
     
     if (globalRemark) {
-      doc.addPage(); doc.setTextColor(30, 41, 59);
-      doc.setFontSize(16); doc.setFont('helvetica', 'bold'); doc.text('Remarques Générales du Chantier', 15, 30);
-      doc.setDrawColor(226, 232, 240); doc.line(15, 35, 60, 35);
+      doc.setTextColor(30, 41, 59);
+      doc.setFontSize(16); doc.setFont('helvetica', 'bold'); doc.text('Remarques Générales du Chantier', 15, y);
+      doc.setDrawColor(226, 232, 240); doc.line(15, y + 5, 60, y + 5);
       doc.setFontSize(11); doc.setFont('helvetica', 'normal'); doc.setTextColor(71, 85, 105);
       const splitRemark = doc.splitTextToSize(globalRemark, pw - 30);
-      doc.text(splitRemark, 15, 45);
+      doc.text(splitRemark, 15, y + 15);
+      y += 15 + splitRemark.length * 5 + 10;
     }
 
-    doc.addPage();
-    let y = 20; 
     doc.setTextColor(30, 41, 59); doc.setFontSize(18); doc.setFont('helvetica', 'bold'); 
     doc.text('Détails des Produits & Suivi Site', 15, y);
     doc.setDrawColor(59, 130, 246); doc.setLineWidth(1); doc.line(15, y + 2, 40, y + 2);
@@ -671,13 +674,14 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
     };
 
     // --- PAGE 1: EXECUTIVE DASHBOARD ---
-    doc.setFillColor(15, 23, 42); doc.rect(0, 0, pw, 70, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(24); doc.setFont('helvetica', 'bold');
-    doc.text('AUDIT DE PERFORMANCE CHANTIER', 15, 30);
-    doc.setFontSize(10); doc.setFont('helvetica', 'normal');
-    doc.text(`PROJET : ${selectedOrder.id} | CLIENT : ${selectedOrder.clientName}`, 15, 40);
-    doc.text(`GÉNÉRÉ LE : ${new Date().toLocaleString('fr-FR')}`, 15, 45);
+    const client = (data.clients || []).find(c => c.id === selectedOrder.clientId) || { nom: selectedOrder.clientName };
+    let y = drawDocumentHeader(doc, quoteSettings, client, {
+      title: "AUDIT PERFORMANCE",
+      docLabel: 'Projet N°',
+      docValue: selectedOrder.id,
+      docDate: new Date().toLocaleDateString('fr-FR'),
+      showClientBox: true
+    });
 
     // KPI Calc
     const stats = {
@@ -729,15 +733,16 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
 
     let bx = 15;
     const bw = (pw - 40) / 4;
-    drawBox(bx, 80, bw, 30, 'Unités Totales', `${stats.total}`, [30, 41, 59]);
-    drawBox(bx + bw + 3.3, 80, bw, 30, 'Taux Pose', `${((stats.done/stats.total)*100 || 0).toFixed(1)}%`, [139, 92, 246]);
-    drawBox(bx + (bw + 3.3)*2, 80, bw, 30, 'Taux Finition', `${((stats.vitDone/stats.total)*100 || 0).toFixed(1)}%`, [16, 185, 129]);
-    drawBox(bx + (bw + 3.3)*3, 80, bw, 30, 'Litiges SAV', `${stats.sav}`, [239, 68, 68]);
+    const boxY = y + 10;
+    drawBox(bx, boxY, bw, 30, 'Unités Totales', `${stats.total}`, [30, 41, 59]);
+    drawBox(bx + bw + 3.3, boxY, bw, 30, 'Taux Pose', `${((stats.done/stats.total)*100 || 0).toFixed(1)}%`, [139, 92, 246]);
+    drawBox(bx + (bw + 3.3)*2, boxY, bw, 30, 'Taux Finition', `${((stats.vitDone/stats.total)*100 || 0).toFixed(1)}%`, [16, 185, 129]);
+    drawBox(bx + (bw + 3.3)*3, boxY, bw, 30, 'Litiges SAV', `${stats.sav}`, [239, 68, 68]);
 
     // Visual Chart: Workload distribution
     doc.setTextColor(30, 41, 59); doc.setFontSize(10); doc.setFont('helvetica', 'bold');
-    doc.text('DISTRIBUTION DE LA CHARGE DE TRAVAIL', 15, 125);
-    let chartY = 135;
+    doc.text('DISTRIBUTION DE LA CHARGE DE TRAVAIL', 15, boxY + 45);
+    let chartY = boxY + 55;
     Object.entries(installerMap).forEach(([name, data]) => {
       const totalActions = data.manut + data.pose + data.finit;
       if (totalActions === 0) return;
@@ -898,56 +903,12 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
     }
 
     // ─── NOUVEAU FORMAT DU PV DE RÉCEPTION ──────────────────────────────────────────
-    // Header
-    doc.setFillColor(255, 255, 255); 
-    doc.rect(0, 0, pw, ph, 'F');
-    
-    doc.setDrawColor(0, 0, 0);
-    doc.setLineWidth(0.3);
-    
-    // Header boxes
-    doc.rect(15, 15, pw - 30, 30); 
-    doc.line(15 + (pw-30)*0.30, 15, 15 + (pw-30)*0.30, 45); 
-    doc.line(15 + (pw-30)*0.70, 15, 15 + (pw-30)*0.70, 45); 
-    doc.line(15 + (pw-30)*0.85, 15, 15 + (pw-30)*0.85, 45);
-
-    // Left box: Logo
-    let logoDrawn = false;
-    if (quoteSettings && quoteSettings.logoBase64) {
-      try {
-        const imgProps = doc.getImageProperties(quoteSettings.logoBase64);
-        const ratio = Math.min(45 / imgProps.width, 25 / imgProps.height);
-        doc.addImage(quoteSettings.logoBase64, 'PNG', 18, 17, imgProps.width * ratio, imgProps.height * ratio, '', 'FAST');
-        logoDrawn = true;
-      } catch(e) {}
-    }
-    if (!logoDrawn) {
-      doc.setFontSize(14); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 41, 59);
-      doc.text((companyName || 'LOGO').substring(0, 15), 20, 30);
-      doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 100, 100);
-      doc.text('Menuiserie', 20, 36);
-    }
-
-    // Center box: Title
-    doc.setFontSize(14); doc.setFont('helvetica', 'bold'); doc.setTextColor(0, 0, 0);
-    const title = isFinalPV ? 'PV DE RECEPTION\nFINAL' : 'PV DE RECEPTION\nPROVISOIRE';
-    doc.text(title, 15 + (pw-30)*0.50, 26, { align: 'center' });
-    doc.setFontSize(10); doc.setFont('helvetica', 'normal');
-    doc.text('« Réalisation des Menuiseries »', 15 + (pw-30)*0.50, 40, { align: 'center' });
-
-    // Right box: Date & Projet
-    doc.setFontSize(9); doc.setFont('helvetica', 'bold');
-    doc.text('Date', 15 + (pw-30)*0.70 + 5, 23);
-    doc.text('Projet', 15 + (pw-30)*0.85 + 5, 23);
-    
-    doc.setFontSize(9); doc.setFont('helvetica', 'normal');
-    doc.setTextColor(0, 50, 150);
-    doc.text(new Date().toLocaleDateString('fr-FR'), 15 + (pw-30)*0.70 + 5, 33);
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(8);
+    const client = (data.clients || []).find(c => c.id === selectedOrder.clientId) || { nom: selectedOrder.clientName };
+    const title = isFinalPV ? 'PV DE RECEPTION FINAL' : 'PV DE RECEPTION PROVISOIRE';
     const projName = selectedOrder.clientName || selectedOrder.id;
-    const splitProj = doc.splitTextToSize(projName, (pw-30)*0.15 - 5);
-    doc.text(splitProj, 15 + (pw-30)*0.85 + 5, 33);
+    
+    let isFirstPage = true;
+    let y = 15;
 
     // Grouping by Apartment from plan chantier names
     // Plan chantier names follow the pattern: [floor][apt][voidIndex], e.g. "1A1", "1A2", "2B3"
@@ -963,24 +924,30 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
       units: zonesMap[z]
     }));
 
-    let isFirstPage = true;
-    let y = 50;
-
     const col1W = (pw-30)*0.45;
     const col2W = (pw-30)*0.275;
     const col3W = (pw-30)*0.275;
 
     const drawPageHeader = () => {
         if (isFirstPage) {
+          y = drawDocumentHeader(doc, quoteSettings, client, {
+            title: title,
+            docLabel: 'Projet',
+            docValue: projName,
+            docDate: new Date().toLocaleDateString('fr-FR'),
+            showClientBox: true
+          });
           doc.setFontSize(10); doc.setFont('helvetica', 'bold');
           const floorsStr = isFinalPV ? 'Tous' : Array.from(pvSelectedFloors).join(', ');
-          doc.text(`Projet : ${projName} ;`, 15, 52);
-          doc.text(`Etage : ${floorsStr} ;`, 15 + (pw-30)*0.6, 52);
+          doc.text(`Projet : ${projName} ;`, 15, y);
+          doc.text(`Etage : ${floorsStr} ;`, 15 + (pw-30)*0.6, y);
 
-          y = 56;
+          y += 4;
           doc.rect(15, y, pw - 30, 8); 
           doc.text('RECEPTION DES TRAVAUX', pw / 2, y + 5.5, { align: 'center' });
           y += 8;
+        } else {
+          y = 15;
         }
 
         doc.rect(15, y, col1W, 8);
@@ -1203,19 +1170,25 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
     setShowPVModal(false);
   };
 
-  const generateDeliveryNote = (type = 'ALU') => {
+  const generateDeliveryNote = (type = 'ALU', unitsToDeliver = []) => {
+    if (unitsToDeliver.length === 0) {
+      alert("Aucun produit sélectionné pour la livraison !");
+      return;
+    }
+
     const doc = new jsPDF();
     const pw = doc.internal.pageSize.getWidth();
     const ph = doc.internal.pageSize.getHeight();
-    doc.setFontSize(22); doc.setFont('helvetica', 'bold');
-    doc.text(`BON DE LIVRAISON : ${type}`, pw / 2, 20, { align: 'center' });
-    doc.setFontSize(12); doc.setFont('helvetica', 'normal');
-    doc.text(`Date: ${new Date().toLocaleDateString()}`, 15, 35);
-    doc.text(`Commande N°: ${selectedOrder.id}`, 15, 42);
-    doc.text(`Client: ${selectedOrder.clientName || '---'}`, 15, 49);
-    doc.line(15, 55, pw - 15, 55);
+    const client = (data.clients || []).find(c => c.id === selectedOrder.clientId) || { nom: selectedOrder.clientName };
+    let y = drawDocumentHeader(doc, quoteSettings, client, {
+      title: `BON DE LIVRAISON : ${type}`,
+      docLabel: 'Commande N°',
+      docValue: selectedOrder.id,
+      docDate: new Date().toLocaleDateString('fr-FR'),
+      showClientBox: true
+    });
     
-    let y = 65;
+    y += 10;
 
     // Helper to check page overflow and add a page
     const checkPageOverflow = (neededSpace) => {
@@ -1229,7 +1202,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
 
     // Group units by floor
     const unitsByFloor = {};
-    allUnits.forEach(u => {
+    unitsToDeliver.forEach(u => {
       const fl = u.floor || 'Sans étage';
       if (!unitsByFloor[fl]) unitsByFloor[fl] = [];
       unitsByFloor[fl].push(u);
@@ -1265,7 +1238,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
       doc.setFont('helvetica', 'normal');
       const floorUnits = unitsByFloor[floor];
       floorUnits.forEach(u => {
-        const status = type === 'ALU' ? u.statusAlu : u.statusVitrage;
+        const status = 'LIVRÉ';
         
         if (type === 'VITRAGE') {
           const panes = u.glassPanes && u.glassPanes.length > 0 ? u.glassPanes : [{ name: 'Vitrage Standard', width: '—', height: '—', qty: 1 }];
@@ -1278,7 +1251,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
             doc.text(String(g.qty), 15, y); 
             doc.text(glassText.substring(0, 42), 30, y); 
             doc.text(u.name, 120, y);
-            doc.text(status !== 'Produit' ? 'LIVRÉ' : '---', 180, y);
+            doc.text(status, 180, y);
             y += 8;
           });
         } else {
@@ -1287,7 +1260,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
           doc.text('1', 15, y); 
           doc.text(labelText.substring(0, 42), 30, y); 
           doc.text(u.name, 120, y);
-          doc.text(status !== 'Produit' ? 'LIVRÉ' : '---', 180, y);
+          doc.text(status, 180, y);
           y += 8;
         }
       });
@@ -1318,7 +1291,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
 
     // Build map of quantity by designation
     const qtyByDesign = {};
-    allUnits.forEach(u => {
+    unitsToDeliver.forEach(u => {
       const origItem = selectedOrder.items?.find(item => item.id === u.itemId);
       const design = origItem?.label || u.label || 'Produit';
       const gamme = u.gammeName || '—';
@@ -1355,6 +1328,31 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
       const blDates = { ...(order.blDates || {}) };
       blDates[type] = new Date().toISOString();
       order.blDates = blDates;
+
+      const dualStatuses = { ...(order.unitStatusesDual || {}) };
+      const timeline = { ...(order.unitTimeline || {}) };
+      const component = type === 'ALU' ? 'alu' : 'vitrage';
+      const userName = 'ADMIN';
+
+      unitsToDeliver.forEach(u => {
+        const current = { ...(dualStatuses[u.id] || { alu: 'Produit', vitrage: 'Produit' }) };
+        current[component] = 'Livré';
+        dualStatuses[u.id] = current;
+
+        const event = {
+          date: new Date().toISOString(),
+          user: userName,
+          component: component,
+          status: 'Livré',
+          action: 'finish',
+          issue: null
+        };
+        if (!timeline[u.id]) timeline[u.id] = [];
+        timeline[u.id] = [...timeline[u.id], event];
+      });
+
+      order.unitStatusesDual = dualStatuses;
+      order.unitTimeline = timeline;
       orders[oIdx] = order;
       return { ...prev, orders };
     });

@@ -113,8 +113,8 @@ export const drawDocumentHeader = (doc, quoteSettings, client, options = {}) => 
   if (quoteSettings?.companyRC) cyLeft += 4;
   if (quoteSettings?.companyIMP) cyLeft += 4;
   if (quoteSettings?.companyMF) cyLeft += 4;
-  if (quoteSettings?.companyRIB) cyLeft += 4;
-  if (quoteSettings?.companyBank) cyLeft += 4;
+  if (quoteSettings?.companyRIB) cyLeft += doc.splitTextToSize(`RIB: ${quoteSettings.companyRIB}`, boxWidth - 6).length * 4;
+  if (quoteSettings?.companyBank) cyLeft += doc.splitTextToSize(`Banque: ${quoteSettings.companyBank}`, boxWidth - 6).length * 4;
 
   let cyRight = boxY + 16;
   if (showClientBox) {
@@ -158,8 +158,16 @@ export const drawDocumentHeader = (doc, quoteSettings, client, options = {}) => 
   if (quoteSettings?.companyRC) { doc.text(`RC N°: ${quoteSettings.companyRC}`, 18, cy); cy += 4; }
   if (quoteSettings?.companyIMP) { doc.text(`AI N°: ${quoteSettings.companyIMP}`, 18, cy); cy += 4; }
   if (quoteSettings?.companyMF) { doc.text(`NIF/MF N°: ${quoteSettings.companyMF}`, 18, cy); cy += 4; }
-  if (quoteSettings?.companyRIB) { doc.text(`RIB: ${quoteSettings.companyRIB}`, 18, cy); cy += 4; }
-  if (quoteSettings?.companyBank) { doc.text(`Banque: ${quoteSettings.companyBank}`, 18, cy); cy += 4; }
+  if (quoteSettings?.companyRIB) {
+    const lines = doc.splitTextToSize(`RIB: ${quoteSettings.companyRIB}`, boxWidth - 6);
+    doc.text(lines, 18, cy);
+    cy += lines.length * 4;
+  }
+  if (quoteSettings?.companyBank) {
+    const lines = doc.splitTextToSize(`Banque: ${quoteSettings.companyBank}`, boxWidth - 6);
+    doc.text(lines, 18, cy);
+    cy += lines.length * 4;
+  }
   doc.setTextColor(0, 0, 0);
 
   if (showClientBox) {
