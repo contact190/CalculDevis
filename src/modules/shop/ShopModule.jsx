@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Store, Plus, Edit2, Trash2, FileText, Search, Save, X, ExternalLink, Printer } from 'lucide-react';
+import { Store, Plus, Edit2, Trash2, FileText, Search, Save, X, ExternalLink, Printer, Pin, PinOff } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onClearSelectedQuote }) => {
   const [activeTab, setActiveTab] = useState('products'); // 'products', 'quotes', or 'viewQuote'
   const [editingProduct, setEditingProduct] = useState(null);
+  const [isNewCategory, setIsNewCategory] = useState(false);
   const [viewingQuote, setViewingQuote] = useState(null);
   
   // Quote Creation State
@@ -37,6 +38,26 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
   const [customL, setCustomL] = useState('');
   const [selectedGlassId, setSelectedGlassId] = useState('');
   const [selectedColorId, setSelectedColorId] = useState('');
+  const [isHEnabled, setIsHEnabled] = useState(false);
+  const [isLEnabled, setIsLEnabled] = useState(false);
+
+  useEffect(() => {
+    const p = (database.shopProducts || []).find(x => x.id === selectedProductId);
+    if (p) {
+      if (p.unit === 'm2') {
+        setIsHEnabled(true);
+        setIsLEnabled(true);
+      } else if (p.unit === 'm') {
+        setIsHEnabled(true);
+        setIsLEnabled(true);
+      } else {
+        setIsHEnabled(false);
+        setIsLEnabled(false);
+      }
+      setCustomH('');
+      setCustomL('');
+    }
+  }, [selectedProductId]);
 
   const shopProducts = database.shopProducts || [];
   const categories = [...new Set(shopProducts.map(p => p.categorie).filter(Boolean))];
@@ -50,6 +71,7 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
   }, [selectedQuote]);
 
   const handleAddProduct = () => {
+    setIsNewCategory(false);
     setEditingProduct({
       id: `PROD-${Date.now()}`,
       nom: '',
@@ -147,8 +169,8 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
     const product = shopProducts.find(p => p.id === selectedProductId);
     if (!product) return;
     
-    const h = Number(customH) || 0;
-    const l = Number(customL) || 0;
+    const h = isHEnabled ? (Number(customH) || 0) : 0;
+    const l = isLEnabled ? (Number(customL) || 0) : 0;
     const q = Number(qty) || 1;
     
     const price = calculateItemPrice(product, h, l, q, selectedGlassId, selectedColorId);
@@ -307,7 +329,7 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
         `${item.nom}\n${item.designation || ''}`,
         dims,
         optStr || '-',
-        `${item.qty} ${item.unit}`,
+        `${item.qty} ${item.unit === 'unité' ? 'U' : 'pces'}`,
         `${formatPrice(puHT)} DZD`,
         `${formatPrice(item.totalHT)} DZD`
       ];
@@ -575,10 +597,45 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
                   </div>
                   <div className="form-group">
                      <label className="label">Catégorie *</label>
-                     <input className="input" list="cat-list" value={editingProduct.categorie} onChange={e => setEditingProduct({...editingProduct, categorie: e.target.value})} />
-                     <datalist id="cat-list">
-                       {categories.map(c => <option key={c} value={c} />)}
-                     </datalist>
+                     {!isNewCategory ? (
+                       <select 
+                         className="input" 
+                         value={categories.includes(editingProduct.categorie) ? editingProduct.categorie : (editingProduct.categorie ? '__NEW__' : '')} 
+                         onChange={e => {
+                           if (e.target.value === '__NEW__') {
+                             setIsNewCategory(true);
+                             setEditingProduct({...editingProduct, categorie: ''});
+                           } else {
+                             setEditingProduct({...editingProduct, categorie: e.target.value});
+                           }
+                         }}
+                       >
+                         <option value="">-- Sélectionner --</option>
+                         {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                         <option value="__NEW__" style={{ fontWeight: 'bold', color: '#3b82f6' }}>+ Nouvelle Catégorie...</option>
+                       </select>
+                     ) : (
+                       <div style={{ display: 'flex', gap: '0.5rem' }}>
+                         <input 
+                           className="input" 
+                           placeholder="Nom de la nouvelle catégorie" 
+                           value={editingProduct.categorie} 
+                           onChange={e => setEditingProduct({...editingProduct, categorie: e.target.value})} 
+                           autoFocus
+                         />
+                         <button 
+                           className="btn" 
+                           type="button" 
+                           onClick={() => {
+                             setIsNewCategory(false);
+                             setEditingProduct({...editingProduct, categorie: ''});
+                           }}
+                           title="Annuler"
+                         >
+                           <X size={16} />
+                         </button>
+                       </div>
+                     )}
                   </div>
                   <div className="form-group">
                      <label className="label">Lien de l'Image (URL)</label>
@@ -680,7 +737,7 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
                     </td>
                     <td data-label="Actions" style={{ textAlign: 'center' }}>
                       <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
-                        <button className="btn" style={{ padding: '0.4rem' }} onClick={() => setEditingProduct(prod)}><Edit2 size={16} /></button>
+                        <button className="btn" style={{ padding: '0.4rem' }} onClick={() => { setEditingProduct(prod); setIsNewCategory(false); }}><Edit2 size={16} /></button>
                         <button className="btn" style={{ padding: '0.4rem', color: '#ef4444' }} onClick={() => handleDeleteProduct(prod.id)}><Trash2 size={16} /></button>
                       </div>
                     </td>
@@ -758,13 +815,43 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
                   <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                     
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                      <div className="form-group">
-                        <label className="label">Hauteur (H) mm</label>
-                        <input type="number" className="input" placeholder="ex: 1200" value={customH} onChange={e => setCustomH(e.target.value)} />
+                      <div className="form-group" style={{ opacity: isHEnabled ? 1 : 0.6 }}>
+                        <label className="label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          Hauteur (H) mm
+                          <button 
+                            type="button" 
+                            onClick={() => {
+                              if (p.unit === 'm2') { alert("La hauteur est indispensable pour le calcul au m²."); return; }
+                              if (p.unit === 'm' && isHEnabled && !isLEnabled) { alert("Pour l'unité mètre linéaire, au moins H ou L doit être activé."); return; }
+                              setIsHEnabled(!isHEnabled);
+                              if (isHEnabled) setCustomH('');
+                            }}
+                            title={isHEnabled ? "Désactiver la hauteur" : "Activer la hauteur"}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: isHEnabled ? '#3b82f6' : '#94a3b8', padding: '0.2rem' }}
+                          >
+                            {isHEnabled ? <Pin size={16} /> : <PinOff size={16} />}
+                          </button>
+                        </label>
+                        <input type="number" className="input" placeholder="ex: 1200" value={customH} onChange={e => setCustomH(e.target.value)} disabled={!isHEnabled} />
                       </div>
-                      <div className="form-group">
-                        <label className="label">Largeur (L) mm</label>
-                        <input type="number" className="input" placeholder="ex: 1000" value={customL} onChange={e => setCustomL(e.target.value)} />
+                      <div className="form-group" style={{ opacity: isLEnabled ? 1 : 0.6 }}>
+                        <label className="label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          Largeur (L) mm
+                          <button 
+                            type="button" 
+                            onClick={() => {
+                              if (p.unit === 'm2') { alert("La largeur est indispensable pour le calcul au m²."); return; }
+                              if (p.unit === 'm' && isLEnabled && !isHEnabled) { alert("Pour l'unité mètre linéaire, au moins H ou L doit être activé."); return; }
+                              setIsLEnabled(!isLEnabled);
+                              if (isLEnabled) setCustomL('');
+                            }}
+                            title={isLEnabled ? "Désactiver la largeur" : "Activer la largeur"}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: isLEnabled ? '#3b82f6' : '#94a3b8', padding: '0.2rem' }}
+                          >
+                            {isLEnabled ? <Pin size={16} /> : <PinOff size={16} />}
+                          </button>
+                        </label>
+                        <input type="number" className="input" placeholder="ex: 1000" value={customL} onChange={e => setCustomL(e.target.value)} disabled={!isLEnabled} />
                       </div>
                     </div>
 
@@ -793,7 +880,7 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
                     )}
 
                     <div className="form-group">
-                      <label className="label">Quantité ({p.unit})</label>
+                      <label className="label">Quantité (Nbr de pièces)</label>
                       <input type="number" min="1" className="input" value={qty} onChange={e => setQty(e.target.value)} />
                     </div>
 
@@ -816,17 +903,15 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <button 
                   className="btn" 
-                  disabled={quoteItems.length === 0 || !quoteClient}
                   onClick={handleExportPDF}
-                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#f8fafc', border: '1px solid #cbd5e1', padding: '0.75rem 1.5rem', fontSize: '1rem' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#f8fafc', border: '1px solid #cbd5e1', padding: '0.75rem 1.5rem', fontSize: '1rem', opacity: (quoteItems.length === 0 || !quoteClient) ? 0.6 : 1 }}
                 >
                   <FileText size={18} /> Exporter PDF
                 </button>
                 <button 
                   className="btn btn-primary" 
-                  disabled={quoteItems.length === 0 || !quoteClient}
                   onClick={handleSaveQuote}
-                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#10b981', padding: '0.75rem 1.5rem', fontSize: '1rem' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#10b981', padding: '0.75rem 1.5rem', fontSize: '1rem', opacity: (quoteItems.length === 0 || !quoteClient) ? 0.6 : 1 }}
                 >
                   <Save size={18} /> Sauvegarder
                 </button>
@@ -860,7 +945,7 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
                            {!item.glassId && !item.colorId && '-'}
                          </div>
                       </td>
-                      <td data-label="Qté" style={{ fontWeight: 600 }}>{item.qty} {item.unit}</td>
+                      <td data-label="Qté" style={{ fontWeight: 600 }}>{item.qty} {item.unit === 'unité' ? 'U' : 'pces'}</td>
                       <td data-label="Total HT" style={{ fontWeight: 700, color: '#3b82f6' }}>
                         {item.totalHT.toLocaleString('fr-FR', {minimumFractionDigits:2})} DZD
                       </td>
@@ -924,6 +1009,193 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
                 </p>
               </div>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
+                {vq.status === 'Validé' && (
+                  <button 
+                    className="btn btn-primary" 
+                    onClick={() => {
+                      if (!window.confirm("Générer une facture pour ce devis validé ?")) return;
+                      // Generate a simple Invoice PDF for the shop quote
+                      const currentCounter = database.invoiceCounter || 1;
+                      const invoiceNumber = `FAC-${String(currentCounter).padStart(2, '0')}`;
+                      const tvaRateToUse = vq.tvaRate !== undefined ? vq.tvaRate : (quoteSettings?.tvaRate ?? 9);
+                      
+                      const doc = new jsPDF({ format: 'a4' });
+                      const pw = doc.internal.pageSize.getWidth();
+                      let y = 15;
+                      const formatPrice = (val) => Number(val || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+                  
+                      if (quoteSettings?.logoBase64) {
+                        try {
+                          const imgProps = doc.getImageProperties(quoteSettings.logoBase64);
+                          const maxW = 60; const maxH = 25;
+                          const ratio = Math.min(maxW / imgProps.width, maxH / imgProps.height);
+                          doc.addImage(quoteSettings.logoBase64, 'PNG', 15, y, imgProps.width * ratio, imgProps.height * ratio, '', 'FAST');
+                        } catch (e) {
+                          try { doc.addImage(quoteSettings.logoBase64, 'PNG', 15, y, 60, 25, '', 'FAST'); } catch(e2) {}
+                        }
+                      }
+                      
+                      doc.setFontSize(22);
+                      doc.setFont('helvetica', 'bold');
+                      doc.text('FACTURE', pw - 15, y + 15, { align: 'right' });
+                      
+                      y += 35;
+                      doc.setFontSize(11);
+                      doc.setFont('helvetica', 'bold');
+                      doc.text(`Facture N° : ${invoiceNumber}`, 15, y);
+                      doc.setFontSize(9);
+                      doc.setFont('helvetica', 'normal');
+                      doc.text(`Date : ${new Date().toLocaleDateString('fr-FR')}`, 15, y + 5);
+                      
+                      y += 8;
+                      const boxY = y;
+                      const boxWidth = (pw - 35) / 2;
+                      
+                      // Company box (Left)
+                      doc.setDrawColor(150, 150, 150);
+                      doc.setLineWidth(0.3);
+                      doc.roundedRect(15, boxY, boxWidth, 42, 2, 2);
+                      
+                      doc.setFontSize(10);
+                      doc.setFont('helvetica', 'bold');
+                      doc.text(quoteSettings?.companyName || 'Mon Entreprise', 18, boxY + 6);
+                      doc.setFontSize(8);
+                      doc.setFont('helvetica', 'normal');
+                      let cy = boxY + 11;
+                      if (quoteSettings?.companyAddress) {
+                        const addressLines = doc.splitTextToSize(quoteSettings.companyAddress, boxWidth - 6);
+                        doc.text(addressLines, 18, cy);
+                        cy += addressLines.length * 4;
+                      }
+                      const phone = quoteSettings?.companyPhone || '';
+                      const email = quoteSettings?.companyEmail || '';
+                      if (phone || email) {
+                        doc.text(`${phone} ${email ? ' - ' + email : ''}`, 18, cy);
+                        cy += 5;
+                      }
+                      doc.setTextColor(80, 80, 80);
+                      if (quoteSettings?.companyRC) { doc.text(`RC N°: ${quoteSettings.companyRC}`, 18, cy); cy += 4; }
+                      if (quoteSettings?.companyIMP) { doc.text(`AI N°: ${quoteSettings.companyIMP}`, 18, cy); cy += 4; }
+                      if (quoteSettings?.companyMF) { doc.text(`NIF N°: ${quoteSettings.companyMF}`, 18, cy); cy += 4; }
+                      doc.setTextColor(0, 0, 0);
+                  
+                      // Client box (Right)
+                      const rightBoxXHeader = 15 + boxWidth + 5;
+                      doc.roundedRect(rightBoxXHeader, boxY, boxWidth, 42, 2, 2);
+                      
+                      doc.setFontSize(9);
+                      doc.setFont('helvetica', 'bold');
+                      doc.text('Destinataire :', rightBoxXHeader + 3, boxY + 6);
+                      doc.setFontSize(10);
+                      doc.text(client?.nom || 'Client', rightBoxXHeader + 3, boxY + 11);
+                      
+                      doc.setFontSize(8);
+                      doc.setFont('helvetica', 'normal');
+                      let cly = boxY + 16;
+                      if (client?.adresse) {
+                        const addrLines = doc.splitTextToSize(client.adresse, boxWidth - 6);
+                        doc.text(addrLines, rightBoxXHeader + 3, cly);
+                        cly += addrLines.length * 4;
+                      }
+                      if (client?.telephone) {
+                        doc.text(`Tél : ${client.telephone}`, rightBoxXHeader + 3, cly);
+                        cly += 4;
+                      }
+                      if (client?.email) {
+                        doc.text(`Email : ${client.email}`, rightBoxXHeader + 3, cly);
+                        cly += 5;
+                      }
+                      doc.setTextColor(80, 80, 80);
+                      if (client?.rc) { doc.text(`RC : ${client.rc}`, rightBoxXHeader + 3, cly); cly += 4; }
+                      if (client?.nif) { doc.text(`NIF : ${client.nif}`, rightBoxXHeader + 3, cly); cly += 4; }
+                      if (client?.nis) { doc.text(`NIS : ${client.nis}`, rightBoxXHeader + 3, cly); cly += 4; }
+                      if (client?.ai) { doc.text(`AI : ${client.ai}`, rightBoxXHeader + 3, cly); cly += 4; }
+                      doc.setTextColor(0, 0, 0);
+                  
+                      y = boxY + 48;
+                  
+                      const tableColumn = ["Désignation", "Dimensions (LxH)", "Vitrage / Couleur", "Qté", "P.U. HT", "Total HT"];
+                      const tableRows = [];
+                  
+                      items.forEach(item => {
+                        const dims = (item.l || item.h) ? `${item.l} x ${item.h} mm` : '-';
+                        let optStr = '';
+                        if (item.glassId) {
+                          const g = (database.glass||[]).find(x=>x.id===item.glassId);
+                          if(g) optStr += g.name + ' ';
+                        }
+                        if (item.colorId) {
+                          const c = (database.colors||[]).find(x=>x.id===item.colorId);
+                          if(c) optStr += c.name;
+                        }
+                        
+                        const puHT = (item.qty > 0) ? (item.totalHT / item.qty) : item.totalHT;
+                        
+                        const rowData = [
+                          `${item.nom}\n${item.designation || ''}`,
+                          dims,
+                          optStr || '-',
+                          `${item.qty} ${item.unit}`,
+                          `${formatPrice(puHT)} DZD`,
+                          `${formatPrice(item.totalHT)} DZD`
+                        ];
+                        tableRows.push(rowData);
+                      });
+                  
+                      autoTable(doc, {
+                        startY: y,
+                        head: [tableColumn],
+                        body: tableRows,
+                        theme: 'grid',
+                        headStyles: { fillColor: [40, 40, 40] },
+                        styles: { fontSize: 9, cellPadding: 3, textColor: [0, 0, 0] },
+                        columnStyles: { 0: { cellWidth: 50 }, 4: { halign: 'right' }, 5: { halign: 'right', fontStyle: 'bold' } }
+                      });
+                  
+                      let finalY = (doc.lastAutoTable?.finalY || doc.previousAutoTable?.finalY || y + 20) + 10;
+                      if (finalY > 220) { doc.addPage(); finalY = 20; }
+                  
+                      const rightBoxX = 110;
+                      const boxHeightBottom = 22;
+                      doc.setDrawColor(150, 150, 150);
+                      doc.setLineWidth(0.5);
+                      doc.roundedRect(rightBoxX, finalY, pw - 15 - rightBoxX, boxHeightBottom, 3, 3);
+                      
+                      doc.setFontSize(9.5);
+                      doc.setFont('helvetica', 'bold');
+                      doc.text('MONTANT TOTAL HT', rightBoxX + 5, finalY + 9);
+                      doc.text(`${formatPrice(totalHT)} DZD`, pw - 20, finalY + 9, { align: 'right' });
+                      
+                      doc.setFont('helvetica', 'normal');
+                      doc.setFontSize(8.5);
+                      doc.text(`TVA ${tvaRateToUse}% :`, rightBoxX + 5, finalY + 16);
+                      doc.text(`${formatPrice(tva)} DZD`, pw - 20, finalY + 16, { align: 'right' });
+                  
+                      finalY += boxHeightBottom + 15;
+                      
+                      doc.setFontSize(14);
+                      doc.setFont('helvetica', 'bold');
+                      doc.text(`NET À PAYER TTC : ${formatPrice(totalTTC)} DZD`, pw - 15, finalY, { align: 'right' });
+                  
+                      if (quoteSettings?.cachetBase64) {
+                        try { doc.addImage(quoteSettings.cachetBase64, 'PNG', 25, finalY, 35, 35); } catch (e) {}
+                      }
+                  
+                      doc.save(`Facture_${invoiceNumber}.pdf`);
+                      
+                      setDatabase(prev => {
+                        let newCounter = prev.invoiceCounter || 1;
+                        if (currentCounter >= newCounter) {
+                           newCounter = currentCounter + 1;
+                        }
+                        return { ...prev, invoiceCounter: newCounter };
+                      });
+                    }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.5rem', fontSize: '1rem', background: '#8b5cf6', border: 'none', color: 'white' }}
+                  >
+                    <Printer size={18} /> Générer Facture
+                  </button>
+                )}
                 <button 
                   className="btn btn-primary" 
                   onClick={() => handleExportExistingQuotePDF(vq)}
@@ -954,7 +1226,26 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
                 <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: '#475569', marginBottom: '0.75rem' }}>Informations Devis</h3>
                 <p style={{ margin: '0.25rem 0', fontSize: '0.9rem' }}><strong>N° :</strong> {vq.number}</p>
                 <p style={{ margin: '0.25rem 0', fontSize: '0.9rem' }}><strong>Date :</strong> {new Date(vq.createdAt).toLocaleDateString('fr-FR')}</p>
-                <p style={{ margin: '0.25rem 0', fontSize: '0.9rem' }}><strong>Statut :</strong> <span style={{ padding: '0.15rem 0.4rem', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 600, background: vq.status === 'Confirmé' ? '#dcfce3' : '#fef3c7', color: vq.status === 'Confirmé' ? '#16a34a' : '#d97706' }}>{vq.status || 'Brouillon'}</span></p>
+                <p style={{ margin: '0.25rem 0', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <strong>Statut :</strong>
+                  {vq.status !== 'Validé' ? (
+                    <select 
+                      value={vq.status || 'Brouillon'} 
+                      onChange={(e) => {
+                        const newStatus = e.target.value;
+                        const updated = { ...vq, status: newStatus, validatedAt: newStatus === 'Validé' ? new Date().toISOString() : vq.validatedAt };
+                        setDatabase(prev => ({ ...prev, quotes: prev.quotes.map(quote => quote.id === vq.id ? updated : quote) }));
+                        setViewingQuote(updated);
+                      }}
+                      className="input" style={{ padding: '0.1rem 0.5rem', fontSize: '0.75rem', height: 'auto', width: 'auto' }}
+                    >
+                      <option value="Brouillon">Brouillon</option>
+                      <option value="Validé">Validé</option>
+                    </select>
+                  ) : (
+                    <span style={{ padding: '0.15rem 0.4rem', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 600, background: '#dcfce3', color: '#16a34a' }}>Validé</span>
+                  )}
+                </p>
                 <p style={{ margin: '0.25rem 0', fontSize: '0.9rem' }}><strong>Articles :</strong> {items.length}</p>
               </div>
             </div>

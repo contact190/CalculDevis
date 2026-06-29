@@ -6,7 +6,8 @@ const InvoiceGenerator = ({ data, setData, quoteSettings }) => {
   const [selectedOrderId, setSelectedOrderId] = useState('');
   const [invoiceType, setInvoiceType] = useState('global'); // 'global' | 'partiel'
   const [selectedFloors, setSelectedFloors] = useState(new Set());
-  const [invoiceNumber, setInvoiceNumber] = useState(`FAC-${Date.now().toString().slice(-6)}`);
+  const currentCounter = data.invoiceCounter || 1;
+  const [invoiceNumber, setInvoiceNumber] = useState(`FAC-${String(currentCounter).padStart(2, '0')}`);
   const [isGenerating, setIsGenerating] = useState(false);
 
   const orders = data.orders || [];
@@ -367,6 +368,21 @@ const InvoiceGenerator = ({ data, setData, quoteSettings }) => {
     }
 
     doc.save(`${invoiceNumber}_${selectedOrder.id}.pdf`);
+    
+    setData(prev => {
+      let newCounter = prev.invoiceCounter || 1;
+      const numMatch = invoiceNumber.match(/FAC-(\d+)/);
+      if (numMatch) {
+         const num = parseInt(numMatch[1], 10);
+         if (num >= newCounter) {
+            newCounter = num + 1;
+         }
+      } else {
+         newCounter += 1;
+      }
+      return { ...prev, invoiceCounter: newCounter };
+    });
+    
     setIsGenerating(false);
   };
 

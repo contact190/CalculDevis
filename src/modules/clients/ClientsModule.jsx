@@ -238,14 +238,29 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
                       </td>
                       <td data-label="Date">{new Date(q.createdAt).toLocaleDateString('fr-FR')}</td>
                       <td data-label="Statut">
-                        <span style={{ 
-                          padding: '0.2rem 0.5rem', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 600,
-                          background: (q.status === 'Validé' || q.status === 'Confirmé') ? '#dcfce3' : (q.status === 'Brouillon' || !q.status ? '#fef3c7' : '#e0f2fe'),
-                          color: (q.status === 'Validé' || q.status === 'Confirmé') ? '#16a34a' : (q.status === 'Brouillon' || !q.status ? '#d97706' : '#0369a1')
-                        }}>
-                          {q.status || 'Brouillon'}
-                          {(q.status === 'Validé' || q.status === 'Confirmé') && q.validatedAt && ` (${new Date(q.validatedAt).toLocaleDateString('fr-FR')})`}
-                        </span>
+                        {q.type === 'shop' && q.status !== 'Validé' ? (
+                          <select 
+                            value={q.status || 'Brouillon'} 
+                            onChange={(e) => {
+                              const newStatus = e.target.value;
+                              const updated = { ...q, status: newStatus, validatedAt: newStatus === 'Validé' ? new Date().toISOString() : q.validatedAt };
+                              setData(prev => ({ ...prev, quotes: prev.quotes.map(quote => quote.id === q.id ? updated : quote) }));
+                            }}
+                            className="input" style={{ padding: '0.1rem 0.5rem', fontSize: '0.75rem', height: 'auto', width: 'auto', display: 'inline-block' }}
+                          >
+                            <option value="Brouillon">Brouillon</option>
+                            <option value="Validé">Validé</option>
+                          </select>
+                        ) : (
+                          <span style={{ 
+                            padding: '0.2rem 0.5rem', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 600,
+                            background: (q.status === 'Validé' || q.status === 'Confirmé') ? '#dcfce3' : (q.status === 'Brouillon' || !q.status ? '#fef3c7' : '#e0f2fe'),
+                            color: (q.status === 'Validé' || q.status === 'Confirmé') ? '#16a34a' : (q.status === 'Brouillon' || !q.status ? '#d97706' : '#0369a1')
+                          }}>
+                            {q.status || 'Brouillon'}
+                            {(q.status === 'Validé' || q.status === 'Confirmé') && q.validatedAt && ` (${new Date(q.validatedAt).toLocaleDateString('fr-FR')})`}
+                          </span>
+                        )}
                       </td>
                       <td data-label="Plan de Chantier" style={{ fontSize: '0.85rem', color: '#475569' }}>
                         {editingClient.sitePlans?.find(p => p.id === q.sitePlanId)?.name || '-'}
@@ -368,13 +383,29 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
                                     </td>
                                     <td data-label="Date">{new Date(q.createdAt).toLocaleDateString('fr-FR')}</td>
                                     <td data-label="Statut">
-                                      <span style={{ 
-                                        padding: '0.2rem 0.5rem', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 600,
-                                        background: q.status === 'Validé' ? '#dcfce3' : (q.status === 'Brouillon' || !q.status ? '#fef3c7' : '#e0f2fe'),
-                                        color: q.status === 'Validé' ? '#16a34a' : (q.status === 'Brouillon' || !q.status ? '#d97706' : '#0369a1')
-                                      }}>
-                                        {q.status || 'Brouillon'}
-                                      </span>
+                                      {q.type === 'shop' && q.status !== 'Validé' ? (
+                                        <select 
+                                          value={q.status || 'Brouillon'} 
+                                          onChange={(e) => {
+                                            const newStatus = e.target.value;
+                                            const updated = { ...q, status: newStatus, validatedAt: newStatus === 'Validé' ? new Date().toISOString() : q.validatedAt };
+                                            setData(prev => ({ ...prev, quotes: prev.quotes.map(quote => quote.id === q.id ? updated : quote) }));
+                                          }}
+                                          className="input" style={{ padding: '0.1rem 0.5rem', fontSize: '0.75rem', height: 'auto', width: 'auto', display: 'inline-block' }}
+                                        >
+                                          <option value="Brouillon">Brouillon</option>
+                                          <option value="Validé">Validé</option>
+                                        </select>
+                                      ) : (
+                                        <span style={{ 
+                                          padding: '0.2rem 0.5rem', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 600,
+                                          background: (q.status === 'Validé' || q.status === 'Confirmé') ? '#dcfce3' : (q.status === 'Brouillon' || !q.status ? '#fef3c7' : '#e0f2fe'),
+                                          color: (q.status === 'Validé' || q.status === 'Confirmé') ? '#16a34a' : (q.status === 'Brouillon' || !q.status ? '#d97706' : '#0369a1')
+                                        }}>
+                                          {q.status || 'Brouillon'}
+                                          {(q.status === 'Validé' || q.status === 'Confirmé') && q.validatedAt && ` (${new Date(q.validatedAt).toLocaleDateString('fr-FR')})`}
+                                        </span>
+                                      )}
                                     </td>
                                     <td data-label="Plan de Chantier" style={{ fontSize: '0.85rem', color: '#475569' }}>
                                       {c.sitePlans?.find(p => p.id === q.sitePlanId)?.name || '-'}
