@@ -60,6 +60,20 @@ export const smartMerge = (dbA, dbB) => {
     } else if (Array.isArray(dbB[key]) && !dbA[key]) {
       // B has an array that A doesn't have at all
       merged[key] = dbB[key];
+    } else if (typeof dbB[key] === 'object' && dbB[key] !== null && !Array.isArray(dbB[key]) && 
+               typeof dbA[key] === 'object' && dbA[key] !== null && !Array.isArray(dbA[key])) {
+      // Both are objects (e.g., shutterComponents). Merge their inner keys.
+      merged[key] = { ...dbA[key] };
+      Object.keys(dbB[key]).forEach(subKey => {
+         if (Array.isArray(dbB[key][subKey]) && Array.isArray(dbA[key][subKey])) {
+            merged[key][subKey] = mergeArrays(dbA[key][subKey], dbB[key][subKey]);
+         } else if (Array.isArray(dbB[key][subKey]) && !dbA[key][subKey]) {
+            merged[key][subKey] = dbB[key][subKey];
+         } else {
+            // Primitive or config overrides inside the object
+            merged[key][subKey] = dbB[key][subKey];
+         }
+      });
     } else {
       // For non-array values (configs, primitives), keep B's version
       // (server/remote is typically more recent)

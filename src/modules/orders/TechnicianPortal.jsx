@@ -6,12 +6,15 @@ import { getTechnicalDrawingDataURL } from '../../utils/drawingUtils';
 const ItemPreview = ({ config, database }) => {
   const [dataUrl, setDataUrl] = React.useState(null);
   
+  // Serialize config to avoid re-rendering on database reference changes
+  const configStr = React.useMemo(() => JSON.stringify(config), [config]);
+  
   React.useEffect(() => {
     if (config && database) {
       const url = getTechnicalDrawingDataURL(config, database);
       setDataUrl(url);
     }
-  }, [config, database]);
+  }, [configStr]); // Remove database from deps to avoid mass re-renders
 
   if (!dataUrl) return <div style={{ width: '100%', height: '100%', minHeight: '120px', background: '#f1f5f9', borderRadius: '0.5rem' }} />;
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Home, Package, Settings, ChevronRight, LayoutDashboard, Users, RefreshCw, ShoppingBag, Truck, CheckCircle, Building, Wifi, WifiOff, TrendingUp, Store } from 'lucide-react';
 import CommercialModule from './modules/commercial/CommercialModule';
 import ShopModule from './modules/shop/ShopModule';
@@ -297,7 +297,10 @@ function App() {
 
         // ─── Push delta ops to server (only if this is a LOCAL change) ─────
         if (!isApplyingRemoteOps.current && previousDbRef.current) {
-          const result = await localSync.pushOps(stampedDb, previousDbRef.current);
+          const oldDb = previousDbRef.current;
+          previousDbRef.current = stampedDb;
+          
+          const result = await localSync.pushOps(stampedDb, oldDb);
           if (result && result.success) {
             if (result.applied > 0) {
               setCloudSyncStatus('ok');
@@ -426,6 +429,17 @@ function App() {
         colorId: colorExists ? prev.colorId : database.colors[0].id
       }));
     }
+  }, [database]);
+
+  const filteredDatabase = useMemo(() => {
+    if (!database) return null;
+    const filtered = { ...database };
+    Object.keys(filtered).forEach(key => {
+      if (Array.isArray(filtered[key])) {
+        filtered[key] = filtered[key].filter(item => item && !item._deleted);
+      }
+    });
+    return filtered;
   }, [database]);
 
   // ─── Emergency restore ────────────────────────────────────────────────────
@@ -653,7 +667,7 @@ function App() {
           <CommercialModule 
             config={currentConfig} 
             setConfig={setCurrentConfig} 
-            database={database}
+            database={filteredDatabase}
             setDatabase={setDatabase}
             currentQuote={currentQuote}
             setCurrentQuote={setCurrentQuote}
@@ -664,7 +678,7 @@ function App() {
         )}
         {activeTab === 'shop' && (
           <ShopModule 
-            database={database}
+            database={filteredDatabase}
             setDatabase={setDatabase}
             quoteSettings={quoteSettings}
             setQuoteSettings={updateQuoteSettings}
@@ -676,14 +690,14 @@ function App() {
           <ProductionModule 
             currentConfig={currentConfig} 
             currentQuote={currentQuote}
-            database={database}
+            database={filteredDatabase}
             setData={setDatabase}
             quoteSettings={quoteSettings}
           />
         )}
         {activeTab === 'clients' && (
           <ClientsModule 
-            data={database}
+            data={filteredDatabase}
             setData={setDatabase}
             quoteSettings={quoteSettings}
             onOpenQuote={(quote) => {
@@ -699,14 +713,14 @@ function App() {
         )}
         {activeTab === 'siteplan' && (
           <SitePlanModule 
-            data={database}
+            data={filteredDatabase}
             setData={setDatabase}
             quoteSettings={quoteSettings}
           />
         )}
         {activeTab === 'orders' && (
           <OrdersModule 
-            data={database}
+            data={filteredDatabase}
             setData={setDatabase}
             quoteSettings={quoteSettings}
             setQuoteSettings={updateQuoteSettings}
@@ -714,7 +728,7 @@ function App() {
         )}
         {activeTab === 'shipping' && (
           <ShippingModule 
-            data={database}
+            data={filteredDatabase}
             setData={setDatabase}
             quoteSettings={quoteSettings}
             refetchData={() => {}}
@@ -722,14 +736,14 @@ function App() {
         )}
         {activeTab === 'admin' && (
           <AdminDashboard 
-            data={database}
+            data={filteredDatabase}
             setData={setDatabase}
             quoteSettings={quoteSettings}
           />
         )}
         {activeTab === 'finance' && (
           <FinanceModule
-            data={database}
+            data={filteredDatabase}
             setData={setDatabase}
             quoteSettings={quoteSettings}
           />

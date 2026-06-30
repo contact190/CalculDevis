@@ -150,7 +150,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
       const { remaining } = getOrderStats(o);
       const isHistory = remaining <= 0 && (o.batches?.length > 0 || o.status === 'Terminé / Historique');
       return listView === 'history' ? isHistory : !isHistory;
-    });
+    }).slice(0, 100); // UI Performance Limit
   }, [data?.orders, listView]);
 
   const selectedOrder = (data?.orders || []).find(o => o.id === selectedOrderId);

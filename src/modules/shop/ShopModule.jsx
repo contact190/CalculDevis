@@ -308,11 +308,11 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
     y = boxY + 48;
 
     // --- TABLEAU ---
-    const tableColumn = ["Désignation", "Dimensions (LxH)", "Vitrage / Couleur", "Qté", "P.U. HT", "Total HT"];
+    const tableColumn = ["Désignation", "Dim. / Options", "Quantité (m²/ml)", "Pièces", "P.U. HT", "Total HT"];
     const tableRows = [];
 
     items.forEach(item => {
-      const dims = (item.l || item.h) ? `${item.l} x ${item.h} mm` : '-';
+      const dims = (item.l || item.h) ? `${item.l} x ${item.h} mm` : '';
       let optStr = '';
       if (item.glassId) {
         const g = (database.glass||[]).find(x=>x.id===item.glassId);
@@ -322,14 +322,24 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
         const c = (database.colors||[]).find(x=>x.id===item.colorId);
         if(c) optStr += c.name;
       }
+      const descLine2 = [dims, optStr].filter(Boolean).join(' | ');
       
-      const puHT = (item.qty > 0) ? (item.totalHT / item.qty) : item.totalHT;
+      let totalMeasurementQty = item.qty;
+      let measureUnit = item.unit === 'unité' ? 'U' : item.unit;
+      
+      if (item.unit === 'm2') {
+         totalMeasurementQty = ((item.h || 0) / 1000) * ((item.l || 0) / 1000) * item.qty;
+      } else if (item.unit === 'm') {
+         totalMeasurementQty = ((item.l || item.h || 0) / 1000) * item.qty;
+      }
+      
+      const puHT = (totalMeasurementQty > 0) ? (item.totalHT / totalMeasurementQty) : item.totalHT;
       
       const rowData = [
         `${item.nom}\n${item.designation || ''}`,
-        dims,
-        optStr || '-',
-        `${item.qty} ${item.unit === 'unité' ? 'U' : 'pces'}`,
+        descLine2 || '-',
+        item.unit === 'unité' ? '-' : `${totalMeasurementQty.toFixed(2)} ${measureUnit}`,
+        `${item.qty} pces`,
         `${formatPrice(puHT)} DZD`,
         `${formatPrice(item.totalHT)} DZD`
       ];
@@ -638,8 +648,27 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
                      )}
                   </div>
                   <div className="form-group">
-                     <label className="label">Lien de l'Image (URL)</label>
-                     <input className="input" placeholder="https://..." value={editingProduct.image} onChange={e => setEditingProduct({...editingProduct, image: e.target.value})} />
+                     <label className="label">Image</label>
+                     <input 
+                       type="file" 
+                       accept="image/*"
+                       className="input" 
+                       onChange={e => {
+                         const file = e.target.files[0];
+                         if (file) {
+                           const reader = new FileReader();
+                           reader.onload = (event) => {
+                             setEditingProduct({...editingProduct, image: event.target.result});
+                           };
+                           reader.readAsDataURL(file);
+                         }
+                       }} 
+                     />
+                     {editingProduct.image && (
+                       <div style={{ marginTop: '0.5rem' }}>
+                         <img src={editingProduct.image} alt="Aperçu" style={{ maxWidth: '100px', maxHeight: '100px', borderRadius: '8px', objectFit: 'cover' }} />
+                       </div>
+                     )}
                   </div>
                   <div className="form-group">
                      <label className="label">Désignation (description sur le devis)</label>
@@ -1114,11 +1143,11 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
                   
                       y = boxY + 48;
                   
-                      const tableColumn = ["Désignation", "Dimensions (LxH)", "Vitrage / Couleur", "Qté", "P.U. HT", "Total HT"];
+                      const tableColumn = ["Désignation", "Dim. / Options", "Quantité (m²/ml)", "Pièces", "P.U. HT", "Total HT"];
                       const tableRows = [];
                   
                       items.forEach(item => {
-                        const dims = (item.l || item.h) ? `${item.l} x ${item.h} mm` : '-';
+                        const dims = (item.l || item.h) ? `${item.l} x ${item.h} mm` : '';
                         let optStr = '';
                         if (item.glassId) {
                           const g = (database.glass||[]).find(x=>x.id===item.glassId);
@@ -1128,14 +1157,24 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
                           const c = (database.colors||[]).find(x=>x.id===item.colorId);
                           if(c) optStr += c.name;
                         }
+                        const descLine2 = [dims, optStr].filter(Boolean).join(' | ');
                         
-                        const puHT = (item.qty > 0) ? (item.totalHT / item.qty) : item.totalHT;
+                        let totalMeasurementQty = item.qty;
+                        let measureUnit = item.unit === 'unité' ? 'U' : item.unit;
+                        
+                        if (item.unit === 'm2') {
+                           totalMeasurementQty = ((item.h || 0) / 1000) * ((item.l || 0) / 1000) * item.qty;
+                        } else if (item.unit === 'm') {
+                           totalMeasurementQty = ((item.l || item.h || 0) / 1000) * item.qty;
+                        }
+                        
+                        const puHT = (totalMeasurementQty > 0) ? (item.totalHT / totalMeasurementQty) : item.totalHT;
                         
                         const rowData = [
                           `${item.nom}\n${item.designation || ''}`,
-                          dims,
-                          optStr || '-',
-                          `${item.qty} ${item.unit}`,
+                          descLine2 || '-',
+                          item.unit === 'unité' ? '-' : `${totalMeasurementQty.toFixed(2)} ${measureUnit}`,
+                          `${item.qty} pces`,
                           `${formatPrice(puHT)} DZD`,
                           `${formatPrice(item.totalHT)} DZD`
                         ];

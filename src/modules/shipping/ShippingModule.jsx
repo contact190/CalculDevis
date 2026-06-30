@@ -313,6 +313,29 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
     return units;
   }, [selectedOrder, selectedBatchIds]);
 
+  const remainingBLUnits = useMemo(() => {
+    if (!blModalType) return [];
+    return allUnits.filter(u => {
+      if (blModalType === 'ALU') {
+        return u.statusAlu !== 'Livré' && u.statusAlu !== 'Posé' && u.statusAlu !== 'Fini';
+      } else {
+        return u.statusVitrage !== 'Livré' && u.statusVitrage !== 'Fini';
+      }
+    });
+  }, [allUnits, blModalType]);
+
+  const groupedRemainingBLUnits = useMemo(() => {
+    const grouped = {};
+    remainingBLUnits.forEach(u => {
+      const fl = u.floor || 'Sans étage';
+      const apt = u.aptName || 'Général';
+      if (!grouped[fl]) grouped[fl] = {};
+      if (!grouped[fl][apt]) grouped[fl][apt] = [];
+      grouped[fl][apt].push(u);
+    });
+    return grouped;
+  }, [remainingBLUnits]);
+
   const handleUpdateUnitRemark = (unitId, remark) => {
     setData(prev => {
       const orders = [...(prev.orders || [])];
@@ -1228,7 +1251,11 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
 
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(10);
-      doc.text('Qté', 15, y); doc.text('Produit', 30, y); doc.text('Repère', 120, y); doc.text('Statut', 180, y);
+      if (type === 'ALU') {
+        doc.text('Qté', 15, y); doc.text('Produit', 30, y); doc.text('Dim. Réelle', 95, y); doc.text('Repère', 135, y); doc.text('Statut', 180, y);
+      } else {
+        doc.text('Qté', 15, y); doc.text('Produit', 30, y); doc.text('Repère', 120, y); doc.text('Statut', 180, y);
+      }
       y += 4; 
       doc.setDrawColor(200, 200, 200);
       doc.line(15, y, pw - 15, y); 
@@ -1258,8 +1285,9 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
           checkPageOverflow(10);
           const labelText = u.hasShutter ? `${u.label} (${u.shutterInfo})` : u.label;
           doc.text('1', 15, y); 
-          doc.text(labelText.substring(0, 42), 30, y); 
-          doc.text(u.name, 120, y);
+          doc.text(labelText.substring(0, 32), 30, y); 
+          doc.text(u.dimensions ? `${u.dimensions} mm` : '—', 95, y);
+          doc.text(u.name, 135, y);
           doc.text(status, 180, y);
           y += 8;
         }
@@ -1425,9 +1453,9 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
                </button>
                <button onClick={() => setShowTeamManager(true)} className="btn btn-secondary" style={{ color: '#0ea5e9', borderColor: '#bae6fd' }}><UserCheck size={16} /> Équipe</button>
                <div style={{ borderLeft: '1px solid #e2e8f0', marginLeft: '0.5rem', paddingLeft: '0.75rem', display: 'flex', gap: '0.5rem' }}>
-                 <button onClick={() => generateDeliveryNote('ALU')} className="btn btn-primary" style={{ background: '#1e293b' }} disabled={allUnits.length === 0}>BL Alu</button>
-                 <button onClick={() => generateDeliveryNote('VITRAGE')} className="btn btn-primary" style={{ background: '#3b82f6' }} disabled={allUnits.length === 0}>BL Vitrage</button>
-               </div>
+                  <button onClick={() => { setBlModalType('ALU'); setBlSelectedUnitIds(new Set()); }} className="btn btn-primary" style={{ background: '#1e293b' }} disabled={allUnits.length === 0}>BL Alu</button>
+                  <button onClick={() => { setBlModalType('VITRAGE'); setBlSelectedUnitIds(new Set()); }} className="btn btn-primary" style={{ background: '#3b82f6' }} disabled={allUnits.length === 0}>BL Vitrage</button>
+                </div>
           </div>
         </header>
 
@@ -2086,6 +2114,166 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
                   className="btn btn-primary" style={{ flex: 2, padding: '1rem', background: '#b45309', border: 'none', boxShadow: '0 4px 12px rgba(180, 83, 9, 0.2)' }}
                 >
                   Générer le PDF
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Selection Modal for BL ─────────────────────────────────────────── */}
+        {blModalType && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.7)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(10px)' }}>
+            <div className="glass shadow-2xl animate-scale-up" style={{ background: 'white', padding: '2.5rem', borderRadius: '2rem', width: '600px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ textAlign: 'center', marginBottom: '1.5rem', flexShrink: 0 }}>
+                <div style={{ width: '60px', height: '60px', background: '#eff6ff', borderRadius: '50%', display: 'grid', placeItems: 'center', margin: '0 auto 1rem' }}>
+                  <Truck size={32} color="#2563eb" />
+                </div>
+                <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 900, color: '#0f172a' }}>Livraison : Produits restants ({blModalType})</h2>
+                <p style={{ color: '#64748b', fontSize: '0.9rem', marginTop: '0.5rem' }}>Sélectionnez les châssis à livrer pour ce bon de livraison.</p>
+              </div>
+
+              {remainingBLUnits.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '2rem', color: '#64748b', flex: 1 }}>
+                  <CheckCircle size={40} color="#10b981" style={{ margin: '0 auto 1rem', display: 'block' }} />
+                  <p style={{ fontWeight: 'bold' }}>Tous les produits sont déjà livrés !</p>
+                </div>
+              ) : (
+                <div style={{ flex: 1, overflowY: 'auto', paddingRight: '0.5rem', marginBottom: '1.5rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', background: '#f8fafc', padding: '0.75rem', borderRadius: '0.75rem' }}>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#475569' }}>
+                      {blSelectedUnitIds.size} / {remainingBLUnits.length} sélectionné(s)
+                    </span>
+                    <button 
+                      onClick={() => {
+                        if (blSelectedUnitIds.size === remainingBLUnits.length) {
+                          setBlSelectedUnitIds(new Set());
+                        } else {
+                          setBlSelectedUnitIds(new Set(remainingBLUnits.map(u => u.id)));
+                        }
+                      }}
+                      className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '0.25rem 0.6rem' }}
+                    >
+                      {blSelectedUnitIds.size === remainingBLUnits.length ? 'Tout désélectionner' : 'Tout sélectionner'}
+                    </button>
+                  </div>
+
+                  {Object.keys(groupedRemainingBLUnits).sort().map(floor => {
+                    const floorApts = groupedRemainingBLUnits[floor];
+                    const floorUnitsCount = Object.values(floorApts).flat().length;
+                    const floorSelectedCount = Object.values(floorApts).flat().filter(u => blSelectedUnitIds.has(u.id)).length;
+                    const isFloorAllSelected = floorSelectedCount === floorUnitsCount;
+
+                    return (
+                      <div key={floor} style={{ marginBottom: '1.5rem', border: '1px solid #e2e8f0', borderRadius: '0.75rem', padding: '1rem' }}>
+                        {/* Floor Header */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem' }}>
+                          <span style={{ fontWeight: 800, fontSize: '1rem', color: '#1e293b' }}>
+                            Étage : {floor === '' || floor === 'N/A' ? 'Non spécifié' : floor}
+                          </span>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>
+                            <input 
+                              type="checkbox"
+                              checked={isFloorAllSelected}
+                              onChange={(e) => {
+                                const checked = e.target.checked;
+                                setBlSelectedUnitIds(prev => {
+                                  const next = new Set(prev);
+                                  Object.values(floorApts).flat().forEach(u => {
+                                    if (checked) next.add(u.id);
+                                    else next.delete(u.id);
+                                  });
+                                  return next;
+                                });
+                              }}
+                            />
+                            Tout l'étage
+                          </label>
+                        </div>
+
+                        {/* Apartments */}
+                        {Object.keys(floorApts).sort().map(apt => {
+                          const aptUnits = floorApts[apt];
+                          const aptSelectedCount = aptUnits.filter(u => blSelectedUnitIds.has(u.id)).length;
+                          const isAptAllSelected = aptSelectedCount === aptUnits.length;
+
+                          return (
+                            <div key={apt} style={{ marginLeft: '1rem', marginBottom: '1rem' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', background: '#f8fafc', padding: '0.4rem 0.75rem', borderRadius: '0.5rem' }}>
+                                <span style={{ fontWeight: 700, fontSize: '0.85rem', color: '#475569' }}>
+                                  Appartement : {apt}
+                                </span>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }}>
+                                  <input 
+                                    type="checkbox"
+                                    checked={isAptAllSelected}
+                                    onChange={(e) => {
+                                      const checked = e.target.checked;
+                                      setBlSelectedUnitIds(prev => {
+                                        const next = new Set(prev);
+                                        aptUnits.forEach(u => {
+                                          if (checked) next.add(u.id);
+                                          else next.delete(u.id);
+                                        });
+                                        return next;
+                                      });
+                                    }}
+                                  />
+                                  Tout l'appart
+                                </label>
+                              </div>
+
+                              {/* Unit list */}
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginLeft: '0.75rem' }}>
+                                {aptUnits.map(unit => {
+                                  const isSelected = blSelectedUnitIds.has(unit.id);
+                                  return (
+                                    <label key={unit.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0.5rem', borderRadius: '0.35rem', background: isSelected ? '#f0f9ff' : 'transparent', cursor: 'pointer' }}>
+                                      <input 
+                                        type="checkbox" 
+                                        checked={isSelected}
+                                        onChange={() => {
+                                          setBlSelectedUnitIds(prev => {
+                                            const next = new Set(prev);
+                                            if (next.has(unit.id)) next.delete(unit.id);
+                                            else next.add(unit.id);
+                                            return next;
+                                          });
+                                        }}
+                                      />
+                                      <div style={{ fontSize: '0.85rem', flex: 1, display: 'flex', justifyContent: 'space-between' }}>
+                                        <span style={{ fontWeight: 600 }}>{unit.name} <span style={{ fontWeight: 400, color: '#64748b' }}>({unit.label})</span></span>
+                                        <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{unit.dimensions}</span>
+                                      </div>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: '1rem', flexShrink: 0 }}>
+                <button 
+                  onClick={() => setBlModalType(null)}
+                  className="btn btn-secondary" style={{ flex: 1, padding: '0.8rem' }}
+                >
+                  Annuler
+                </button>
+                <button 
+                  onClick={() => {
+                    const unitsToDeliver = remainingBLUnits.filter(u => blSelectedUnitIds.has(u.id));
+                    generateDeliveryNote(blModalType, unitsToDeliver);
+                    setBlModalType(null);
+                  }}
+                  disabled={blSelectedUnitIds.size === 0}
+                  className="btn btn-primary" style={{ flex: 2, padding: '0.8rem', background: '#2563eb', border: 'none', boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)' }}
+                >
+                  Générer le BL ({blSelectedUnitIds.size})
                 </button>
               </div>
             </div>

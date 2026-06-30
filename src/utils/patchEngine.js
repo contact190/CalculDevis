@@ -163,8 +163,10 @@ export function generateOps(oldDb, newDb) {
     }
     
     // Detect deletions
-    for (const [id] of oldMap) {
+    for (const [id, oldObj] of oldMap) {
       if (!newMap.has(id)) {
+        if (oldObj && oldObj._deleted) continue; // Already a tombstone
+
         ops.push({
           op: 'delete',
           collection,
@@ -216,8 +218,21 @@ export function applyOp(db, op) {
   
   // Handle non-collection key replacements
   if (opType === 'replace_key') {
+    // Conflict resolution for globals if _lastGlobalUpdate exists
+    const existingTime = db._lastGlobalUpdate ? new Date(db._lastGlobalUpdate).getTime() : 0;
+    const incomingTime = timestamp ? new Date(timestamp).getTime() : 0;
+    
+    if (existingTime > incomingTime) {
+       return { db, applied: false };
+    }
+
+    if (op._inPlace) {
+      db[collection] = data;
+      db._lastGlobalUpdate = timestamp;
+      return { db, applied: true };
+    }
     return {
-      db: { ...db, [collection]: data },
+      db: { ...db, [collection]: data, _lastGlobalUpdate: timestamp },
       applied: true
     };
   }
@@ -244,7 +259,7 @@ export function applyOp(db, op) {
       } else {
         currentArr.push(data);
       }
-      const newDb = JSON.parse(JSON.stringify(db)); // clone to allow deep set
+      const newDb = op._inPlace ? db : JSON.parse(JSON.stringify(db)); // clone only if not in-place
       setPath(newDb, collection, currentArr);
       return {
         db: newDb,
@@ -257,7 +272,7 @@ export function applyOp(db, op) {
       if (idx < 0) {
         // Item doesn't exist locally — add it
         currentArr.push(data);
-        const newDb = JSON.parse(JSON.stringify(db));
+        const newDb = op._inPlace ? db : JSON.parse(JSON.stringify(db));
         setPath(newDb, collection, currentArr);
         return {
           db: newDb,
@@ -272,7 +287,7 @@ export function applyOp(db, op) {
       }
       
       currentArr[idx] = data;
-      const newDb = JSON.parse(JSON.stringify(db));
+      const newDb = op._inPlace ? db : JSON.parse(JSON.stringify(db));
       setPath(newDb, collection, currentArr);
       return {
         db: newDb,
@@ -283,7 +298,7 @@ export function applyOp(db, op) {
     case 'delete': {
       const deleteIdx = currentArr.findIndex(item => item && item.id === id);
       if (deleteIdx < 0) {
-        return { db, applied: false }; // Already deleted
+        return { db, applied: false }; // Already deleted or physically missing
       }
       
       const existingItem = currentArr[deleteIdx];
@@ -292,8 +307,14 @@ export function applyOp(db, op) {
         return { db, applied: false };
       }
       
-      currentArr.splice(deleteIdx, 1);
-      const newDb = JSON.parse(JSON.stringify(db));
+      // Soft Delete (Tombstone)
+      currentArr[deleteIdx] = {
+        ...existingItem,
+        _deleted: true,
+        _lastModified: timestamp
+      };
+
+      const newDb = op._inPlace ? db : JSON.parse(JSON.stringify(db));
       setPath(newDb, collection, currentArr);
       return {
         db: newDb,
@@ -313,11 +334,13 @@ export function applyOp(db, op) {
 export function applyOps(db, ops) {
   if (!db || !Array.isArray(ops) || ops.length === 0) return { db, appliedCount: 0 };
   
-  let current = db;
+  let current = JSON.parse(JSON.stringify(db)); // Clone once for all ops
   let appliedCount = 0;
   
   for (const op of ops) {
-    const result = applyOp(current, op);
+    // Flag it as in-place so applyOp doesn't clone it again
+    const opWithFlag = { ...op, _inPlace: true };
+    const result = applyOp(current, opWithFlag);
     current = result.db;
     if (result.applied) appliedCount++;
   }

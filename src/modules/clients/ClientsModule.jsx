@@ -312,7 +312,7 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
             </tr>
           </thead>
           <tbody>
-            {(data.clients || []).map(c => {
+            {(data.clients || []).slice(0, 100).map(c => {
               const clientQuotes = (data.quotes || []).filter(q => q.clientId === c.id);
               return (
               <React.Fragment key={c.id}>
