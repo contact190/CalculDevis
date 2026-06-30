@@ -1,6 +1,9 @@
+import { createClient } from '@supabase/supabase-js';
+
 const SUPABASE_URL = 'https://ttgtlitdbgioujgflaal.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR0Z3RsaXRkYmdpb3VqZ2ZsYWFsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0ODU5NTgsImV4cCI6MjA5MTA2MTk1OH0.Ig6MuvUXOjE_F1q3phMiGYau0UJLzl9vwOwX5hLIRiw';
 
+export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 export const supabaseFetch = async (endpoint, options = {}) => {
   const url = `${SUPABASE_URL}/rest/v1/${endpoint}`;
   const headers = {
@@ -161,6 +164,95 @@ export const syncDatabase = {
     } catch (e) {
       console.error("Failed to save to Supabase:", e);
       throw e;
+    }
+  }
+};
+
+export const cloudSync = {
+  /**
+   * Push a batch of operations to the Supabase operations_log table
+   */
+  async pushOps(ops) {
+    if (!ops || ops.length === 0) return { success: true, applied: 0 };
+    
+    try {
+      const rows = ops.map(op => ({
+        op: op.op,
+        collection: op.collection,
+        doc_id: op.id,
+        data: op.data,
+        timestamp: op.timestamp,
+        device_id: op.deviceId
+      }));
+      
+      const { error } = await supabase.from('operations_log').insert(rows);
+      if (error) throw error;
+      return { success: true, applied: ops.length };
+    } catch (e) {
+      console.error("Failed to push ops to cloud:", e);
+      return { success: false, queued: true };
+    }
+  },
+
+  /**
+   * Subscribe to real-time operations from other devices
+   */
+  subscribe(onOpsReceived, currentDeviceId) {
+    const channel = supabase.channel('cloud-ops')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'operations_log' },
+        (payload) => {
+          const row = payload.new;
+          // Ignore our own operations
+          if (row.device_id === currentDeviceId) return;
+          
+          const op = {
+            op: row.op,
+            collection: row.collection,
+            id: row.doc_id,
+            data: row.data,
+            timestamp: row.timestamp,
+            deviceId: row.device_id
+          };
+          onOpsReceived([op]);
+        }
+      )
+      .subscribe((status) => {
+        console.log("Supabase Realtime Status:", status);
+      });
+      
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  },
+
+  /**
+   * Fetch missed operations since a given timestamp
+   */
+  async fetchOpsSince(timestampIso, currentDeviceId) {
+    if (!timestampIso) return [];
+    try {
+      const { data, error } = await supabase
+        .from('operations_log')
+        .select('*')
+        .gt('timestamp', timestampIso)
+        .neq('device_id', currentDeviceId)
+        .order('timestamp', { ascending: true });
+        
+      if (error) throw error;
+      
+      return data.map(row => ({
+        op: row.op,
+        collection: row.collection,
+        id: row.doc_id,
+        data: row.data,
+        timestamp: row.timestamp,
+        deviceId: row.device_id
+      }));
+    } catch (e) {
+      console.error("Failed to fetch ops since timestamp:", e);
+      return [];
     }
   }
 };

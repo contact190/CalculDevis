@@ -12,7 +12,7 @@ import TechnicianPortal from './modules/orders/TechnicianPortal';
 import SitePlanModule from './modules/siteplan/SitePlanModule';
 import FinanceModule from './modules/finance/FinanceModule';
 import { DEFAULT_DATA } from './data/default-data';
-import { syncDatabase } from './utils/supabaseClient';
+import { syncDatabase, cloudSync } from './utils/supabaseClient';
 import { persistentStorage } from './utils/storage';
 import { localSync } from './utils/localSync';
 import { smartMerge } from './utils/smartMerge';
@@ -276,9 +276,11 @@ function App() {
         const now = new Date().toISOString();
         
         let stampedDb = database;
+        let generatedOps = [];
         // ─── Stamp local changes in database before saving ───
         if (!isApplyingRemoteOps.current && previousDbRef.current) {
           const ops = generateOps(previousDbRef.current, database);
+          generatedOps = ops;
           if (ops.length > 0) {
             const applyResult = applyOps(database, ops);
             if (applyResult && applyResult.appliedCount > 0) {
@@ -310,6 +312,14 @@ function App() {
           } else if (result && result.queued) {
             setCloudSyncStatus('offline');
           }
+
+          // ─── Push Delta Ops to Cloud (Event Sourcing) ─────
+          if (generatedOps.length > 0) {
+             const cloudResult = await cloudSync.pushOps(generatedOps);
+             if (cloudResult && cloudResult.success) {
+               console.log(`☁️ ${cloudResult.applied} ops envoyées au Cloud avec succès.`);
+             }
+          }
         }
         previousDbRef.current = stampedDb;
       } catch (e) {
@@ -327,29 +337,31 @@ function App() {
   useEffect(() => {
     if (isLoading) return;
 
+    const handleIncomingOps = (ops) => {
+      if (!databaseRef.current || !Array.isArray(ops) || ops.length === 0) return;
+      
+      console.log(`📥 Application de ${ops.length} ops distantes en temps réel...`);
+      isApplyingRemoteOps.current = true;
+      
+      const { db: newDb, appliedCount } = applyOps(databaseRef.current, ops);
+      if (appliedCount > 0) {
+        const repaired = repairDatabase(newDb);
+        setDatabase(repaired);
+        // Update the snapshot so we don't re-send these ops back
+        localSync.updateSnapshot(repaired);
+        previousDbRef.current = repaired;
+        setCloudSyncStatus('ok');
+        setLastCloudSync(new Date());
+      }
+      
+      // Reset flag after React batches the state update
+      setTimeout(() => { isApplyingRemoteOps.current = false; }, 50);
+    };
+
     // Connect with delta-aware callbacks
     localSync.connect({
       // ─── Receive individual operations from other clients ─────
-      onOpsReceived: (ops) => {
-        if (!databaseRef.current || !Array.isArray(ops) || ops.length === 0) return;
-        
-        console.log(`📥 Application de ${ops.length} ops distantes en temps réel...`);
-        isApplyingRemoteOps.current = true;
-        
-        const { db: newDb, appliedCount } = applyOps(databaseRef.current, ops);
-        if (appliedCount > 0) {
-          const repaired = repairDatabase(newDb);
-          setDatabase(repaired);
-          // Update the snapshot so we don't re-send these ops back
-          localSync.updateSnapshot(repaired);
-          previousDbRef.current = repaired;
-          setCloudSyncStatus('ok');
-          setLastCloudSync(new Date());
-        }
-        
-        // Reset flag after React batches the state update
-        setTimeout(() => { isApplyingRemoteOps.current = false; }, 50);
-      },
+      onOpsReceived: handleIncomingOps,
 
       // ─── Full refresh needed (backup restored, etc.) ─────
       onFullRefresh: async () => {
@@ -388,20 +400,24 @@ function App() {
       }
     });
 
-    // Periodic Supabase cloud backup (every 2 minutes)
+    // ─── Connect to Supabase Cloud Ops ─────
+    const unsubscribeCloud = cloudSync.subscribe(handleIncomingOps, getDeviceId());
+
+    // Periodic Supabase cloud backup (every 10 minutes - Snapshot)
     cloudSyncIntervalRef.current = setInterval(async () => {
       const db = databaseRef.current;
       if (!db) return;
       try {
         await syncDatabase.save({ mainDb: db, quotes: db.quotes || [] });
-        console.log('☁️ Backup Supabase effectué');
+        console.log('☁️ Snapshot Supabase effectué');
       } catch (e) {
         // Silent fail for cloud backup — not critical
       }
-    }, 120000); // 2 minutes
+    }, 600000); // 10 minutes
 
     return () => {
       localSync.disconnect();
+      if (unsubscribeCloud) unsubscribeCloud();
       if (cloudSyncIntervalRef.current) clearInterval(cloudSyncIntervalRef.current);
     };
   }, [isLoading, repairDatabase]);
