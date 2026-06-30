@@ -510,29 +510,69 @@ function App() {
   const handleForceCloudSync = async () => {
     if (!database) return;
     setCloudSyncStatus('syncing');
-    let localOk = false;
     let cloudOk = false;
+    let cloudError = null;
+
+    // 1. Try local server (silent — expected to fail on GitHub Pages)
     try {
-      const result = await localSync.pushDataFull(database);
-      if (result) localOk = true;
-    } catch (e) {
-      console.warn('Local server push failed:', e);
-    }
+      await localSync.pushDataFull(database);
+    } catch (e) { /* expected on GitHub Pages */ }
+
+    // 2. Try Cloud Snapshot (the important one)
     try {
       await syncDatabase.save({ mainDb: database, quotes: database.quotes || [] });
       cloudOk = true;
       console.log('☁️ Snapshot Cloud forcé avec succès');
     } catch (e) {
-      console.warn('Cloud snapshot failed:', e);
+      cloudError = e;
+      console.error('Cloud snapshot failed:', e);
+      
+      // 3. Fallback: if snapshot fails (Disk IO, size limit), try pushing all data as individual ops
+      console.log('☁️ Tentative fallback: envoi des données comme opérations individuelles...');
+      try {
+        const allOps = [];
+        const now = new Date().toISOString();
+        const deviceId = getDeviceId();
+        const TRACKABLE = ['clients', 'quotes', 'orders', 'contracts', 'financialTrackers'];
+        
+        for (const col of TRACKABLE) {
+          const arr = database[col];
+          if (!Array.isArray(arr)) continue;
+          for (const item of arr) {
+            if (!item || !item.id || item._deleted) continue;
+            allOps.push({
+              op: 'update',
+              collection: col,
+              id: item.id,
+              data: { ...item, _lastModified: now, _modifiedBy: deviceId },
+              timestamp: now,
+              deviceId
+            });
+          }
+        }
+
+        if (allOps.length > 0) {
+          // Send in batches of 50 to avoid payload limits
+          for (let i = 0; i < allOps.length; i += 50) {
+            const batch = allOps.slice(i, i + 50);
+            await cloudSync.pushOps(batch);
+          }
+          cloudOk = true;
+          console.log(`☁️ Fallback réussi: ${allOps.length} ops envoyées au Cloud`);
+        }
+      } catch (fallbackErr) {
+        console.error('Cloud ops fallback also failed:', fallbackErr);
+      }
     }
-    if (localOk || cloudOk) {
+
+    if (cloudOk) {
       setCloudSyncStatus('ok');
       setLastCloudSync(new Date());
       previousDbRef.current = database;
-      alert(`✅ Synchronisation réussie !${cloudOk ? ' (Cloud ☁️)' : ''}${localOk ? ' (Local 🔗)' : ''}`);
+      alert('✅ Synchronisation Cloud réussie !');
     } else {
       setCloudSyncStatus('offline');
-      alert('❌ Échec Réseau. Données sauvegardées en local uniquement.');
+      alert(`❌ Échec Cloud: ${cloudError?.message || 'Erreur inconnue'}. Vérifiez votre connexion internet et le budget Supabase.`);
     }
   };
 
