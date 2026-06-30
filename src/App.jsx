@@ -233,12 +233,49 @@ function App() {
             setCloudSyncStatus('ok');
           }
         } else {
-          // Fallback to purely local
-          console.log('📴 Mode Offline / Serveur Local injoignable');
-          const repaired = repairDatabase(localData || DEFAULT_DATA);
-          setDatabase(repaired);
-          lastLocalModifiedRef.current = localTimestamp || null;
-          setCloudSyncStatus('offline');
+          // Fallback to purely local OR Supabase
+          console.log('📴 Mode Offline / Serveur Local injoignable, tentative Supabase...');
+          try {
+             setLoadingMessage('Recherche Cloud Supabase...');
+             const { data: cloudData, updatedAt } = await syncDatabase.loadWithMeta();
+             
+             let finalData = localData || DEFAULT_DATA;
+             let baseTimestamp = localTimestamp || "1970-01-01T00:00:00.000Z";
+             
+             if (cloudData) {
+               // Si le cloud a un snapshot plus récent, ou si on a pas de données locales (ex: Edge pour la 1ere fois)
+               const localDate = localTimestamp ? new Date(localTimestamp).getTime() : 0;
+               const cloudDate = updatedAt ? new Date(updatedAt).getTime() : 0;
+               
+               if (!localData || cloudDate > localDate) {
+                 finalData = cloudData;
+                 baseTimestamp = updatedAt || baseTimestamp;
+                 console.log("☁️ Snapshot Cloud chargé.");
+               }
+             }
+             
+             // Now fetch missed ops
+             setLoadingMessage('Récupération des opérations récentes...');
+             const missedOps = await cloudSync.fetchOpsSince(baseTimestamp, getDeviceId());
+             
+             if (missedOps && missedOps.length > 0) {
+                console.log(`☁️ Application de ${missedOps.length} opérations manquées...`);
+                const { db: updatedDb } = applyOps(finalData, missedOps);
+                finalData = updatedDb;
+             }
+             
+             const repaired = repairDatabase(finalData);
+             setDatabase(repaired);
+             await persistentStorage.save(LOCAL_KEY, repaired);
+             lastLocalModifiedRef.current = new Date().toISOString();
+             setCloudSyncStatus('ok');
+          } catch(err) {
+             console.error("Erreur Supabase load:", err);
+             const repaired = repairDatabase(localData || DEFAULT_DATA);
+             setDatabase(repaired);
+             lastLocalModifiedRef.current = localTimestamp || null;
+             setCloudSyncStatus('offline');
+          }
         }
       } catch (e) {
         console.error('Erreur chargement:', e);
