@@ -506,23 +506,33 @@ function App() {
     }
   };
 
-  // ─── Force local sync (full push) ─────────────────────────────────────────
+  // ─── Force full sync (local server + Supabase Cloud Snapshot) ──────────────
   const handleForceCloudSync = async () => {
     if (!database) return;
     setCloudSyncStatus('syncing');
+    let localOk = false;
+    let cloudOk = false;
     try {
       const result = await localSync.pushDataFull(database);
-      if (result) {
-        setCloudSyncStatus('ok');
-        setLastCloudSync(new Date());
-        previousDbRef.current = database;
-        alert('✅ Synchronisation complète réussie !');
-      } else {
-        throw new Error('Échec du serveur');
-      }
+      if (result) localOk = true;
     } catch (e) {
+      console.warn('Local server push failed:', e);
+    }
+    try {
+      await syncDatabase.save({ mainDb: database, quotes: database.quotes || [] });
+      cloudOk = true;
+      console.log('☁️ Snapshot Cloud forcé avec succès');
+    } catch (e) {
+      console.warn('Cloud snapshot failed:', e);
+    }
+    if (localOk || cloudOk) {
+      setCloudSyncStatus('ok');
+      setLastCloudSync(new Date());
+      previousDbRef.current = database;
+      alert(`✅ Synchronisation réussie !${cloudOk ? ' (Cloud ☁️)' : ''}${localOk ? ' (Local 🔗)' : ''}`);
+    } else {
       setCloudSyncStatus('offline');
-      alert('❌ Échec Réseau. Données sauvegardées en local.');
+      alert('❌ Échec Réseau. Données sauvegardées en local uniquement.');
     }
   };
 
@@ -687,11 +697,24 @@ function App() {
                 const file = e.target.files[0];
                 if (!file) return;
                 const reader = new FileReader();
-                reader.onload = (evt) => {
+                reader.onload = async (evt) => {
                   try {
                     const imported = JSON.parse(evt.target.result);
                     if (window.confirm("Restaurer cette sauvegarde ? Cela écrasera les données actuelles.")) {
-                      setDatabase(repairDatabase(imported));
+                      const repairedImport = repairDatabase(imported);
+                      setDatabase(repairedImport);
+                      // Immediately push a Snapshot to Supabase Cloud so other devices can see it
+                      try {
+                        setCloudSyncStatus('syncing');
+                        await syncDatabase.save({ mainDb: repairedImport, quotes: repairedImport.quotes || [] });
+                        setCloudSyncStatus('ok');
+                        setLastCloudSync(new Date());
+                        console.log('☁️ Snapshot Cloud poussé après import');
+                        alert('✅ Import réussi et synchronisé avec le Cloud !');
+                      } catch(syncErr) {
+                        console.error('Cloud snapshot after import failed:', syncErr);
+                        alert('✅ Import réussi localement. ⚠️ La synchronisation Cloud suivra automatiquement.');
+                      }
                     }
                   } catch(err) { alert("Fichier invalide"); }
                 };
