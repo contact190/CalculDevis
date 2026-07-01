@@ -34,6 +34,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
   const [sendByEmail, setSendByEmail] = useState(false);
   const [blModalType, setBlModalType] = useState(null); // 'ALU' | 'VITRAGE' | null
   const [blSelectedUnitIds, setBlSelectedUnitIds] = useState(new Set());
+  const [listTab, setListTab] = useState('ongoing'); // 'ongoing' | 'history'
 
 
   React.useEffect(() => {
@@ -58,9 +59,39 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
   };
   
   const storageZones = data.storageZones || [];
-  const shippableOrders = useMemo(() => {
-    return (data.orders || []).filter(order => order.batches && order.batches.length > 0);
-  }, [data.orders]);
+  const shippableOrdersWithStats = useMemo(() => {
+    return (data.orders || []).filter(order => order.batches && order.batches.length > 0).map(order => {
+        const client = (data.clients || []).find(c => c.id === order.clientId);
+        
+        const stats = (order.batches || []).reduce((acc, b) => {
+            (b.items || []).forEach(i => acc.total += (i.measurements || []).reduce((s, m) => s + m.qty, 0));
+            return acc;
+        }, { total: 0 });
+        
+        const aluDone = Object.values(order.unitStatusesDual || {}).filter(s => s.alu === 'Posé' || s.alu === 'Fini').length;
+        const vitDone = Object.values(order.unitStatusesDual || {}).filter(s => s.vitrage === 'Fini').length;
+        
+        const progressAlu = stats.total > 0 ? (aluDone / stats.total) * 100 : 0;
+        const progressVit = stats.total > 0 ? (vitDone / stats.total) * 100 : 0;
+        const globalProgress = (progressAlu + progressVit) / 2;
+
+        return {
+          ...order,
+          clientName: order.clientName || client?.nom || 'CLIENT INCONNU',
+          stats,
+          progressAlu,
+          progressVit,
+          globalProgress
+        };
+    });
+  }, [data.orders, data.clients]);
+
+  const displayedOrders = useMemo(() => {
+    if (listTab === 'history') {
+      return shippableOrdersWithStats.filter(o => o.globalProgress === 100);
+    }
+    return shippableOrdersWithStats.filter(o => o.globalProgress < 100);
+  }, [shippableOrdersWithStats, listTab]);
 
   const selectedOrder = useMemo(() => {
     const order = (data.orders || []).find(o => o.id === selectedOrderId);
@@ -2364,25 +2395,31 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
           Zones de Stockage
         </button>
       </header>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '1.5rem' }}>
-        {shippableOrders.map(order => {
-          const stats = (order.batches || []).reduce((acc, b) => {
-            (b.items || []).forEach(i => acc.total += (i.measurements || []).reduce((s, m) => s + m.qty, 0));
-            return acc;
-          }, { total: 0 });
-          
-          const aluDone = Object.values(order.unitStatusesDual || {}).filter(s => s.alu === 'Posé' || s.alu === 'Fini').length;
-          const vitDone = Object.values(order.unitStatusesDual || {}).filter(s => s.vitrage === 'Fini').length;
-          
-          const progressAlu = stats.total > 0 ? (aluDone / stats.total) * 100 : 0;
-          const progressVit = stats.total > 0 ? (vitDone / stats.total) * 100 : 0;
-          const globalProgress = (progressAlu + progressVit) / 2;
 
+      <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem' }}>
+        <button 
+          className={`btn ${listTab === 'ongoing' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setListTab('ongoing')}
+          style={listTab === 'ongoing' ? { background: '#3b82f6', color: 'white', border: 'none' } : {}}
+        >
+          En cours
+        </button>
+        <button 
+          className={`btn ${listTab === 'history' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setListTab('history')}
+          style={listTab === 'history' ? { background: '#3b82f6', color: 'white', border: 'none' } : {}}
+        >
+          Historique (Prêt)
+        </button>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '1.5rem' }}>
+        {displayedOrders.map(order => {
           return (
             <div key={order.id} className="glass shadow-md card-hover" style={{ padding: '1.5rem', cursor: 'pointer' }} onClick={() => { setSelectedOrderId(order.id); setActiveView('details'); }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
                 <div style={{ width: '48px', height: '48px', background: '#eff6ff', color: '#3b82f6', borderRadius: '12px', display: 'grid', placeItems: 'center' }}><Truck size={24} /></div>
-                <span style={{ padding: '0.3rem 0.75rem', background: globalProgress === 100 ? '#d1fae5' : '#fef3c7', color: globalProgress === 100 ? '#065f46' : '#92400e', borderRadius: '999px', fontSize: '0.7rem', fontWeight: 700 }}>{globalProgress === 100 ? 'PRÊT' : 'EN COURS'}</span>
+                <span style={{ padding: '0.3rem 0.75rem', background: order.globalProgress === 100 ? '#d1fae5' : '#fef3c7', color: order.globalProgress === 100 ? '#065f46' : '#92400e', borderRadius: '999px', fontSize: '0.7rem', fontWeight: 700 }}>{order.globalProgress === 100 ? 'PRÊT' : 'EN COURS'}</span>
               </div>
               <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800 }}>{order.id} - {order.clientName}</h3>
               
@@ -2390,25 +2427,30 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: '0.25rem' }}>
                     <span>POSE ALU</span>
-                    <span>{progressAlu.toFixed(0)}%</span>
+                    <span>{order.progressAlu.toFixed(0)}%</span>
                   </div>
                   <div style={{ width: '100%', height: '6px', background: '#f1f5f9', borderRadius: '3px', overflow: 'hidden' }}>
-                    <div style={{ width: `${progressAlu}%`, height: '100%', background: '#8b5cf6', transition: 'width 0.4s ease' }}></div>
+                    <div style={{ width: `${order.progressAlu}%`, height: '100%', background: '#8b5cf6', transition: 'width 0.4s ease' }}></div>
                   </div>
                 </div>
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: '0.25rem' }}>
                     <span>VITRAGE / FINI</span>
-                    <span>{progressVit.toFixed(0)}%</span>
+                    <span>{order.progressVit.toFixed(0)}%</span>
                   </div>
                   <div style={{ width: '100%', height: '6px', background: '#f1f5f9', borderRadius: '3px', overflow: 'hidden' }}>
-                    <div style={{ width: `${progressVit}%`, height: '100%', background: '#10b981', transition: 'width 0.4s ease' }}></div>
+                    <div style={{ width: `${order.progressVit}%`, height: '100%', background: '#10b981', transition: 'width 0.4s ease' }}></div>
                   </div>
                 </div>
               </div>
             </div>
           );
         })}
+        {displayedOrders.length === 0 && (
+          <div style={{ gridColumn: '1 / -1', padding: '3rem', textAlign: 'center', color: '#64748b' }}>
+            <p>Aucune commande dans cet onglet.</p>
+          </div>
+        )}
       </div>
       {/* SHUTTER DETAILS POPUP */}
       {viewingShutter && (
