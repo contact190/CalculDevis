@@ -32,7 +32,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
   const [companyName, setCompanyName] = useState(quoteSettings?.companyName || 'ALU DESIGN'); // Nom depuis config ou par défaut
   const [recipientEmail, setRecipientEmail] = useState('');
   const [sendByEmail, setSendByEmail] = useState(false);
-  const [blModalType, setBlModalType] = useState(null); // 'ALU' | 'VITRAGE' | null
+  const [blModalType, setBlModalType] = useState(null); // 'ALU' | 'VITRAGE' | 'VOLET' | null
   const [blSelectedUnitIds, setBlSelectedUnitIds] = useState(new Set());
   const [listTab, setListTab] = useState('ongoing'); // 'ongoing' | 'history'
 
@@ -229,13 +229,14 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
             }
 
 
-            const dualStatus = selectedOrder.unitStatusesDual?.[unitId] || { alu: 'Produit', vitrage: 'Produit' };
+            const dualStatus = selectedOrder.unitStatusesDual?.[unitId] || { alu: 'Produit', vitrage: 'Produit', volet: 'Produit' };
             const storageZoneId = selectedOrder.unitStorageZones?.[unitId];
             const zone = storageZones.find(z => z.id === storageZoneId);
 
             // Determine if this specific instance has a shutter and its details
             let hasShutter = false;
             let shutterInfo = 'SANS VOLET';
+            let isExtrudedLame = false;
             let offset = 0;
             const shutterOverridden = (m.shutterList || []).length > 0;
 
@@ -274,11 +275,16 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
                   hasShutter = true;
                   const caisson = sh.overrides?.caissonId || item.config.shutterConfig?.caissonId;
                   const kit = sh.overrides?.kitId || item.config.shutterConfig?.kitId;
+                  const lameId = sh.overrides?.lameId || item.config.shutterConfig?.lameId;
+                  
+                  const lameObj = data.shutterComponents?.lames?.find(l => l.id === lameId);
+                  if (lameObj && lameObj.hasBaguette) isExtrudedLame = true;
                   
                   const caissonName = data.shutterComponents?.caissons?.find(c => c.id === caisson)?.name || caisson || '';
                   const kitName = data.shutterComponents?.kits?.find(k => k.id === kit)?.name || kit || '';
+                  const lameName = lameObj?.name || lameId || '';
                   
-                  shutterInfo = `${caissonName} ${kitName}`.trim() || 'AVEC VOLET';
+                  shutterInfo = `${caissonName} ${lameName} ${kitName}`.trim() || 'AVEC VOLET';
 
                   instanceConfig.hasShutter = true;
                   instanceConfig.shutterConfig = {
@@ -293,11 +299,16 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
               hasShutter = true;
               const caisson = item.config.shutterConfig?.caissonId;
               const kit = item.config.shutterConfig?.kitId;
+              const lameId = item.config.shutterConfig?.lameId;
+              
+              const lameObj = data.shutterComponents?.lames?.find(l => l.id === lameId);
+              if (lameObj && lameObj.hasBaguette) isExtrudedLame = true;
               
               const caissonName = data.shutterComponents?.caissons?.find(c => c.id === caisson)?.name || caisson || '';
               const kitName = data.shutterComponents?.kits?.find(k => k.id === kit)?.name || kit || '';
+              const lameName = lameObj?.name || lameId || '';
               
-              shutterInfo = `${caissonName} ${kitName}`.trim() || 'AVEC VOLET';
+              shutterInfo = `${caissonName} ${lameName} ${kitName}`.trim() || 'AVEC VOLET';
             }
 
             let glassPanes = [];
@@ -331,7 +342,9 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
               dimensions: `${m.L} x ${m.H}`,
               statusAlu: dualStatus.alu,
               statusVitrage: dualStatus.vitrage,
+              statusVolet: dualStatus.volet || 'Produit',
               hasShutter: hasShutter,
+              isExtrudedLame: isExtrudedLame,
               shutterInfo: shutterInfo,
               storageZoneId: storageZoneId,
               storageZone: zone?.name || '',
@@ -349,9 +362,12 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
     return allUnits.filter(u => {
       if (blModalType === 'ALU') {
         return u.statusAlu !== 'Livré' && u.statusAlu !== 'Posé' && u.statusAlu !== 'Fini';
-      } else {
+      } else if (blModalType === 'VITRAGE') {
         return u.statusVitrage !== 'Livré' && u.statusVitrage !== 'Fini';
+      } else if (blModalType === 'VOLET') {
+        return u.isExtrudedLame && u.statusVolet !== 'Livré' && u.statusVolet !== 'Fini' && u.statusVolet !== 'Posé';
       }
+      return false;
     });
   }, [allUnits, blModalType]);
 
@@ -389,7 +405,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
       if (oIdx === -1) return prev;
       const order = { ...orders[oIdx] };
       const dualStatuses = { ...(order.unitStatusesDual || {}) };
-      const current = dualStatuses[unitId] || { alu: 'Produit', vitrage: 'Produit' };
+      const current = dualStatuses[unitId] || { alu: 'Produit', vitrage: 'Produit', volet: 'Produit' };
       
       const event = {
         date: new Date().toISOString(),
@@ -404,6 +420,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
         if (component === 'both') {
           current.alu = newStatus;
           current.vitrage = newStatus;
+          current.volet = newStatus;
         } else {
           current[component] = newStatus;
         }
@@ -1282,7 +1299,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
 
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(10);
-      if (type === 'ALU') {
+      if (type === 'ALU' || type === 'VOLET') {
         doc.text('Qté', 15, y); doc.text('Produit', 30, y); doc.text('Dim. Réelle', 95, y); doc.text('Repère', 135, y); doc.text('Statut', 180, y);
       } else {
         doc.text('Qté', 15, y); doc.text('Produit', 30, y); doc.text('Repère', 120, y); doc.text('Statut', 180, y);
@@ -1315,12 +1332,14 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
         } else {
           checkPageOverflow(10);
           const labelText = u.hasShutter ? `${u.label} (${u.shutterInfo})` : u.label;
+          const splitLabel = doc.splitTextToSize(labelText, 60);
+          
           doc.text('1', 15, y); 
-          doc.text(labelText.substring(0, 32), 30, y); 
+          doc.text(splitLabel, 30, y); 
           doc.text(u.dimensions ? `${u.dimensions} mm` : '—', 95, y);
           doc.text(u.name, 135, y);
           doc.text(status, 180, y);
-          y += 8;
+          y += (splitLabel.length * 4) + 4;
         }
       });
 
@@ -1390,11 +1409,11 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
 
       const dualStatuses = { ...(order.unitStatusesDual || {}) };
       const timeline = { ...(order.unitTimeline || {}) };
-      const component = type === 'ALU' ? 'alu' : 'vitrage';
+      const component = type === 'ALU' ? 'alu' : (type === 'VITRAGE' ? 'vitrage' : 'volet');
       const userName = 'ADMIN';
 
       unitsToDeliver.forEach(u => {
-        const current = { ...(dualStatuses[u.id] || { alu: 'Produit', vitrage: 'Produit' }) };
+        const current = { ...(dualStatuses[u.id] || { alu: 'Produit', vitrage: 'Produit', volet: 'Produit' }) };
         current[component] = 'Livré';
         dualStatuses[u.id] = current;
 
@@ -1486,6 +1505,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
                <div style={{ borderLeft: '1px solid #e2e8f0', marginLeft: '0.5rem', paddingLeft: '0.75rem', display: 'flex', gap: '0.5rem' }}>
                   <button onClick={() => { setBlModalType('ALU'); setBlSelectedUnitIds(new Set()); }} className="btn btn-primary" style={{ background: '#1e293b' }} disabled={allUnits.length === 0}>BL Alu</button>
                   <button onClick={() => { setBlModalType('VITRAGE'); setBlSelectedUnitIds(new Set()); }} className="btn btn-primary" style={{ background: '#3b82f6' }} disabled={allUnits.length === 0}>BL Vitrage</button>
+                  <button onClick={() => { setBlModalType('VOLET'); setBlSelectedUnitIds(new Set()); }} className="btn btn-primary" style={{ background: '#b45309' }} disabled={allUnits.length === 0}>BL Volet</button>
                 </div>
           </div>
         </header>
@@ -1797,13 +1817,20 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
                       </td>
                       <td>
                         {unit.hasShutter ? (
-                          <button 
-                            onClick={() => setViewingShutter(unit)}
-                            className="btn" 
-                            style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem', background: '#fef3c7', color: '#d97706', border: '1px solid #fde68a', fontWeight: 800 }}
-                          >
-                            OUI
-                          </button>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                            <button 
+                              onClick={() => setViewingShutter(unit)}
+                              className="btn" 
+                              style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem', background: '#fef3c7', color: '#d97706', border: '1px solid #fde68a', fontWeight: 800 }}
+                            >
+                              OUI
+                            </button>
+                            {unit.isExtrudedLame && (
+                              <span style={{ fontSize: '0.65rem', color: '#8b5cf6', fontWeight: 'bold' }}>
+                                 {unit.statusVolet}
+                              </span>
+                            )}
+                          </div>
                         ) : (
                           <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>NON</span>
                         )}
