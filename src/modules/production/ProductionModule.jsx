@@ -906,12 +906,36 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
         cParts.forEach(p => {
            const ovW = cfg.partOverrides?.[p.id]?.width;
            const ovH = cfg.partOverrides?.[p.id]?.height;
-           p.rawW = ovW !== undefined ? Number(ovW) : (p.width || (isH ? cfg.L/cParts.length : cfg.L));
-           p.rawH = ovH !== undefined ? Number(ovH) : (p.height || (isH ? cfg.H : cfg.H/cParts.length));
-           p._hasOv = isH ? (ovW !== undefined && ovW !== '') : (ovH !== undefined && ovH !== '');
+           p.rawW = ovW !== undefined ? Number(ovW) : (p.width || null);
+           p.rawH = ovH !== undefined ? Number(ovH) : (p.height || null);
+           p._hasOv = isH ? (p.rawW !== null && p.rawW !== '') : (p.rawH !== null && p.rawH !== '');
         });
+        
+        const isMulti = cfg.compoundType === 'fix_coulissant';
+        let divThick = 0;
+        if (isMulti) {
+           const divId = cfg.compoundConfig?.unionId;
+           const trv = (database.traverses || []).find(t => t.id === divId || t.profileId === divId);
+           divThick = trv ? (parseFloat(trv.epaisseur) || 3) : 3;
+        } else if (cfg.compoundType === 'fix_ouvrant') {
+           const divId = cfg.compoundConfig?.traverseId;
+           const trv = (database.traverses || []).find(t => t.id === divId || t.profileId === divId);
+           divThick = trv ? (parseFloat(trv.epaisseur) || 0) : 0;
+        }
+        const divQty = cParts.length > 1 ? cParts.length - 1 : 0;
+        const totalDivThick = divQty * divThick;
 
-        const available = isH ? cfg.L : cfg.H;
+        const available = (isH ? cfg.L : cfg.H) - totalDivThick;
+        
+        cParts.forEach(p => {
+           if (isH) {
+              if (p.rawH === null || p.rawH === '') p.rawH = isMulti ? cfg.H - 3 : cfg.H;
+              if (p.rawW === null || p.rawW === '') p.rawW = available / cParts.length;
+           } else {
+              if (p.rawW === null || p.rawW === '') p.rawW = cfg.L;
+              if (p.rawH === null || p.rawH === '') p.rawH = available / cParts.length;
+           }
+        });
         const overriddenParts = cParts.filter(p => p._hasOv);
         const autoParts = cParts.filter(p => !p._hasOv);
         
