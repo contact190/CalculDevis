@@ -363,5 +363,5 @@ export const getTechnicalDrawingDataURL = (cfg, database) => {
   if (!cfg || !database) return null;
   const canvas = document.createElement('canvas');
   drawTechnicalDrawing(canvas, cfg, database);
-  return canvas.toDataURL('image/png');
+  return canvas.toDataURL('image/jpeg', 0.5);
 };

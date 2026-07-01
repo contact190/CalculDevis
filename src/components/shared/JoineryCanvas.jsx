@@ -437,7 +437,7 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
     if (onDrawComplete) {
       setTimeout(() => {
         try {
-          onDrawComplete(canvas.toDataURL('image/png'));
+          onDrawComplete(canvas.toDataURL('image/jpeg', 0.5));
         } catch (e) {
           console.error('Failed to export canvas', e);
         }
