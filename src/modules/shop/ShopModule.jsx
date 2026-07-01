@@ -15,6 +15,7 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
   const [currentCategory, setCurrentCategory] = useState('');
   const [quoteValidity, setQuoteValidity] = useState(quoteSettings.validityDays || 30);
   const [quoteTva, setQuoteTva] = useState(quoteSettings.tvaRate || 9);
+  const [quoteRemise, setQuoteRemise] = useState(0);
   
   let counter = quoteSettings.quoteCounter || 1;
   if (database && database.quotes) {
@@ -184,7 +185,8 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
       h, l, qty: q,
       glassId: selectedGlassId,
       colorId: selectedColorId,
-      totalHT: price
+      totalHT: price,
+      image: product.image
     };
     
     setQuoteItems([...quoteItems, newItem]);
@@ -202,7 +204,7 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
     setQuoteItems(items => items.filter(i => i.id !== id));
   };
 
-  const generatePDF = (quoteNumber, client, items, totalHT, tva, totalTTC, tvaRate) => {
+  const generatePDF = (quoteNumber, client, items, totalHT, tva, totalTTC, tvaRate, totalHTBrut = 0, remiseAmount = 0) => {
     const doc = new jsPDF({ format: 'a4' });
     const pw = doc.internal.pageSize.getWidth();
     let y = 15;
@@ -333,7 +335,7 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
     y = boxY + boxHeight + 6;
 
     // --- TABLEAU ---
-    const tableColumn = ["Désignation", "Dim. / Options", "Quantité (m²/ml)", "Pièces", "P.U. HT", "Total HT"];
+    const tableColumn = ["Image", "Désignation", "Dim. / Options", "Quantité (m²/ml)", "Pièces", "P.U. HT", "Total HT"];
     const tableRows = [];
 
     items.forEach(item => {
@@ -361,6 +363,7 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
       const puHT = (totalMeasurementQty > 0) ? (item.totalHT / totalMeasurementQty) : item.totalHT;
       
       const rowData = [
+        "", // Image placeholder
         `${item.nom}\n${item.designation || ''}`,
         descLine2 || '-',
         item.unit === 'unité' ? '-' : `${totalMeasurementQty.toFixed(2)} ${measureUnit}`,
@@ -377,11 +380,31 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
       body: tableRows,
       theme: 'grid',
       headStyles: { fillColor: [40, 40, 40], textColor: [255, 255, 255] },
-      styles: { fontSize: 9, cellPadding: 3, textColor: [0, 0, 0] },
+      styles: { fontSize: 9, cellPadding: 3, textColor: [0, 0, 0], minCellHeight: 18 },
       columnStyles: {
-        0: { cellWidth: 50 },
-        4: { halign: 'right' },
-        5: { halign: 'right', fontStyle: 'bold' }
+        0: { cellWidth: 20, halign: 'center' },
+        1: { cellWidth: 45 },
+        5: { halign: 'right' },
+        6: { halign: 'right', fontStyle: 'bold' }
+      },
+      didDrawCell: (data) => {
+        if (data.section === 'body' && data.column.index === 0) {
+          const item = items[data.row.index];
+          if (item && item.image) {
+            try {
+              let format = 'JPEG';
+              if (item.image.includes('png') || item.image.startsWith('data:image/png')) format = 'PNG';
+              else if (item.image.includes('webp') || item.image.startsWith('data:image/webp')) format = 'WEBP';
+              
+              const dim = 14;
+              const x = data.cell.x + (data.cell.width - dim) / 2;
+              const yPos = data.cell.y + (data.cell.height - dim) / 2;
+              doc.addImage(item.image, format, x, yPos, dim, dim, '', 'FAST');
+            } catch (e) {
+              console.warn('Could not draw image in shop quote PDF:', e);
+            }
+          }
+        }
       }
     });
 
@@ -404,19 +427,35 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
 
     // Right Box: Totals
     const rightBoxX = 110;
-    const totalsBoxHeight = 22;
+    let totalsBoxHeight = 22;
+    if (remiseAmount > 0) totalsBoxHeight += 14;
+
     doc.roundedRect(rightBoxX, finalY, pw - 15 - rightBoxX, totalsBoxHeight, 3, 3);
     const effectiveTvaRate = tvaRate !== undefined ? tvaRate : (quoteSettings?.tvaRate ?? 9);
     
+    let currentTotalY = finalY + 9;
+    if (remiseAmount > 0) {
+      doc.setFontSize(8.5);
+      doc.setFont('helvetica', 'normal');
+      doc.text('MONTANT BRUT', rightBoxX + 5, currentTotalY);
+      doc.text(`${formatPrice(totalHTBrut)} DZD`, pw - 20, currentTotalY, { align: 'right' });
+      
+      currentTotalY += 7;
+      doc.text('REMISE', rightBoxX + 5, currentTotalY);
+      doc.text(`- ${formatPrice(remiseAmount)} DZD`, pw - 20, currentTotalY, { align: 'right' });
+
+      currentTotalY += 7;
+    }
+
     doc.setFontSize(9.5);
     doc.setFont('helvetica', 'bold');
-    doc.text('MONTANT TOTAL HT', rightBoxX + 5, finalY + 9);
-    doc.text(`${formatPrice(totalHT)} DZD`, pw - 20, finalY + 9, { align: 'right' });
+    doc.text('MONTANT TOTAL HT', rightBoxX + 5, currentTotalY);
+    doc.text(`${formatPrice(totalHT)} DZD`, pw - 20, currentTotalY, { align: 'right' });
     
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8.5);
-    doc.text(`TVA ${effectiveTvaRate}% :`, rightBoxX + 5, finalY + 16);
-    doc.text(`${formatPrice(tva)} DZD`, pw - 20, finalY + 16, { align: 'right' });
+    doc.text(`TVA ${effectiveTvaRate}% :`, rightBoxX + 5, currentTotalY + 7);
+    doc.text(`${formatPrice(tva)} DZD`, pw - 20, currentTotalY + 7, { align: 'right' });
 
     finalY += totalsBoxHeight + 15;
     
@@ -508,7 +547,9 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
     const quoteNumber = currentQuoteNumber;
     
     const tvaRateNum = Number(quoteTva);
-    const totalHT = quoteItems.reduce((sum, item) => sum + item.totalHT, 0);
+    const totalHTBrut = quoteItems.reduce((sum, item) => sum + item.totalHT, 0);
+    const remiseAmount = Number(quoteRemise) || 0;
+    const totalHT = Math.max(0, totalHTBrut - remiseAmount);
     const tva = totalHT * (tvaRateNum / 100);
     const totalTTC = totalHT + tva;
     
@@ -522,6 +563,8 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
         ...item,
       })),
       totals: {
+        htBrut: totalHTBrut,
+        remise: remiseAmount,
         ht: totalHT,
         tva: tva,
         ttc: totalTTC
@@ -541,6 +584,7 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
     
     setQuoteClient('');
     setQuoteItems([]);
+    setQuoteRemise(0);
   };
 
   const handleExportPDF = () => {
@@ -550,11 +594,13 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
     }
     const client = (database.clients || []).find(c => c.id === quoteClient);
     const tvaRateNum = Number(quoteTva);
-    const totalHT = quoteItems.reduce((sum, item) => sum + item.totalHT, 0);
+    const totalHTBrut = quoteItems.reduce((sum, item) => sum + item.totalHT, 0);
+    const remiseAmount = Number(quoteRemise) || 0;
+    const totalHT = Math.max(0, totalHTBrut - remiseAmount);
     const tva = totalHT * (tvaRateNum / 100);
     const totalTTC = totalHT + tva;
     
-    generatePDF(currentQuoteNumber, client, quoteItems, totalHT, tva, totalTTC, tvaRateNum);
+    generatePDF(currentQuoteNumber, client, quoteItems, totalHT, tva, totalTTC, tvaRateNum, totalHTBrut, remiseAmount);
   };
 
   const handleExportExistingQuotePDF = (quote) => {
@@ -564,11 +610,13 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
       alert("Client introuvable.");
       return;
     }
+    const totalHTBrut = quote.totals?.htBrut || quote.totals?.ht || 0;
+    const remiseAmount = quote.totals?.remise || 0;
     const totalHT = quote.totals?.ht || 0;
     const tva = quote.totals?.tva || 0;
     const totalTTC = quote.totals?.ttc || 0;
     const tvaRateToUse = quote.tvaRate !== undefined ? quote.tvaRate : (quoteSettings?.tvaRate ?? 9);
-    generatePDF(quote.number, client, quote.items || [], totalHT, tva, totalTTC, tvaRateToUse);
+    generatePDF(quote.number, client, quote.items || [], totalHT, tva, totalTTC, tvaRateToUse, totalHTBrut, remiseAmount);
   };
 
 
@@ -841,6 +889,11 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
               </select>
             </div>
 
+            <div className="form-group">
+              <label className="label">Remise (DZD)</label>
+              <input type="number" min="0" className="input" value={quoteRemise} onChange={e => setQuoteRemise(e.target.value)} placeholder="0" />
+            </div>
+
             <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '1.5rem' }}>
               <h3 style={{ fontSize: '1rem', fontWeight: 600, color: '#3b82f6', marginBottom: '1rem' }}>Ajouter un Produit</h3>
               
@@ -1024,18 +1077,30 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
             {quoteItems.length > 0 && (
               <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'flex-end' }}>
                 <div style={{ width: '300px', background: '#f8fafc', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #e2e8f0' }}>
+                   {Number(quoteRemise) > 0 && (
+                     <>
+                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.95rem' }}>
+                         <span style={{ color: '#64748b' }}>Total Brut</span>
+                         <span style={{ fontWeight: 600 }}>{quoteItems.reduce((s,i) => s + i.totalHT, 0).toLocaleString('fr-FR', {minimumFractionDigits:2})} DZD</span>
+                       </div>
+                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.95rem', color: '#ef4444' }}>
+                         <span>Remise</span>
+                         <span style={{ fontWeight: 600 }}>- {Number(quoteRemise).toLocaleString('fr-FR', {minimumFractionDigits:2})} DZD</span>
+                       </div>
+                     </>
+                   )}
                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.95rem' }}>
                      <span style={{ color: '#64748b' }}>Total HT</span>
-                     <span style={{ fontWeight: 600 }}>{quoteItems.reduce((s,i) => s + i.totalHT, 0).toLocaleString('fr-FR', {minimumFractionDigits:2})} DZD</span>
+                     <span style={{ fontWeight: 600 }}>{Math.max(0, quoteItems.reduce((s,i) => s + i.totalHT, 0) - Number(quoteRemise)).toLocaleString('fr-FR', {minimumFractionDigits:2})} DZD</span>
                    </div>
                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem', fontSize: '0.95rem' }}>
                      <span style={{ color: '#64748b' }}>TVA ({quoteTva}%)</span>
-                     <span style={{ fontWeight: 600 }}>{(quoteItems.reduce((s,i) => s + i.totalHT, 0) * (Number(quoteTva)/100)).toLocaleString('fr-FR', {minimumFractionDigits:2})} DZD</span>
+                     <span style={{ fontWeight: 600 }}>{(Math.max(0, quoteItems.reduce((s,i) => s + i.totalHT, 0) - Number(quoteRemise)) * (Number(quoteTva)/100)).toLocaleString('fr-FR', {minimumFractionDigits:2})} DZD</span>
                    </div>
                    <div style={{ borderTop: '2px solid #e2e8f0', paddingTop: '1rem', display: 'flex', justifyContent: 'space-between', fontSize: '1.15rem' }}>
                      <span style={{ fontWeight: 800, color: '#1e293b' }}>Total TTC</span>
                      <span style={{ fontWeight: 800, color: '#16a34a' }}>
-                       {(quoteItems.reduce((s,i) => s + i.totalHT, 0) * (1 + Number(quoteTva)/100)).toLocaleString('fr-FR', {minimumFractionDigits:2})} DZD
+                       {(Math.max(0, quoteItems.reduce((s,i) => s + i.totalHT, 0) - Number(quoteRemise)) * (1 + Number(quoteTva)/100)).toLocaleString('fr-FR', {minimumFractionDigits:2})} DZD
                      </span>
                    </div>
                 </div>
@@ -1245,20 +1310,36 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
                       if (finalY > 220) { doc.addPage(); finalY = 20; }
                   
                       const rightBoxX = 110;
-                      const boxHeightBottom = 22;
+                      let boxHeightBottom = 22;
+                      if (vq.totals?.remise > 0) boxHeightBottom += 14;
+
                       doc.setDrawColor(150, 150, 150);
                       doc.setLineWidth(0.5);
                       doc.roundedRect(rightBoxX, finalY, pw - 15 - rightBoxX, boxHeightBottom, 3, 3);
                       
+                      let currentTotalY = finalY + 9;
+                      if (vq.totals?.remise > 0) {
+                        doc.setFontSize(8.5);
+                        doc.setFont('helvetica', 'normal');
+                        doc.text('MONTANT BRUT', rightBoxX + 5, currentTotalY);
+                        doc.text(`${formatPrice(vq.totals.htBrut || totalHT)} DZD`, pw - 20, currentTotalY, { align: 'right' });
+                        
+                        currentTotalY += 7;
+                        doc.text('REMISE', rightBoxX + 5, currentTotalY);
+                        doc.text(`- ${formatPrice(vq.totals.remise)} DZD`, pw - 20, currentTotalY, { align: 'right' });
+
+                        currentTotalY += 7;
+                      }
+
                       doc.setFontSize(9.5);
                       doc.setFont('helvetica', 'bold');
-                      doc.text('MONTANT TOTAL HT', rightBoxX + 5, finalY + 9);
-                      doc.text(`${formatPrice(totalHT)} DZD`, pw - 20, finalY + 9, { align: 'right' });
+                      doc.text('MONTANT TOTAL HT', rightBoxX + 5, currentTotalY);
+                      doc.text(`${formatPrice(totalHT)} DZD`, pw - 20, currentTotalY, { align: 'right' });
                       
                       doc.setFont('helvetica', 'normal');
                       doc.setFontSize(8.5);
-                      doc.text(`TVA ${tvaRateToUse}% :`, rightBoxX + 5, finalY + 16);
-                      doc.text(`${formatPrice(tva)} DZD`, pw - 20, finalY + 16, { align: 'right' });
+                      doc.text(`TVA ${tvaRateToUse}% :`, rightBoxX + 5, currentTotalY + 7);
+                      doc.text(`${formatPrice(tva)} DZD`, pw - 20, currentTotalY + 7, { align: 'right' });
                   
                       finalY += boxHeightBottom + 15;
                       
@@ -1387,6 +1468,18 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
             {items.length > 0 && (
               <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'flex-end' }}>
                 <div style={{ width: '300px', background: '#f8fafc', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #e2e8f0' }}>
+                  {vq.totals?.remise > 0 && (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.95rem' }}>
+                        <span style={{ color: '#64748b' }}>Total Brut</span>
+                        <span style={{ fontWeight: 600 }}>{(vq.totals.htBrut || totalHT).toLocaleString('fr-FR', {minimumFractionDigits:2})} DZD</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.95rem', color: '#ef4444' }}>
+                        <span>Remise</span>
+                        <span style={{ fontWeight: 600 }}>- {vq.totals.remise.toLocaleString('fr-FR', {minimumFractionDigits:2})} DZD</span>
+                      </div>
+                    </>
+                  )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.95rem' }}>
                     <span style={{ color: '#64748b' }}>Total HT</span>
                     <span style={{ fontWeight: 600 }}>{totalHT.toLocaleString('fr-FR', {minimumFractionDigits:2})} DZD</span>
