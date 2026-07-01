@@ -37,6 +37,8 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
   const [qty, setQty] = useState(1);
   const [customH, setCustomH] = useState('');
   const [customL, setCustomL] = useState('');
+  const [customM2, setCustomM2] = useState('');
+  const [isM2Direct, setIsM2Direct] = useState(false);
   const [selectedGlassId, setSelectedGlassId] = useState('');
   const [selectedColorId, setSelectedColorId] = useState('');
   const [isHEnabled, setIsHEnabled] = useState(false);
@@ -48,15 +50,19 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
       if (p.unit === 'm2') {
         setIsHEnabled(true);
         setIsLEnabled(true);
+        setIsM2Direct(false);
       } else if (p.unit === 'm') {
         setIsHEnabled(true);
         setIsLEnabled(true);
+        setIsM2Direct(false);
       } else {
         setIsHEnabled(false);
         setIsLEnabled(false);
+        setIsM2Direct(false);
       }
       setCustomH('');
       setCustomL('');
+      setCustomM2('');
     }
   }, [selectedProductId]);
 
@@ -117,14 +123,15 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
     }
   };
 
-  const calculateItemPrice = (product, h, l, q, glassId, colorId) => {
+  const calculateItemPrice = (product, h, l, q, glassId, colorId, m2) => {
     let basePrice = Number(product.prix) || 0;
     
     // Unité multiplier
     let quantityMultiplier = 1;
+    let actualArea = 0;
     if (product.unit === 'm2') {
-      const area = ((Number(h)||0) / 1000) * ((Number(l)||0) / 1000);
-      quantityMultiplier = area * Number(q);
+      actualArea = (m2 !== undefined && m2 !== null) ? Number(m2) : (((Number(h)||0) / 1000) * ((Number(l)||0) / 1000));
+      quantityMultiplier = actualArea * Number(q);
     } else if (product.unit === 'm') {
       const length = (Number(l) || Number(h) || 0) / 1000;
       quantityMultiplier = length * Number(q);
@@ -146,7 +153,7 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
             const fn = new Function('return (' + formula + ')');
             glassArea = fn() / 1000000; // convert mm2 to m2
           } else {
-             glassArea = ((Number(h)||0) / 1000) * ((Number(l)||0) / 1000);
+             glassArea = product.unit === 'm2' ? actualArea : (((Number(h)||0) / 1000) * ((Number(l)||0) / 1000));
           }
         } catch (e) {
           console.warn("Erreur formule vitrage", e);
@@ -173,8 +180,9 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
     const h = isHEnabled ? (Number(customH) || 0) : 0;
     const l = isLEnabled ? (Number(customL) || 0) : 0;
     const q = Number(qty) || 1;
+    const m2Val = isM2Direct ? (Number(customM2) || 0) : null;
     
-    const price = calculateItemPrice(product, h, l, q, selectedGlassId, selectedColorId);
+    const price = calculateItemPrice(product, h, l, q, selectedGlassId, selectedColorId, m2Val);
     
     const newItem = {
       id: `QUOTE-ITEM-${Date.now()}`,
@@ -183,6 +191,7 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
       designation: product.designation,
       unit: product.unit,
       h, l, qty: q,
+      m2: m2Val,
       glassId: selectedGlassId,
       colorId: selectedColorId,
       totalHT: price,
@@ -196,6 +205,7 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
     setQty(1);
     setCustomH('');
     setCustomL('');
+    setCustomM2('');
     setSelectedGlassId('');
     setSelectedColorId('');
   };
@@ -339,7 +349,7 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
     const tableRows = [];
 
     items.forEach(item => {
-      const dims = (item.l || item.h) ? `${item.l} x ${item.h} mm` : '';
+      const dims = (item.m2 !== undefined && item.m2 !== null) ? `${item.m2} m²` : ((item.l || item.h) ? `${item.l} x ${item.h} mm` : '');
       let optStr = '';
       if (item.glassId) {
         const g = (database.glass||[]).find(x=>x.id===item.glassId);
@@ -355,7 +365,7 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
       let measureUnit = item.unit === 'unité' ? 'U' : item.unit;
       
       if (item.unit === 'm2') {
-         totalMeasurementQty = ((item.h || 0) / 1000) * ((item.l || 0) / 1000) * item.qty;
+         totalMeasurementQty = (item.m2 !== undefined && item.m2 !== null) ? (item.m2 * item.qty) : (((item.h || 0) / 1000) * ((item.l || 0) / 1000) * item.qty);
       } else if (item.unit === 'm') {
          totalMeasurementQty = ((item.l || item.h || 0) / 1000) * item.qty;
       }
@@ -921,46 +931,66 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
                 return (
                   <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                     
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                      <div className="form-group" style={{ opacity: isHEnabled ? 1 : 0.6 }}>
-                        <label className="label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          Hauteur (H) mm
-                          <button 
-                            type="button" 
-                            onClick={() => {
-                              if (p.unit === 'm2') { alert("La hauteur est indispensable pour le calcul au m²."); return; }
-                              if (p.unit === 'm' && isHEnabled && !isLEnabled) { alert("Pour l'unité mètre linéaire, au moins H ou L doit être activé."); return; }
-                              setIsHEnabled(!isHEnabled);
-                              if (isHEnabled) setCustomH('');
-                            }}
-                            title={isHEnabled ? "Désactiver la hauteur" : "Activer la hauteur"}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: isHEnabled ? '#3b82f6' : '#94a3b8', padding: '0.2rem' }}
-                          >
-                            {isHEnabled ? <Pin size={16} /> : <PinOff size={16} />}
-                          </button>
+                    {p.unit === 'm2' && (
+                      <div style={{ display: 'flex', gap: '1rem', marginBottom: '0.5rem' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                          <input type="radio" checked={!isM2Direct} onChange={() => setIsM2Direct(false)} />
+                          Saisir H et L (mm)
                         </label>
-                        <input type="number" className="input" placeholder="ex: 1200" value={customH} onChange={e => setCustomH(e.target.value)} disabled={!isHEnabled} />
-                      </div>
-                      <div className="form-group" style={{ opacity: isLEnabled ? 1 : 0.6 }}>
-                        <label className="label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          Largeur (L) mm
-                          <button 
-                            type="button" 
-                            onClick={() => {
-                              if (p.unit === 'm2') { alert("La largeur est indispensable pour le calcul au m²."); return; }
-                              if (p.unit === 'm' && isLEnabled && !isHEnabled) { alert("Pour l'unité mètre linéaire, au moins H ou L doit être activé."); return; }
-                              setIsLEnabled(!isLEnabled);
-                              if (isLEnabled) setCustomL('');
-                            }}
-                            title={isLEnabled ? "Désactiver la largeur" : "Activer la largeur"}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: isLEnabled ? '#3b82f6' : '#94a3b8', padding: '0.2rem' }}
-                          >
-                            {isLEnabled ? <Pin size={16} /> : <PinOff size={16} />}
-                          </button>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                          <input type="radio" checked={isM2Direct} onChange={() => setIsM2Direct(true)} />
+                          Saisir la surface (m²)
                         </label>
-                        <input type="number" className="input" placeholder="ex: 1000" value={customL} onChange={e => setCustomL(e.target.value)} disabled={!isLEnabled} />
                       </div>
-                    </div>
+                    )}
+
+                    {!isM2Direct ? (
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                        <div className="form-group" style={{ opacity: isHEnabled ? 1 : 0.6 }}>
+                          <label className="label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            Hauteur (H) mm
+                            <button 
+                              type="button" 
+                              onClick={() => {
+                                if (p.unit === 'm2') { alert("La hauteur est indispensable pour le calcul au m²."); return; }
+                                if (p.unit === 'm' && isHEnabled && !isLEnabled) { alert("Pour l'unité mètre linéaire, au moins H ou L doit être activé."); return; }
+                                setIsHEnabled(!isHEnabled);
+                                if (isHEnabled) setCustomH('');
+                              }}
+                              title={isHEnabled ? "Désactiver la hauteur" : "Activer la hauteur"}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: isHEnabled ? '#3b82f6' : '#94a3b8', padding: '0.2rem' }}
+                            >
+                              {isHEnabled ? <Pin size={16} /> : <PinOff size={16} />}
+                            </button>
+                          </label>
+                          <input type="number" className="input" placeholder="ex: 1200" value={customH} onChange={e => setCustomH(e.target.value)} disabled={!isHEnabled} />
+                        </div>
+                        <div className="form-group" style={{ opacity: isLEnabled ? 1 : 0.6 }}>
+                          <label className="label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            Largeur (L) mm
+                            <button 
+                              type="button" 
+                              onClick={() => {
+                                if (p.unit === 'm2') { alert("La largeur est indispensable pour le calcul au m²."); return; }
+                                if (p.unit === 'm' && isLEnabled && !isHEnabled) { alert("Pour l'unité mètre linéaire, au moins H ou L doit être activé."); return; }
+                                setIsLEnabled(!isLEnabled);
+                                if (isLEnabled) setCustomL('');
+                              }}
+                              title={isLEnabled ? "Désactiver la largeur" : "Activer la largeur"}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: isLEnabled ? '#3b82f6' : '#94a3b8', padding: '0.2rem' }}
+                            >
+                              {isLEnabled ? <Pin size={16} /> : <PinOff size={16} />}
+                            </button>
+                          </label>
+                          <input type="number" className="input" placeholder="ex: 1000" value={customL} onChange={e => setCustomL(e.target.value)} disabled={!isLEnabled} />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="form-group">
+                        <label className="label">Surface (m²)</label>
+                        <input type="number" className="input" placeholder="ex: 2.5" value={customM2} onChange={e => setCustomM2(e.target.value)} />
+                      </div>
+                    )}
 
                     {p.hasGlazing && (
                       <div className="form-group">
