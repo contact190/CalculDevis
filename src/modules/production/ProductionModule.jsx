@@ -887,16 +887,57 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
         doc.setTextColor(71, 85, 105);
         let partY = detailsStartY + 24;
         
-        if (openingPart) {
-          const w = openingPart.width || cfg.L;
-          const h = openingPart.height || cfg.H;
+        const cParts = cfg.compoundConfig.parts.map(p => ({...p}));
+        const isH = cfg.compoundConfig.orientation === 'horizontal';
+        const splitKey = isH ? 'rawW' : 'rawH';
+        
+        cParts.forEach(p => {
+           const ovW = cfg.partOverrides?.[p.id]?.width;
+           const ovH = cfg.partOverrides?.[p.id]?.height;
+           p.rawW = ovW !== undefined ? Number(ovW) : (p.width || (isH ? cfg.L/cParts.length : cfg.L));
+           p.rawH = ovH !== undefined ? Number(ovH) : (p.height || (isH ? cfg.H : cfg.H/cParts.length));
+           p._hasOv = isH ? (ovW !== undefined && ovW !== '') : (ovH !== undefined && ovH !== '');
+        });
+
+        const available = isH ? cfg.L : cfg.H;
+        const overriddenParts = cParts.filter(p => p._hasOv);
+        const autoParts = cParts.filter(p => !p._hasOv);
+        
+        if (overriddenParts.length > 0 && autoParts.length > 0) {
+           const overTotal = overriddenParts.reduce((s, p) => s + p[splitKey], 0);
+           const rem = Math.max(0, available - overTotal);
+           const autoTotal = autoParts.reduce((s, p) => s + p[splitKey], 0);
+           if (autoTotal > 0) {
+              const scale = rem / autoTotal;
+              autoParts.forEach(p => { p[splitKey] *= scale; });
+           } else {
+              const perAuto = rem / autoParts.length;
+              autoParts.forEach(p => { p[splitKey] = perAuto; });
+           }
+        }
+
+        const openingP = cParts.find(p => p.type === 'opening');
+        const fixP = cParts.filter(p => p.type === 'fixe');
+
+        if (openingP) {
+          const w = Math.round(openingP.rawW);
+          const h = Math.round(openingP.rawH);
           const gammeTag = openingRangeName ? ` [Gamme: ${openingRangeName}]` : '';
           doc.text(`↳ Ouvrant: ${w} x ${h} mm${gammeTag}`, startX, partY);
-          partY += 6;
+          
+          // DEBUG: print partOverrides to see what is arriving
+          if (cfg.partOverrides) {
+             doc.text(`DEBUG Overrides: ${JSON.stringify(cfg.partOverrides)}`, startX, partY + 6);
+             partY += 12;
+          } else {
+             doc.text(`DEBUG Overrides: NONE`, startX, partY + 6);
+             partY += 12;
+          }
         }
-        fixParts.forEach((fp, fi) => {
-          const w = fp.width || 0;
-          const h = fp.height || cfg.H;
+        
+        fixP.forEach((fp, fi) => {
+          const w = Math.round(fp.rawW);
+          const h = Math.round(fp.rawH);
           const fpComp = database.compositions?.find(c => c.id === fp.compositionId);
           const fpRange = fpComp ? database.ranges?.find(r => r.id === fpComp.rangeId) : null;
           const fpRangeName = fpRange?.name || fixRangeName;

@@ -1,22 +1,19 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Ruler, CheckCircle, ArrowLeft, QrCode, ClipboardList, RefreshCw, ShieldCheck, Save, ChevronDown, ChevronRight, Settings } from 'lucide-react';
 import { FormulaEngine } from '../../engine/formula-engine';
-import { getTechnicalDrawingDataURL } from '../../utils/drawingUtils';
+import { getTechnicalDrawingDataURL, drawTechnicalDrawing } from '../../utils/drawingUtils';
 
 const ItemPreview = ({ config, database }) => {
-  const [dataUrl, setDataUrl] = React.useState(null);
+  const canvasRef = useRef(null);
   
   // Serialize config to avoid re-rendering on database reference changes
   const configStr = React.useMemo(() => JSON.stringify(config), [config]);
   
   React.useEffect(() => {
-    if (config && database) {
-      const url = getTechnicalDrawingDataURL(config, database);
-      setDataUrl(url);
+    if (config && database && canvasRef.current) {
+      drawTechnicalDrawing(canvasRef.current, config, database);
     }
-  }, [configStr]); // Remove database from deps to avoid mass re-renders
-
-  if (!dataUrl) return <div style={{ width: '100%', height: '100%', minHeight: '120px', background: '#f1f5f9', borderRadius: '0.5rem' }} />;
+  }, [configStr, database]); // keep database in deps so it redraws if the database catalog changes
 
   return (
     <div style={{ 
@@ -29,9 +26,8 @@ const ItemPreview = ({ config, database }) => {
       padding: '10px',
       borderRadius: '0.5rem'
     }}>
-      <img 
-        src={dataUrl} 
-        alt="Aperçu" 
+      <canvas 
+        ref={canvasRef}
         style={{ width: '100%', maxHeight: '160px', objectFit: 'contain' }} 
       />
     </div>
@@ -340,6 +336,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                     wallDepth: sourceVoid.wallDepth,
                     handleHeight: sourceVoid.handleHeight,
                     shutter: sourceVoid.shutter ? JSON.parse(JSON.stringify(sourceVoid.shutter)) : null,
+                    partOverrides: sourceVoid.partOverrides ? JSON.parse(JSON.stringify(sourceVoid.partOverrides)) : {},
                     measurementsValidated: true
                   };
                 }
@@ -519,7 +516,8 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                     label: `${f.name} - ${a.name} - ${v.name}`,
                     shutterList: shutterList,
                     instanceNames: [v.name],
-                    instanceFloors: [f.name]
+                    instanceFloors: [f.name],
+                    partOverrides: v.partOverrides || {}
                   });
                 }
                 return { ...v, productionLaunched: true };
@@ -918,7 +916,8 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                       shutterConfig: v.shutter ? {
                                         ...(item.config.shutterConfig || {}),
                                         ...(v.shutter.overrides || {})
-                                      } : (v.shutter === null ? null : item.config.shutterConfig)
+                                      } : (v.shutter === null ? null : item.config.shutterConfig),
+                                      partOverrides: v.partOverrides || {}
                                     }} database={data} />
                                   </div>
 

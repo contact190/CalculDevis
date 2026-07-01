@@ -614,7 +614,8 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                     H: sourceVoid.H,
                     wallDepth: sourceVoid.wallDepth,
                     handleHeight: sourceVoid.handleHeight,
-                    shutter: JSON.parse(JSON.stringify(sourceVoid.shutter || { qty: 1, overrides: {} }))
+                    shutter: JSON.parse(JSON.stringify(sourceVoid.shutter || { qty: 1, overrides: {} })),
+                    partOverrides: sourceVoid.partOverrides ? JSON.parse(JSON.stringify(sourceVoid.partOverrides)) : {}
                   };
                 }
                 return v;
@@ -1311,7 +1312,8 @@ const previewConfig = {
                                   shutterConfig: v.shutter ? {
                                     ...(item.config.shutterConfig || {}),
                                     ...(v.shutter.overrides || {})
-                                  } : (v.shutter === null ? null : item.config.shutterConfig)
+                                  } : (v.shutter === null ? null : item.config.shutterConfig),
+                                  partOverrides: v.partOverrides || {}
                                 };
 
                                 return (

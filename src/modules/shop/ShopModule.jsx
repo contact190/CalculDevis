@@ -244,24 +244,49 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
     const boxY = y;
     const boxWidth = (pw - 35) / 2; // 15 margin L/R, 5 gap = 35
     
+    const companyNameLines = doc.splitTextToSize(quoteSettings?.companyName || 'Mon Entreprise', boxWidth - 6);
+    const clientNameLines = doc.splitTextToSize(client?.nom || 'Client', boxWidth - 6);
+
+    let tempCyLeft = boxY + 6 + (companyNameLines.length * 4) + 1;
+    if (quoteSettings?.companyAddress) {
+      tempCyLeft += doc.splitTextToSize(quoteSettings.companyAddress, boxWidth - 6).length * 4;
+    }
+    const phone = quoteSettings?.companyPhone || '';
+    const email = quoteSettings?.companyEmail || '';
+    if (phone || email) tempCyLeft += 5;
+    if (quoteSettings?.companyRC) tempCyLeft += 4;
+    if (quoteSettings?.companyIMP) tempCyLeft += 4;
+    if (quoteSettings?.companyMF) tempCyLeft += 4;
+
+    let tempCyRight = boxY + 11 + (clientNameLines.length * 4) + 1;
+    if (client?.adresse) {
+      tempCyRight += doc.splitTextToSize(client.adresse, boxWidth - 6).length * 4;
+    }
+    if (client?.telephone) tempCyRight += 4;
+    if (client?.email) tempCyRight += 5;
+    if (client?.rc) tempCyRight += 4;
+    if (client?.nif) tempCyRight += 4;
+    if (client?.nis) tempCyRight += 4;
+    if (client?.ai) tempCyRight += 4;
+
+    const boxHeight = Math.max(tempCyLeft - boxY + 4, tempCyRight - boxY + 4, 42);
+
     // Company box (Left)
     doc.setDrawColor(150, 150, 150);
     doc.setLineWidth(0.3);
-    doc.roundedRect(15, boxY, boxWidth, 42, 2, 2);
+    doc.roundedRect(15, boxY, boxWidth, boxHeight, 2, 2);
     
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
-    doc.text(quoteSettings?.companyName || 'Mon Entreprise', 18, boxY + 6);
+    doc.text(companyNameLines, 18, boxY + 6);
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
-    let cy = boxY + 11;
+    let cy = boxY + 6 + (companyNameLines.length * 4) + 1;
     if (quoteSettings?.companyAddress) {
       const addressLines = doc.splitTextToSize(quoteSettings.companyAddress, boxWidth - 6);
       doc.text(addressLines, 18, cy);
       cy += addressLines.length * 4;
     }
-    const phone = quoteSettings?.companyPhone || '';
-    const email = quoteSettings?.companyEmail || '';
     if (phone || email) {
       doc.text(`${phone} ${email ? ' - ' + email : ''}`, 18, cy);
       cy += 5;
@@ -274,17 +299,17 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
 
     // Client box (Right)
     const rightBoxXHeader = 15 + boxWidth + 5;
-    doc.roundedRect(rightBoxXHeader, boxY, boxWidth, 42, 2, 2);
+    doc.roundedRect(rightBoxXHeader, boxY, boxWidth, boxHeight, 2, 2);
     
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
     doc.text('Destinataire :', rightBoxXHeader + 3, boxY + 6);
     doc.setFontSize(10);
-    doc.text(client?.nom || 'Client', rightBoxXHeader + 3, boxY + 11);
+    doc.text(clientNameLines, rightBoxXHeader + 3, boxY + 11);
     
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
-    let cly = boxY + 16;
+    let cly = boxY + 11 + (clientNameLines.length * 4) + 1;
     if (client?.adresse) {
       const addrLines = doc.splitTextToSize(client.adresse, boxWidth - 6);
       doc.text(addrLines, rightBoxXHeader + 3, cly);
@@ -305,7 +330,7 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
     if (client?.ai) { doc.text(`AI : ${client.ai}`, rightBoxXHeader + 3, cly); cly += 4; }
     doc.setTextColor(0, 0, 0);
 
-    y = boxY + 48;
+    y = boxY + boxHeight + 6;
 
     // --- TABLEAU ---
     const tableColumn = ["Désignation", "Dim. / Options", "Quantité (m²/ml)", "Pièces", "P.U. HT", "Total HT"];
@@ -379,8 +404,8 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
 
     // Right Box: Totals
     const rightBoxX = 110;
-    const boxHeight = 22;
-    doc.roundedRect(rightBoxX, finalY, pw - 15 - rightBoxX, boxHeight, 3, 3);
+    const totalsBoxHeight = 22;
+    doc.roundedRect(rightBoxX, finalY, pw - 15 - rightBoxX, totalsBoxHeight, 3, 3);
     const effectiveTvaRate = tvaRate !== undefined ? tvaRate : (quoteSettings?.tvaRate ?? 9);
     
     doc.setFontSize(9.5);
@@ -393,7 +418,7 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
     doc.text(`TVA ${effectiveTvaRate}% :`, rightBoxX + 5, finalY + 16);
     doc.text(`${formatPrice(tva)} DZD`, pw - 20, finalY + 16, { align: 'right' });
 
-    finalY += boxHeight + 15;
+    finalY += totalsBoxHeight + 15;
     
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
@@ -1080,24 +1105,49 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
                       const boxY = y;
                       const boxWidth = (pw - 35) / 2;
                       
+                      const companyNameLines = doc.splitTextToSize(quoteSettings?.companyName || 'Mon Entreprise', boxWidth - 6);
+                      const clientNameLines = doc.splitTextToSize(client?.nom || 'Client', boxWidth - 6);
+                  
+                      let tempCyLeft = boxY + 6 + (companyNameLines.length * 4) + 1;
+                      if (quoteSettings?.companyAddress) {
+                        tempCyLeft += doc.splitTextToSize(quoteSettings.companyAddress, boxWidth - 6).length * 4;
+                      }
+                      const phone = quoteSettings?.companyPhone || '';
+                      const email = quoteSettings?.companyEmail || '';
+                      if (phone || email) tempCyLeft += 5;
+                      if (quoteSettings?.companyRC) tempCyLeft += 4;
+                      if (quoteSettings?.companyIMP) tempCyLeft += 4;
+                      if (quoteSettings?.companyMF) tempCyLeft += 4;
+                  
+                      let tempCyRight = boxY + 11 + (clientNameLines.length * 4) + 1;
+                      if (client?.adresse) {
+                        tempCyRight += doc.splitTextToSize(client.adresse, boxWidth - 6).length * 4;
+                      }
+                      if (client?.telephone) tempCyRight += 4;
+                      if (client?.email) tempCyRight += 5;
+                      if (client?.rc) tempCyRight += 4;
+                      if (client?.nif) tempCyRight += 4;
+                      if (client?.nis) tempCyRight += 4;
+                      if (client?.ai) tempCyRight += 4;
+                  
+                      const boxHeight = Math.max(tempCyLeft - boxY + 4, tempCyRight - boxY + 4, 42);
+
                       // Company box (Left)
                       doc.setDrawColor(150, 150, 150);
                       doc.setLineWidth(0.3);
-                      doc.roundedRect(15, boxY, boxWidth, 42, 2, 2);
+                      doc.roundedRect(15, boxY, boxWidth, boxHeight, 2, 2);
                       
                       doc.setFontSize(10);
                       doc.setFont('helvetica', 'bold');
-                      doc.text(quoteSettings?.companyName || 'Mon Entreprise', 18, boxY + 6);
+                      doc.text(companyNameLines, 18, boxY + 6);
                       doc.setFontSize(8);
                       doc.setFont('helvetica', 'normal');
-                      let cy = boxY + 11;
+                      let cy = boxY + 6 + (companyNameLines.length * 4) + 1;
                       if (quoteSettings?.companyAddress) {
                         const addressLines = doc.splitTextToSize(quoteSettings.companyAddress, boxWidth - 6);
                         doc.text(addressLines, 18, cy);
                         cy += addressLines.length * 4;
                       }
-                      const phone = quoteSettings?.companyPhone || '';
-                      const email = quoteSettings?.companyEmail || '';
                       if (phone || email) {
                         doc.text(`${phone} ${email ? ' - ' + email : ''}`, 18, cy);
                         cy += 5;
@@ -1110,17 +1160,17 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
                   
                       // Client box (Right)
                       const rightBoxXHeader = 15 + boxWidth + 5;
-                      doc.roundedRect(rightBoxXHeader, boxY, boxWidth, 42, 2, 2);
+                      doc.roundedRect(rightBoxXHeader, boxY, boxWidth, boxHeight, 2, 2);
                       
                       doc.setFontSize(9);
                       doc.setFont('helvetica', 'bold');
                       doc.text('Destinataire :', rightBoxXHeader + 3, boxY + 6);
                       doc.setFontSize(10);
-                      doc.text(client?.nom || 'Client', rightBoxXHeader + 3, boxY + 11);
+                      doc.text(clientNameLines, rightBoxXHeader + 3, boxY + 11);
                       
                       doc.setFontSize(8);
                       doc.setFont('helvetica', 'normal');
-                      let cly = boxY + 16;
+                      let cly = boxY + 11 + (clientNameLines.length * 4) + 1;
                       if (client?.adresse) {
                         const addrLines = doc.splitTextToSize(client.adresse, boxWidth - 6);
                         doc.text(addrLines, rightBoxXHeader + 3, cly);
@@ -1141,7 +1191,7 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
                       if (client?.ai) { doc.text(`AI : ${client.ai}`, rightBoxXHeader + 3, cly); cly += 4; }
                       doc.setTextColor(0, 0, 0);
                   
-                      y = boxY + 48;
+                      y = boxY + boxHeight + 6;
                   
                       const tableColumn = ["Désignation", "Dim. / Options", "Quantité (m²/ml)", "Pièces", "P.U. HT", "Total HT"];
                       const tableRows = [];

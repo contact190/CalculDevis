@@ -1,13 +1,15 @@
-export const getTechnicalDrawingDataURL = (cfg, database) => {
-  if (!cfg || !database) return null;
+export const drawTechnicalDrawing = (canvas, cfg, database) => {
+  if (!canvas || !cfg || !database) return;
 
-  const canvas = document.createElement('canvas');
   canvas.width = 700;
   canvas.height = 700;
   const ctx = canvas.getContext('2d');
   
   const { L, H, compositionId, optionalSides = {} } = cfg;
-  if (!L || !H) return null;
+  if (!L || !H) {
+    ctx.clearRect(0, 0, 700, 700);
+    return;
+  }
 
   const margin = 100;
   const canvasSize = 700;
@@ -355,6 +357,11 @@ export const getTechnicalDrawingDataURL = (cfg, database) => {
     ctx.font = 'bold 18px Inter, sans-serif';
     ctx.fillText(`${caissonH}`, dimX2 - 15, offsetY + dCaissonH/2 + 5);
   }
+};
 
+export const getTechnicalDrawingDataURL = (cfg, database) => {
+  if (!cfg || !database) return null;
+  const canvas = document.createElement('canvas');
+  drawTechnicalDrawing(canvas, cfg, database);
   return canvas.toDataURL('image/png');
 };

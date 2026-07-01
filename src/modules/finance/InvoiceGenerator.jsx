@@ -125,8 +125,13 @@ const InvoiceGenerator = ({ data, setData, quoteSettings }) => {
     const boxWidth = (pw - 35) / 2; // 15 margin L/R, 5 gap = 35
 
     doc.setFontSize(8);
+    
+    // Split names
+    const companyNameLines = doc.splitTextToSize(quoteSettings?.companyName || 'Mon Entreprise', boxWidth - 6);
+    const clientNameLines = doc.splitTextToSize(selectedClient?.nom || 'Client', boxWidth - 6);
+
     // Calculate required height for Left Box
-    let cyLeft = boxY + 16;
+    let cyLeft = boxY + 6 + (companyNameLines.length * 4) + 1;
     if (quoteSettings?.companyAddress) cyLeft += doc.splitTextToSize(quoteSettings.companyAddress, boxWidth - 6).length * 4;
     if (quoteSettings?.companyPhone || quoteSettings?.companyEmail) {
       const contactStr = `${quoteSettings?.companyPhone || ''} ${quoteSettings?.companyEmail ? ' - ' + quoteSettings.companyEmail : ''}`;
@@ -139,7 +144,7 @@ const InvoiceGenerator = ({ data, setData, quoteSettings }) => {
     if (quoteSettings?.companyBank) cyLeft += doc.splitTextToSize(`Banque: ${quoteSettings.companyBank}`, boxWidth - 6).length * 4;
 
     // Calculate required height for Right Box
-    let cyRight = boxY + 16;
+    let cyRight = boxY + 11 + (clientNameLines.length * 4) + 1;
     if (selectedClient?.adresse) cyRight += doc.splitTextToSize(selectedClient.adresse, boxWidth - 6).length * 4;
     if (selectedClient?.telephone) cyRight += doc.splitTextToSize(`Tél : ${selectedClient.telephone}`, boxWidth - 6).length * 4;
     if (selectedClient?.email) cyRight += doc.splitTextToSize(`Email : ${selectedClient.email}`, boxWidth - 6).length * 4;
@@ -161,10 +166,10 @@ const InvoiceGenerator = ({ data, setData, quoteSettings }) => {
     doc.text('Fournisseur :', 18, boxY + 6);
 
     doc.setFontSize(10);
-    doc.text(quoteSettings?.companyName || 'Mon Entreprise', 18, boxY + 11);
+    doc.text(companyNameLines, 18, boxY + 11);
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
-    let cy = boxY + 16;
+    let cy = boxY + 6 + (companyNameLines.length * 4) + 1;
     if (quoteSettings?.companyAddress) {
       const lines = doc.splitTextToSize(quoteSettings.companyAddress, boxWidth - 6);
       doc.text(lines, 18, cy); cy += lines.length * 4;
@@ -207,11 +212,11 @@ const InvoiceGenerator = ({ data, setData, quoteSettings }) => {
     doc.setFont('helvetica', 'bold');
     doc.text('Destinataire :', rightBoxXHeader + 3, boxY + 6);
     doc.setFontSize(10);
-    doc.text(selectedClient?.nom || 'Client', rightBoxXHeader + 3, boxY + 11);
+    doc.text(clientNameLines, rightBoxXHeader + 3, boxY + 11);
     
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
-    let cly = boxY + 16;
+    let cly = boxY + 11 + (clientNameLines.length * 4) + 1;
     if (selectedClient?.adresse) {
       const lines = doc.splitTextToSize(selectedClient.adresse, boxWidth - 6);
       doc.text(lines, rightBoxXHeader + 3, cly); cly += lines.length * 4;

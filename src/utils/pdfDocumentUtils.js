@@ -107,7 +107,8 @@ export const drawDocumentHeader = (doc, quoteSettings, client, options = {}) => 
   const boxY = y;
   const boxWidth = showClientBox ? (pw - 35) / 2 : pw - 30;
 
-  let cyLeft = boxY + 16;
+  const companyNameLines = doc.splitTextToSize(quoteSettings?.companyName || 'Mon Entreprise', boxWidth - 6);
+  let cyLeft = boxY + 11 + (companyNameLines.length * 4) + 1;
   if (quoteSettings?.companyAddress) cyLeft += doc.splitTextToSize(quoteSettings.companyAddress, boxWidth - 6).length * 4;
   if (quoteSettings?.companyPhone || quoteSettings?.companyEmail) {
     cyLeft += doc.splitTextToSize(`${quoteSettings?.companyPhone || ''} ${quoteSettings?.companyEmail ? ' - ' + quoteSettings.companyEmail : ''}`, boxWidth - 6).length * 4;
@@ -119,7 +120,10 @@ export const drawDocumentHeader = (doc, quoteSettings, client, options = {}) => 
   if (quoteSettings?.companyBank) cyLeft += doc.splitTextToSize(`Banque: ${quoteSettings.companyBank}`, boxWidth - 6).length * 4;
 
   let cyRight = boxY + 16;
+  let clientNameLines = [];
   if (showClientBox) {
+    clientNameLines = doc.splitTextToSize(client?.nom || 'Client', boxWidth - 6);
+    cyRight = boxY + 11 + (clientNameLines.length * 4) + 1;
     if (client?.adresse) cyRight += doc.splitTextToSize(client.adresse, boxWidth - 6).length * 4;
     if (client?.telephone) cyRight += 4;
     if (client?.email) cyRight += 4;
@@ -139,11 +143,11 @@ export const drawDocumentHeader = (doc, quoteSettings, client, options = {}) => 
   doc.setFont('helvetica', 'bold');
   doc.text('Fournisseur :', 18, boxY + 6);
   doc.setFontSize(10);
-  doc.text(quoteSettings?.companyName || 'Mon Entreprise', 18, boxY + 11);
+  doc.text(companyNameLines, 18, boxY + 11);
   doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
 
-  let cy = boxY + 16;
+  let cy = boxY + 11 + (companyNameLines.length * 4) + 1;
   if (quoteSettings?.companyAddress) {
     const lines = doc.splitTextToSize(quoteSettings.companyAddress, boxWidth - 6);
     doc.text(lines, 18, cy);
@@ -179,10 +183,10 @@ export const drawDocumentHeader = (doc, quoteSettings, client, options = {}) => 
     doc.setFont('helvetica', 'bold');
     doc.text('Destinataire :', rightBoxX + 3, boxY + 6);
     doc.setFontSize(10);
-    doc.text(client?.nom || 'Client', rightBoxX + 3, boxY + 11);
+    doc.text(clientNameLines, rightBoxX + 3, boxY + 11);
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
-    let cly = boxY + 16;
+    let cly = boxY + 11 + (clientNameLines.length * 4) + 1;
     if (client?.adresse) {
       const lines = doc.splitTextToSize(client.adresse, boxWidth - 6);
       doc.text(lines, rightBoxX + 3, cly);
