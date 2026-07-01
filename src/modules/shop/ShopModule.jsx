@@ -351,7 +351,7 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
       head: [tableColumn],
       body: tableRows,
       theme: 'grid',
-      headStyles: { fillColor: [40, 40, 40] },
+      headStyles: { fillColor: [40, 40, 40], textColor: [255, 255, 255] },
       styles: { fontSize: 9, cellPadding: 3, textColor: [0, 0, 0] },
       columnStyles: {
         0: { cellWidth: 50 },
@@ -1186,7 +1186,7 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
                         head: [tableColumn],
                         body: tableRows,
                         theme: 'grid',
-                        headStyles: { fillColor: [40, 40, 40] },
+                        headStyles: { fillColor: [40, 40, 40], textColor: [255, 255, 255] },
                         styles: { fontSize: 9, cellPadding: 3, textColor: [0, 0, 0] },
                         columnStyles: { 0: { cellWidth: 50 }, 4: { halign: 'right' }, 5: { halign: 'right', fontStyle: 'bold' } }
                       });

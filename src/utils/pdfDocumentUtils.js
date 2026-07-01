@@ -87,7 +87,9 @@ export const drawDocumentHeader = (doc, quoteSettings, client, options = {}) => 
   if (title) {
     doc.setFontSize(22);
     doc.setFont('helvetica', 'bold');
-    doc.text(title, pw - 15, y + 15, { align: 'right' });
+    const maxTitleWidth = pw - 90; // leave room for logo on the left
+    const splitTitle = doc.splitTextToSize(title, maxTitleWidth);
+    doc.text(splitTitle, pw - 15, y + 12, { align: 'right' });
   }
 
   y += 35;

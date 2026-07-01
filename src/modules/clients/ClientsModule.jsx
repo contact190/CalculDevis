@@ -108,6 +108,15 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
     return false;
   };
 
+  const handleDeleteQuote = (quote) => {
+    if (window.confirm(`Voulez-vous vraiment supprimer le devis ${quote.number} ? Cette action est irréversible.`)) {
+      setData(prev => ({
+        ...prev,
+        quotes: (prev.quotes || []).filter(q => q.id !== quote.id)
+      }));
+    }
+  };
+
   return (
     <div className="animate-fade-in">
       <header className="flex-header">
@@ -271,6 +280,11 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
 
                       <td data-label="Actions" style={{ textAlign: 'center' }}>
                         <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
+                          {(!q.status || q.status === 'Brouillon') && (
+                            <button onClick={() => handleDeleteQuote(q)} className="btn" style={{ padding: '0.3rem', fontSize: '0.8rem', color: '#ef4444', borderColor: '#fecaca', background: '#fef2f2' }} title="Supprimer">
+                              <Trash2 size={14} />
+                            </button>
+                          )}
                           <button onClick={() => { if(onOpenQuote) onOpenQuote(q); }} className="btn" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', color: '#2563eb', borderColor: '#2563eb' }}>
                             Ouvrir
                           </button>
@@ -416,6 +430,11 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
                                     <td data-label="Actions" style={{ textAlign: 'center' }}>
 
                                       <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'center' }}>
+                                        {(!q.status || q.status === 'Brouillon') && (
+                                          <button onClick={() => handleDeleteQuote(q)} className="btn" style={{ padding: '0.3rem', fontSize: '0.8rem', color: '#ef4444', borderColor: '#fecaca', background: '#fef2f2' }} title="Supprimer">
+                                            <Trash2 size={12} />
+                                          </button>
+                                        )}
                                         <button onClick={() => { if(onOpenQuote) onOpenQuote(q); }} className="btn" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', color: '#2563eb', borderColor: '#2563eb' }}>
                                           Détails
                                         </button>

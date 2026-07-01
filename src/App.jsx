@@ -291,9 +291,27 @@ function App() {
     setQuoteSettings(prev => {
       const next = typeof newSettings === 'function' ? newSettings(prev) : newSettings;
       persistentStorage.save('quoteSettings', next).catch(e => console.error(e));
+      setDatabase(db => db ? { ...db, quoteSettings: next } : db);
       return next;
     });
   }, []);
+
+  useEffect(() => {
+    if (database) {
+      if (database.quoteSettings) {
+        setQuoteSettings(prev => {
+          if (JSON.stringify(prev) !== JSON.stringify(database.quoteSettings)) {
+            persistentStorage.save('quoteSettings', database.quoteSettings).catch(e => {});
+            return database.quoteSettings;
+          }
+          return prev;
+        });
+      } else {
+        setDatabase(db => ({ ...db, quoteSettings: quoteSettings }));
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [database?.quoteSettings]);
 
   // ─── Keep databaseRef in sync ───────────────────────────────────────────
   useEffect(() => {

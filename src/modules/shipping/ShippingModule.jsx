@@ -1029,7 +1029,8 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
 
         doc.setFontSize(9); doc.setFont('helvetica', 'bold');
         doc.text('Conforme', 25, y + 5.5);
-        doc.text(`Représentant ${companyName || 'Fournisseur'}`, 15 + col1W + col2W/2, y + 9, { align: 'center' });
+        doc.text('Représentant', 15 + col1W + col2W/2, y + 6.5, { align: 'center' });
+        doc.text(companyName || 'Fournisseur', 15 + col1W + col2W/2, y + 11.5, { align: 'center' });
         doc.text('Client', 15 + col1W + col2W + col3W/2, y + 9, { align: 'center' });
 
         doc.rect(15, y + 8, col1W, 8);
@@ -1239,6 +1240,163 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
     }
 
     setShowPVModal(false);
+  };
+
+  const handleDownloadOldPV = (pv) => {
+    const doc = new jsPDF();
+    const pw = doc.internal.pageSize.getWidth();
+    const ph = doc.internal.pageSize.getHeight();
+
+    const filteredUnits = allUnits.filter(u => {
+      if (pv.isFinal) {
+        return (u.statusAlu === 'Posé' || u.statusAlu === 'Fini') && u.statusVitrage === 'Fini';
+      } else {
+        return selectedOrder.unitPVs && selectedOrder.unitPVs[u.id] === pv.id;
+      }
+    });
+
+    if (filteredUnits.length === 0) {
+      alert("Impossible de retrouver les unités de ce PV.");
+      return;
+    }
+
+    const client = (data.clients || []).find(c => c.id === selectedOrder.clientId) || { nom: selectedOrder.clientName };
+    const title = pv.isFinal ? 'PV DE RECEPTION FINAL' : 'PV DE RECEPTION PROVISOIRE';
+    const projName = selectedOrder.clientName || selectedOrder.id;
+    
+    let isFirstPage = true;
+    let y = 15;
+
+    const zonesMap = {};
+    filteredUnits.forEach(u => {
+      const aptKey = u.aptName || u.storageZone || (u.floor ? `Etage ${u.floor}` : 'Général');
+      if (!zonesMap[aptKey]) zonesMap[aptKey] = [];
+      zonesMap[aptKey].push(u);
+    });
+    const groupedZones = Object.keys(zonesMap).map(z => ({ zoneName: z, units: zonesMap[z] }));
+
+    const col1W = (pw-30)*0.45;
+    const col2W = (pw-30)*0.275;
+    const col3W = (pw-30)*0.275;
+
+    const drawPageHeader = () => {
+        if (isFirstPage) {
+          y = drawDocumentHeader(doc, quoteSettings, client, {
+            title: title,
+            docLabel: 'Projet',
+            docValue: projName,
+            docDate: new Date(pv.createdAt).toLocaleDateString('fr-FR'),
+            showClientBox: true
+          });
+          doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+          const floorsStr = pv.isFinal ? 'Tous' : (pv.etages || []).join(', ');
+          doc.text(`Projet : ${projName} ;`, 15, y);
+          doc.text(`Etage : ${floorsStr} ;`, 15 + (pw-30)*0.6, y);
+
+          y += 4;
+          doc.rect(15, y, pw - 30, 8); 
+          doc.text('RECEPTION DES TRAVAUX', pw / 2, y + 5.5, { align: 'center' });
+          y += 8;
+        } else {
+          y = 15;
+        }
+
+        doc.rect(15, y, col1W, 8);
+        doc.rect(15 + col1W, y, col2W, 16); 
+        doc.rect(15 + col1W + col2W, y, col3W, 16);
+        doc.rect(18, y + 2, 4, 4);
+
+        doc.setFontSize(9); doc.setFont('helvetica', 'bold');
+        doc.text('Conforme', 25, y + 5.5);
+        doc.text('Représentant', 15 + col1W + col2W/2, y + 6.5, { align: 'center' });
+        doc.text(companyName || 'Fournisseur', 15 + col1W + col2W/2, y + 11.5, { align: 'center' });
+        doc.text('Client', 15 + col1W + col2W + col3W/2, y + 9, { align: 'center' });
+
+        doc.rect(15, y + 8, col1W, 8);
+        doc.rect(18, y + 10, 4, 4); 
+        doc.text('Avec Réserves (*)', 25, y + 13.5);
+        
+        return y + 16;
+    };
+
+    let tableStartY = drawPageHeader();
+    let currentY = tableStartY;
+
+    const drawPageFooter = () => {
+        const minHeight = 110;
+        if (currentY - tableStartY < minHeight) {
+            currentY = tableStartY + minHeight;
+        }
+
+        doc.rect(15, tableStartY, col1W, currentY - tableStartY);
+        doc.rect(15 + col1W, tableStartY, col2W, currentY - tableStartY);
+        doc.rect(15 + col1W + col2W, tableStartY, col3W, currentY - tableStartY);
+
+        doc.setFontSize(8); doc.setFont('helvetica', 'bold');
+        doc.text('Nom et prénom :', 15 + col1W + 5, tableStartY + 8);
+        doc.text('Nom et prénom :', 15 + col1W + col2W + 5, tableStartY + 8);
+        
+        doc.line(15 + col1W, tableStartY + 18, 15 + col1W + col2W + col3W, tableStartY + 18);
+        
+        doc.text('Fonction :', 15 + col1W + 5, tableStartY + 24);
+        doc.text('Fonction :', 15 + col1W + col2W + 5, tableStartY + 24);
+        
+        doc.line(15 + col1W, tableStartY + 34, 15 + col1W + col2W + col3W, tableStartY + 34);
+        
+        doc.text('Date et Visas', 15 + col1W + 5, tableStartY + 50);
+        doc.text('Date et Visas', 15 + col1W + col2W + 5, tableStartY + 50);
+
+        doc.setFont('helvetica', 'normal');
+        doc.text('....... / ....... / .......', 15 + col1W + 15, tableStartY + 100);
+        doc.text('....... / ....... / .......', 15 + col1W + col2W + 15, tableStartY + 100);
+    };
+
+    groupedZones.forEach(group => {
+        const positionLines = group.units.map(u => `${u.name} : ${u.gammeName || u.label}`);
+        const positionsText = positionLines.join('\n');
+        const splitPos = doc.splitTextToSize(positionsText, col1W - 10);
+        let linesHeight = splitPos.length * 3.5;
+        const requiredSpace = 20 + linesHeight;
+
+        if (currentY + requiredSpace > ph - 20) {
+            drawPageFooter();
+            doc.addPage();
+            isFirstPage = false;
+            y = 15;
+            tableStartY = drawPageHeader();
+            currentY = tableStartY;
+        }
+
+        doc.setFontSize(8); doc.setFont('helvetica', 'bold');
+        doc.text(`(*) Détail réserves Appartement ${group.zoneName}`, 18, currentY + 5);
+        
+        doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(60, 60, 60);
+        doc.text(splitPos, 20, currentY + 10);
+
+        const contentBottom = currentY + 12 + linesHeight;
+
+        doc.setDrawColor(150, 150, 150); doc.setLineDash([1, 1], 0); doc.setLineWidth(0.2);
+        doc.line(20, contentBottom + 2, 15 + col1W - 5, contentBottom + 2);
+        doc.line(20, contentBottom + 8, 15 + col1W - 5, contentBottom + 8);
+        doc.line(20, contentBottom + 14, 15 + col1W - 5, contentBottom + 14);
+        
+        doc.setDrawColor(0, 0, 0); doc.setLineDash([], 0); doc.setLineWidth(0.3);
+        doc.setTextColor(0, 0, 0);
+        
+        currentY = contentBottom + 18;
+        doc.line(15, currentY, 15 + col1W, currentY);
+    });
+
+    drawPageFooter();
+
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8); doc.setTextColor(150, 150, 150);
+      doc.text(`Page ${i} / ${pageCount}`, pw - 20, ph - 10, { align: 'right' });
+    }
+
+    doc.save(`${pv.id}_${selectedOrder.id}.pdf`);
   };
 
   const generateDeliveryNote = (type = 'ALU', unitsToDeliver = []) => {
@@ -1560,6 +1718,12 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
 
                     {/* Pièce jointe */}
                     <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <button 
+                        onClick={() => handleDownloadOldPV(pv)}
+                        style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.65rem', background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '0.4rem', cursor: 'pointer', fontSize: '0.78rem', color: '#0369a1', fontWeight: 600 }}
+                      >
+                        <Download size={13} /> PDF
+                      </button>
                       {pv.attachment ? (
                         pv.attachment.type === 'drive' ? (
                           <a href={pv.attachment.url} target="_blank" rel="noopener noreferrer"
