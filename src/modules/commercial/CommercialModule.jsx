@@ -1887,7 +1887,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
       const shouldLiveRecalculate = !quote.status || quote.status === 'Brouillon' || isExpired;
 
           try {
-            const tempConfig = { ...item.config, margin: quoteSettings?.globalMargin || 2.2 };
+            const tempConfig = { ...item.config, margin: quote.globalMargin ?? quoteSettings?.globalMargin ?? 2.2 };
             const livePd = engine.calculatePrice(tempConfig);
             if (livePd) {
               pd = livePd;
@@ -2033,7 +2033,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
   };
 
   const handleSaveProduct = () => {
-    const tempConfig = { ...draftConfig, margin: quoteSettings?.globalMargin || 2.2 };
+    const tempConfig = { ...draftConfig, margin: quote.globalMargin ?? quoteSettings?.globalMargin ?? 2.2 };
     const priceData = engine.calculatePrice(tempConfig);
     const existingItem = editingItemId ? (quote.items || []).find(i => i.id === editingItemId) : null;
     const newItem = {
@@ -2116,7 +2116,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
         setItemRef={setDraftRef}
         qty={draftQty}
         setQty={setDraftQty}
-        globalMargin={quoteSettings?.globalMargin || 2.2}
+        globalMargin={quote.globalMargin ?? quoteSettings?.globalMargin ?? 2.2}
       />
     );
   }
@@ -2966,7 +2966,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
                     let effectivePriceHT = item.unitPriceHT || 0;
                     if (!quote.status || quote.status === 'Brouillon') {
                       try {
-                        const tempConfig = { ...item.config, margin: quoteSettings?.globalMargin || 2.2 };
+                        const tempConfig = { ...item.config, margin: quote.globalMargin ?? quoteSettings?.globalMargin ?? 2.2 };
                         const pd = engine.calculatePrice(tempConfig);
                         if (pd && pd.priceHT) effectivePriceHT = pd.priceHT;
                       } catch(e) {}
@@ -3254,8 +3254,8 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', opacity: 0.85 }}>
                 <span>Marge Globale</span>
                 <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                  <input type="number" step="0.1" min="1" value={quoteSettings?.globalMargin || 2.2}
-                    onChange={e => setQuoteSettings(prev => ({ ...prev, globalMargin: parseFloat(e.target.value) || 2.2 }))}
+                  <input type="number" step="0.1" min="1" value={quote.globalMargin ?? quoteSettings?.globalMargin ?? 2.2}
+                    onChange={e => setCurrentQuote(prev => ({ ...prev, globalMargin: parseFloat(e.target.value) || 2.2 }))}
                     style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: 'white', borderRadius: '4px', padding: '2px 6px', width: '60px', fontSize: '0.8rem', fontWeight: 700, textAlign: 'right' }} />
                   <span style={{ fontSize: '0.75rem' }}>x</span>
                 </div>
