@@ -175,6 +175,18 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
       return `${item.label}-${idx + 1}`;
     };
 
+    const getVoidOverrides = (mId) => {
+      if (!activeSitePlan?.floors) return {};
+      for (const f of activeSitePlan.floors) {
+        for (const a of (f.apartments || [])) {
+          const v = (a.voids || []).find(voidItem => voidItem.id === mId);
+          if (v && v.partOverrides) return v.partOverrides;
+        }
+      }
+      return {};
+    };
+
+
     // 1. If it's an order/batch system
     if (activeQuote?.batches && activeQuote.batches.length > 0) {
       let configs = [];
@@ -204,7 +216,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                     H: m.H, 
                     wallDepth: m.wallDepth,
                     handleHeight: m.handleHeight,
-                    partOverrides: m.partOverrides,
+                    partOverrides: (m.partOverrides && Object.keys(m.partOverrides).length > 0) ? m.partOverrides : getVoidOverrides(m.id),
                     // Use technician optionalSides override if set, else keep item config
                     ...(m.optionalSides !== undefined ? { optionalSides: m.optionalSides } : {}),
                     hasShutter: true,
@@ -236,7 +248,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                   H: m.H, 
                   wallDepth: m.wallDepth, 
                   handleHeight: m.handleHeight, 
-                  partOverrides: m.partOverrides,
+                  partOverrides: (m.partOverrides && Object.keys(m.partOverrides).length > 0) ? m.partOverrides : getVoidOverrides(m.id),
                   // Use technician optionalSides override if set, else keep item config
                   ...(m.optionalSides !== undefined ? { optionalSides: m.optionalSides } : {})
                 },
@@ -266,7 +278,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
             const totalQty = m.qty || 1;
             for (let i = 0; i < totalQty; i++) {
               configs.push({
-                config: { ...item.config, L: m.L, H: m.H, wallDepth: m.wallDepth, handleHeight: m.handleHeight, partOverrides: m.partOverrides },
+                config: { ...item.config, L: m.L, H: m.H, wallDepth: m.wallDepth, handleHeight: m.handleHeight, partOverrides: (m.partOverrides && Object.keys(m.partOverrides).length > 0) ? m.partOverrides : getVoidOverrides(m.id) },
                 qty: 1,
                 label: item.label,
                 allLabels: [getPositionLabel(item, m, i)],
@@ -924,15 +936,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
           const h = Math.round(openingP.rawH);
           const gammeTag = openingRangeName ? ` [Gamme: ${openingRangeName}]` : '';
           doc.text(`↳ Ouvrant: ${w} x ${h} mm${gammeTag}`, startX, partY);
-          
-          // DEBUG: print partOverrides to see what is arriving
-          if (cfg.partOverrides) {
-             doc.text(`DEBUG Overrides: ${JSON.stringify(cfg.partOverrides)}`, startX, partY + 6);
-             partY += 12;
-          } else {
-             doc.text(`DEBUG Overrides: NONE`, startX, partY + 6);
-             partY += 12;
-          }
+          partY += 6;
         }
         
         fixP.forEach((fp, fi) => {
