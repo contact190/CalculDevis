@@ -254,17 +254,36 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                     };
                   }
                   if (property.startsWith('shutter.overrides.')) {
-                    const overrideField = property.split('.')[2]; // e.g. 'controlPosition', 'caissonId', etc.
-                    return {
-                      ...v,
-                      shutter: {
-                        ...currentShutter,
-                        overrides: {
-                          ...currentShutter.overrides,
-                          [overrideField]: value || undefined
+                    const parts = property.split('.');
+                    if (parts.length > 3) {
+                      const overrideField = parts[2];
+                      const subField = parts[3];
+                      return {
+                        ...v,
+                        shutter: {
+                          ...currentShutter,
+                          overrides: {
+                            ...currentShutter.overrides,
+                            [overrideField]: {
+                              ...(currentShutter.overrides?.[overrideField] || {}),
+                              [subField]: value || undefined
+                            }
+                          }
                         }
-                      }
-                    };
+                      };
+                    } else {
+                      const overrideField = parts[2];
+                      return {
+                        ...v,
+                        shutter: {
+                          ...currentShutter,
+                          overrides: {
+                            ...currentShutter.overrides,
+                            [overrideField]: value || undefined
+                          }
+                        }
+                      };
+                    }
                   }
                 }
 
