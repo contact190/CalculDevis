@@ -1179,6 +1179,50 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                             {(data.shutterComponents?.glissieres || []).map(opt => <option key={opt.id} value={opt.id}>{opt.name}</option>)}
                                           </select>
                                         </div>
+                                        {(() => {
+                                          const glissId = actualShutter.overrides?.glissiereId || item.config.shutterConfig?.glissiereId;
+                                          const effGliss = (data.shutterComponents?.glissieres || []).find(g => g.id === glissId);
+                                          if (!effGliss) return null;
+                                          const isDouble = actualShutter.overrides?.isDoubleShutter ?? item.config.shutterConfig?.isDoubleShutter ?? false;
+                                          const opt1L = (isDouble && effGliss.doubleOpt1Label) ? effGliss.doubleOpt1Label : effGliss.opt1Label;
+                                          const opt1V = (isDouble && effGliss.doubleOpt1Values) ? effGliss.doubleOpt1Values : effGliss.opt1Values;
+                                          return (
+                                            <>
+                                              {opt1L && (
+                                                <div>
+                                                  <label style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', marginBottom: '0.2rem', fontWeight: 600 }}>{opt1L.toUpperCase()}</label>
+                                                  <select
+                                                    className="input"
+                                                    value={actualShutter.overrides?.glissiereParams?.opt1 || ''}
+                                                    onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.glissiereParams.opt1', e.target.value)}
+                                                    style={{ fontSize: '0.85rem', padding: '0.35rem 0.5rem', border: '1.5px solid #3b82f6', background: '#eff6ff' }}
+                                                  >
+                                                    <option value="">Par défaut</option>
+                                                    {(opt1V || '').split(',').map(val => val.trim()).filter(Boolean).map(val => (
+                                                      <option key={val} value={val}>{val} mm</option>
+                                                    ))}
+                                                  </select>
+                                                </div>
+                                              )}
+                                              {effGliss.opt2Label && (
+                                                <div>
+                                                  <label style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', marginBottom: '0.2rem', fontWeight: 600 }}>{effGliss.opt2Label.toUpperCase()}</label>
+                                                  <select
+                                                    className="input"
+                                                    value={actualShutter.overrides?.glissiereParams?.opt2 || ''}
+                                                    onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.glissiereParams.opt2', e.target.value)}
+                                                    style={{ fontSize: '0.85rem', padding: '0.35rem 0.5rem', border: '1.5px solid #3b82f6', background: '#eff6ff' }}
+                                                  >
+                                                    <option value="">Par défaut</option>
+                                                    {(effGliss.opt2Values || '').split(',').map(val => val.trim()).filter(Boolean).map(val => (
+                                                      <option key={val} value={val}>{val} mm</option>
+                                                    ))}
+                                                  </select>
+                                                </div>
+                                              )}
+                                            </>
+                                          );
+                                        })()}
                                         <div>
                                           <label style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', marginBottom: '0.2rem', fontWeight: 600 }}>AXE</label>
                                           <select
