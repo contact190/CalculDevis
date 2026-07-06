@@ -1413,7 +1413,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
     doc.save(`${pv.id}_${selectedOrder.id}.pdf`);
   };
 
-  const generateDeliveryNote = (type = 'ALU', unitsToDeliver = []) => {
+  const generateDeliveryNote = (type = 'ALU', unitsToDeliver = [], isRedownload = false) => {
     if (unitsToDeliver.length === 0) {
       alert("Aucun produit sélectionné pour la livraison !");
       return;
@@ -1423,11 +1423,15 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
     const pw = doc.internal.pageSize.getWidth();
     const ph = doc.internal.pageSize.getHeight();
     const client = (data.clients || []).find(c => c.id === selectedOrder.clientId) || { nom: selectedOrder.clientName };
+    
+    const firstDateStr = selectedOrder.blDates?.[type];
+    const displayDate = (isRedownload && firstDateStr) ? new Date(firstDateStr).toLocaleDateString('fr-FR') : new Date().toLocaleDateString('fr-FR');
+
     let y = drawDocumentHeader(doc, quoteSettings, client, {
       title: `BON DE LIVRAISON : ${type === 'CAISSON_TUNNEL' ? 'CAISSON TUNNEL' : type}`,
       docLabel: 'Commande N°',
       docValue: selectedOrder.id,
-      docDate: new Date().toLocaleDateString('fr-FR'),
+      docDate: displayDate,
       showClientBox: true
     });
     
@@ -1583,44 +1587,49 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
       y += 8;
     });
 
-    setData(prev => {
-      const orders = [...(prev.orders || [])];
-      const oIdx = orders.findIndex(o => o.id === selectedOrderId);
-      if (oIdx === -1) return prev;
-      const order = { ...orders[oIdx] };
-      const blDates = { ...(order.blDates || {}) };
-      blDates[type] = new Date().toISOString();
-      order.blDates = blDates;
+    if (!isRedownload) {
+      setData(prev => {
+        const orders = [...(prev.orders || [])];
+        const oIdx = orders.findIndex(o => o.id === selectedOrderId);
+        if (oIdx === -1) return prev;
+        const order = { ...orders[oIdx] };
+        
+        const blDates = { ...(order.blDates || {}) };
+        if (!blDates[type]) {
+          blDates[type] = new Date().toISOString();
+        }
+        order.blDates = blDates;
 
-      const dualStatuses = { ...(order.unitStatusesDual || {}) };
-      const timeline = { ...(order.unitTimeline || {}) };
-      const component = type === 'ALU' ? 'alu' : (type === 'VITRAGE' ? 'vitrage' : (type === 'VOLET' ? 'volet' : 'caisson_tunnel'));
-      const userName = 'ADMIN';
+        const dualStatuses = { ...(order.unitStatusesDual || {}) };
+        const timeline = { ...(order.unitTimeline || {}) };
+        const component = type === 'ALU' ? 'alu' : (type === 'VITRAGE' ? 'vitrage' : (type === 'VOLET' ? 'volet' : 'caisson_tunnel'));
+        const userName = 'ADMIN';
 
-      unitsToDeliver.forEach(u => {
-        const current = { ...(dualStatuses[u.id] || { alu: 'Produit', vitrage: 'Produit', volet: 'Produit', caisson_tunnel: 'Produit' }) };
-        current[component] = 'Livré';
-        dualStatuses[u.id] = current;
+        unitsToDeliver.forEach(u => {
+          const current = { ...(dualStatuses[u.id] || { alu: 'Produit', vitrage: 'Produit', volet: 'Produit', caisson_tunnel: 'Produit' }) };
+          current[component] = 'Livré';
+          dualStatuses[u.id] = current;
 
-        const event = {
-          date: new Date().toISOString(),
-          user: userName,
-          component: component,
-          status: 'Livré',
-          action: 'finish',
-          issue: null
-        };
-        if (!timeline[u.id]) timeline[u.id] = [];
-        timeline[u.id] = [...timeline[u.id], event];
+          const event = {
+            date: new Date().toISOString(),
+            user: userName,
+            component: component,
+            status: 'Livré',
+            action: 'finish',
+            issue: null
+          };
+          if (!timeline[u.id]) timeline[u.id] = [];
+          timeline[u.id] = [...timeline[u.id], event];
+        });
+
+        order.unitStatusesDual = dualStatuses;
+        order.unitTimeline = timeline;
+        orders[oIdx] = order;
+        return { ...prev, orders };
       });
+    }
 
-      order.unitStatusesDual = dualStatuses;
-      order.unitTimeline = timeline;
-      orders[oIdx] = order;
-      return { ...prev, orders };
-    });
-
-    doc.save(`BL_${type}_${selectedOrder.id}.pdf`);
+    doc.save(`BL_${type}_${selectedOrder.id}${isRedownload ? '_copie' : ''}.pdf`);
   };
 
   if (selectedOrderId && activeView !== 'list') {
@@ -2380,6 +2389,32 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
                 </div>
                 <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 900, color: '#0f172a' }}>Livraison : Produits restants ({blModalType === 'CAISSON_TUNNEL' ? 'CAISSON TUNNEL' : blModalType})</h2>
                 <p style={{ color: '#64748b', fontSize: '0.9rem', marginTop: '0.5rem' }}>Sélectionnez les châssis à livrer pour ce bon de livraison.</p>
+                {selectedOrder.blDates?.[blModalType] && (
+                  <button 
+                    onClick={() => {
+                      let deliveredUnits = [];
+                      if (blModalType === 'ALU') {
+                        deliveredUnits = allUnits.filter(u => u.statusAlu === 'Livré' || u.statusAlu === 'Posé' || u.statusAlu === 'Fini');
+                      } else if (blModalType === 'VITRAGE') {
+                        deliveredUnits = allUnits.filter(u => u.statusVitrage === 'Livré' || u.statusVitrage === 'Fini');
+                      } else if (blModalType === 'VOLET') {
+                        deliveredUnits = allUnits.filter(u => u.isExtrudedLame && (u.statusVolet === 'Livré' || u.statusVolet === 'Fini' || u.statusVolet === 'Posé'));
+                      } else if (blModalType === 'CAISSON_TUNNEL') {
+                        deliveredUnits = allUnits.filter(u => u.isCaissonTunnel && (u.statusCaissonTunnel === 'Livré' || u.statusCaissonTunnel === 'Fini' || u.statusCaissonTunnel === 'Posé'));
+                      }
+
+                      if (deliveredUnits.length === 0) {
+                        alert(`Aucun produit n'a été livré pour ${blModalType}`);
+                        return;
+                      }
+                      generateDeliveryNote(blModalType, deliveredUnits, true);
+                    }}
+                    className="btn btn-secondary" 
+                    style={{ marginTop: '1rem', color: '#0369a1', borderColor: '#bae6fd', fontWeight: 'bold' }}
+                  >
+                    <Download size={16} /> Re-télécharger le BL (généré le {new Date(selectedOrder.blDates[blModalType]).toLocaleDateString('fr-FR')})
+                  </button>
+                )}
               </div>
 
               {remainingBLUnits.length === 0 ? (
