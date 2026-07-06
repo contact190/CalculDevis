@@ -120,6 +120,10 @@ export function generateOps(oldDb, newDb) {
     // Skip if both are missing or not arrays
     if (!Array.isArray(oldArr) && !Array.isArray(newArr)) continue;
     
+    // Fast path: if the array reference is identical, no items changed!
+    // This avoids deeply comparing a 30MB+ array when it wasn't modified.
+    if (oldArr === newArr) continue;
+    
     const oldMap = new Map();
     const newMap = new Map();
     
@@ -328,16 +332,38 @@ export function applyOp(db, op) {
 }
 
 /**
+ * Recursively clone an object along a given path to ensure immutability
+ * without deep cloning the entire 50MB database.
+ */
+function cloneAlongPath(obj, path) {
+  const parts = path.split('.');
+  const newObj = { ...obj };
+  let current = newObj;
+  
+  for (let i = 0; i < parts.length - 1; i++) {
+    const part = parts[i];
+    current[part] = { ...(current[part] || {}) };
+    current = current[part];
+  }
+  return newObj;
+}
+
+/**
  * Apply multiple operations to a database state.
  * Returns the final db state and count of applied ops.
  */
 export function applyOps(db, ops) {
   if (!db || !Array.isArray(ops) || ops.length === 0) return { db, appliedCount: 0 };
   
-  let current = JSON.parse(JSON.stringify(db)); // Clone once for all ops
+  let current = { ...db }; // Shallow clone the top level
   let appliedCount = 0;
   
   for (const op of ops) {
+    if (op.collection) {
+      // Clone the nested path for this specific collection to preserve immutability safely
+      current = cloneAlongPath(current, op.collection);
+    }
+    
     // Flag it as in-place so applyOp doesn't clone it again
     const opWithFlag = { ...op, _inPlace: true };
     const result = applyOp(current, opWithFlag);
