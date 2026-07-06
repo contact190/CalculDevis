@@ -257,22 +257,25 @@ function App() {
           // Fallback to purely local OR Supabase
           console.log('📴 Mode Offline / Serveur Local injoignable, tentative Supabase...');
           try {
-             setLoadingMessage('Recherche Cloud Supabase...');
-             const { data: cloudData, updatedAt } = await syncDatabase.loadWithMeta();
+             setLoadingMessage('Vérification du Cloud Supabase...');
+             const cloudTimestampStr = await syncDatabase.getCloudTimestamp();
              
              let finalData = localData || DEFAULT_DATA;
              let baseTimestamp = localTimestamp || "1970-01-01T00:00:00.000Z";
              
-             if (cloudData) {
-               // Si le cloud a un snapshot plus récent, ou si on a pas de données locales (ex: Edge pour la 1ere fois)
-               const localDate = localTimestamp ? new Date(localTimestamp).getTime() : 0;
-               const cloudDate = updatedAt ? new Date(updatedAt).getTime() : 0;
-               
-               if (!localData || cloudDate > localDate) {
+             const localDate = localTimestamp ? new Date(localTimestamp).getTime() : 0;
+             const cloudDate = cloudTimestampStr ? new Date(cloudTimestampStr).getTime() : 0;
+             
+             if (!localData || cloudDate > localDate) {
+               setLoadingMessage('Téléchargement du Snapshot Cloud...');
+               const { data: cloudData, updatedAt } = await syncDatabase.loadWithMeta();
+               if (cloudData) {
                  finalData = cloudData;
-                 baseTimestamp = updatedAt || baseTimestamp;
+                 baseTimestamp = updatedAt || cloudTimestampStr || baseTimestamp;
                  console.log("☁️ Snapshot Cloud chargé.");
                }
+             } else {
+               console.log("☁️ Snapshot Cloud ignoré (local plus récent ou identique).");
              }
              
              // Now fetch missed ops
