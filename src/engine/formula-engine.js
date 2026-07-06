@@ -119,6 +119,14 @@ export class FormulaEngine {
     const glassQtyRaw = this.evaluate(composition.glassFormulaQty || '1', tempScope, 'Quantité Vitre', errors);
     const glassQty = isNaN(glassQtyRaw) ? 0 : glassQtyRaw;
 
+    let glass2L = 0, glass2H = 0, glass2Qty = 0;
+    if (composition.hasSecondGlass) {
+      glass2L = this.evaluate(composition.glassFormula2L || 'L', tempScope, 'Largeur Vitre 2', errors);
+      glass2H = this.evaluate(composition.glassFormula2H || 'H', tempScope, 'Hauteur Vitre 2', errors);
+      const glass2QtyRaw = this.evaluate(composition.glassFormula2Qty || '1', tempScope, 'Quantité Vitre 2', errors);
+      glass2Qty = isNaN(glass2QtyRaw) ? 0 : glass2QtyRaw;
+    }
+
     // 2. Build the final enriched scope for all subsequent calculations
     const windowDir = (config.openingDirection || 'gauche').toLowerCase();
     const scope = { 
@@ -454,6 +462,13 @@ export class FormulaEngine {
     const glassWeight = glass ? (glassArea * glass.weightPerM2) : 0;
     const glassCost = glass ? (glassArea * glass.pricePerM2) : 0;
 
+    let glass2Area = 0, glass2Weight = 0, glass2Cost = 0;
+    if (composition.hasSecondGlass) {
+      glass2Area = (((isNaN(glass2L)?0:glass2L) * (isNaN(glass2H)?0:glass2H)) / 1000000) * (isNaN(glass2Qty)?0:glass2Qty);
+      glass2Weight = glass ? (glass2Area * glass.weightPerM2) : 0;
+      glass2Cost = glass ? (glass2Area * glass.pricePerM2) : 0;
+    }
+
     // Add Parcloses based on glass compatibility ONLY if not already present in profiles
     if (glass) {
       const hasManualParcloseH = profiles.some(p => p.label?.toLowerCase() === 'parcloseh');
@@ -545,20 +560,43 @@ export class FormulaEngine {
       });
     }
 
+    const baseGlass = glass ? {
+      ...glass,
+      width: isNaN(glassL)?0:glassL,
+      height: isNaN(glassH)?0:glassH,
+      qty: isNaN(glassQty)?0:glassQty,
+      area: glassArea,
+      weight: glassWeight,
+      cost: glassCost,
+      calculation: `L: ${this.resolveFormula(composition.glassFormulaL || 'L', scope)} = ${Math.round(glassL)} | H: ${this.resolveFormula(composition.glassFormulaH || 'H', scope)} = ${Math.round(glassH)}`,
+      error: (isNaN(glassL) || isNaN(glassH) || isNaN(glassQty)) ? "Formule Invalide" : null
+    } : { name: 'Vitrage Manquant', width: 0, height: 0, qty: 0, area: 0, weight: 0, cost: 0 };
+
+    const returnedGlasses = [];
+    if (baseGlass.qty > 0 || !glass) {
+      returnedGlasses.push(baseGlass);
+    }
+
+    if (composition.hasSecondGlass) {
+      returnedGlasses.push(glass ? {
+        ...glass,
+        name: glass.name + ' (2ème Vitrage)',
+        width: isNaN(glass2L)?0:glass2L,
+        height: isNaN(glass2H)?0:glass2H,
+        qty: isNaN(glass2Qty)?0:glass2Qty,
+        area: glass2Area,
+        weight: glass2Weight,
+        cost: glass2Cost,
+        calculation: `L: ${this.resolveFormula(composition.glassFormula2L || 'L', scope)} = ${Math.round(glass2L)} | H: ${this.resolveFormula(composition.glassFormula2H || 'H', scope)} = ${Math.round(glass2H)}`,
+        error: (isNaN(glass2L) || isNaN(glass2H) || isNaN(glass2Qty)) ? "Formule Invalide" : null
+      } : { name: 'Vitrage Manquant (2)', width: 0, height: 0, qty: 0, area: 0, weight: 0, cost: 0 });
+    }
+
     return {
       profiles,
       accessories,
-      glass: glass ? {
-        ...glass,
-        width: isNaN(glassL)?0:glassL,
-        height: isNaN(glassH)?0:glassH,
-        qty: isNaN(glassQty)?0:glassQty,
-        area: glassArea,
-        weight: glassWeight,
-        cost: glassCost,
-        calculation: `L: ${this.resolveFormula(composition.glassFormulaL || 'L', scope)} = ${Math.round(glassL)} | H: ${this.resolveFormula(composition.glassFormulaH || 'H', scope)} = ${Math.round(glassH)}`,
-        error: (isNaN(glassL) || isNaN(glassH) || isNaN(glassQty)) ? "Formule Invalide" : null
-      } : { name: 'Vitrage Manquant', width: 0, height: 0, qty: 0, area: 0, weight: 0, cost: 0 },
+      glass: baseGlass,
+      glasses: returnedGlasses,
       gasket
     };
   }
@@ -600,7 +638,8 @@ export class FormulaEngine {
           profiles = [...profiles, ...res.profiles];
           accessories = [...accessories, ...res.accessories];
           if (res.gasket) accessories.push(res.gasket);
-          if (res.glass) glasses.push(res.glass);
+          if (res.glasses && res.glasses.length > 0) glasses.push(...res.glasses);
+          else if (res.glass) glasses.push(res.glass);
         }
       });
     });

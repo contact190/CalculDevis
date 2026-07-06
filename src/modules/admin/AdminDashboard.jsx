@@ -242,6 +242,10 @@ const AdminDashboard = ({ data, setData }) => {
       glassFormulaL: 'L-80',
       glassFormulaH: 'H-80',
       glassFormulaQty: '1',
+      hasSecondGlass: false,
+      glassFormula2L: '',
+      glassFormula2H: '',
+      glassFormula2Qty: '',
       elements: [],
       _isNew: true
     };
@@ -2121,8 +2125,22 @@ const AdminDashboard = ({ data, setData }) => {
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginBottom: '1.5rem', padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '0.5rem' }}>
+                    <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 600 }}>
+                        <input 
+                          type="checkbox" 
+                          checked={editingComposition.hasSecondGlass || false}
+                          onChange={(e) => {
+                            const updated = { ...editingComposition, hasSecondGlass: e.target.checked };
+                            setEditingComposition(updated);
+                            handleUpdateComposition(updated);
+                          }}
+                        />
+                        Ajouter un 2ème vitrage (dimensions différentes)
+                      </label>
+                    </div>
                     <div className="form-group">
-                      <label className="label">Formule Largeur Vitrage (L-..)</label>
+                      <label className="label">Formule Largeur Vitrage 1 (L-..)</label>
                       <FormulaInput 
                         value={editingComposition.glassFormulaL || 'L-80'} 
                         onChange={(val) => {
@@ -2133,7 +2151,7 @@ const AdminDashboard = ({ data, setData }) => {
                       />
                     </div>
                     <div className="form-group">
-                      <label className="label">Formule Hauteur Vitrage (H-..)</label>
+                      <label className="label">Formule Hauteur Vitrage 1 (H-..)</label>
                       <FormulaInput 
                         value={editingComposition.glassFormulaH || 'H-80'} 
                         onChange={(val) => {
@@ -2144,7 +2162,7 @@ const AdminDashboard = ({ data, setData }) => {
                       />
                     </div>
                     <div className="form-group">
-                      <label className="label">Nombre de Vitrages</label>
+                      <label className="label">Nombre de Vitrages 1</label>
                       <FormulaInput 
                         value={editingComposition.glassFormulaQty || '1'} 
                         onChange={(val) => {
@@ -2154,6 +2172,45 @@ const AdminDashboard = ({ data, setData }) => {
                         }} 
                       />
                     </div>
+                    {editingComposition.hasSecondGlass && (
+                      <>
+                        <div className="form-group">
+                          <label className="label">Formule Largeur Vitrage 2</label>
+                          <FormulaInput 
+                            value={editingComposition.glassFormula2L || ''} 
+                            placeholder="ex: (L-80)/2"
+                            onChange={(val) => {
+                              const updated = { ...editingComposition, glassFormula2L: val };
+                              setEditingComposition(updated);
+                              handleUpdateComposition(updated);
+                            }} 
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label className="label">Formule Hauteur Vitrage 2</label>
+                          <FormulaInput 
+                            value={editingComposition.glassFormula2H || ''} 
+                            placeholder="ex: H-80"
+                            onChange={(val) => {
+                              const updated = { ...editingComposition, glassFormula2H: val };
+                              setEditingComposition(updated);
+                              handleUpdateComposition(updated);
+                            }} 
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label className="label">Nombre de Vitrages 2</label>
+                          <FormulaInput 
+                            value={editingComposition.glassFormula2Qty || '1'} 
+                            onChange={(val) => {
+                              const updated = { ...editingComposition, glassFormula2Qty: val };
+                              setEditingComposition(updated);
+                              handleUpdateComposition(updated);
+                            }} 
+                          />
+                        </div>
+                      </>
+                    )}
                   </div>
 
                   <h5 style={{ marginBottom: '1rem' }}>Composants (Profilés & Accessoires)</h5>
