@@ -2059,18 +2059,33 @@ const AdminDashboard = ({ data, setData }) => {
                         <option value="droit">Droit</option>
                       </select>
                     </div>
-                    <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', paddingTop: '1.5rem' }}>
-                      <input 
-                        type="checkbox" 
-                        id="hasGasket"
-                        checked={editingComposition.hasGasket} 
-                        onChange={(e) => {
-                          const updated = { ...editingComposition, hasGasket: e.target.checked };
-                          setEditingComposition(updated);
-                          handleUpdateComposition(updated);
-                        }}
-                      />
-                      <label htmlFor="hasGasket" className="label" style={{ marginBottom: 0 }}>Joint</label>
+                    <div style={{ display: 'flex', gap: '1rem', paddingTop: '1.5rem' }}>
+                      <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <input 
+                          type="checkbox" 
+                          id="hasGasket"
+                          checked={editingComposition.hasGasket} 
+                          onChange={(e) => {
+                            const updated = { ...editingComposition, hasGasket: e.target.checked };
+                            setEditingComposition(updated);
+                            handleUpdateComposition(updated);
+                          }}
+                        />
+                        <label htmlFor="hasGasket" className="label" style={{ marginBottom: 0 }}>Joint</label>
+                      </div>
+                      <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <input 
+                          type="checkbox" 
+                          id="isPrecadre"
+                          checked={editingComposition.isPrecadre || false} 
+                          onChange={(e) => {
+                            const updated = { ...editingComposition, isPrecadre: e.target.checked };
+                            setEditingComposition(updated);
+                            handleUpdateComposition(updated);
+                          }}
+                        />
+                        <label htmlFor="isPrecadre" className="label" style={{ marginBottom: 0 }}>Précadre</label>
+                      </div>
                     </div>
 
                     <div className="form-group">

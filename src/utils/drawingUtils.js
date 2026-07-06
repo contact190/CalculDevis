@@ -200,7 +200,70 @@ export const drawTechnicalDrawing = (canvas, cfg, database) => {
   };
 
   // Handle compound compositions
-  if (cfg.compoundType && cfg.compoundType !== 'none' && cfg.compoundConfig?.parts) {
+  const isPrecadre = compo?.isPrecadre || (compo?.name || '').toLowerCase().includes('precadre');
+
+  if (isPrecadre) {
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(offsetX, winOffsetY, dW, dH_window);
+    ctx.lineWidth = 1;
+    ctx.strokeRect(offsetX + 5, winOffsetY + 5, dW - 10, dH_window - 10);
+    ctx.fillStyle = 'rgba(186, 230, 253, 0.15)';
+    ctx.fillRect(offsetX, winOffsetY, dW, dH_window);
+
+    const name = (compo?.name || '').toLowerCase();
+    let numTravH = 0;
+    let numTravV = 0;
+    
+    const matchH = name.match(/(\d+)\s*trav\s*h/);
+    if (matchH) numTravH = parseInt(matchH[1]);
+    else if (name.includes('trav h')) numTravH = 1;
+
+    const matchV = name.match(/(\d+)\s*trav\s*v/);
+    if (matchV) numTravV = parseInt(matchV[1]);
+    else if (name.includes('trav v')) numTravV = 1;
+
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 4;
+    
+    if (numTravH > 0) {
+      const step = dH_window / (numTravH + 1);
+      for (let i = 1; i <= numTravH; i++) {
+        ctx.beginPath();
+        ctx.moveTo(offsetX, winOffsetY + step * i);
+        ctx.lineTo(offsetX + dW, winOffsetY + step * i);
+        ctx.stroke();
+        
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(offsetX + 5, winOffsetY + step * i - 2.5);
+        ctx.lineTo(offsetX + dW - 5, winOffsetY + step * i - 2.5);
+        ctx.moveTo(offsetX + 5, winOffsetY + step * i + 2.5);
+        ctx.lineTo(offsetX + dW - 5, winOffsetY + step * i + 2.5);
+        ctx.stroke();
+        ctx.lineWidth = 4;
+      }
+    }
+    
+    if (numTravV > 0) {
+      const step = dW / (numTravV + 1);
+      for (let i = 1; i <= numTravV; i++) {
+        ctx.beginPath();
+        ctx.moveTo(offsetX + step * i, winOffsetY);
+        ctx.lineTo(offsetX + step * i, winOffsetY + dH_window);
+        ctx.stroke();
+        
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(offsetX + step * i - 2.5, winOffsetY + 5);
+        ctx.lineTo(offsetX + step * i - 2.5, winOffsetY + dH_window - 5);
+        ctx.moveTo(offsetX + step * i + 2.5, winOffsetY + 5);
+        ctx.lineTo(offsetX + step * i + 2.5, winOffsetY + dH_window - 5);
+        ctx.stroke();
+        ctx.lineWidth = 4;
+      }
+    }
+  } else if (cfg.compoundType && cfg.compoundType !== 'none' && cfg.compoundConfig?.parts) {
     const { parts, orientation, unionId, traverseId } = cfg.compoundConfig;
     const divRef = (database.profiles || []).find(p => p.id === (cfg.compoundType === 'fix_coulissant' ? unionId : traverseId));
     const thick = (divRef?.thickness || 20) * scale;
