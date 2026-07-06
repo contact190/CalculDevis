@@ -201,7 +201,7 @@ export const drawTechnicalDrawing = (canvas, cfg, database) => {
 
   // Handle compound compositions
   const compoName = (compo?.name || '').toLowerCase();
-  const isPrecadreOrVitrage = compo?.isPrecadre || compoName.includes('precadre') || compoName.includes('vitrage');
+  const isPrecadreOrVitrage = compo?.isPrecadre || compoName.includes('precadre') || compoName.includes('pres cadre') || compoName.includes('vitrage');
 
   if (isPrecadreOrVitrage) {
     ctx.strokeStyle = '#334155';
@@ -214,18 +214,26 @@ export const drawTechnicalDrawing = (canvas, cfg, database) => {
     let numTravH = 0;
     let numTravV = 0;
     
-    // Check V
-    const matchV = compoName.match(/(\d+)?\s*(?:trav|traverse|traverses)\s*(?:v|vert|verticale)/i);
+    // Check V (H means Hauteur = Vertical)
+    const matchV = compoName.match(/(\d+)?\s*trav[a-z]*\s*(?:v|vert|verticale|h|hauteur)\b/i);
     if (matchV) numTravV = matchV[1] ? parseInt(matchV[1]) : 1;
 
-    // Check H
-    const matchH = compoName.match(/(\d+)?\s*(?:trav|traverse|traverses)\s*(?:h|horiz|horizontale)/i);
+    // Check H (L means Largeur = Horizontal)
+    const matchH = compoName.match(/(\d+)?\s*trav[a-z]*\s*(?:horiz|horizontale|l|largeur)\b/i);
     if (matchH) numTravH = matchH[1] ? parseInt(matchH[1]) : 1;
 
     // Default to H if neither V nor H is specified but 'trav' is present
     if (numTravH === 0 && numTravV === 0) {
-      const matchAny = compoName.match(/(\d+)?\s*(?:trav|traverse|traverses)/i);
-      if (matchAny) numTravH = matchAny[1] ? parseInt(matchAny[1]) : 1;
+      const matchAny = compoName.match(/(\d+)?\s*trav[a-z]*/i);
+      if (matchAny) {
+        const count = matchAny[1] ? parseInt(matchAny[1]) : 1;
+        if (count === 2) {
+          numTravH = 1;
+          numTravV = 1;
+        } else {
+          numTravH = count;
+        }
+      }
     }
 
     ctx.strokeStyle = '#334155';

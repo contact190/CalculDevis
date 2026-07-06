@@ -281,7 +281,85 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
       }
     };
 
-    if (config.compoundType && config.compoundType !== 'none' && config.compoundConfig?.parts) {
+    const compoForName = database.compositions?.find(c => c.id === compositionId);
+    const compoName = (compoForName?.name || '').toLowerCase();
+    const isPrecadreOrVitrage = compoForName?.isPrecadre || compoName.includes('precadre') || compoName.includes('pres cadre') || compoName.includes('vitrage');
+
+    if (isPrecadreOrVitrage) {
+      if (!isOnlyShutter) {
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(offsetX, winOffsetY, dW, dH);
+        ctx.lineWidth = 1;
+        ctx.strokeRect(offsetX + 5, winOffsetY + 5, dW - 10, dH - 10);
+
+        let numTravH = 0;
+        let numTravV = 0;
+        
+        // "H" or "Hauteur" = de haut en bas = Vertical. "V" = Vertical.
+        const matchV = compoName.match(/(\d+)?\s*trav[a-z]*\s*(?:v|vert|verticale|h|hauteur)\b/i);
+        if (matchV) numTravV = matchV[1] ? parseInt(matchV[1]) : 1;
+
+        // "L" or "Largeur" = de gauche à droite = Horizontal. "Horiz" = Horizontal.
+        const matchH = compoName.match(/(\d+)?\s*trav[a-z]*\s*(?:horiz|horizontale|l|largeur)\b/i);
+        if (matchH) numTravH = matchH[1] ? parseInt(matchH[1]) : 1;
+
+        if (numTravH === 0 && numTravV === 0) {
+          const matchAny = compoName.match(/(\d+)?\s*trav[a-z]*/i);
+          if (matchAny) {
+            const count = matchAny[1] ? parseInt(matchAny[1]) : 1;
+            if (count === 2) {
+              // 2 traverses = en forme de + (1 verticale, 1 horizontale)
+              numTravH = 1;
+              numTravV = 1;
+            } else {
+              numTravH = count; // Défaut horizontal
+            }
+          }
+        }
+
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 4;
+        
+        if (numTravH > 0) {
+          const step = dH / (numTravH + 1);
+          for (let i = 1; i <= numTravH; i++) {
+            ctx.beginPath();
+            ctx.moveTo(offsetX, winOffsetY + step * i);
+            ctx.lineTo(offsetX + dW, winOffsetY + step * i);
+            ctx.stroke();
+            
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(offsetX + 5, winOffsetY + step * i - 2.5);
+            ctx.lineTo(offsetX + dW - 5, winOffsetY + step * i - 2.5);
+            ctx.moveTo(offsetX + 5, winOffsetY + step * i + 2.5);
+            ctx.lineTo(offsetX + dW - 5, winOffsetY + step * i + 2.5);
+            ctx.stroke();
+            ctx.lineWidth = 4;
+          }
+        }
+        
+        if (numTravV > 0) {
+          const step = dW / (numTravV + 1);
+          for (let i = 1; i <= numTravV; i++) {
+            ctx.beginPath();
+            ctx.moveTo(offsetX + step * i, winOffsetY);
+            ctx.lineTo(offsetX + step * i, winOffsetY + dH);
+            ctx.stroke();
+            
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(offsetX + step * i - 2.5, winOffsetY + 5);
+            ctx.lineTo(offsetX + step * i - 2.5, winOffsetY + dH - 5);
+            ctx.moveTo(offsetX + step * i + 2.5, winOffsetY + 5);
+            ctx.lineTo(offsetX + step * i + 2.5, winOffsetY + dH - 5);
+            ctx.stroke();
+            ctx.lineWidth = 4;
+          }
+        }
+      }
+    } else if (config.compoundType && config.compoundType !== 'none' && config.compoundConfig?.parts) {
       const { parts, orientation, unionId, traverseId } = config.compoundConfig;
       const isMulti = config.compoundType === 'fix_coulissant';
       
