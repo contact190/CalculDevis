@@ -1956,6 +1956,23 @@ const AdminDashboard = ({ data, setData }) => {
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                       <button 
                         className="btn" 
+                        style={{ color: '#3b82f6', borderColor: '#3b82f6' }} 
+                        onClick={() => {
+                          const newComp = {
+                            ...editingComposition,
+                            id: `COMP-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+                            name: `${editingComposition.name} (Copie)`,
+                            _isNew: true
+                          };
+                          setData(prev => ({ ...prev, compositions: [...prev.compositions, newComp] }));
+                          setEditingComposition(newComp);
+                        }}
+                      >
+                        <Copy size={16} style={{ marginRight: '0.3rem', verticalAlign: 'middle' }} />
+                        Dupliquer
+                      </button>
+                      <button 
+                        className="btn" 
                         style={{ color: '#ef4444', borderColor: '#ef4444' }} 
                         onClick={() => {
                           if (handleDeleteComposition(editingComposition.id)) {
@@ -2325,6 +2342,22 @@ const AdminDashboard = ({ data, setData }) => {
                             onClick={() => setEditingComposition(comp)}
                           >
                             <Edit2 size={14} />
+                          </button>
+                          <button 
+                            className="btn" 
+                            style={{ padding: '0.3rem', color: '#3b82f6' }} 
+                            title="Dupliquer"
+                            onClick={() => {
+                              const newComp = {
+                                ...comp,
+                                id: `COMP-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+                                name: `${comp.name} (Copie)`,
+                                _isNew: true
+                              };
+                              setData(prev => ({ ...prev, compositions: [...prev.compositions, newComp] }));
+                            }}
+                          >
+                            <Copy size={14} />
                           </button>
                           <button 
                             className="btn" 
