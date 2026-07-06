@@ -125,9 +125,18 @@ function App() {
         const seen = new Set();
         repaired[key] = repaired[key].filter(item => {
           if (!item) return false;
-          const id = item.id || JSON.stringify(item);
-          if (seen.has(id)) return false;
-          seen.add(id);
+          if (item.id) {
+            if (seen.has(item.id)) return false;
+            seen.add(item.id);
+            return true;
+          }
+          if (typeof item !== 'object') {
+            const id = String(item);
+            if (seen.has(id)) return false;
+            seen.add(id);
+            return true;
+          }
+          // Avoid slow JSON.stringify on large objects without an ID
           return true;
         });
       }
