@@ -259,6 +259,9 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
          if (comp?.defaultOpeningDirection) {
             next.openingDirection = comp.defaultOpeningDirection;
          }
+         if (comp?.isPrecadre || (comp?.name || '').toLowerCase().includes('precadre')) {
+            next.glassId = '';
+         }
       }
       if ((name === 'L' || name === 'H') && prev.useCustomLayout && prev.customLayout) {
         next.customLayout = rescaleTree(prev.customLayout, name === 'L' ? newVal : prev.L, name === 'H' ? newVal : prev.H);
@@ -841,10 +844,24 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
               <div className="form-group" style={{ position: 'relative' }}>
                 <label className="label">Vitrage</label>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <select name="glassId" value={config.glassId} onChange={handleChange} className="input" style={{ flex: 1 }}>
-                    {database.glass.map(g => <option key={g.id} value={g.id}>{g.name} {g.composition ? `(${g.composition})` : ''}</option>)}
+                  <select 
+                    name="glassId" 
+                    value={config.glassId} 
+                    onChange={handleChange} 
+                    className="input" 
+                    style={{ flex: 1 }}
+                    disabled={currentComp?.isPrecadre || (currentComp?.name || '').toLowerCase().includes('precadre')}
+                  >
+                    {currentComp?.isPrecadre || (currentComp?.name || '').toLowerCase().includes('precadre') ? (
+                      <option value="">-- Sans Vitrage (Précadre) --</option>
+                    ) : (
+                      <>
+                        <option value="">-- Sélectionner Vitrage --</option>
+                        {database.glass.map(g => <option key={g.id} value={g.id}>{g.name} {g.composition ? `(${g.composition})` : ''}</option>)}
+                      </>
+                    )}
                   </select>
-                  <button onClick={() => setCompareModalOpen(true)} className="btn btn-secondary" style={{ padding: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Comparer les vitrages">
+                  <button onClick={() => setCompareModalOpen(true)} className="btn btn-secondary" style={{ padding: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Comparer les vitrages" disabled={currentComp?.isPrecadre || (currentComp?.name || '').toLowerCase().includes('precadre')}>
                     <GitCompare size={18} />
                   </button>
                 </div>

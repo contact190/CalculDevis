@@ -1552,7 +1552,8 @@ export class FormulaEngine {
     if (!range && !isAssemblage) return { valid: false, message: 'Gamme inexistante' };
 
     const glass = (this.db.glass || []).find(g => g.id === config.glassId);
-    if (!glass) return { valid: false, message: 'Vitrage selectionné inexistant' };
+    const isPrecadreOrVitrage = composition?.isPrecadre || (composition?.name || '').toLowerCase().includes('precadre') || (composition?.name || '').toLowerCase().includes('vitrage');
+    if (!glass && !isPrecadreOrVitrage) return { valid: false, message: 'Vitrage selectionné inexistant' };
 
     const color = (this.db.colors || []).find(c => c.id === config.colorId);
     if (!color) return { valid: false, message: 'Couleur selectionnée inexistante' };

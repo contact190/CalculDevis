@@ -32,7 +32,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
   const [companyName, setCompanyName] = useState(quoteSettings?.companyName || 'ALU DESIGN'); // Nom depuis config ou par défaut
   const [recipientEmail, setRecipientEmail] = useState('');
   const [sendByEmail, setSendByEmail] = useState(false);
-  const [blModalType, setBlModalType] = useState(null); // 'ALU' | 'VITRAGE' | 'VOLET' | null
+  const [blModalType, setBlModalType] = useState(null); // 'ALU' | 'VITRAGE' | 'VOLET' | 'CAISSON_TUNNEL' | null
   const [blSelectedUnitIds, setBlSelectedUnitIds] = useState(new Set());
   const [listTab, setListTab] = useState('ongoing'); // 'ongoing' | 'history'
 
@@ -237,6 +237,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
             let hasShutter = false;
             let shutterInfo = 'SANS VOLET';
             let isExtrudedLame = false;
+            let isCaissonTunnel = false;
             let offset = 0;
             const shutterOverridden = (m.shutterList || []).length > 0;
 
@@ -280,7 +281,11 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
                   const lameObj = data.shutterComponents?.lames?.find(l => l.id === lameId);
                   if (lameObj && lameObj.hasBaguette) isExtrudedLame = true;
                   
-                  const caissonName = data.shutterComponents?.caissons?.find(c => c.id === caisson)?.name || caisson || '';
+                  const caissonObj = data.shutterComponents?.caissons?.find(c => c.id === caisson);
+                  const caissonName = caissonObj?.name || caisson || '';
+                  const caissonSize = parseFloat(caissonObj?.height) || parseFloat(caissonObj?.size) || parseFloat(caissonObj?.thickness) || 0;
+                  if (caissonSize === 300) isCaissonTunnel = true;
+                  
                   const kitName = data.shutterComponents?.kits?.find(k => k.id === kit)?.name || kit || '';
                   const lameName = lameObj?.name || lameId || '';
                   
@@ -304,7 +309,11 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
               const lameObj = data.shutterComponents?.lames?.find(l => l.id === lameId);
               if (lameObj && lameObj.hasBaguette) isExtrudedLame = true;
               
-              const caissonName = data.shutterComponents?.caissons?.find(c => c.id === caisson)?.name || caisson || '';
+              const caissonObj = data.shutterComponents?.caissons?.find(c => c.id === caisson);
+              const caissonName = caissonObj?.name || caisson || '';
+              const caissonSize = parseFloat(caissonObj?.height) || parseFloat(caissonObj?.size) || parseFloat(caissonObj?.thickness) || 0;
+              if (caissonSize === 300) isCaissonTunnel = true;
+              
               const kitName = data.shutterComponents?.kits?.find(k => k.id === kit)?.name || kit || '';
               const lameName = lameObj?.name || lameId || '';
               
@@ -343,8 +352,10 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
               statusAlu: dualStatus.alu,
               statusVitrage: dualStatus.vitrage,
               statusVolet: dualStatus.volet || 'Produit',
+              statusCaissonTunnel: dualStatus.caisson_tunnel || 'Produit',
               hasShutter: hasShutter,
               isExtrudedLame: isExtrudedLame,
+              isCaissonTunnel: isCaissonTunnel,
               shutterInfo: shutterInfo,
               storageZoneId: storageZoneId,
               storageZone: zone?.name || '',
@@ -366,6 +377,8 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
         return u.statusVitrage !== 'Livré' && u.statusVitrage !== 'Fini';
       } else if (blModalType === 'VOLET') {
         return u.isExtrudedLame && u.statusVolet !== 'Livré' && u.statusVolet !== 'Fini' && u.statusVolet !== 'Posé';
+      } else if (blModalType === 'CAISSON_TUNNEL') {
+        return u.isCaissonTunnel && u.statusCaissonTunnel !== 'Livré' && u.statusCaissonTunnel !== 'Fini' && u.statusCaissonTunnel !== 'Posé';
       }
       return false;
     });
@@ -405,7 +418,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
       if (oIdx === -1) return prev;
       const order = { ...orders[oIdx] };
       const dualStatuses = { ...(order.unitStatusesDual || {}) };
-      const current = dualStatuses[unitId] || { alu: 'Produit', vitrage: 'Produit', volet: 'Produit' };
+      const current = dualStatuses[unitId] || { alu: 'Produit', vitrage: 'Produit', volet: 'Produit', caisson_tunnel: 'Produit' };
       
       const event = {
         date: new Date().toISOString(),
@@ -421,6 +434,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
           current.alu = newStatus;
           current.vitrage = newStatus;
           current.volet = newStatus;
+          current.caisson_tunnel = newStatus;
         } else {
           current[component] = newStatus;
         }
@@ -1410,7 +1424,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
     const ph = doc.internal.pageSize.getHeight();
     const client = (data.clients || []).find(c => c.id === selectedOrder.clientId) || { nom: selectedOrder.clientName };
     let y = drawDocumentHeader(doc, quoteSettings, client, {
-      title: `BON DE LIVRAISON : ${type}`,
+      title: `BON DE LIVRAISON : ${type === 'CAISSON_TUNNEL' ? 'CAISSON TUNNEL' : type}`,
       docLabel: 'Commande N°',
       docValue: selectedOrder.id,
       docDate: new Date().toLocaleDateString('fr-FR'),
@@ -1457,7 +1471,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
 
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(10);
-      if (type === 'ALU' || type === 'VOLET') {
+      if (type === 'ALU' || type === 'VOLET' || type === 'CAISSON_TUNNEL') {
         doc.text('Qté', 15, y); doc.text('Produit', 30, y); doc.text('Dim. Réelle', 95, y); doc.text('Repère', 135, y); doc.text('Statut', 180, y);
       } else {
         doc.text('Qté', 15, y); doc.text('Produit', 30, y); doc.text('Repère', 120, y); doc.text('Statut', 180, y);
@@ -1487,6 +1501,19 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
             doc.text(status, 180, y);
             y += 8;
           });
+        } else if (type === 'CAISSON_TUNNEL') {
+          checkPageOverflow(10);
+          const labelText = u.hasShutter ? `${u.label} (${u.shutterInfo})` : u.label;
+          const splitLabel = doc.splitTextToSize(labelText, 60);
+          const repereText = u.name;
+          const splitRepere = doc.splitTextToSize(repereText, 40);
+          
+          doc.text('1', 15, y); 
+          doc.text(splitLabel, 30, y); 
+          doc.text(u.dimensions ? `${u.dimensions} mm` : '—', 95, y);
+          doc.text(splitRepere, 135, y);
+          doc.text(status, 180, y);
+          y += (Math.max(splitLabel.length, splitRepere.length) * 4) + 4;
         } else {
           checkPageOverflow(10);
           const labelText = u.hasShutter ? `${u.label} (${u.shutterInfo})` : u.label;
@@ -1567,11 +1594,11 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
 
       const dualStatuses = { ...(order.unitStatusesDual || {}) };
       const timeline = { ...(order.unitTimeline || {}) };
-      const component = type === 'ALU' ? 'alu' : (type === 'VITRAGE' ? 'vitrage' : 'volet');
+      const component = type === 'ALU' ? 'alu' : (type === 'VITRAGE' ? 'vitrage' : (type === 'VOLET' ? 'volet' : 'caisson_tunnel'));
       const userName = 'ADMIN';
 
       unitsToDeliver.forEach(u => {
-        const current = { ...(dualStatuses[u.id] || { alu: 'Produit', vitrage: 'Produit', volet: 'Produit' }) };
+        const current = { ...(dualStatuses[u.id] || { alu: 'Produit', vitrage: 'Produit', volet: 'Produit', caisson_tunnel: 'Produit' }) };
         current[component] = 'Livré';
         dualStatuses[u.id] = current;
 
@@ -1664,6 +1691,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
                   <button onClick={() => { setBlModalType('ALU'); setBlSelectedUnitIds(new Set()); }} className="btn btn-primary" style={{ background: '#1e293b' }} disabled={allUnits.length === 0}>BL Alu</button>
                   <button onClick={() => { setBlModalType('VITRAGE'); setBlSelectedUnitIds(new Set()); }} className="btn btn-primary" style={{ background: '#3b82f6' }} disabled={allUnits.length === 0}>BL Vitrage</button>
                   <button onClick={() => { setBlModalType('VOLET'); setBlSelectedUnitIds(new Set()); }} className="btn btn-primary" style={{ background: '#b45309' }} disabled={allUnits.length === 0}>BL Volet</button>
+                  <button onClick={() => { setBlModalType('CAISSON_TUNNEL'); setBlSelectedUnitIds(new Set()); }} className="btn btn-primary" style={{ background: '#059669' }} disabled={allUnits.length === 0}>BL Caisson Tunnel</button>
                 </div>
           </div>
         </header>
@@ -2350,7 +2378,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
                 <div style={{ width: '60px', height: '60px', background: '#eff6ff', borderRadius: '50%', display: 'grid', placeItems: 'center', margin: '0 auto 1rem' }}>
                   <Truck size={32} color="#2563eb" />
                 </div>
-                <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 900, color: '#0f172a' }}>Livraison : Produits restants ({blModalType})</h2>
+                <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 900, color: '#0f172a' }}>Livraison : Produits restants ({blModalType === 'CAISSON_TUNNEL' ? 'CAISSON TUNNEL' : blModalType})</h2>
                 <p style={{ color: '#64748b', fontSize: '0.9rem', marginTop: '0.5rem' }}>Sélectionnez les châssis à livrer pour ce bon de livraison.</p>
               </div>
 

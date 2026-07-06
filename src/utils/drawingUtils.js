@@ -200,28 +200,33 @@ export const drawTechnicalDrawing = (canvas, cfg, database) => {
   };
 
   // Handle compound compositions
-  const isPrecadre = compo?.isPrecadre || (compo?.name || '').toLowerCase().includes('precadre');
+  const compoName = (compo?.name || '').toLowerCase();
+  const isPrecadreOrVitrage = compo?.isPrecadre || compoName.includes('precadre') || compoName.includes('vitrage');
 
-  if (isPrecadre) {
+  if (isPrecadreOrVitrage) {
     ctx.strokeStyle = '#334155';
     ctx.lineWidth = 4;
     ctx.strokeRect(offsetX, winOffsetY, dW, dH_window);
     ctx.lineWidth = 1;
     ctx.strokeRect(offsetX + 5, winOffsetY + 5, dW - 10, dH_window - 10);
-    ctx.fillStyle = 'rgba(186, 230, 253, 0.15)';
-    ctx.fillRect(offsetX, winOffsetY, dW, dH_window);
+    // REMOVED BLUE FILL FOR PRECADRE
 
-    const name = (compo?.name || '').toLowerCase();
     let numTravH = 0;
     let numTravV = 0;
     
-    const matchH = name.match(/(\d+)\s*trav\s*h/);
-    if (matchH) numTravH = parseInt(matchH[1]);
-    else if (name.includes('trav h')) numTravH = 1;
+    // Check V
+    const matchV = compoName.match(/(\d+)?\s*(?:trav|traverse|traverses)\s*(?:v|vert|verticale)/i);
+    if (matchV) numTravV = matchV[1] ? parseInt(matchV[1]) : 1;
 
-    const matchV = name.match(/(\d+)\s*trav\s*v/);
-    if (matchV) numTravV = parseInt(matchV[1]);
-    else if (name.includes('trav v')) numTravV = 1;
+    // Check H
+    const matchH = compoName.match(/(\d+)?\s*(?:trav|traverse|traverses)\s*(?:h|horiz|horizontale)/i);
+    if (matchH) numTravH = matchH[1] ? parseInt(matchH[1]) : 1;
+
+    // Default to H if neither V nor H is specified but 'trav' is present
+    if (numTravH === 0 && numTravV === 0) {
+      const matchAny = compoName.match(/(\d+)?\s*(?:trav|traverse|traverses)/i);
+      if (matchAny) numTravH = matchAny[1] ? parseInt(matchAny[1]) : 1;
+    }
 
     ctx.strokeStyle = '#334155';
     ctx.lineWidth = 4;
