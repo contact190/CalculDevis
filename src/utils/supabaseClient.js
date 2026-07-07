@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { persistentStorage } from './storage.js';
+import { getDeviceId } from './patchEngine.js';
 
 const SUPABASE_URL = 'https://ttgtlitdbgioujgflaal.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR0Z3RsaXRkYmdpb3VqZ2ZsYWFsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0ODU5NTgsImV4cCI6MjA5MTA2MTk1OH0.Ig6MuvUXOjE_F1q3phMiGYau0UJLzl9vwOwX5hLIRiw';
@@ -398,6 +399,20 @@ export const syncDatabase = {
         contentType: 'application/json'
       });
       if (metaErr) throw metaErr;
+      
+      // Notify other devices in real-time about this full refresh
+      try {
+        await cloudSync.pushOps([{
+          op: 'replace_key',
+          collection: '_meta',
+          id: 'force_refresh',
+          data: now,
+          timestamp: now,
+          deviceId: getDeviceId()
+        }]);
+      } catch (err) {
+        console.warn("Failed to push force_refresh notification:", err);
+      }
       
       return now; // Return the timestamp used
     } catch (e) {

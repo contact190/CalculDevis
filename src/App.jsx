@@ -434,9 +434,35 @@ function App() {
   useEffect(() => {
     if (isLoading) return;
 
-    const handleIncomingOps = (ops) => {
+    const handleIncomingOps = async (ops) => {
       if (!databaseRef.current || !Array.isArray(ops) || ops.length === 0) return;
       
+      const hasForceRefresh = ops.some(op => op.op === 'replace_key' && op.collection === '_meta' && op.id === 'force_refresh');
+      if (hasForceRefresh) {
+        console.log("☁️ Reçu ordre de rechargement complet (Import/Force Save)...");
+        setCloudSyncStatus('syncing');
+        setSupabaseSyncStatus('syncing');
+        try {
+          const { data: cloudData, updatedAt } = await syncDatabase.loadWithMeta();
+          if (cloudData) {
+            isApplyingRemoteOps.current = true;
+            const repaired = repairDatabase(cloudData);
+            setDatabase(repaired);
+            previousDbRef.current = repaired;
+            setCloudSyncStatus('ok');
+            setLastCloudSync(new Date());
+            setSupabaseSyncStatus('ok');
+            setLastSupabaseSync(new Date());
+            console.log("✅ Base rechargée avec succès depuis le stockage Cloud.");
+            setTimeout(() => { isApplyingRemoteOps.current = false; }, 50);
+          }
+        } catch (e) {
+          console.error("Failed to load snapshot after force_refresh:", e);
+          setSupabaseSyncStatus('error');
+        }
+        return;
+      }
+
       console.log(`📥 Application de ${ops.length} ops distantes en temps réel...`);
       isApplyingRemoteOps.current = true;
       
