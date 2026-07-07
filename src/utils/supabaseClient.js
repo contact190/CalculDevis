@@ -1,9 +1,27 @@
 import { createClient } from '@supabase/supabase-js';
+import { persistentStorage } from './storage';
 
 const SUPABASE_URL = 'https://ttgtlitdbgioujgflaal.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR0Z3RsaXRkYmdpb3VqZ2ZsYWFsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0ODU5NTgsImV4cCI6MjA5MTA2MTk1OH0.Ig6MuvUXOjE_F1q3phMiGYau0UJLzl9vwOwX5hLIRiw';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+export const fetchWithTimeout = async (resource, options = {}, timeout = 8000) => {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+  try {
+    const response = await fetch(resource, {
+      ...options,
+      signal: controller.signal
+    });
+    clearTimeout(id);
+    return response;
+  } catch (error) {
+    clearTimeout(id);
+    throw error;
+  }
+};
+
 export const supabaseFetch = async (endpoint, options = {}) => {
   const url = `${SUPABASE_URL}/rest/v1/${endpoint}`;
   const headers = {
@@ -13,7 +31,7 @@ export const supabaseFetch = async (endpoint, options = {}) => {
     ...options.headers
   };
 
-  const response = await fetch(url, { ...options, headers });
+  const response = await fetchWithTimeout(url, { ...options, headers }, 8000);
   if (!response.ok) {
     const text = await response.text();
     throw new Error(`Supabase Error: ${response.status} - ${text}`);
@@ -30,7 +48,7 @@ export const supabaseFetch = async (endpoint, options = {}) => {
 
 export const invokeFunction = async (name, payload) => {
   const url = `${SUPABASE_URL}/functions/v1/${name}`;
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     method: 'POST',
     headers: {
       'apikey': SUPABASE_KEY,
@@ -38,12 +56,19 @@ export const invokeFunction = async (name, payload) => {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify(payload)
-  });
+  }, 10000);
   if (!response.ok) throw new Error(`Function Error: ${response.status}`);
   return response.json();
 };
 
-
+// Fast hash function to check segments updates
+function getHash(str) {
+  let hash = 5381;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash * 33) ^ str.charCodeAt(i);
+  }
+  return (hash >>> 0).toString(36);
+}
 
 export const syncDatabase = {
   /**
@@ -60,7 +85,86 @@ export const syncDatabase = {
    */
   async loadWithMeta() {
     try {
-      // 1. Try to load chunked data
+      // 1. Try to load from Storage Bucket first
+      const t = Date.now();
+      const bucket = supabase.storage.from('app-state');
+      const { data: metaUrlData } = bucket.getPublicUrl('meta.json');
+      
+      const storageMetaRes = await fetchWithTimeout(`${metaUrlData.publicUrl}?t=${t}`, {}, 5000);
+      
+      if (storageMetaRes.ok) {
+        const meta = await storageMetaRes.json();
+        const cloudHashes = meta.hashes || {};
+        
+        // Load the local database to compare hashes and download only changed segments
+        let localDb = null;
+        try {
+          localDb = await persistentStorage.load('calculDevis_main');
+        } catch (e) {
+          console.warn("Could not load local database for delta comparison:", e);
+        }
+        
+        const localSegments = {
+          clients: localDb?.clients || [],
+          orders: localDb?.orders || [],
+          quotes: localDb?.quotes || [],
+          catalog: {}
+        };
+        
+        if (localDb) {
+          for (const key of Object.keys(localDb)) {
+            if (key !== 'clients' && key !== 'orders' && key !== 'quotes') {
+              localSegments.catalog[key] = localDb[key];
+            }
+          }
+        }
+        
+        const localHashes = {
+          clients: getHash(JSON.stringify(localSegments.clients)),
+          orders: getHash(JSON.stringify(localSegments.orders)),
+          quotes: getHash(JSON.stringify(localSegments.quotes)),
+          catalog: getHash(JSON.stringify(localSegments.catalog))
+        };
+        
+        const db = localDb ? { ...localDb } : {};
+        const downloadPromises = [];
+        const keysToDownload = [];
+        
+        for (const key of ['clients', 'orders', 'quotes', 'catalog']) {
+          if (!localDb || localHashes[key] !== cloudHashes[key]) {
+            keysToDownload.push(key);
+            const { data: urlData } = bucket.getPublicUrl(`${key}.json`);
+            downloadPromises.push(
+              fetchWithTimeout(`${urlData.publicUrl}?t=${t}`, {}, 8000).then(res => {
+                if (!res.ok) throw new Error(`Failed to download segment ${key}`);
+                return res.json();
+              })
+            );
+          } else {
+            console.log(`Segment ${key} is up to date locally, skipping download.`);
+          }
+        }
+        
+        if (keysToDownload.length > 0) {
+          console.log(`Downloading ${keysToDownload.length} modified segments:`, keysToDownload);
+          const downloadedData = await Promise.all(downloadPromises);
+          
+          for (let i = 0; i < keysToDownload.length; i++) {
+            const key = keysToDownload[i];
+            const val = downloadedData[i];
+            if (key === 'catalog') {
+              Object.assign(db, val);
+            } else {
+              db[key] = val;
+            }
+          }
+        }
+        
+        return { data: db, updatedAt: meta.updated_at };
+      }
+
+      // 2. Fallback to old chunked data in PostgreSQL
+      console.log("Storage bucket non trouvé ou vide, fallback vers la table Postgres...");
       const metaRes = await supabaseFetch('app_state?id=eq.chunk-meta&select=data,updated_at', { method: 'GET' });
       const metaRow = metaRes && metaRes.length > 0 ? metaRes[0] : null;
       
@@ -89,7 +193,7 @@ export const syncDatabase = {
         }
       }
 
-      // 2. Fallback to old non-chunked method
+      // 3. Fallback to old non-chunked method
       const [mainRes, quotesRes] = await Promise.all([
         supabaseFetch('app_state?id=eq.main-db&select=data,updated_at', { method: 'GET' }),
         supabaseFetch('app_state?id=eq.quotes-db&select=data,updated_at', { method: 'GET' })
@@ -114,10 +218,20 @@ export const syncDatabase = {
    */
   async getCloudTimestamp() {
     try {
-      // Check chunk-meta first
+      // 1. Check Storage Bucket meta first via public URL
+      const t = Date.now();
+      const { data: metaUrlData } = supabase.storage.from('app-state').getPublicUrl('meta.json');
+      const response = await fetchWithTimeout(`${metaUrlData.publicUrl}?t=${t}`, {}, 5000);
+      if (response.ok) {
+        const meta = await response.json();
+        if (meta.updated_at) return meta.updated_at;
+      }
+
+      // 2. Check Postgres chunk-meta
       const metaRes = await supabaseFetch('app_state?id=eq.chunk-meta&select=updated_at', { method: 'GET' });
       if (metaRes && metaRes.length > 0) return metaRes[0].updated_at;
 
+      // 3. Check old Postgres main-db
       const res = await supabaseFetch('app_state?id=eq.main-db&select=updated_at', { method: 'GET' });
       return res && res.length > 0 ? res[0].updated_at : null;
     } catch (e) {
@@ -127,42 +241,83 @@ export const syncDatabase = {
   },
 
   /**
-   * Save data to Cloud with a shared timestamp.
-   * Splits large payload into ~3MB chunks to bypass Supabase request size limits.
+   * Save data to Cloud Storage Bucket with a shared timestamp.
+   * Compares hashes with cloud and only uploads segments that actually changed.
    */
   async save({ mainDb, quotes }) {
     const now = new Date().toISOString();
     
     try {
-      const fullJson = JSON.stringify({ mainDb, quotes });
-      const MAX_CHUNK_LENGTH = 3000000; // ~3MB per chunk
-      const totalChunks = Math.ceil(fullJson.length / MAX_CHUNK_LENGTH);
+      const db = { ...mainDb };
+      if (quotes) db.quotes = quotes;
       
-      const requests = [];
-      for (let i = 0; i < totalChunks; i++) {
-        const chunkStr = fullJson.substring(i * MAX_CHUNK_LENGTH, (i + 1) * MAX_CHUNK_LENGTH);
-        requests.push(
-          supabaseFetch('app_state', {
-            method: 'POST',
-            headers: { 'Prefer': 'resolution=merge-duplicates' },
-            body: JSON.stringify({ id: `chunk-${i}`, data: { text: chunkStr }, updated_at: now })
-          })
-        );
+      const segments = {
+        clients: JSON.stringify(db.clients || []),
+        orders: JSON.stringify(db.orders || []),
+        quotes: JSON.stringify(db.quotes || []),
+        catalog: ''
+      };
+      
+      const catalogObj = {};
+      for (const key of Object.keys(db)) {
+        if (key !== 'clients' && key !== 'orders' && key !== 'quotes') {
+          catalogObj[key] = db[key];
+        }
+      }
+      segments.catalog = JSON.stringify(catalogObj);
+      
+      const localHashes = {
+        clients: getHash(segments.clients),
+        orders: getHash(segments.orders),
+        quotes: getHash(segments.quotes),
+        catalog: getHash(segments.catalog)
+      };
+      
+      // Get current cloud hashes first
+      const t = Date.now();
+      const bucket = supabase.storage.from('app-state');
+      const { data: metaUrlData } = bucket.getPublicUrl('meta.json');
+      let cloudMeta = null;
+      try {
+        const metaRes = await fetchWithTimeout(`${metaUrlData.publicUrl}?t=${t}`, {}, 5000);
+        if (metaRes.ok) {
+          cloudMeta = await metaRes.json();
+        }
+      } catch (e) {
+        console.warn("Could not fetch current cloud meta.json for comparison, writing all segments.");
       }
       
-      // Save metadata last so load doesn't trigger prematurely if possible
-      requests.push(
-        supabaseFetch('app_state', {
-          method: 'POST',
-          headers: { 'Prefer': 'resolution=merge-duplicates' },
-          body: JSON.stringify({ id: 'chunk-meta', data: { totalChunks }, updated_at: now })
-        })
-      );
+      const cloudHashes = cloudMeta?.hashes || {};
       
-      await Promise.all(requests);
+      for (const key of ['clients', 'orders', 'quotes', 'catalog']) {
+        if (localHashes[key] !== cloudHashes[key]) {
+          console.log(`Uploading modified segment to storage: ${key}.json`);
+          const blob = new Blob([segments[key]], { type: 'application/json' });
+          const { error } = await bucket.upload(`${key}.json`, blob, { 
+            upsert: true,
+            contentType: 'application/json'
+          });
+          if (error) throw error;
+        } else {
+          console.log(`Segment ${key}.json is identical to cloud, skipping upload.`);
+        }
+      }
+      
+      // Update meta.json with the new hashes and timestamp
+      const metaObj = { 
+        updated_at: now, 
+        hashes: localHashes 
+      };
+      const metaBlob = new Blob([JSON.stringify(metaObj)], { type: 'application/json' });
+      const { error: metaErr } = await bucket.upload('meta.json', metaBlob, { 
+        upsert: true,
+        contentType: 'application/json'
+      });
+      if (metaErr) throw metaErr;
+      
       return now; // Return the timestamp used
     } catch (e) {
-      console.error("Failed to save to Supabase:", e);
+      console.error("Failed to save to Supabase Storage:", e);
       throw e;
     }
   }

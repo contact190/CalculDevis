@@ -83,6 +83,8 @@ function App() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [cloudSyncStatus, setCloudSyncStatus] = useState('idle'); // 'idle' | 'syncing' | 'ok' | 'offline'
   const [lastCloudSync, setLastCloudSync] = useState(null);
+  const [supabaseSyncStatus, setSupabaseSyncStatus] = useState('idle'); // 'idle' | 'syncing' | 'ok' | 'error' | 'offline'
+  const [lastSupabaseSync, setLastSupabaseSync] = useState(null);
   const [connectedClients, setConnectedClients] = useState(0);
   const saveTimerRef = useRef(null);
   const cloudSyncIntervalRef = useRef(null);
@@ -93,6 +95,7 @@ function App() {
   const databaseRef = useRef(null); // Always-current ref for interval access
   const isApplyingRemoteOps = useRef(false); // Flag to prevent sync loops
   const previousDbRef = useRef(null); // Previous db state for diffing
+  const lastBackupTimeRef = useRef(0); // Timestamp of last BACKUP_KEY save
 
   const [quoteSettings, setQuoteSettings] = useState(DEFAULT_QUOTE_SETTINGS);
 
@@ -256,6 +259,7 @@ function App() {
         } else {
           // Fallback to purely local OR Supabase
           console.log('📴 Mode Offline / Serveur Local injoignable, tentative Supabase...');
+          setSupabaseSyncStatus('syncing');
           try {
              setLoadingMessage('Recherche Cloud Supabase...');
              const { data: cloudData, updatedAt } = await syncDatabase.loadWithMeta();
@@ -290,12 +294,15 @@ function App() {
              await persistentStorage.save(LOCAL_KEY, repaired);
              lastLocalModifiedRef.current = new Date().toISOString();
              setCloudSyncStatus('ok');
+             setSupabaseSyncStatus('ok');
+             setLastSupabaseSync(new Date());
           } catch(err) {
              console.error("Erreur Supabase load:", err);
              const repaired = repairDatabase(localData || DEFAULT_DATA);
              setDatabase(repaired);
              lastLocalModifiedRef.current = localTimestamp || null;
              setCloudSyncStatus('offline');
+             setSupabaseSyncStatus('error');
           }
         }
       } catch (e) {
@@ -344,10 +351,10 @@ function App() {
     if (!database || isLoading) return;
     if (isFirstLoad.current) { isFirstLoad.current = false; previousDbRef.current = database; return; }
 
-    setSaveStatus('saving');
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
 
     saveTimerRef.current = setTimeout(async () => {
+      setSaveStatus('saving');
       try {
         const now = new Date().toISOString();
         
@@ -367,10 +374,16 @@ function App() {
         }
 
         await persistentStorage.save(LOCAL_KEY, stampedDb);
-        // Optimize BACKUP_KEY clone: update property inside backup instead of full shallow duplicate
-        stampedDb._backupTime = now;
-        await persistentStorage.save(BACKUP_KEY, stampedDb);
-        delete stampedDb._backupTime; // clean up property to keep database clean
+        
+        // Save to BACKUP_KEY at most once every 5 minutes to optimize disk write speed and memory
+        const nowMs = Date.now();
+        if (nowMs - lastBackupTimeRef.current > 300000) {
+          stampedDb._backupTime = now;
+          await persistentStorage.save(BACKUP_KEY, stampedDb);
+          delete stampedDb._backupTime; // clean up property to keep database clean
+          lastBackupTimeRef.current = nowMs;
+        }
+
         await persistentStorage.save('calculDevis_lastModified', now);
         lastLocalModifiedRef.current = now;
         setSaveStatus('saved');
@@ -394,9 +407,14 @@ function App() {
 
           // ─── Push Delta Ops to Cloud (Event Sourcing) ─────
           if (generatedOps.length > 0) {
+             setSupabaseSyncStatus('syncing');
              const cloudResult = await cloudSync.pushOps(generatedOps);
              if (cloudResult && cloudResult.success) {
                console.log(`☁️ ${cloudResult.applied} ops envoyées au Cloud avec succès.`);
+               setSupabaseSyncStatus('ok');
+               setLastSupabaseSync(new Date());
+             } else {
+               setSupabaseSyncStatus('error');
              }
           }
         }
@@ -405,7 +423,7 @@ function App() {
         console.error('IndexedDB save error:', e);
         setSaveStatus('error');
       }
-    }, 150); // Reduced debounce from 300ms to 150ms for faster sync
+    }, 1500); // Debounce set to 1500ms to prevent lag during rapid typing
 
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -480,17 +498,25 @@ function App() {
     });
 
     // ─── Connect to Supabase Cloud Ops ─────
-    const unsubscribeCloud = cloudSync.subscribe(handleIncomingOps, getDeviceId());
+    const unsubscribeCloud = cloudSync.subscribe((ops) => {
+      handleIncomingOps(ops);
+      setSupabaseSyncStatus('ok');
+      setLastSupabaseSync(new Date());
+    }, getDeviceId());
 
     // Periodic Supabase cloud backup (every 10 minutes - Snapshot)
     cloudSyncIntervalRef.current = setInterval(async () => {
       const db = databaseRef.current;
       if (!db) return;
       try {
+        setSupabaseSyncStatus('syncing');
         await syncDatabase.save({ mainDb: db, quotes: db.quotes || [] });
         console.log('☁️ Snapshot Supabase effectué');
+        setSupabaseSyncStatus('ok');
+        setLastSupabaseSync(new Date());
       } catch (e) {
         // Silent fail for cloud backup — not critical
+        setSupabaseSyncStatus('error');
       }
     }, 600000); // 10 minutes
 
@@ -530,22 +556,18 @@ function App() {
   // Avoids creating unnecessary copies of the entire database on every change
   const filteredDatabase = useMemo(() => {
     if (!database) return null;
-    let hasDeleted = false;
-    // Quick check: do we even need to filter?
+    let copied = null;
     for (const key of Object.keys(database)) {
-      if (Array.isArray(database[key]) && database[key].some(item => item && item._deleted)) {
-        hasDeleted = true;
-        break;
+      const arr = database[key];
+      if (Array.isArray(arr)) {
+        const hasDeleted = arr.some(item => item && item._deleted);
+        if (hasDeleted) {
+          if (!copied) copied = { ...database };
+          copied[key] = arr.filter(item => item && !item._deleted);
+        }
       }
     }
-    if (!hasDeleted) return database; // No copy needed — save memory!
-    const filtered = { ...database };
-    Object.keys(filtered).forEach(key => {
-      if (Array.isArray(filtered[key])) {
-        filtered[key] = filtered[key].filter(item => item && !item._deleted);
-      }
-    });
-    return filtered;
+    return copied || database;
   }, [database]);
 
   // ─── Emergency restore ────────────────────────────────────────────────────
@@ -563,6 +585,7 @@ function App() {
   const handleForceCloudSync = async () => {
     if (!database) return;
     setCloudSyncStatus('syncing');
+    setSupabaseSyncStatus('syncing');
     let cloudOk = false;
     let cloudError = null;
 
@@ -621,10 +644,13 @@ function App() {
     if (cloudOk) {
       setCloudSyncStatus('ok');
       setLastCloudSync(new Date());
+      setSupabaseSyncStatus('ok');
+      setLastSupabaseSync(new Date());
       previousDbRef.current = database;
       alert('✅ Synchronisation Cloud réussie !');
     } else {
       setCloudSyncStatus('offline');
+      setSupabaseSyncStatus('error');
       alert(`❌ Échec Cloud: ${cloudError?.message || 'Erreur inconnue'}. Vérifiez votre connexion internet et le budget Supabase.`);
     }
   };
@@ -686,6 +712,7 @@ function App() {
   }
 
   const cloudColor = cloudSyncStatus === 'ok' ? '#10b981' : cloudSyncStatus === 'syncing' ? '#f59e0b' : '#94a3b8';
+  const supabaseColor = supabaseSyncStatus === 'ok' ? '#10b981' : supabaseSyncStatus === 'syncing' ? '#f59e0b' : supabaseSyncStatus === 'error' ? '#ef4444' : '#94a3b8';
 
   return (
     <div className="app-container">
@@ -743,16 +770,29 @@ function App() {
             </span>
           </div>
 
-          {/* Real-time Sync Status */}
+          {/* Real-time Sync Status (Local Server) */}
           <div style={{ padding: '0.5rem 0.75rem', borderRadius: '0.4rem', background: 'rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
             <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: cloudSyncStatus === 'ok' ? '#10b981' : cloudSyncStatus === 'syncing' ? '#f59e0b' : '#ef4444', flexShrink: 0, boxShadow: cloudSyncStatus === 'ok' ? '0 0 6px #10b981' : 'none' }} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <p style={{ margin: 0, fontSize: '0.68rem', color: cloudColor, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {cloudSyncStatus === 'ok' ? '⚡ Temps Réel' : cloudSyncStatus === 'syncing' ? '🔄 Synchronisation...' : '📴 Hors-ligne'}
+                💻 Réseau Local: {cloudSyncStatus === 'ok' ? 'Connecté' : cloudSyncStatus === 'syncing' ? 'Synchro...' : 'Hors-ligne'}
               </p>
               <p style={{ margin: 0, fontSize: '0.55rem', color: '#64748b' }}>
                 {lastCloudSync ? `Dernière sync: ${lastCloudSync.toLocaleTimeString()}` : ''}
                 {localSync.getPendingCount() > 0 ? ` • ${localSync.getPendingCount()} ops en attente` : ''}
+              </p>
+            </div>
+          </div>
+
+          {/* Cloud Supabase Sync Status */}
+          <div style={{ padding: '0.5rem 0.75rem', borderRadius: '0.4rem', background: 'rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+            <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: supabaseColor, flexShrink: 0, boxShadow: supabaseSyncStatus === 'ok' ? '0 0 6px #10b981' : 'none' }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ margin: 0, fontSize: '0.68rem', color: supabaseColor, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                ☁️ Cloud Supabase: {supabaseSyncStatus === 'ok' ? 'Synchronisé' : supabaseSyncStatus === 'syncing' ? 'Synchro...' : supabaseSyncStatus === 'error' ? 'Erreur Cloud' : 'Hors-ligne'}
+              </p>
+              <p style={{ margin: 0, fontSize: '0.55rem', color: '#64748b' }}>
+                {lastSupabaseSync ? `Dernière sync: ${lastSupabaseSync.toLocaleTimeString()}` : 'Pas encore synchronisé'}
               </p>
             </div>
             <button onClick={handleForceCloudSync} title="Forcer sync complète" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', flexShrink: 0 }}>
@@ -803,13 +843,17 @@ function App() {
                       // Immediately push a Snapshot to Supabase Cloud so other devices can see it
                       try {
                         setCloudSyncStatus('syncing');
+                        setSupabaseSyncStatus('syncing');
                         await syncDatabase.save({ mainDb: repairedImport, quotes: repairedImport.quotes || [] });
                         setCloudSyncStatus('ok');
                         setLastCloudSync(new Date());
+                        setSupabaseSyncStatus('ok');
+                        setLastSupabaseSync(new Date());
                         console.log('☁️ Snapshot Cloud poussé après import');
                         alert('✅ Import réussi et synchronisé avec le Cloud !');
                       } catch(syncErr) {
                         console.error('Cloud snapshot after import failed:', syncErr);
+                        setSupabaseSyncStatus('error');
                         alert('✅ Import réussi localement. ⚠️ La synchronisation Cloud suivra automatiquement.');
                       }
                     }
