@@ -71,6 +71,21 @@ function getHash(str) {
   return (hash >>> 0).toString(36);
 }
 
+const PARTITIONS = {
+  clients: 5,
+  orders: 10,
+  quotes: 30
+};
+
+function getBucketIndex(id, numBuckets) {
+  if (!id) return 0;
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = (hash * 31) + id.charCodeAt(i);
+  }
+  return Math.abs(hash % numBuckets);
+}
+
 export const syncDatabase = {
   /**
    * Load full data from Cloud (returns null if nothing exists)
@@ -121,57 +136,44 @@ export const syncDatabase = {
           }
         }
         
-        // Calculate catalog local hash
         const localCatalogHash = getHash(JSON.stringify(localSegments.catalog));
+        const db = localDb ? { ...localDb } : { clients: [], orders: [], quotes: [] };
         
-        const db = localDb ? { ...localDb } : {};
         const downloadPromises = [];
-        const downloadKeys = []; // Array of { collection, id } or 'catalog'
+        const downloadKeys = []; // Array of { collection, bucketIdx } or 'catalog'
         
-        // ─── A. Process large collections item-by-item ───
+        // ─── A. Process large collections bucket-by-bucket ───
         for (const key of ['clients', 'orders', 'quotes']) {
-          const cloudItemHashes = cloudHashes[key] || {};
-          const localItems = localSegments[key];
+          const numBuckets = PARTITIONS[key];
+          const cloudBucketHashes = cloudHashes[key] || [];
           
-          // Reconstruct local hashes map
-          const localItemHashes = {};
-          localItems.forEach(item => {
+          // Reconstruct local buckets
+          const localBuckets = Array.from({ length: numBuckets }, () => []);
+          localSegments[key].forEach(item => {
             if (item && item.id) {
-              localItemHashes[item.id] = getHash(JSON.stringify(item));
+              const bucketIdx = getBucketIndex(item.id, numBuckets);
+              localBuckets[bucketIdx].push(item);
             }
           });
           
-          // 1. Identify items to download (new or modified in cloud)
-          for (const id of Object.keys(cloudItemHashes)) {
-            if (localItemHashes[id] !== cloudItemHashes[id]) {
-              downloadKeys.push({ collection: key, id });
-              const { data: urlData } = bucket.getPublicUrl(`${key}/${id}.json`);
+          // Identify which buckets to download
+          for (let bucketIdx = 0; bucketIdx < numBuckets; bucketIdx++) {
+            const localBucketStr = JSON.stringify(localBuckets[bucketIdx]);
+            const localBucketHash = getHash(localBucketStr);
+            const cloudBucketHash = cloudBucketHashes[bucketIdx];
+            
+            if (localBucketHash !== cloudBucketHash) {
+              downloadKeys.push({ collection: key, bucketIdx });
+              const { data: urlData } = bucket.getPublicUrl(`${key}/bucket-${bucketIdx}.json`);
               downloadPromises.push(
                 fetchWithTimeout(`${urlData.publicUrl}?t=${t}`, {}, 60000).then(res => {
-                  if (!res.ok) throw new Error(`Failed to download ${key}/${id}.json`);
+                  if (res.status === 404) return []; // If file doesn't exist yet on cloud, it's empty
+                  if (!res.ok) throw new Error(`Failed to download ${key}/bucket-${bucketIdx}.json`);
                   return res.json();
                 })
               );
             }
           }
-          
-          // 2. Identify local items that exist locally but not in cloud meta
-          // Keep only active local items that are in the cloud, OR that were created/modified locally after the cloud snapshot
-          const activeCloudIds = Object.keys(cloudItemHashes);
-          db[key] = localItems.filter(item => {
-            if (!item || !item.id) return false;
-            const inCloud = activeCloudIds.includes(item.id);
-            if (inCloud) return true;
-            
-            // Offline created item safety check
-            const localTime = item._lastModified ? new Date(item._lastModified).getTime() : 0;
-            if (localTime > cloudTime) {
-              console.log(`Keeping offline created item: ${key}/${item.id}`);
-              return true;
-            }
-            console.log(`Deleting local item deleted on cloud: ${key}/${item.id}`);
-            return false;
-          });
         }
         
         // ─── B. Process catalog segment ───
@@ -188,24 +190,30 @@ export const syncDatabase = {
         
         // ─── C. Await downloads and apply updates ───
         if (downloadPromises.length > 0) {
-          console.log(`Downloading ${downloadPromises.length} modified entities...`);
+          console.log(`Downloading ${downloadPromises.length} modified bucket partitions...`);
           const downloadedData = await Promise.all(downloadPromises);
           
           for (let i = 0; i < downloadKeys.length; i++) {
             const keyInfo = downloadKeys[i];
-            const val = downloadedData[i];
+            const val = downloadedData[i] || [];
             
             if (keyInfo === 'catalog') {
               Object.assign(db, val);
             } else {
-              const { collection, id } = keyInfo;
-              if (!db[collection]) db[collection] = [];
-              const idx = db[collection].findIndex(item => item && item.id === id);
-              if (idx >= 0) {
-                db[collection][idx] = val;
-              } else {
-                db[collection].push(val);
-              }
+              const { collection, bucketIdx } = keyInfo;
+              
+              // Filter out local items belonging to this bucket, EXCEPT new offline modifications
+              db[collection] = (db[collection] || []).filter(item => {
+                if (!item || !item.id) return false;
+                if (getBucketIndex(item.id, PARTITIONS[collection]) !== bucketIdx) return true; // keep other buckets
+                
+                // Keep local offline item if modified after the cloud snapshot
+                const localTime = item._lastModified ? new Date(item._lastModified).getTime() : 0;
+                return localTime > cloudTime;
+              });
+              
+              // Push the downloaded partition items
+              db[collection].push(...val);
             }
           }
         }
@@ -292,7 +300,7 @@ export const syncDatabase = {
 
   /**
    * Save data to Cloud Storage Bucket with a shared timestamp.
-   * Compares hashes of individual items and only uploads modified ones.
+   * Compares hashes of individual partitions and only uploads modified ones.
    */
   async save({ mainDb, quotes }) {
     const now = new Date().toISOString();
@@ -312,50 +320,49 @@ export const syncDatabase = {
           cloudMeta = await metaRes.json();
         }
       } catch (e) {
-        console.warn("Could not fetch current cloud meta.json for comparison, writing all entities.");
+        console.warn("Could not fetch current cloud meta.json for comparison, writing all partitions.");
       }
       
       const cloudHashes = cloudMeta?.hashes || {};
       const localHashes = {
-        clients: {},
-        orders: {},
-        quotes: {},
+        clients: [],
+        orders: [],
+        quotes: [],
         catalog: ''
       };
       
-      const deletePaths = [];
-      
-      // ─── A. Upload/Sync large collections item-by-item ───
+      // ─── A. Partition large collections into buckets ───
       for (const key of ['clients', 'orders', 'quotes']) {
+        const numBuckets = PARTITIONS[key];
+        const cloudBucketHashes = cloudHashes[key] || [];
+        
         const localItems = db[key] || [];
+        const activeItems = localItems.filter(item => item && !item._deleted); // Exclude soft-deleted items
         
-        // Filter out deleted items from the active hashes index
-        const activeItems = localItems.filter(item => item && !item._deleted);
-        const activeLocalIds = activeItems.map(i => i.id);
+        // Group active items by stable bucket index
+        const buckets = Array.from({ length: numBuckets }, () => []);
+        activeItems.forEach(item => {
+          if (item && item.id) {
+            const bucketIdx = getBucketIndex(item.id, numBuckets);
+            buckets[bucketIdx].push(item);
+          }
+        });
         
-        for (const item of activeItems) {
-          const itemStr = JSON.stringify(item);
-          const itemHash = getHash(itemStr);
-          localHashes[key][item.id] = itemHash;
+        // Calculate hash and upload if modified
+        for (let bucketIdx = 0; bucketIdx < numBuckets; bucketIdx++) {
+          const bucketStr = JSON.stringify(buckets[bucketIdx]);
+          const bucketHash = getHash(bucketStr);
+          localHashes[key].push(bucketHash);
           
-          const cloudHash = cloudHashes[key]?.[item.id];
-          if (itemHash !== cloudHash) {
-            console.log(`Uploading modified entity: ${key}/${item.id}.json`);
-            const blob = new Blob([itemStr], { type: 'application/json' });
-            const { error } = await bucket.upload(`${key}/${item.id}.json`, blob, { 
+          const cloudBucketHash = cloudBucketHashes[bucketIdx];
+          if (bucketHash !== cloudBucketHash) {
+            console.log(`Uploading modified partition: ${key}/bucket-${bucketIdx}.json`);
+            const blob = new Blob([bucketStr], { type: 'application/json' });
+            const { error } = await bucket.upload(`${key}/bucket-${bucketIdx}.json`, blob, { 
               upsert: true,
               contentType: 'application/json'
             });
             if (error) throw error;
-          }
-        }
-        
-        // Detect items deleted locally that still exist in the cloud
-        const cloudItemIds = Object.keys(cloudHashes[key] || {});
-        for (const id of cloudItemIds) {
-          if (!activeLocalIds.includes(id)) {
-            console.log(`Queuing deletion for cloud file: ${key}/${id}.json`);
-            deletePaths.push(`${key}/${id}.json`);
           }
         }
       }
@@ -379,13 +386,6 @@ export const syncDatabase = {
           contentType: 'application/json'
         });
         if (error) throw error;
-      }
-      
-      // ─── C. Remove deleted files from bucket ───
-      if (deletePaths.length > 0) {
-        console.log(`Removing ${deletePaths.length} deleted files from storage...`);
-        const { error } = await bucket.remove(deletePaths);
-        if (error) console.error("Error removing deleted files from storage:", error);
       }
       
       // ─── D. Update meta.json ───
