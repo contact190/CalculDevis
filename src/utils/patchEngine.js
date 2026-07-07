@@ -38,10 +38,10 @@ export function getDeviceId() {
 const TRACKABLE_COLLECTIONS = [
   'clients', 'quotes', 'orders', 'compositions', 'glass', 'colors',
   'options', 'accessories', 'profiles', 'joints', 'reinforcements', 'hardwareSets',
-  'ranges', 'categories', 'traverses', 'glassProfileCompatibility', 'gasketCompatibility',
+  'ranges', 'categories', 'traverses', 'glassProfileCompatibility', 'gasketCompatibility', 'shopProducts',
   'shutterComponents.caissons', 'shutterComponents.lames',
-  'shutterComponents.lamesFinales', 'shutterComponents.glissieres',
-  'shutterComponents.axes', 'shutterComponents.kits'
+  'shutterComponents.lamesFinales', 'shutterComponents.lameFinales', 'shutterComponents.glissieres',
+  'shutterComponents.axes', 'shutterComponents.kits', 'shutterComponents.extras', 'shutterComponents.moteurs'
 ];
 
 function getPath(obj, path) {
