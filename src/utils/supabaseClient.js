@@ -95,6 +95,7 @@ export const syncDatabase = {
       if (storageMetaRes.ok) {
         const meta = await storageMetaRes.json();
         const cloudHashes = meta.hashes || {};
+        const cloudTime = new Date(meta.updated_at).getTime();
         
         // Load the local database to compare hashes and download only changed segments
         let localDb = null;
@@ -119,43 +120,91 @@ export const syncDatabase = {
           }
         }
         
-        const localHashes = {
-          clients: getHash(JSON.stringify(localSegments.clients)),
-          orders: getHash(JSON.stringify(localSegments.orders)),
-          quotes: getHash(JSON.stringify(localSegments.quotes)),
-          catalog: getHash(JSON.stringify(localSegments.catalog))
-        };
+        // Calculate catalog local hash
+        const localCatalogHash = getHash(JSON.stringify(localSegments.catalog));
         
         const db = localDb ? { ...localDb } : {};
         const downloadPromises = [];
-        const keysToDownload = [];
+        const downloadKeys = []; // Array of { collection, id } or 'catalog'
         
-        for (const key of ['clients', 'orders', 'quotes', 'catalog']) {
-          if (!localDb || localHashes[key] !== cloudHashes[key]) {
-            keysToDownload.push(key);
-            const { data: urlData } = bucket.getPublicUrl(`${key}.json`);
-            downloadPromises.push(
-              fetchWithTimeout(`${urlData.publicUrl}?t=${t}`, {}, 60000).then(res => { // 60s timeout for segments
-                if (!res.ok) throw new Error(`Failed to download segment ${key}`);
-                return res.json();
-              })
-            );
-          } else {
-            console.log(`Segment ${key} is up to date locally, skipping download.`);
+        // ─── A. Process large collections item-by-item ───
+        for (const key of ['clients', 'orders', 'quotes']) {
+          const cloudItemHashes = cloudHashes[key] || {};
+          const localItems = localSegments[key];
+          
+          // Reconstruct local hashes map
+          const localItemHashes = {};
+          localItems.forEach(item => {
+            if (item && item.id) {
+              localItemHashes[item.id] = getHash(JSON.stringify(item));
+            }
+          });
+          
+          // 1. Identify items to download (new or modified in cloud)
+          for (const id of Object.keys(cloudItemHashes)) {
+            if (localItemHashes[id] !== cloudItemHashes[id]) {
+              downloadKeys.push({ collection: key, id });
+              const { data: urlData } = bucket.getPublicUrl(`${key}/${id}.json`);
+              downloadPromises.push(
+                fetchWithTimeout(`${urlData.publicUrl}?t=${t}`, {}, 60000).then(res => {
+                  if (!res.ok) throw new Error(`Failed to download ${key}/${id}.json`);
+                  return res.json();
+                })
+              );
+            }
           }
+          
+          // 2. Identify local items that exist locally but not in cloud meta
+          // Keep only active local items that are in the cloud, OR that were created/modified locally after the cloud snapshot
+          const activeCloudIds = Object.keys(cloudItemHashes);
+          db[key] = localItems.filter(item => {
+            if (!item || !item.id) return false;
+            const inCloud = activeCloudIds.includes(item.id);
+            if (inCloud) return true;
+            
+            // Offline created item safety check
+            const localTime = item._lastModified ? new Date(item._lastModified).getTime() : 0;
+            if (localTime > cloudTime) {
+              console.log(`Keeping offline created item: ${key}/${item.id}`);
+              return true;
+            }
+            console.log(`Deleting local item deleted on cloud: ${key}/${item.id}`);
+            return false;
+          });
         }
         
-        if (keysToDownload.length > 0) {
-          console.log(`Downloading ${keysToDownload.length} modified segments:`, keysToDownload);
+        // ─── B. Process catalog segment ───
+        if (localCatalogHash !== cloudHashes.catalog) {
+          downloadKeys.push('catalog');
+          const { data: urlData } = bucket.getPublicUrl('catalog.json');
+          downloadPromises.push(
+            fetchWithTimeout(`${urlData.publicUrl}?t=${t}`, {}, 60000).then(res => {
+              if (!res.ok) throw new Error(`Failed to download catalog.json`);
+              return res.json();
+            })
+          );
+        }
+        
+        // ─── C. Await downloads and apply updates ───
+        if (downloadPromises.length > 0) {
+          console.log(`Downloading ${downloadPromises.length} modified entities...`);
           const downloadedData = await Promise.all(downloadPromises);
           
-          for (let i = 0; i < keysToDownload.length; i++) {
-            const key = keysToDownload[i];
+          for (let i = 0; i < downloadKeys.length; i++) {
+            const keyInfo = downloadKeys[i];
             const val = downloadedData[i];
-            if (key === 'catalog') {
+            
+            if (keyInfo === 'catalog') {
               Object.assign(db, val);
             } else {
-              db[key] = val;
+              const { collection, id } = keyInfo;
+              if (!db[collection]) db[collection] = [];
+              const idx = db[collection].findIndex(item => item && item.id === id);
+              if (idx >= 0) {
+                db[collection][idx] = val;
+              } else {
+                db[collection].push(val);
+              }
             }
           }
         }
@@ -242,7 +291,7 @@ export const syncDatabase = {
 
   /**
    * Save data to Cloud Storage Bucket with a shared timestamp.
-   * Compares hashes with cloud and only uploads segments that actually changed.
+   * Compares hashes of individual items and only uploads modified ones.
    */
   async save({ mainDb, quotes }) {
     const now = new Date().toISOString();
@@ -251,59 +300,94 @@ export const syncDatabase = {
       const db = { ...mainDb };
       if (quotes) db.quotes = quotes;
       
-      const segments = {
-        clients: JSON.stringify(db.clients || []),
-        orders: JSON.stringify(db.orders || []),
-        quotes: JSON.stringify(db.quotes || []),
+      // Get current cloud meta first
+      const t = Date.now();
+      const bucket = supabase.storage.from('app-state');
+      const { data: metaUrlData } = bucket.getPublicUrl('meta.json');
+      let cloudMeta = null;
+      try {
+        const metaRes = await fetchWithTimeout(`${metaUrlData.publicUrl}?t=${t}`, {}, 15000);
+        if (metaRes.ok) {
+          cloudMeta = await metaRes.json();
+        }
+      } catch (e) {
+        console.warn("Could not fetch current cloud meta.json for comparison, writing all entities.");
+      }
+      
+      const cloudHashes = cloudMeta?.hashes || {};
+      const localHashes = {
+        clients: {},
+        orders: {},
+        quotes: {},
         catalog: ''
       };
       
+      const deletePaths = [];
+      
+      // ─── A. Upload/Sync large collections item-by-item ───
+      for (const key of ['clients', 'orders', 'quotes']) {
+        const localItems = db[key] || [];
+        
+        // Filter out deleted items from the active hashes index
+        const activeItems = localItems.filter(item => item && !item._deleted);
+        const activeLocalIds = activeItems.map(i => i.id);
+        
+        for (const item of activeItems) {
+          const itemStr = JSON.stringify(item);
+          const itemHash = getHash(itemStr);
+          localHashes[key][item.id] = itemHash;
+          
+          const cloudHash = cloudHashes[key]?.[item.id];
+          if (itemHash !== cloudHash) {
+            console.log(`Uploading modified entity: ${key}/${item.id}.json`);
+            const blob = new Blob([itemStr], { type: 'application/json' });
+            const { error } = await bucket.upload(`${key}/${item.id}.json`, blob, { 
+              upsert: true,
+              contentType: 'application/json'
+            });
+            if (error) throw error;
+          }
+        }
+        
+        // Detect items deleted locally that still exist in the cloud
+        const cloudItemIds = Object.keys(cloudHashes[key] || {});
+        for (const id of cloudItemIds) {
+          if (!activeLocalIds.includes(id)) {
+            console.log(`Queuing deletion for cloud file: ${key}/${id}.json`);
+            deletePaths.push(`${key}/${id}.json`);
+          }
+        }
+      }
+      
+      // ─── B. Upload/Sync catalog ───
       const catalogObj = {};
       for (const key of Object.keys(db)) {
         if (key !== 'clients' && key !== 'orders' && key !== 'quotes') {
           catalogObj[key] = db[key];
         }
       }
-      segments.catalog = JSON.stringify(catalogObj);
+      const catalogStr = JSON.stringify(catalogObj);
+      const catalogHash = getHash(catalogStr);
+      localHashes.catalog = catalogHash;
       
-      const localHashes = {
-        clients: getHash(segments.clients),
-        orders: getHash(segments.orders),
-        quotes: getHash(segments.quotes),
-        catalog: getHash(segments.catalog)
-      };
-      
-      // Get current cloud hashes first
-      const t = Date.now();
-      const bucket = supabase.storage.from('app-state');
-      const { data: metaUrlData } = bucket.getPublicUrl('meta.json');
-      let cloudMeta = null;
-      try {
-        const metaRes = await fetchWithTimeout(`${metaUrlData.publicUrl}?t=${t}`, {}, 5000);
-        if (metaRes.ok) {
-          cloudMeta = await metaRes.json();
-        }
-      } catch (e) {
-        console.warn("Could not fetch current cloud meta.json for comparison, writing all segments.");
+      if (catalogHash !== cloudHashes.catalog) {
+        console.log(`Uploading modified catalog.json`);
+        const blob = new Blob([catalogStr], { type: 'application/json' });
+        const { error } = await bucket.upload('catalog.json', blob, { 
+          upsert: true,
+          contentType: 'application/json'
+        });
+        if (error) throw error;
       }
       
-      const cloudHashes = cloudMeta?.hashes || {};
-      
-      for (const key of ['clients', 'orders', 'quotes', 'catalog']) {
-        if (localHashes[key] !== cloudHashes[key]) {
-          console.log(`Uploading modified segment to storage: ${key}.json`);
-          const blob = new Blob([segments[key]], { type: 'application/json' });
-          const { error } = await bucket.upload(`${key}.json`, blob, { 
-            upsert: true,
-            contentType: 'application/json'
-          });
-          if (error) throw error;
-        } else {
-          console.log(`Segment ${key}.json is identical to cloud, skipping upload.`);
-        }
+      // ─── C. Remove deleted files from bucket ───
+      if (deletePaths.length > 0) {
+        console.log(`Removing ${deletePaths.length} deleted files from storage...`);
+        const { error } = await bucket.remove(deletePaths);
+        if (error) console.error("Error removing deleted files from storage:", error);
       }
       
-      // Update meta.json with the new hashes and timestamp
+      // ─── D. Update meta.json ───
       const metaObj = { 
         updated_at: now, 
         hashes: localHashes 
