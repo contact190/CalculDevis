@@ -242,6 +242,9 @@ const AdminDashboard = ({ data, setData }) => {
       glassFormulaL: 'L-80',
       glassFormulaH: 'H-80',
       glassFormulaQty: '1',
+      glass2FormulaL: '',
+      glass2FormulaH: '',
+      glass2FormulaQty: '',
       elements: [],
       _isNew: true
     };
@@ -332,8 +335,8 @@ const AdminDashboard = ({ data, setData }) => {
       colors: { id: generateId('C'), name: 'Nouvelle Couleur', hex: '#FFFFFF', factor: 1.0 },
       accessories: { id: generateId('A'), name: 'Nouvel Accessoire', rangeIds: [data.ranges?.[0]?.id || ''], unit: 'Unité', price: 5.0 },
       categories: { id: generateId('CAT'), name: 'Nouvelle Catégorie' },
-      gasketCompatibility: { rangeId: data.ranges?.[0]?.id || '', glassThickness: 4, gasketId: data.accessories.find(a => a.unit === 'Joint')?.id || '', formula: '(L+H)*2' },
-      glassProfileCompatibility: { rangeId: data.ranges?.[0]?.id || '', glassThickness: 4, profileHId: data.profiles?.[0]?.id || '', qtyH: 2, formulaH: 'L-80', profileVId: data.profiles?.[0]?.id || '', qtyV: 2, formulaV: 'H-80' },
+      gasketCompatibility: { id: generateId('GC'), rangeId: data.ranges?.[0]?.id || '', glassThickness: 4, gasketId: data.accessories.find(a => a.unit === 'Joint')?.id || '', formula: '(L+H)*2' },
+      glassProfileCompatibility: { id: generateId('GPC'), rangeId: data.ranges?.[0]?.id || '', glassThickness: 4, profileHId: data.profiles?.[0]?.id || '', qtyH: 2, formulaH: 'L-80', profileVId: data.profiles?.[0]?.id || '', qtyV: 2, formulaV: 'H-80' },
       options: { id: generateId('OPT'), name: 'Nouvelle Option', rangeIds: [data.ranges?.[0]?.id || ''], addAccessoryId: data.accessories?.[0]?.id || '', removeAccessoryId: '', formula: '1' },
       traverses: { id: generateId('TRV'), name: 'Nouvelle Traverse', type: 'horizontale', usage: 'fenetre', profileId: '', formula: 'L', priceUnit: 'ML' }
     };
@@ -2149,6 +2152,42 @@ const AdminDashboard = ({ data, setData }) => {
                         value={editingComposition.glassFormulaQty || '1'} 
                         onChange={(val) => {
                           const updated = { ...editingComposition, glassFormulaQty: val };
+                          setEditingComposition(updated);
+                          handleUpdateComposition(updated);
+                        }} 
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginBottom: '1.5rem', padding: '1rem', background: 'rgba(255,255,255,0.02)', borderRadius: '0.5rem', border: '1px dashed rgba(255,255,255,0.1)' }}>
+                    <div className="form-group">
+                      <label className="label">Formule Largeur Vitrage 2 (Facultatif)</label>
+                      <FormulaInput 
+                        value={editingComposition.glass2FormulaL || ''} 
+                        onChange={(val) => {
+                          const updated = { ...editingComposition, glass2FormulaL: val };
+                          setEditingComposition(updated);
+                          handleUpdateComposition(updated);
+                        }} 
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="label">Formule Hauteur Vitrage 2 (Facultatif)</label>
+                      <FormulaInput 
+                        value={editingComposition.glass2FormulaH || ''} 
+                        onChange={(val) => {
+                          const updated = { ...editingComposition, glass2FormulaH: val };
+                          setEditingComposition(updated);
+                          handleUpdateComposition(updated);
+                        }} 
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="label">Nombre de Vitrages 2 (Facultatif)</label>
+                      <FormulaInput 
+                        value={editingComposition.glass2FormulaQty || ''} 
+                        onChange={(val) => {
+                          const updated = { ...editingComposition, glass2FormulaQty: val };
                           setEditingComposition(updated);
                           handleUpdateComposition(updated);
                         }} 

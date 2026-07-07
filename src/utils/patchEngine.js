@@ -38,7 +38,7 @@ export function getDeviceId() {
 const TRACKABLE_COLLECTIONS = [
   'clients', 'quotes', 'orders', 'compositions', 'glass', 'colors',
   'options', 'accessories', 'profiles', 'joints', 'reinforcements', 'hardwareSets',
-  'ranges', 'categories', 'traverses',
+  'ranges', 'categories', 'traverses', 'glassProfileCompatibility', 'gasketCompatibility',
   'shutterComponents.caissons', 'shutterComponents.lames',
   'shutterComponents.lamesFinales', 'shutterComponents.glissieres',
   'shutterComponents.axes', 'shutterComponents.kits'

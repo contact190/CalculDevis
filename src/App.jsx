@@ -169,6 +169,24 @@ function App() {
         return updated;
       });
     }
+    if (repaired.glassProfileCompatibility) {
+      let counter = 1;
+      repaired.glassProfileCompatibility = repaired.glassProfileCompatibility.map(item => {
+        if (item && !item.id) {
+          return { ...item, id: `GPC-${Date.now()}-${counter++}` };
+        }
+        return item;
+      });
+    }
+    if (repaired.gasketCompatibility) {
+      let counter = 1;
+      repaired.gasketCompatibility = repaired.gasketCompatibility.map(item => {
+        if (item && !item.id) {
+          return { ...item, id: `GC-${Date.now()}-${counter++}` };
+        }
+        return item;
+      });
+    }
     if (!repaired.orders) repaired.orders = [];
     if (!repaired.quotes) repaired.quotes = [];
     if (!repaired.contracts) repaired.contracts = [];
