@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { persistentStorage } from './storage';
+import { persistentStorage } from './storage.js';
 
 const SUPABASE_URL = 'https://ttgtlitdbgioujgflaal.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR0Z3RsaXRkYmdpb3VqZ2ZsYWFsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0ODU5NTgsImV4cCI6MjA5MTA2MTk1OH0.Ig6MuvUXOjE_F1q3phMiGYau0UJLzl9vwOwX5hLIRiw';
@@ -90,7 +90,7 @@ export const syncDatabase = {
       const bucket = supabase.storage.from('app-state');
       const { data: metaUrlData } = bucket.getPublicUrl('meta.json');
       
-      const storageMetaRes = await fetchWithTimeout(`${metaUrlData.publicUrl}?t=${t}`, {}, 5000);
+      const storageMetaRes = await fetchWithTimeout(`${metaUrlData.publicUrl}?t=${t}`, {}, 15000); // 15s for meta
       
       if (storageMetaRes.ok) {
         const meta = await storageMetaRes.json();
@@ -135,7 +135,7 @@ export const syncDatabase = {
             keysToDownload.push(key);
             const { data: urlData } = bucket.getPublicUrl(`${key}.json`);
             downloadPromises.push(
-              fetchWithTimeout(`${urlData.publicUrl}?t=${t}`, {}, 8000).then(res => {
+              fetchWithTimeout(`${urlData.publicUrl}?t=${t}`, {}, 60000).then(res => { // 60s timeout for segments
                 if (!res.ok) throw new Error(`Failed to download segment ${key}`);
                 return res.json();
               })
@@ -221,7 +221,7 @@ export const syncDatabase = {
       // 1. Check Storage Bucket meta first via public URL
       const t = Date.now();
       const { data: metaUrlData } = supabase.storage.from('app-state').getPublicUrl('meta.json');
-      const response = await fetchWithTimeout(`${metaUrlData.publicUrl}?t=${t}`, {}, 5000);
+      const response = await fetchWithTimeout(`${metaUrlData.publicUrl}?t=${t}`, {}, 15000); // 15s for meta
       if (response.ok) {
         const meta = await response.json();
         if (meta.updated_at) return meta.updated_at;
