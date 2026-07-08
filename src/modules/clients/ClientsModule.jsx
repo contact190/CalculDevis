@@ -102,7 +102,10 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
 
   const handleDeleteClient = (id) => {
     if (window.confirm('Supprimer ce client ?')) {
-      setData(prev => ({ ...prev, clients: prev.clients.filter(c => c.id !== id) }));
+      setData(prev => {
+        const list = (prev.clients || []).map(c => c.id === id ? { ...c, _deleted: true, _lastModified: new Date().toISOString() } : c);
+        return { ...prev, clients: list };
+      });
       return true;
     }
     return false;
@@ -110,10 +113,10 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
 
   const handleDeleteQuote = (quote) => {
     if (window.confirm(`Voulez-vous vraiment supprimer le devis ${quote.number} ? Cette action est irréversible.`)) {
-      setData(prev => ({
-        ...prev,
-        quotes: (prev.quotes || []).filter(q => q.id !== quote.id)
-      }));
+      setData(prev => {
+        const list = (prev.quotes || []).map(q => q.id === quote.id ? { ...q, _deleted: true, _lastModified: new Date().toISOString() } : q);
+        return { ...prev, quotes: list };
+      });
     }
   };
 
