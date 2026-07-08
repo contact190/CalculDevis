@@ -280,15 +280,23 @@ function App() {
              let baseTimestamp = localTimestamp || "1970-01-01T00:00:00.000Z";
              
              if (cloudData) {
-               // Si le cloud a un snapshot plus récent, ou si on a pas de données locales (ex: Edge pour la 1ere fois)
-               const localDate = localTimestamp ? new Date(localTimestamp).getTime() : 0;
-               const cloudDate = updatedAt ? new Date(updatedAt).getTime() : 0;
-               
-               if (!localData || cloudDate > localDate) {
-                 finalData = cloudData;
-                 baseTimestamp = updatedAt || baseTimestamp;
-                 console.log("☁️ Snapshot Cloud chargé.");
-               }
+                if (!localData) {
+                  finalData = cloudData;
+                  baseTimestamp = updatedAt || baseTimestamp;
+                  console.log("☁️ Snapshot Cloud chargé.");
+                } else {
+                  console.log("☁️ Fusion intelligente (Smart Merge) des données locales avec le Cloud...");
+                  finalData = smartMerge(localData, cloudData);
+                  
+                  const localDate = localTimestamp ? new Date(localTimestamp).getTime() : 0;
+                  const cloudDate = updatedAt ? new Date(updatedAt).getTime() : 0;
+                  // Use the older timestamp for fetching operations to guarantee no operations are missed
+                  if (localDate < cloudDate && localTimestamp) {
+                    baseTimestamp = localTimestamp;
+                  } else if (updatedAt) {
+                    baseTimestamp = updatedAt;
+                  }
+                }
              }
              
              // Now fetch missed ops
