@@ -61,6 +61,38 @@ const FormulaInput = ({ value, onChange, placeholder, style = {}, variables = ['
   );
 };
 
+// ─── REUSABLE COMPONENT: BufferedInput to prevent lag and decimal loss ───────
+const BufferedInput = ({ value, onChange, type = "text", ...props }) => {
+  const [localValue, setLocalValue] = useState(value);
+
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
+
+  const handleBlur = () => {
+    if (localValue !== value) {
+      onChange(localValue);
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.target.blur();
+    }
+  };
+
+  return (
+    <input
+      {...props}
+      type={type}
+      value={localValue ?? ''}
+      onChange={e => setLocalValue(e.target.value)}
+      onBlur={handleBlur}
+      onKeyDown={handleKeyDown}
+    />
+  );
+};
+
 const MultiSelectRange = ({ selectedIds = [], allRanges, onChange }) => {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -253,41 +285,55 @@ const AdminDashboard = ({ data, setData }) => {
   };
 
   // Shutter Helpers (Moved to Top for Accessibility)
-  const updateShutterItem = (family, idx, field, value) => {
+  const updateShutterItem = (family, id, index, field, value) => {
     setData(prev => {
       const components = prev.shutterComponents || {};
       const list = components[family] || [];
       const updated = [...list];
-      if (updated[idx] !== undefined) {
-        const item = { ...updated[idx], [field]: (field === 'price' || field === 'height' || field === 'jointPrice' || field === 'baguettePrice' || field === 'barLength' || field === 'scrapThreshold') ? parseFloat(value) || 0 : value };
+      let targetIdx = -1;
+      if (id) targetIdx = updated.findIndex(item => item && item.id === id);
+      if (targetIdx === -1) targetIdx = index;
+      if (targetIdx !== -1 && targetIdx < updated.length) {
+        const item = { ...updated[targetIdx], [field]: (field === 'price' || field === 'height' || field === 'jointPrice' || field === 'baguettePrice' || field === 'barLength' || field === 'scrapThreshold') ? parseFloat(value) || 0 : value };
         delete item._isNew;
-        updated[idx] = item;
+        updated[targetIdx] = item;
       }
       return { ...prev, shutterComponents: { ...components, [family]: updated } };
     });
   };
 
-  const deleteShutterItem = (family, idx) => {
+  const deleteShutterItem = (family, id, index) => {
     setData(prev => {
       const components = prev.shutterComponents || {};
       const list = components[family] || [];
-      const updated = list.filter((_, i) => i !== idx);
+      const updated = [...list];
+      let targetIdx = -1;
+      if (id) targetIdx = updated.findIndex(item => item && item.id === id);
+      if (targetIdx === -1) targetIdx = index;
+      if (targetIdx !== -1 && targetIdx < updated.length) {
+        updated[targetIdx] = { ...updated[targetIdx], _deleted: true, _lastModified: new Date().toISOString() };
+      }
       return { ...prev, shutterComponents: { ...components, [family]: updated } };
     });
   };
 
-  const duplicateShutterItem = (family, idx) => {
+  const duplicateShutterItem = (family, id, index) => {
     setData(prev => {
       const components = prev.shutterComponents || {};
       const list = components[family] || [];
-      const itemToDuplicate = list[idx];
-      if (!itemToDuplicate) return prev;
+      let targetIdx = -1;
+      if (id) targetIdx = list.findIndex(item => item && item.id === id);
+      if (targetIdx === -1) targetIdx = index;
+      if (targetIdx === -1 || !list[targetIdx]) return prev;
       
+      const itemToDuplicate = list[targetIdx];
       const newId = `${family.slice(0,3).toUpperCase()}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
       const duplicatedItem = { ...itemToDuplicate, id: newId, name: `${itemToDuplicate.name} (Copie)`, _isNew: true };
+      // Deep copy nested properties like rangeIds or addOns if any
+      if (duplicatedItem.addOns) duplicatedItem.addOns = JSON.parse(JSON.stringify(duplicatedItem.addOns));
       
       const updated = [...list];
-      updated.splice(idx + 1, 0, duplicatedItem);
+      updated.splice(targetIdx + 1, 0, duplicatedItem);
       return { ...prev, shutterComponents: { ...components, [family]: updated } };
     });
   };
@@ -319,7 +365,10 @@ const AdminDashboard = ({ data, setData }) => {
 
 
   const handleDeleteComposition = (id) => {
-    setData(prev => ({ ...prev, compositions: prev.compositions.filter(c => c.id !== id) }));
+    setData(prev => {
+      const list = prev.compositions.map(c => c.id === id ? { ...c, _deleted: true, _lastModified: new Date().toISOString() } : c);
+      return { ...prev, compositions: list };
+    });
     return true;
   };
 
@@ -482,17 +531,18 @@ const AdminDashboard = ({ data, setData }) => {
       };
 
       const updatedCategoryList = [...nextData[category]];
-      if (index !== -1 && index < updatedCategoryList.length) {
-        const item = { ...updatedCategoryList[index], [field]: parseValue(value, updatedCategoryList[index][field]) };
+      let targetIdx = -1;
+      if (id) {
+        targetIdx = updatedCategoryList.findIndex(item => item && item.id === id);
+      }
+      if (targetIdx === -1) {
+        targetIdx = index;
+      }
+
+      if (targetIdx !== -1 && targetIdx < updatedCategoryList.length) {
+        const item = { ...updatedCategoryList[targetIdx], [field]: parseValue(value, updatedCategoryList[targetIdx][field]) };
         delete item._isNew;
-        updatedCategoryList[index] = item;
-      } else {
-        const itemIdx = updatedCategoryList.findIndex(item => item.id === id);
-        if (itemIdx !== -1) {
-          const item = { ...updatedCategoryList[itemIdx], [field]: parseValue(value, updatedCategoryList[itemIdx][field]) };
-          delete item._isNew;
-          updatedCategoryList[itemIdx] = item;
-        }
+        updatedCategoryList[targetIdx] = item;
       }
       
       return { ...nextData, [category]: updatedCategoryList };
@@ -501,15 +551,18 @@ const AdminDashboard = ({ data, setData }) => {
 
   const handleDeleteItem = (category, id, index = -1) => {
     setData(prev => {
-      if (index !== -1) {
-        const updated = [...prev[category]];
-        updated.splice(index, 1);
-        return { ...prev, [category]: updated };
+      const updated = [...prev[category]];
+      let targetIdx = -1;
+      if (id) {
+        targetIdx = updated.findIndex(item => item && item.id === id);
       }
-      return {
-        ...prev,
-        [category]: prev[category].filter(item => item.id !== id)
-      };
+      if (targetIdx === -1) {
+        targetIdx = index;
+      }
+      if (targetIdx !== -1 && targetIdx < updated.length) {
+        updated.splice(targetIdx, 1);
+      }
+      return { ...prev, [category]: updated };
     });
   };
 
@@ -533,31 +586,58 @@ const AdminDashboard = ({ data, setData }) => {
     }));
   };
 
-  const handleDeleteGlassProfileCompatibility = (index) => {
-    setData(prev => ({ ...prev, glassProfileCompatibility: prev.glassProfileCompatibility.filter((_, i) => i !== index) }));
+  const handleDeleteGlassProfileCompatibility = (id, index = -1) => {
+    setData(prev => {
+      const list = [...(prev.glassProfileCompatibility || [])];
+      let targetIdx = -1;
+      if (id) targetIdx = list.findIndex(item => item && item.id === id);
+      if (targetIdx === -1) targetIdx = index;
+      if (targetIdx !== -1 && targetIdx < list.length) {
+        list.splice(targetIdx, 1);
+      }
+      return { ...prev, glassProfileCompatibility: list };
+    });
   };
 
-  const handleDeleteGasketCompatibility = (index) => {
-    setData(prev => ({
-      ...prev,
-      gasketCompatibility: prev.gasketCompatibility.filter((_, i) => i !== index)
-    }));
+  const handleDeleteGasketCompatibility = (id, index = -1) => {
+    setData(prev => {
+      const list = [...(prev.gasketCompatibility || [])];
+      let targetIdx = -1;
+      if (id) targetIdx = list.findIndex(item => item && item.id === id);
+      if (targetIdx === -1) targetIdx = index;
+      if (targetIdx !== -1 && targetIdx < list.length) {
+        list.splice(targetIdx, 1);
+      }
+      return { ...prev, gasketCompatibility: list };
+    });
   };
 
-  const handleUpdateGasketCompatibility = (index, field, value) => {
-    const updated = [...data.gasketCompatibility];
-    const item = { ...updated[index], [field]: field === 'glassThickness' ? parseFloat(value) || 0 : value };
-    delete item._isNew;
-    updated[index] = item;
-    setData(prev => ({ ...prev, gasketCompatibility: updated }));
+  const handleUpdateGasketCompatibility = (id, index, field, value) => {
+    setData(prev => {
+      const list = [...(prev.gasketCompatibility || [])];
+      let targetIdx = -1;
+      if (id) targetIdx = list.findIndex(item => item && item.id === id);
+      if (targetIdx === -1) targetIdx = index;
+      if (targetIdx !== -1 && targetIdx < list.length) {
+        const item = { ...list[targetIdx], [field]: field === 'glassThickness' ? parseFloat(value) || 0 : value };
+        list[targetIdx] = item;
+      }
+      return { ...prev, gasketCompatibility: list };
+    });
   };
 
-  const handleUpdateGlassProfileCompatibility = (index, field, value) => {
-    const updated = [...(data.glassProfileCompatibility || [])];
-    const item = { ...updated[index], [field]: (field === 'glassThickness' || field === 'qtyH' || field === 'qtyV') ? parseFloat(value) || 0 : value };
-    delete item._isNew;
-    updated[index] = item;
-    setData(prev => ({ ...prev, glassProfileCompatibility: updated }));
+  const handleUpdateGlassProfileCompatibility = (id, index, field, value) => {
+    setData(prev => {
+      const list = [...(prev.glassProfileCompatibility || [])];
+      let targetIdx = -1;
+      if (id) targetIdx = list.findIndex(item => item && item.id === id);
+      if (targetIdx === -1) targetIdx = index;
+      if (targetIdx !== -1 && targetIdx < list.length) {
+        const item = { ...list[targetIdx], [field]: (field === 'glassThickness' || field === 'qtyH' || field === 'qtyV') ? parseFloat(value) || 0 : value };
+        list[targetIdx] = item;
+      }
+      return { ...prev, glassProfileCompatibility: list };
+    });
   };
 
   const handleUpdateComposition = (updated) => {
@@ -1093,7 +1173,7 @@ const AdminDashboard = ({ data, setData }) => {
                   {data.categories.map((cat, idx) => (
                     <tr key={cat.id} style={cat._isNew ? { background: '#dcfce7', transition: 'background 1s' } : {}}>
                       <td data-label="ID">{cat.id}</td>
-                      <td data-label="Nom"><input className="input" value={cat.name} onChange={e => handleUpdateItem('categories', cat.id, 'name', e.target.value, idx)} /></td>
+                      <td data-label="Nom"><BufferedInput className="input" value={cat.name} onChange={val => handleUpdateItem('categories', cat.id, 'name', val, idx)} /></td>
                       <td data-label="Actions"><button className="btn" onClick={() => handleDeleteItem('categories', cat.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button></td>
                     </tr>
                   ))}
@@ -1128,7 +1208,7 @@ const AdminDashboard = ({ data, setData }) => {
                   {data.ranges.map((range, idx) => (
                     <tr key={range.id} style={range._isNew ? { background: '#dcfce7', transition: 'background 1s' } : {}}>
                       <td data-label="ID" style={{ fontWeight: 600 }}>
-                        <input className="input" value={range.id} onChange={e => handleUpdateItem('ranges', range.id, 'id', e.target.value, idx)} style={{ width: '80px', fontWeight: 600 }} />
+                        <BufferedInput className="input" value={range.id} onChange={val => handleUpdateItem('ranges', range.id, 'id', val, idx)} style={{ width: '80px', fontWeight: 600 }} />
                       </td>
                       <td data-label="Visuel">
                         <div style={{ 
@@ -1165,11 +1245,11 @@ const AdminDashboard = ({ data, setData }) => {
                           />
                         </div>
                       </td>
-                      <td data-label="Nom commercial"><input className="input" value={range.name} onChange={e => handleUpdateItem('ranges', range.id, 'name', e.target.value, idx)} /></td>
-                      <td data-label="Min L"><input type="number" className="input" value={range.minL} onChange={e => handleUpdateItem('ranges', range.id, 'minL', e.target.value, idx)} /></td>
-                      <td data-label="Max L"><input type="number" className="input" value={range.maxL} onChange={e => handleUpdateItem('ranges', range.id, 'maxL', e.target.value, idx)} /></td>
-                      <td data-label="Min H"><input type="number" className="input" value={range.minH} onChange={e => handleUpdateItem('ranges', range.id, 'minH', e.target.value, idx)} /></td>
-                      <td data-label="Max H"><input type="number" className="input" value={range.maxH} onChange={e => handleUpdateItem('ranges', range.id, 'maxH', e.target.value, idx)} /></td>
+                      <td data-label="Nom commercial"><BufferedInput className="input" value={range.name} onChange={val => handleUpdateItem('ranges', range.id, 'name', val, idx)} /></td>
+                      <td data-label="Min L"><BufferedInput type="number" className="input" value={range.minL} onChange={val => handleUpdateItem('ranges', range.id, 'minL', val, idx)} /></td>
+                      <td data-label="Max L"><BufferedInput type="number" className="input" value={range.maxL} onChange={val => handleUpdateItem('ranges', range.id, 'maxL', val, idx)} /></td>
+                      <td data-label="Min H"><BufferedInput type="number" className="input" value={range.minH} onChange={val => handleUpdateItem('ranges', range.id, 'minH', val, idx)} /></td>
+                      <td data-label="Max H"><BufferedInput type="number" className="input" value={range.maxH} onChange={val => handleUpdateItem('ranges', range.id, 'maxH', val, idx)} /></td>
                       <td data-label="Actions"><button className="btn" onClick={() => handleDeleteItem('ranges', range.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button></td>
                     </tr>
                   ))}
@@ -1211,10 +1291,10 @@ const AdminDashboard = ({ data, setData }) => {
                              const idx = data.profiles.indexOf(p);
                              return (
                                <tr key={p.id} style={p._isNew ? { background: '#dcfce7', transition: 'background 1s' } : {}}>
-                                  <td><input className="input" value={p.id} onChange={e => handleUpdateItem('profiles', p.id, 'id', e.target.value, idx)} style={{ width: '80px', fontWeight: 700 }} /></td>
+                                  <td><BufferedInput className="input" value={p.id} onChange={val => handleUpdateItem('profiles', p.id, 'id', val, idx)} style={{ width: '80px', fontWeight: 700 }} /></td>
                                   <td><div style={{ width: '30px', height: '30px', background: 'white', borderRadius: '4px' }}>{p.image && <img src={p.image} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />}</div></td>
                                   <td>{p.technicalDrawing ? '✅' : '❌'}</td>
-                                  <td><input className="input" value={p.name} onChange={e => handleUpdateItem('profiles', p.id, 'name', e.target.value, idx)} style={{ width: '120px' }} /></td>
+                                  <td><BufferedInput className="input" value={p.name} onChange={val => handleUpdateItem('profiles', p.id, 'name', val, idx)} style={{ width: '120px' }} /></td>
                                   <td>
                                     <select className="input" value={p.category || 'standard'} onChange={e => handleUpdateItem('profiles', p.id, 'category', e.target.value, idx)} style={{ width: '90px', fontSize: '0.75rem' }}>
                                       <option value="standard">Standard</option>
@@ -1269,7 +1349,7 @@ const AdminDashboard = ({ data, setData }) => {
                             return (
                               <tr key={p.id} style={p._isNew ? { background: '#dcfce7', transition: 'background 1s' } : {}}>
                                 <td style={{ fontWeight: 600 }}>
-                                  <input className="input" value={p.id} onChange={e => handleUpdateItem('profiles', p.id, 'id', e.target.value, idx)} style={{ width: '80px', fontWeight: 600 }} />
+                                  <BufferedInput className="input" value={p.id} onChange={val => handleUpdateItem('profiles', p.id, 'id', val, idx)} style={{ width: '80px', fontWeight: 600 }} />
                                 </td>
                                 <td>
                                   <div style={{ width: '35px', height: '35px', position: 'relative' }}>
@@ -1293,19 +1373,19 @@ const AdminDashboard = ({ data, setData }) => {
                                     }} />
                                   </div>
                                 </td>
-                                <td><input className="input" value={p.name} onChange={e => handleUpdateItem('profiles', p.id, 'name', e.target.value, idx)} style={{ width: '130px' }} /></td>
+                                <td><BufferedInput className="input" value={p.name} onChange={val => handleUpdateItem('profiles', p.id, 'name', val, idx)} style={{ width: '130px' }} /></td>
                                 <td>
                                   <select className="input" value={p.category || 'standard'} onChange={e => handleUpdateItem('profiles', p.id, 'category', e.target.value, idx)} style={{ width: '80px', fontSize: '0.7rem' }}>
                                     <option value="standard">Std</option>
                                     <option value="divider">Jonct</option>
                                   </select>
                                 </td>
-                                <td><input type="number" step="0.001" className="input" value={p.weightPerM} onChange={e => handleUpdateItem('profiles', p.id, 'weightPerM', e.target.value, idx)} style={{ width: '60px' }} /></td>
-                                <td><input type="number" step="0.01" className="input" value={p.pricePerKg} onChange={e => handleUpdateItem('profiles', p.id, 'pricePerKg', e.target.value, idx)} style={{ width: '60px' }} title="Prix au KG" /></td>
-                                <td><input type="number" step="0.01" className="input" value={p.pricePerBar} onChange={e => handleUpdateItem('profiles', p.id, 'pricePerBar', e.target.value, idx)} style={{ width: '60px' }} title="Prix à la Barre" /></td>
-                                <td><input type="number" className="input" value={p.thickness || 0} onChange={e => handleUpdateItem('profiles', p.id, 'thickness', e.target.value, idx)} style={{ width: '50px' }} /></td>
-                                <td><input type="number" className="input" value={p.barLength || 6000} onChange={e => handleUpdateItem('profiles', p.id, 'barLength', e.target.value, idx)} style={{ width: '60px' }} /></td>
-                                <td><input type="number" className="input" value={p.scrapThreshold || 0} onChange={e => handleUpdateItem('profiles', p.id, 'scrapThreshold', e.target.value, idx)} style={{ width: '55px' }} /></td>
+                                <td><BufferedInput type="number" step="0.001" className="input" value={p.weightPerM} onChange={val => handleUpdateItem('profiles', p.id, 'weightPerM', val, idx)} style={{ width: '60px' }} /></td>
+                                <td><BufferedInput type="number" step="0.01" className="input" value={p.pricePerKg} onChange={val => handleUpdateItem('profiles', p.id, 'pricePerKg', val, idx)} style={{ width: '60px' }} title="Prix au KG" /></td>
+                                <td><BufferedInput type="number" step="0.01" className="input" value={p.pricePerBar} onChange={val => handleUpdateItem('profiles', p.id, 'pricePerBar', val, idx)} style={{ width: '60px' }} title="Prix à la Barre" /></td>
+                                <td><BufferedInput type="number" className="input" value={p.thickness || 0} onChange={val => handleUpdateItem('profiles', p.id, 'thickness', val, idx)} style={{ width: '50px' }} /></td>
+                                <td><BufferedInput type="number" className="input" value={p.barLength || 6000} onChange={val => handleUpdateItem('profiles', p.id, 'barLength', val, idx)} style={{ width: '60px' }} /></td>
+                                <td><BufferedInput type="number" className="input" value={p.scrapThreshold || 0} onChange={val => handleUpdateItem('profiles', p.id, 'scrapThreshold', val, idx)} style={{ width: '55px' }} /></td>
                                 <td><MultiSelectRange selectedIds={p.rangeIds || []} allRanges={data.ranges} onChange={newR => handleUpdateItem('profiles', p.id, 'rangeIds', newR, idx)} /></td>
                                 <td>
                                    <select className="input" value={p.cutType || '45/45'} onChange={e => handleUpdateItem('profiles', p.id, 'cutType', e.target.value, idx)} style={{ width: '70px', fontSize: '0.7rem' }}>
@@ -1356,19 +1436,19 @@ const AdminDashboard = ({ data, setData }) => {
                             const idx = data.profiles.indexOf(p);
                             return (
                               <tr key={p.id}>
-                                <td><input className="input" value={p.id} onChange={e => handleUpdateItem('profiles', p.id, 'id', e.target.value, idx)} style={{ width: '80px', fontWeight: 700 }} /></td>
+                                <td><BufferedInput className="input" value={p.id} onChange={val => handleUpdateItem('profiles', p.id, 'id', val, idx)} style={{ width: '80px', fontWeight: 700 }} /></td>
                                 <td>{p.technicalDrawing ? '✅' : '...'}</td>
-                                <td><input className="input" value={p.name} onChange={e => handleUpdateItem('profiles', p.id, 'name', e.target.value, idx)} style={{ width: '150px' }} /></td>
+                                <td><BufferedInput className="input" value={p.name} onChange={val => handleUpdateItem('profiles', p.id, 'name', val, idx)} style={{ width: '150px' }} /></td>
                                 <td>
                                   <select className="input" value={p.category || 'standard'} onChange={e => handleUpdateItem('profiles', p.id, 'category', e.target.value, idx)} style={{ width: '80px' }}>
                                     <option value="standard">Std</option>
                                     <option value="divider">Jonct</option>
                                   </select>
                                 </td>
-                                <td><input type="number" className="input" value={p.weightPerM} onChange={e => handleUpdateItem('profiles', p.id, 'weightPerM', e.target.value, idx)} style={{ width: '60px' }} /></td>
-                                <td><input type="number" className="input" value={p.pricePerKg} onChange={e => handleUpdateItem('profiles', p.id, 'pricePerKg', e.target.value, idx)} style={{ width: '60px' }} /></td>
-                                <td><input type="number" className="input" value={p.pricePerBar || 0} onChange={e => handleUpdateItem('profiles', p.id, 'pricePerBar', e.target.value, idx)} style={{ width: '60px' }} /></td>
-                                <td><input type="number" className="input" value={p.thickness || 0} onChange={e => handleUpdateItem('profiles', p.id, 'thickness', e.target.value, idx)} style={{ width: '50px' }} /></td>
+                                <td><BufferedInput type="number" className="input" value={p.weightPerM} onChange={val => handleUpdateItem('profiles', p.id, 'weightPerM', val, idx)} style={{ width: '60px' }} /></td>
+                                <td><BufferedInput type="number" className="input" value={p.pricePerKg} onChange={val => handleUpdateItem('profiles', p.id, 'pricePerKg', val, idx)} style={{ width: '60px' }} /></td>
+                                <td><BufferedInput type="number" className="input" value={p.pricePerBar || 0} onChange={val => handleUpdateItem('profiles', p.id, 'pricePerBar', val, idx)} style={{ width: '60px' }} /></td>
+                                <td><BufferedInput type="number" className="input" value={p.thickness || 0} onChange={val => handleUpdateItem('profiles', p.id, 'thickness', val, idx)} style={{ width: '50px' }} /></td>
                                 <td><MultiSelectRange selectedIds={p.rangeIds || []} allRanges={data.ranges} onChange={newR => handleUpdateItem('profiles', p.id, 'rangeIds', newR, idx)} /></td>
                                 <td style={{ display: 'flex', gap: '0.2rem' }}>
                                   <button className="btn btn-secondary" onClick={() => setEditingAddonItem({ item: p, family: 'profiles', idx, isShutter: false })} style={{ padding: '0.4rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }} title="Gérer les add-ons spécifiques">
@@ -1413,7 +1493,7 @@ const AdminDashboard = ({ data, setData }) => {
                   {data.glass.map((g, idx) => (
                     <tr key={`${g.id}-${idx}`} style={g._isNew ? { background: '#dcfce7', transition: 'background 1s' } : {}}>
                       <td data-label="ID" style={{ fontWeight: 600 }}>
-                        <input className="input" value={g.id} onChange={e => handleUpdateItem('glass', g.id, 'id', e.target.value, idx)} style={{ width: '100px', fontWeight: 600 }} />
+                        <BufferedInput className="input" value={g.id} onChange={val => handleUpdateItem('glass', g.id, 'id', val, idx)} style={{ width: '100px', fontWeight: 600 }} />
                       </td>
                       <td data-label="Aperçu">
                         <div style={{ 
@@ -1435,7 +1515,7 @@ const AdminDashboard = ({ data, setData }) => {
                           />
                         </div>
                       </td>
-                      <td data-label="Nom"><input className="input" value={g.name} onChange={e => handleUpdateItem('glass', g.id, 'name', e.target.value, idx)} style={{ width: '180px' }} /></td>
+                      <td data-label="Nom"><BufferedInput className="input" value={g.name} onChange={val => handleUpdateItem('glass', g.id, 'name', val, idx)} style={{ width: '180px' }} /></td>
                       <td data-label="Type">
                         <select className="input" value={g.type} onChange={e => handleUpdateItem('glass', g.id, 'type', e.target.value, idx)} style={{ width: '100px' }}>
                           <option value="SIMPLE">Simple</option>
@@ -1444,11 +1524,11 @@ const AdminDashboard = ({ data, setData }) => {
                           <option value="SPECIAL">Spécial</option>
                         </select>
                       </td>
-                      <td data-label="Comp."><input className="input" value={g.composition} onChange={e => handleUpdateItem('glass', g.id, 'composition', e.target.value, idx)} style={{ width: '100px' }} /></td>
-                      <td data-label="Spec."><input className="input" value={g.specification || 'Standard'} onChange={e => handleUpdateItem('glass', g.id, 'specification', e.target.value, idx)} style={{ width: '120px' }} /></td>
-                      <td data-label="Ep. (mm)"><input className="input" type="number" value={g.thickness} onChange={e => handleUpdateItem('glass', g.id, 'thickness', e.target.value, idx)} style={{ width: '80px' }} /></td>
-                      <td data-label="Poids (kg/m²)"><input className="input" type="number" step="0.1" value={g.weightPerM2 ?? 10} onChange={e => handleUpdateItem('glass', g.id, 'weightPerM2', e.target.value, idx)} style={{ width: '90px' }} /></td>
-                      <td data-label="Prix/m2"><input className="input" type="number" value={g.pricePerM2} onChange={e => handleUpdateItem('glass', g.id, 'pricePerM2', e.target.value, idx)} style={{ width: '100px' }} /></td>
+                      <td data-label="Comp."><BufferedInput className="input" value={g.composition} onChange={val => handleUpdateItem('glass', g.id, 'composition', val, idx)} style={{ width: '100px' }} /></td>
+                      <td data-label="Spec."><BufferedInput className="input" value={g.specification || 'Standard'} onChange={val => handleUpdateItem('glass', g.id, 'specification', val, idx)} style={{ width: '120px' }} /></td>
+                      <td data-label="Ep. (mm)"><BufferedInput className="input" type="number" value={g.thickness} onChange={val => handleUpdateItem('glass', g.id, 'thickness', val, idx)} style={{ width: '80px' }} /></td>
+                      <td data-label="Poids (kg/m²)"><BufferedInput className="input" type="number" step="0.1" value={g.weightPerM2 ?? 10} onChange={val => handleUpdateItem('glass', g.id, 'weightPerM2', val, idx)} style={{ width: '90px' }} /></td>
+                      <td data-label="Prix/m2"><BufferedInput className="input" type="number" value={g.pricePerM2} onChange={val => handleUpdateItem('glass', g.id, 'pricePerM2', val, idx)} style={{ width: '100px' }} /></td>
                       <td data-label="Actions"><button className="btn" onClick={() => handleDeleteItem('glass', g.id, idx)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button></td>
                     </tr>
                   ))}
@@ -1538,7 +1618,9 @@ const AdminDashboard = ({ data, setData }) => {
                              const idx = data.accessories.indexOf(acc);
                              return (
                                <tr key={acc.id}>
-                                 <td><input className="input" value={acc.id} onChange={e => handleUpdateItem('accessories', acc.id, 'id', e.target.value, idx)} style={{ width: '80px' }} /></td>
+                                 <td data-label="ID" style={{ fontWeight: 600 }}>
+                                   <BufferedInput className="input" value={acc.id} onChange={val => handleUpdateItem('accessories', acc.id, 'id', val, idx)} style={{ width: '80px', fontWeight: 600 }} />
+                                 </td>
                                  <td>
                                    <div style={{ width: '35px', height: '35px', position: 'relative' }}>
                                      {acc.image && <img src={acc.image} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />}
@@ -1561,7 +1643,7 @@ const AdminDashboard = ({ data, setData }) => {
                                      }} />
                                    </div>
                                  </td>
-                                 <td><input className="input" value={acc.name} onChange={e => handleUpdateItem('accessories', acc.id, 'name', e.target.value, idx)} style={{ width: '150px' }} /></td>
+                                 <td><BufferedInput className="input" value={acc.name} onChange={val => handleUpdateItem('accessories', acc.id, 'name', val, idx)} style={{ width: '150px' }} /></td>
                                  <td>
                                    <select 
                                      className="input" 
@@ -1587,7 +1669,7 @@ const AdminDashboard = ({ data, setData }) => {
                                      <option value="droit">Droit</option>
                                    </select>
                                  </td>
-                                 <td><input type="number" className="input" value={acc.price} onChange={e => handleUpdateItem('accessories', acc.id, 'price', e.target.value, idx)} style={{ width: '80px' }} /></td>
+                                 <td><BufferedInput type="number" className="input" value={acc.price} onChange={val => handleUpdateItem('accessories', acc.id, 'price', val, idx)} style={{ width: '80px' }} /></td>
                                  <td>
                                    <FormulaInput
                                      value={acc.compatibilityFormula || ''}
@@ -1640,7 +1722,7 @@ const AdminDashboard = ({ data, setData }) => {
                             return (
                               <tr key={acc.id} style={acc._isNew ? { background: '#dcfce7', transition: 'background 1s' } : {}}>
                                 <td data-label="ID" style={{ fontWeight: 600 }}>
-                                  <input className="input" value={acc.id} onChange={e => handleUpdateItem('accessories', acc.id, 'id', e.target.value, idx)} style={{ width: '80px', fontWeight: 600 }} />
+                                  <BufferedInput className="input" value={acc.id} onChange={val => handleUpdateItem('accessories', acc.id, 'id', val, idx)} style={{ width: '80px', fontWeight: 600 }} />
                                 </td>
                                 <td>
                                   <div style={{ width: '35px', height: '35px', position: 'relative' }}>
@@ -1664,7 +1746,7 @@ const AdminDashboard = ({ data, setData }) => {
                                     }} />
                                   </div>
                                 </td>
-                                <td><input className="input" value={acc.name} onChange={e => handleUpdateItem('accessories', acc.id, 'name', e.target.value, idx)} style={{ width: '150px' }} /></td>
+                                <td><BufferedInput className="input" value={acc.name} onChange={val => handleUpdateItem('accessories', acc.id, 'name', val, idx)} style={{ width: '150px' }} /></td>
                                 <td>
                                   <select 
                                     className="input" 
@@ -1690,7 +1772,7 @@ const AdminDashboard = ({ data, setData }) => {
                                     <option value="droit">Droit</option>
                                   </select>
                                 </td>
-                                <td><input type="number" className="input" value={acc.price} onChange={e => handleUpdateItem('accessories', acc.id, 'price', e.target.value, idx)} style={{ width: '70px' }} /></td>
+                                <td><BufferedInput type="number" className="input" value={acc.price} onChange={val => handleUpdateItem('accessories', acc.id, 'price', val, idx)} style={{ width: '70px' }} /></td>
                                  <td>
                                    <FormulaInput
                                      value={acc.compatibilityFormula || ''}
@@ -1753,18 +1835,18 @@ const AdminDashboard = ({ data, setData }) => {
                                 <select 
                                   className="input" 
                                   value={gc.rangeId || ''} 
-                                  onChange={e => handleUpdateGasketCompatibility(i, 'rangeId', e.target.value)}
+                                  onChange={e => handleUpdateGasketCompatibility(gc.id, i, 'rangeId', e.target.value)}
                                   style={{ width: '120px' }}
                                 >
                                   {(data.ranges || []).map(r => <option key={r.id} value={r.id}>{r.name || r.id}</option>)}
                                 </select>
                               </td>
                               <td>
-                                <input 
+                                <BufferedInput 
                                   className="input" 
                                   type="number" 
                                   value={gc.glassThickness || 0} 
-                                  onChange={e => handleUpdateGasketCompatibility(i, 'glassThickness', e.target.value)}
+                                  onChange={val => handleUpdateGasketCompatibility(gc.id, i, 'glassThickness', val)}
                                   style={{ width: '60px' }} 
                                 />
                               </td>
@@ -1773,7 +1855,7 @@ const AdminDashboard = ({ data, setData }) => {
                                 <select 
                                   className="input" 
                                   value={gc.gasketId || ''} 
-                                  onChange={e => handleUpdateGasketCompatibility(i, 'gasketId', e.target.value)}
+                                  onChange={e => handleUpdateGasketCompatibility(gc.id, i, 'gasketId', e.target.value)}
                                   style={{ width: '200px' }}
                                 >
                                   <option value="">Sélectionner...</option>
@@ -1788,13 +1870,13 @@ const AdminDashboard = ({ data, setData }) => {
                               <td>
                                 <FormulaInput 
                                   value={gc.formula || ''} 
-                                  onChange={val => handleUpdateGasketCompatibility(i, 'formula', val)}
+                                  onChange={val => handleUpdateGasketCompatibility(gc.id, i, 'formula', val)}
                                   variables={['L', 'H']}
                                 />
                               </td>
                               <td style={{ display: 'flex', gap: '0.3rem' }}>
                                 <button className="btn" onClick={() => handleDuplicateItem('gasketCompatibility', gc)} style={{ padding: '0.4rem', color: '#6366f1' }}><Copy size={16} /></button>
-                                <button className="btn" onClick={() => handleDeleteGasketCompatibility(i)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
+                                <button className="btn" onClick={() => handleDeleteGasketCompatibility(gc.id, i)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
                               </td>
                             </tr>
                           );
@@ -1847,23 +1929,23 @@ const AdminDashboard = ({ data, setData }) => {
                                 <td data-label="Gamme">
                                   <select 
                                     className="input" value={gc.rangeId || ''} 
-                                    onChange={e => handleUpdateGlassProfileCompatibility(i, 'rangeId', e.target.value)}
+                                    onChange={e => handleUpdateGlassProfileCompatibility(gc.id, i, 'rangeId', e.target.value)}
                                     style={{ width: '110px' }}>
                                     <option value="">Sélectionner...</option>
                                     {(data.ranges || []).map(r => <option key={r.id} value={r.id}>{r.name || r.id}</option>)}
                                   </select>
                                 </td>
                                 <td data-label="Vitrage">
-                                  <input 
+                                  <BufferedInput 
                                     className="input" type="number" value={gc.glassThickness || 0} 
-                                    onChange={e => handleUpdateGlassProfileCompatibility(i, 'glassThickness', e.target.value)} 
+                                    onChange={val => handleUpdateGlassProfileCompatibility(gc.id, i, 'glassThickness', val)} 
                                     style={{ width: '50px' }} 
                                   />
                                 </td>
                                 <td data-label="Parclose H">
                                   <select 
                                     className="input" value={gc.profileHId || ''} 
-                                    onChange={e => handleUpdateGlassProfileCompatibility(i, 'profileHId', e.target.value)}
+                                    onChange={e => handleUpdateGlassProfileCompatibility(gc.id, i, 'profileHId', e.target.value)}
                                     style={{ width: '140px' }}>
                                     <option value="">Sélectionner...</option>
                                     {(data?.profiles || [])
@@ -1873,22 +1955,22 @@ const AdminDashboard = ({ data, setData }) => {
                                   </select>
                                 </td>
                                 <td data-label="Qté H">
-                                  <input className="input" type="number" value={gc.qtyH || 0} 
-                                    onChange={e => handleUpdateGlassProfileCompatibility(i, 'qtyH', e.target.value)} 
+                                  <BufferedInput className="input" type="number" value={gc.qtyH || 0} 
+                                    onChange={val => handleUpdateGlassProfileCompatibility(gc.id, i, 'qtyH', val)} 
                                     style={{ width: '50px' }} 
                                   />
                                 </td>
                                 <td data-label="Formule H">
                                   <FormulaInput 
                                     value={gc.formulaH || ''} 
-                                    onChange={val => handleUpdateGlassProfileCompatibility(i, 'formulaH', val)} 
+                                    onChange={val => handleUpdateGlassProfileCompatibility(gc.id, i, 'formulaH', val)} 
                                     variables={['L', 'H']}
                                   />
                                 </td>
                                 <td data-label="Parcase V">
                                   <select 
                                     className="input" value={gc.profileVId || ''} 
-                                    onChange={e => handleUpdateGlassProfileCompatibility(i, 'profileVId', e.target.value)}
+                                    onChange={e => handleUpdateGlassProfileCompatibility(gc.id, i, 'profileVId', e.target.value)}
                                     style={{ width: '140px' }}>
                                     <option value="">Sélectionner...</option>
                                     {(data?.profiles || [])
@@ -1898,21 +1980,21 @@ const AdminDashboard = ({ data, setData }) => {
                                   </select>
                                 </td>
                                 <td data-label="Qté V">
-                                  <input className="input" type="number" value={gc.qtyV || 0} 
-                                    onChange={e => handleUpdateGlassProfileCompatibility(i, 'qtyV', e.target.value)} 
+                                  <BufferedInput className="input" type="number" value={gc.qtyV || 0} 
+                                    onChange={val => handleUpdateGlassProfileCompatibility(gc.id, i, 'qtyV', val)} 
                                     style={{ width: '50px' }} 
                                   />
                                 </td>
                                 <td data-label="Formule V">
                                   <FormulaInput 
                                     value={gc.formulaV || ''} 
-                                    onChange={val => handleUpdateGlassProfileCompatibility(i, 'formulaV', val)} 
+                                    onChange={val => handleUpdateGlassProfileCompatibility(gc.id, i, 'formulaV', val)} 
                                     variables={['L', 'H']}
                                   />
                                 </td>
                                 <td data-label="Actions" style={{ display: 'flex', gap: '0.3rem', justifyContent: 'flex-end' }}>
                                   <button className="btn" onClick={() => handleDuplicateItem('glassProfileCompatibility', gc)} style={{ padding: '0.4rem', color: '#6366f1' }} title="Dupliquer"><Copy size={16} /></button>
-                                  <button className="btn" onClick={() => handleDeleteGlassProfileCompatibility(i)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
+                                  <button className="btn" onClick={() => handleDeleteGlassProfileCompatibility(gc.id, i)} style={{ padding: '0.4rem', color: '#ef4444' }}><Trash2 size={16} /></button>
                                 </td>
                               </tr>
                             );
@@ -1993,11 +2075,11 @@ const AdminDashboard = ({ data, setData }) => {
                   <div style={{ display: 'grid', gridTemplateColumns: 'minmax(200px, 1fr) 1fr 120px 1fr 120px', gap: '1rem', marginBottom: '1.5rem' }}>
                     <div className="form-group">
                       <label className="label">Nom du Modèle</label>
-                      <input 
+                      <BufferedInput 
                         className="input" 
                         value={editingComposition.name} 
-                        onChange={(e) => {
-                          const updated = { ...editingComposition, name: e.target.value };
+                        onChange={val => {
+                          const updated = { ...editingComposition, name: val };
                           setEditingComposition(updated);
                           handleUpdateComposition(updated);
                         }} 
@@ -2318,12 +2400,12 @@ const AdminDashboard = ({ data, setData }) => {
                             </div>
                           </td>
                           <td>
-                            <input 
+                            <BufferedInput 
                               className="input" 
                               value={el.label} 
-                              onChange={(e) => {
+                              onChange={val => {
                                 const newEls = [...editingComposition.elements];
-                                newEls[i].label = e.target.value;
+                                newEls[i].label = val;
                                 const updated = { ...editingComposition, elements: newEls };
                                 setEditingComposition(updated);
                                 handleUpdateComposition(updated);
@@ -2331,13 +2413,13 @@ const AdminDashboard = ({ data, setData }) => {
                             />
                           </td>
                           <td>
-                            <input 
+                            <BufferedInput 
                               className="input" 
                               type="number" 
                               value={el.qty} 
-                              onChange={(e) => {
+                              onChange={val => {
                                 const newEls = [...editingComposition.elements];
-                                newEls[i].qty = parseFloat(e.target.value) || 0;
+                                newEls[i].qty = parseFloat(val) || 0;
                                 const updated = { ...editingComposition, elements: newEls };
                                 setEditingComposition(updated);
                                 handleUpdateComposition(updated);
@@ -2476,10 +2558,10 @@ const AdminDashboard = ({ data, setData }) => {
                   {data.options?.map((opt, idx) => (
                     <tr key={`${opt.id}-${idx}`}>
                       <td>
-                        <input 
+                        <BufferedInput 
                           className="input" 
                           value={opt.name} 
-                          onChange={e => handleUpdateItem('options', opt.id, 'name', e.target.value, idx)} 
+                          onChange={val => handleUpdateItem('options', opt.id, 'name', val, idx)} 
                           style={{ width: '180px' }} 
                         />
                       </td>
@@ -2626,11 +2708,11 @@ const AdminDashboard = ({ data, setData }) => {
                       <tbody>
                         {(data.shutterComponents?.[key] || []).map((item, i) => (
                           <tr key={item.id} style={item._isNew ? { background: '#dcfce7', transition: 'background 1s' } : {}}>
-                             <td><input className="input" value={item.reference || ''} onChange={e => updateShutterItem(key, i, 'reference', e.target.value)} style={{ width: '100px' }} placeholder="Réf" /></td>
-                             <td><input className="input" value={item.name} onChange={e => updateShutterItem(key, i, 'name', e.target.value)} style={{ width: '180px' }} /></td>
+                             <td><BufferedInput className="input" value={item.reference || ''} onChange={val => updateShutterItem(key, item.id, i, 'reference', val)} style={{ width: '100px' }} placeholder="Réf" /></td>
+                             <td><BufferedInput className="input" value={item.name} onChange={val => updateShutterItem(key, item.id, i, 'name', val)} style={{ width: '180px' }} /></td>
                              {key === 'kits' && (
                                <td>
-                                 <select className="input" value={item.type || 'SANGLE'} onChange={e => updateShutterItem(key, i, 'type', e.target.value)} style={{ width: '110px', fontSize: '0.8rem' }}>
+                                 <select className="input" value={item.type || 'SANGLE'} onChange={e => updateShutterItem(key, item.id, i, 'type', e.target.value)} style={{ width: '110px', fontSize: '0.8rem' }}>
                                    <option value="SANGLE">Sangle</option>
                                    <option value="MOTEUR">Moteur</option>
                                    <option value="MANIVELLE">Manivelle</option>
@@ -2639,12 +2721,12 @@ const AdminDashboard = ({ data, setData }) => {
                              )}
                             {key === 'caissons' && (
                               <>
-                                <td><input className="input" type="number" value={item.size || 0} onChange={e => updateShutterItem(key, i, 'size', e.target.value)} style={{ width: '80px' }} /></td>
-                                <td><input className="input" type="number" value={item.height || 0} onChange={e => updateShutterItem(key, i, 'height', e.target.value)} style={{ width: '80px' }} /></td>
+                                <td><input className="input" type="number" value={item.size || 0} onChange={e => updateShutterItem(key, item.id, i, 'size', e.target.value)} style={{ width: '80px' }} /></td>
+                                <td><input className="input" type="number" value={item.height || 0} onChange={e => updateShutterItem(key, item.id, i, 'height', e.target.value)} style={{ width: '80px' }} /></td>
                                 <td>
                                   <FormulaInput
                                     value={item.compatibilityFormula || ''}
-                                    onChange={val => updateShutterItem(key, i, 'compatibilityFormula', val)}
+                                    onChange={val => updateShutterItem(key, item.id, i, 'compatibilityFormula', val)}
                                     variables={['L', 'H', 'lameWidth', 'caissonSize', 'area']}
                                     placeholder={key === 'caissons' ? "Ex: lameWidth<=43 && L<=1500" : "Ex: caissonSize == 155"}
                                   />
@@ -2655,16 +2737,16 @@ const AdminDashboard = ({ data, setData }) => {
                             {key === 'lames' && (
                               <>
                                 <td style={{ textAlign: 'center' }}>
-                                  <input type="checkbox" checked={item.hasBaguette || false} onChange={e => updateShutterItem(key, i, 'hasBaguette', e.target.checked)} />
+                                  <input type="checkbox" checked={item.hasBaguette || false} onChange={e => updateShutterItem(key, item.id, i, 'hasBaguette', e.target.checked)} />
                                 </td>
-                                <td><input className="input" type="number" step="0.01" value={item.baguettePrice || 0} onChange={e => updateShutterItem(key, i, 'baguettePrice', e.target.value)} style={{ width: '90px' }} /></td>
+                                <td><input className="input" type="number" step="0.01" value={item.baguettePrice || 0} onChange={e => updateShutterItem(key, item.id, i, 'baguettePrice', e.target.value)} style={{ width: '90px' }} /></td>
                                 <td>
                                   <input
                                     className="input"
                                     type="number"
                                     step="1"
                                     value={item.lameWidth || ''}
-                                    onChange={e => updateShutterItem(key, i, 'lameWidth', e.target.value)}
+                                    onChange={e => updateShutterItem(key, item.id, i, 'lameWidth', e.target.value)}
                                     placeholder="Ex: 43"
                                     style={{ width: '80px' }}
                                   />
@@ -2676,7 +2758,7 @@ const AdminDashboard = ({ data, setData }) => {
                                     type="number"
                                     step="0.1"
                                     value={item.weightPerM2 || ''}
-                                    onChange={e => updateShutterItem(key, i, 'weightPerM2', e.target.value)}
+                                    onChange={e => updateShutterItem(key, item.id, i, 'weightPerM2', e.target.value)}
                                     placeholder="Ex: 3.5"
                                     style={{ width: '80px' }}
                                   />
@@ -2687,43 +2769,43 @@ const AdminDashboard = ({ data, setData }) => {
                             {key === 'glissieres' && (
                               <>
                                 <td>
-                                  <select className="input" value={item.rangeId || ''} onChange={e => updateShutterItem(key, i, 'rangeId', e.target.value)} style={{ width: '90px' }}>
+                                  <select className="input" value={item.rangeId || ''} onChange={e => updateShutterItem(key, item.id, i, 'rangeId', e.target.value)} style={{ width: '90px' }}>
                                     <option value="">Toutes</option>
                                     {data.ranges.map(r => <option key={r.id} value={r.id}>{r.id}</option>)}
                                   </select> 
                                 </td>
                                 <td>
-                                  <select className="input" value={item.shutterType || 'OTHER'} onChange={e => updateShutterItem(key, i, 'shutterType', e.target.value)} style={{ width: '90px' }}>
+                                  <select className="input" value={item.shutterType || 'OTHER'} onChange={e => updateShutterItem(key, item.id, i, 'shutterType', e.target.value)} style={{ width: '90px' }}>
                                   <option value="MONO">Mono (Sangle)</option>
                                   <option value="PALA">Pala (Moteur)</option>
                                   <option value="OTHER">Autre</option>
                                 </select>
                                 </td>
-                                <td><input className="input" type="number" step="1" value={item.thickness || 0} onChange={e => updateShutterItem(key, i, 'thickness', e.target.value)} style={{ width: '80px' }} /></td>
+                                <td><input className="input" type="number" step="1" value={item.thickness || 0} onChange={e => updateShutterItem(key, item.id, i, 'thickness', e.target.value)} style={{ width: '80px' }} /></td>
                               </>
                             )}
                             {key === 'axes' && (
                               <>
-                                <td><input className="input" type="number" value={item.diameter || 0} onChange={e => updateShutterItem(key, i, 'diameter', e.target.value)} style={{ width: '80px' }} /></td>
+                                <td><input className="input" type="number" value={item.diameter || 0} onChange={e => updateShutterItem(key, item.id, i, 'diameter', e.target.value)} style={{ width: '80px' }} /></td>
                               </>
                             )}
                             {key === 'glissieres' ? (
                               <>
-                                <td><input className="input" value={item.opt1Label || ''} onChange={e => updateShutterItem(key, i, 'opt1Label', e.target.value)} style={{ width: '120px', fontSize: '0.7rem' }} placeholder="Ex: Largeur" /></td>
-                                <td><input className="input" value={item.opt1Values || ''} onChange={e => updateShutterItem(key, i, 'opt1Values', e.target.value)} style={{ width: '150px', fontSize: '0.7rem' }} placeholder="Ex: 85, 120" /></td>
-                                <td><input className="input" value={item.opt1Prices || ''} onChange={e => updateShutterItem(key, i, 'opt1Prices', e.target.value)} style={{ width: '120px', fontSize: '0.7rem' }} placeholder="Ex: 200, 500" /></td>
-                                <td><input className="input" value={item.opt2Label || ''} onChange={e => updateShutterItem(key, i, 'opt2Label', e.target.value)} style={{ width: '120px', fontSize: '0.7rem' }} placeholder="Ex: Épaisseur" /></td>
-                                <td><input className="input" value={item.opt2Values || ''} onChange={e => updateShutterItem(key, i, 'opt2Values', e.target.value)} style={{ width: '150px', fontSize: '0.7rem' }} placeholder="Ex: 120, 150" /></td>
-                                <td><input className="input" value={item.opt2Prices || ''} onChange={e => updateShutterItem(key, i, 'opt2Prices', e.target.value)} style={{ width: '120px', fontSize: '0.7rem' }} placeholder="Ex: 100, 300" /></td>
+                                <td><input className="input" value={item.opt1Label || ''} onChange={e => updateShutterItem(key, item.id, i, 'opt1Label', e.target.value)} style={{ width: '120px', fontSize: '0.7rem' }} placeholder="Ex: Largeur" /></td>
+                                <td><input className="input" value={item.opt1Values || ''} onChange={e => updateShutterItem(key, item.id, i, 'opt1Values', e.target.value)} style={{ width: '150px', fontSize: '0.7rem' }} placeholder="Ex: 85, 120" /></td>
+                                <td><input className="input" value={item.opt1Prices || ''} onChange={e => updateShutterItem(key, item.id, i, 'opt1Prices', e.target.value)} style={{ width: '120px', fontSize: '0.7rem' }} placeholder="Ex: 200, 500" /></td>
+                                <td><input className="input" value={item.opt2Label || ''} onChange={e => updateShutterItem(key, item.id, i, 'opt2Label', e.target.value)} style={{ width: '120px', fontSize: '0.7rem' }} placeholder="Ex: Épaisseur" /></td>
+                                <td><input className="input" value={item.opt2Values || ''} onChange={e => updateShutterItem(key, item.id, i, 'opt2Values', e.target.value)} style={{ width: '150px', fontSize: '0.7rem' }} placeholder="Ex: 120, 150" /></td>
+                                <td><input className="input" value={item.opt2Prices || ''} onChange={e => updateShutterItem(key, item.id, i, 'opt2Prices', e.target.value)} style={{ width: '120px', fontSize: '0.7rem' }} placeholder="Ex: 100, 300" /></td>
                               </>
                             ) : null}
-                            {!['extras', 'moteurs', 'kits'].includes(key) && <td><input className="input" type="number" value={item.barLength || 6400} onChange={e => updateShutterItem(key, i, 'barLength', e.target.value)} style={{ width: '90px', fontSize: '0.8rem' }} /></td>}
-                            {!['extras', 'moteurs', 'kits'].includes(key) && <td><input className="input" type="number" value={item.scrapThreshold || 0} onChange={e => updateShutterItem(key, i, 'scrapThreshold', e.target.value)} style={{ width: '90px', fontSize: '0.8rem' }} placeholder="Ex: 500" /></td>}
+                            {!['extras', 'moteurs', 'kits'].includes(key) && <td><input className="input" type="number" value={item.barLength || 6400} onChange={e => updateShutterItem(key, item.id, i, 'barLength', e.target.value)} style={{ width: '90px', fontSize: '0.8rem' }} /></td>}
+                            {!['extras', 'moteurs', 'kits'].includes(key) && <td><input className="input" type="number" value={item.scrapThreshold || 0} onChange={e => updateShutterItem(key, item.id, i, 'scrapThreshold', e.target.value)} style={{ width: '90px', fontSize: '0.8rem' }} placeholder="Ex: 500" /></td>}
 
                             <td>
                               <FormulaInput 
                                 value={item.formula || '1'} 
-                                onChange={val => updateShutterItem(key, i, 'formula', val)} 
+                                onChange={val => updateShutterItem(key, item.id, i, 'formula', val)} 
                                 variables={['L', 'H', 'HC', 'lameWidth', 'caissonSize', 'area', 'totalWeight', 'liftingWeight', 'axeDiameter']}
                                 placeholder="Ex: ceil(H/lameWidth)"
                               />
@@ -2732,7 +2814,7 @@ const AdminDashboard = ({ data, setData }) => {
                               <td>
                                 <FormulaInput 
                                   value={item.cuttingFormula || ''} 
-                                  onChange={val => updateShutterItem(key, i, 'cuttingFormula', val)} 
+                                  onChange={val => updateShutterItem(key, item.id, i, 'cuttingFormula', val)} 
                                   variables={['L', 'H', 'HC', 'lameWidth', 'caissonSize', 'area', 'totalWeight', 'liftingWeight', 'axeDiameter']}
                                   placeholder="Ex: L-10"
                                 />
@@ -2743,7 +2825,7 @@ const AdminDashboard = ({ data, setData }) => {
                                 <td>
                                   <FormulaInput 
                                     value={item.compatibilityFormula || ''} 
-                                    onChange={val => updateShutterItem(key, i, 'compatibilityFormula', val)} 
+                                    onChange={val => updateShutterItem(key, item.id, i, 'compatibilityFormula', val)} 
                                     variables={['L', 'H', 'HC', 'lameWidth', 'caissonSize', 'area', 'totalWeight', 'liftingWeight', 'axeDiameter']}
                                     placeholder={key === 'axes' ? "Ex: L < 2500" : "Ex: L <= 2500"}
                                   />
@@ -2751,7 +2833,7 @@ const AdminDashboard = ({ data, setData }) => {
                                 <td>
                                   <FormulaInput 
                                     value={item.technicalAlert || ''} 
-                                    onChange={val => updateShutterItem(key, i, 'technicalAlert', val)} 
+                                    onChange={val => updateShutterItem(key, item.id, i, 'technicalAlert', val)} 
                                     variables={['L', 'H', 'area', 'totalWeight', 'liftingWeight', 'axeDiameter', 'lameWidth', 'caissonSize']}
                                     placeholder='Ex: if(L > 2200, "Attention...", "")'
                                   />
@@ -2763,7 +2845,7 @@ const AdminDashboard = ({ data, setData }) => {
                                 <td>
                                   <FormulaInput 
                                     value={item.compatibilityFormula || ''} 
-                                    onChange={val => updateShutterItem(key, i, 'compatibilityFormula', val)} 
+                                    onChange={val => updateShutterItem(key, item.id, i, 'compatibilityFormula', val)} 
                                     variables={['L', 'H', 'HC', 'lameWidth', 'caissonSize', 'area', 'totalWeight', 'liftingWeight', 'axeDiameter']}
                                     placeholder={key === 'moteurs' ? "Ex: L < 1500" : (key === 'kits' ? "Ex: L < 1800" : "Ex: caissonSize == 200")}
                                   />
@@ -2772,7 +2854,7 @@ const AdminDashboard = ({ data, setData }) => {
                                 <td>
                                   <FormulaInput 
                                     value={item.technicalAlert || ''} 
-                                    onChange={val => updateShutterItem(key, i, 'technicalAlert', val)} 
+                                    onChange={val => updateShutterItem(key, item.id, i, 'technicalAlert', val)} 
                                     variables={['L', 'H', 'area', 'totalWeight', 'liftingWeight']}
                                     placeholder='Ex: if(totalWeight > 9, "Trop lourd!", "")'
                                   />
@@ -2780,7 +2862,7 @@ const AdminDashboard = ({ data, setData }) => {
                               </>
                             )}
                             <td>
-                              <select className="input" value={item.priceUnit} onChange={e => updateShutterItem(key, i, 'priceUnit', e.target.value)} style={{ width: '90px' }}>
+                              <select className="input" value={item.priceUnit} onChange={e => updateShutterItem(key, item.id, i, 'priceUnit', e.target.value)} style={{ width: '90px' }}>
                                 <option>ML</option>
                                 <option>M2</option>
                                 <option>Unité</option>
@@ -2788,14 +2870,14 @@ const AdminDashboard = ({ data, setData }) => {
                                 <option>Joint</option>
                               </select>
                             </td>
-                            <td><input className="input" type="number" step="0.01" value={item.price} onChange={e => updateShutterItem(key, i, 'price', e.target.value)} style={{ width: '100px' }} /></td>
+                            <td><BufferedInput className="input" type="number" step="0.01" value={item.price} onChange={val => updateShutterItem(key, item.id, i, 'price', val)} style={{ width: '100px' }} /></td>
                             <td>
                               <button className="base-btn btn-secondary" onClick={() => setEditingAddonItem({ family: key, idx: i, item, isShutter: true })} style={{ fontSize: '0.75rem', padding: '0.4rem 0.6rem' }}>
                                  🔧 Options ({item.addOns?.length || 0})
                               </button>
                             </td>
                             <td>
-                              <select className="input" value={item.usageVolet || 'NORMAL'} onChange={e => updateShutterItem(key, i, 'usageVolet', e.target.value)} style={{ width: '100px', fontSize: '0.8rem' }}>
+                              <select className="input" value={item.usageVolet || 'NORMAL'} onChange={e => updateShutterItem(key, item.id, i, 'usageVolet', e.target.value)} style={{ width: '100px', fontSize: '0.8rem' }}>
                                 <option value="NORMAL">Normal</option>
                                 <option value="DOUBLE">Double</option>
                                 <option value="BOTH">Les deux</option>
@@ -2805,7 +2887,7 @@ const AdminDashboard = ({ data, setData }) => {
                                {item.usageVolet === 'BOTH' && (
                                  <FormulaInput 
                                    value={item.doubleQtyFormula || ''} 
-                                   onChange={val => updateShutterItem(key, i, 'doubleQtyFormula', val)} 
+                                   onChange={val => updateShutterItem(key, item.id, i, 'doubleQtyFormula', val)} 
                                    variables={['L', 'H', 'HC', 'lameWidth', 'caissonSize', 'area', 'totalWeight', 'liftingWeight', 'axeDiameter', 'nb_moteurs']}
                                    placeholder="Qté pour double"
                                  />
@@ -2816,7 +2898,7 @@ const AdminDashboard = ({ data, setData }) => {
                                  {item.usageVolet === 'BOTH' && (
                                    <FormulaInput 
                                      value={item.doubleCuttingFormula || ''} 
-                                     onChange={val => updateShutterItem(key, i, 'doubleCuttingFormula', val)} 
+                                     onChange={val => updateShutterItem(key, item.id, i, 'doubleCuttingFormula', val)} 
                                      variables={['L', 'H', 'HC', 'lameWidth', 'caissonSize', 'area', 'totalWeight', 'liftingWeight', 'axeDiameter', 'nb_moteurs']}
                                      placeholder="Dim pour double"
                                    />
@@ -2827,17 +2909,17 @@ const AdminDashboard = ({ data, setData }) => {
                                <td>
                                  {item.usageVolet === 'BOTH' && (
                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                     <input className="input" value={item.doubleOpt1Label || ''} onChange={e => updateShutterItem(key, i, 'doubleOpt1Label', e.target.value)} style={{ width: '100px', fontSize: '0.65rem' }} placeholder="Nom Opt1" />
-                                     <input className="input" value={item.doubleOpt1Values || ''} onChange={e => updateShutterItem(key, i, 'doubleOpt1Values', e.target.value)} style={{ width: '100px', fontSize: '0.65rem' }} placeholder="Valeurs (85, 120)" />
-                                     <input className="input" value={item.doubleOpt1Prices || ''} onChange={e => updateShutterItem(key, i, 'doubleOpt1Prices', e.target.value)} style={{ width: '100px', fontSize: '0.65rem' }} placeholder="Prix (0, 200)" />
+                                     <input className="input" value={item.doubleOpt1Label || ''} onChange={e => updateShutterItem(key, item.id, i, 'doubleOpt1Label', e.target.value)} style={{ width: '100px', fontSize: '0.65rem' }} placeholder="Nom Opt1" />
+                                     <input className="input" value={item.doubleOpt1Values || ''} onChange={e => updateShutterItem(key, item.id, i, 'doubleOpt1Values', e.target.value)} style={{ width: '100px', fontSize: '0.65rem' }} placeholder="Valeurs (85, 120)" />
+                                     <input className="input" value={item.doubleOpt1Prices || ''} onChange={e => updateShutterItem(key, item.id, i, 'doubleOpt1Prices', e.target.value)} style={{ width: '100px', fontSize: '0.65rem' }} placeholder="Prix (0, 200)" />
                                    </div>
                                  )}
                                </td>
                              )}
                             <td>
                               <div style={{ display: 'flex', gap: '0.4rem' }}>
-                                <button className="btn" onClick={() => duplicateShutterItem(key, i)} style={{ padding: '0.4rem', color: '#6366f1' }} title="Dupliquer"><Copy size={16} /></button>
-                                <button className="btn" onClick={() => deleteShutterItem(key, i)} style={{ padding: '0.4rem', color: '#ef4444' }} title="Supprimer"><Trash2 size={16} /></button>
+                                <button className="btn" onClick={() => duplicateShutterItem(key, item.id, i)} style={{ padding: '0.4rem', color: '#6366f1' }} title="Dupliquer"><Copy size={16} /></button>
+                                <button className="btn" onClick={() => deleteShutterItem(key, item.id, i)} style={{ padding: '0.4rem', color: '#ef4444' }} title="Supprimer"><Trash2 size={16} /></button>
                               </div>
                             </td>
 
@@ -2875,7 +2957,7 @@ const AdminDashboard = ({ data, setData }) => {
                 <tbody>
                   {(data.traverses || []).map((trv, idx) => (
                     <tr key={`${trv.id}-${idx}`} style={trv._isNew ? { background: '#dcfce7', transition: 'background 1s' } : {}}>
-                      <td><input className="input" value={trv.name} onChange={e => handleUpdateItem('traverses', trv.id, 'name', e.target.value, idx)} style={{ width: '220px' }} placeholder="Ex: Traverse renforcée H" /></td>
+                      <td><BufferedInput className="input" value={trv.name} onChange={val => handleUpdateItem('traverses', trv.id, 'name', val, idx)} style={{ width: '220px' }} placeholder="Ex: Traverse renforcée H" /></td>
                       <td>
                         <select className="input" value={trv.role} onChange={e => handleUpdateItem('traverses', trv.id, 'role', e.target.value, idx)} style={{ width: '160px' }}>
                           <option value="traverse_h">Traverse Horizontale (Division H)</option>

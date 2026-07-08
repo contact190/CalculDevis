@@ -241,12 +241,6 @@ function App() {
           } catch(e) {}
         }
 
-        const hasLocalUserData = localData && (
-          (localData.clients && localData.clients.length > 0) ||
-          (localData.quotes && localData.quotes.length > 0) ||
-          (localData.orders && localData.orders.length > 0)
-        );
-
         // Try local server first
         setLoadingMessage('Recherche du Serveur Local...');
         let serverData = null;
@@ -258,7 +252,7 @@ function App() {
 
         if (serverData) {
           console.log('🔗 Serveur local trouvé !');
-          if (hasLocalUserData) {
+          if (localData) {
             console.log('🔄 Fusion Intelligente (Smart Merge) des données locales avec le serveur...');
             const merged = smartMerge(localData, serverData);
             const repaired = repairDatabase(merged);
@@ -509,10 +503,9 @@ function App() {
         console.log('🔄 Refresh complet depuis le serveur...');
         setCloudSyncStatus('syncing');
         const serverData = await localSync.fetchData();
-        if (serverData && databaseRef.current) {
+        if (serverData) {
           isApplyingRemoteOps.current = true;
-          const merged = smartMerge(databaseRef.current, serverData);
-          const repaired = repairDatabase(merged);
+          const repaired = repairDatabase(serverData);
           setDatabase(repaired);
           localSync.updateSnapshot(repaired);
           previousDbRef.current = repaired;
@@ -608,6 +601,22 @@ function App() {
         if (hasDeleted) {
           if (!copied) copied = { ...database };
           copied[key] = arr.filter(item => item && !item._deleted);
+        }
+      } else if (key === 'shutterComponents' && arr && typeof arr === 'object') {
+        let shutterCopied = null;
+        for (const subKey of Object.keys(arr)) {
+          const subArr = arr[subKey];
+          if (Array.isArray(subArr)) {
+            const hasDeleted = subArr.some(item => item && item._deleted);
+            if (hasDeleted) {
+              if (!shutterCopied) shutterCopied = { ...arr };
+              shutterCopied[subKey] = subArr.filter(item => item && !item._deleted);
+            }
+          }
+        }
+        if (shutterCopied) {
+          if (!copied) copied = { ...database };
+          copied.shutterComponents = shutterCopied;
         }
       }
     }
@@ -883,8 +892,24 @@ function App() {
                     const imported = JSON.parse(evt.target.result);
                     if (window.confirm("Restaurer cette sauvegarde ? Cela écrasera les données actuelles.")) {
                       const repairedImport = repairDatabase(imported);
+                      
+                      // 1. Immediately update local refs to bypass the auto-save diffing timer
+                      previousDbRef.current = repairedImport;
+                      databaseRef.current = repairedImport;
                       setDatabase(repairedImport);
-                      // Immediately push a Snapshot to Supabase Cloud so other devices can see it
+                      
+                      // 2. Clear any save debouncers
+                      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+                      
+                      // 3. Immediately push full snapshot to local SQLite server if available
+                      try {
+                        await localSync.pushDataFull(repairedImport);
+                        localSync.updateSnapshot(repairedImport);
+                      } catch (e) {
+                        console.warn("Failed to overwrite local SQLite server during import:", e);
+                      }
+
+                      // 4. Immediately push Snapshot to Supabase Cloud so other devices can see it
                       try {
                         setCloudSyncStatus('syncing');
                         setSupabaseSyncStatus('syncing');
