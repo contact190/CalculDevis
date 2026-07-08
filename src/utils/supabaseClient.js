@@ -86,6 +86,36 @@ function getBucketIndex(id, numBuckets) {
   return Math.abs(hash % numBuckets);
 }
 
+function getClientMaxTime(db) {
+  let maxTime = 0;
+  if (!db) return maxTime;
+  
+  for (const key of Object.keys(db)) {
+    const arr = db[key];
+    if (Array.isArray(arr)) {
+      for (const item of arr) {
+        if (item && item._lastModified) {
+          const t = new Date(item._lastModified).getTime();
+          if (t > maxTime) maxTime = t;
+        }
+      }
+    } else if (key === 'shutterComponents' && arr && typeof arr === 'object') {
+      for (const subKey of Object.keys(arr)) {
+        const subArr = arr[subKey];
+        if (Array.isArray(subArr)) {
+          for (const item of subArr) {
+            if (item && item._lastModified) {
+              const t = new Date(item._lastModified).getTime();
+              if (t > maxTime) maxTime = t;
+            }
+          }
+        }
+      }
+    }
+  }
+  return maxTime;
+}
+
 export const syncDatabase = {
   /**
    * Load full data from Cloud (returns null if nothing exists)
@@ -318,6 +348,15 @@ export const syncDatabase = {
         const metaRes = await fetchWithTimeout(`${metaUrlData.publicUrl}?t=${t}`, {}, 15000);
         if (metaRes.ok) {
           cloudMeta = await metaRes.json();
+          if (cloudMeta && cloudMeta.updated_at) {
+            const cloudTime = new Date(cloudMeta.updated_at).getTime();
+            const clientMaxTime = getClientMaxTime(db);
+            // 5s clock skew safety buffer
+            if (cloudTime > clientMaxTime + 5000) {
+              console.warn(`⚠️ Aborting cloud snapshot save: Cloud snapshot is newer than client database (${new Date(cloudTime).toISOString()} > ${new Date(clientMaxTime).toISOString()}).`);
+              return cloudMeta.updated_at;
+            }
+          }
         }
       } catch (e) {
         console.warn("Could not fetch current cloud meta.json for comparison, writing all partitions.");
