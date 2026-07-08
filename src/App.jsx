@@ -901,6 +901,9 @@ function App() {
                     if (window.confirm("Restaurer cette sauvegarde ? Cela écrasera les données actuelles.")) {
                       const repairedImport = repairDatabase(imported);
                       
+                      // Set import timestamp to discard any old operations generated before this import
+                      repairedImport._importTime = new Date().toISOString();
+                      
                       // 1. Immediately update local refs to bypass the auto-save diffing timer
                       previousDbRef.current = repairedImport;
                       databaseRef.current = repairedImport;

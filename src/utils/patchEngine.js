@@ -220,6 +220,15 @@ export function applyOp(db, op) {
   
   const { op: opType, collection, id, data, timestamp } = op;
   
+  // Reject operations created before the database import time
+  if (db._importTime && timestamp) {
+    const opTime = new Date(timestamp).getTime();
+    const importTime = new Date(db._importTime).getTime();
+    if (opTime < importTime) {
+      return { db, applied: false };
+    }
+  }
+  
   // Handle non-collection key replacements
   if (opType === 'replace_key') {
     // Conflict resolution for globals if _lastGlobalUpdate exists

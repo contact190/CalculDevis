@@ -134,6 +134,15 @@ function applyOpToDb(op) {
 
   const { op: opType, collection, id, data, timestamp } = op;
 
+  // Reject operations created before the database import time
+  if (dbInMemory._importTime && timestamp) {
+    const opTime = new Date(timestamp).getTime();
+    const importTime = new Date(dbInMemory._importTime).getTime();
+    if (opTime < importTime) {
+      return false;
+    }
+  }
+
   // Handle non-collection key replacements
   if (opType === 'replace_key') {
     setPath(dbInMemory, collection, data);
