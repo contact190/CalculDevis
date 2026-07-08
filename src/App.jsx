@@ -252,7 +252,8 @@ function App() {
 
         if (serverData) {
           console.log('🔗 Serveur local trouvé !');
-          if (localData) {
+          const hasPendingOps = localSync.getPendingCount() > 0;
+          if (localData && hasPendingOps) {
             console.log('🔄 Fusion Intelligente (Smart Merge) des données locales avec le serveur...');
             const merged = smartMerge(localData, serverData);
             const repaired = repairDatabase(merged);
@@ -261,7 +262,7 @@ function App() {
             lastLocalModifiedRef.current = new Date().toISOString();
             setCloudSyncStatus('ok');
           } else {
-            console.log('📥 Chargement depuis le Serveur Local...');
+            console.log('📥 Chargement direct depuis le Serveur Local (cache écrasé)...');
             const repaired = repairDatabase(serverData);
             setDatabase(repaired);
             await persistentStorage.save(LOCAL_KEY, repaired);
@@ -280,10 +281,11 @@ function App() {
              let baseTimestamp = localTimestamp || "1970-01-01T00:00:00.000Z";
              
              if (cloudData) {
-                if (!localData) {
+                const hasPendingOps = localSync.getPendingCount() > 0;
+                if (!localData || !hasPendingOps) {
                   finalData = cloudData;
                   baseTimestamp = updatedAt || baseTimestamp;
-                  console.log("☁️ Snapshot Cloud chargé.");
+                  console.log("☁️ Snapshot Cloud chargé (cache écrasé).");
                 } else {
                   console.log("☁️ Fusion intelligente (Smart Merge) des données locales avec le Cloud...");
                   finalData = smartMerge(localData, cloudData);
