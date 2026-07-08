@@ -1159,242 +1159,256 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
               </div>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 {vq.status === 'Validé' && (
-                  <button 
-                    className="btn btn-primary" 
-                    onClick={() => {
-                      if (!window.confirm("Générer une facture pour ce devis validé ?")) return;
-                      // Generate a simple Invoice PDF for the shop quote
-                      const currentCounter = database.invoiceCounter || 1;
-                      const invoiceNumber = `FAC-${String(currentCounter).padStart(2, '0')}`;
-                      const tvaRateToUse = vq.tvaRate !== undefined ? vq.tvaRate : (quoteSettings?.tvaRate ?? 9);
-                      
-                      const doc = new jsPDF({ format: 'a4' });
-                      const pw = doc.internal.pageSize.getWidth();
-                      let y = 15;
-                      const formatPrice = (val) => Number(val || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
-                  
-                      if (quoteSettings?.logoBase64) {
-                        try {
-                          const imgProps = doc.getImageProperties(quoteSettings.logoBase64);
-                          const maxW = 60; const maxH = 25;
-                          const ratio = Math.min(maxW / imgProps.width, maxH / imgProps.height);
-                          doc.addImage(quoteSettings.logoBase64, 'PNG', 15, y, imgProps.width * ratio, imgProps.height * ratio, '', 'FAST');
-                        } catch (e) {
-                          try { doc.addImage(quoteSettings.logoBase64, 'PNG', 15, y, 60, 25, '', 'FAST'); } catch(e2) {}
-                        }
-                      }
-                      
-                      doc.setFontSize(22);
-                      doc.setFont('helvetica', 'bold');
-                      doc.text('FACTURE', pw - 15, y + 15, { align: 'right' });
-                      
-                      y += 35;
-                      doc.setFontSize(11);
-                      doc.setFont('helvetica', 'bold');
-                      doc.text(`Facture N° : ${invoiceNumber}`, 15, y);
-                      doc.setFontSize(9);
-                      doc.setFont('helvetica', 'normal');
-                      doc.text(`Date : ${new Date().toLocaleDateString('fr-FR')}`, 15, y + 5);
-                      
-                      y += 8;
-                      const boxY = y;
-                      const boxWidth = (pw - 35) / 2;
-                      
-                      const companyNameLines = doc.splitTextToSize(quoteSettings?.companyName || 'Mon Entreprise', boxWidth - 6);
-                      const clientNameLines = doc.splitTextToSize(client?.nom || 'Client', boxWidth - 6);
-                  
-                      let tempCyLeft = boxY + 6 + (companyNameLines.length * 4) + 1;
-                      if (quoteSettings?.companyAddress) {
-                        tempCyLeft += doc.splitTextToSize(quoteSettings.companyAddress, boxWidth - 6).length * 4;
-                      }
-                      const phone = quoteSettings?.companyPhone || '';
-                      const email = quoteSettings?.companyEmail || '';
-                      if (phone || email) tempCyLeft += 5;
-                      if (quoteSettings?.companyRC) tempCyLeft += 4;
-                      if (quoteSettings?.companyIMP) tempCyLeft += 4;
-                      if (quoteSettings?.companyMF) tempCyLeft += 4;
-                  
-                      let tempCyRight = boxY + 11 + (clientNameLines.length * 4) + 1;
-                      if (client?.adresse) {
-                        tempCyRight += doc.splitTextToSize(client.adresse, boxWidth - 6).length * 4;
-                      }
-                      if (client?.telephone) tempCyRight += 4;
-                      if (client?.email) tempCyRight += 5;
-                      if (client?.rc) tempCyRight += 4;
-                      if (client?.nif) tempCyRight += 4;
-                      if (client?.nis) tempCyRight += 4;
-                      if (client?.ai) tempCyRight += 4;
-                  
-                      const boxHeight = Math.max(tempCyLeft - boxY + 4, tempCyRight - boxY + 4, 42);
-
-                      // Company box (Left)
-                      doc.setDrawColor(150, 150, 150);
-                      doc.setLineWidth(0.3);
-                      doc.roundedRect(15, boxY, boxWidth, boxHeight, 2, 2);
-                      
-                      doc.setFontSize(10);
-                      doc.setFont('helvetica', 'bold');
-                      doc.text(companyNameLines, 18, boxY + 6);
-                      doc.setFontSize(8);
-                      doc.setFont('helvetica', 'normal');
-                      let cy = boxY + 6 + (companyNameLines.length * 4) + 1;
-                      if (quoteSettings?.companyAddress) {
-                        const addressLines = doc.splitTextToSize(quoteSettings.companyAddress, boxWidth - 6);
-                        doc.text(addressLines, 18, cy);
-                        cy += addressLines.length * 4;
-                      }
-                      if (phone || email) {
-                        doc.text(`${phone} ${email ? ' - ' + email : ''}`, 18, cy);
-                        cy += 5;
-                      }
-                      doc.setTextColor(80, 80, 80);
-                      if (quoteSettings?.companyRC) { doc.text(`RC N°: ${quoteSettings.companyRC}`, 18, cy); cy += 4; }
-                      if (quoteSettings?.companyIMP) { doc.text(`AI N°: ${quoteSettings.companyIMP}`, 18, cy); cy += 4; }
-                      if (quoteSettings?.companyMF) { doc.text(`NIF N°: ${quoteSettings.companyMF}`, 18, cy); cy += 4; }
-                      doc.setTextColor(0, 0, 0);
-                  
-                      // Client box (Right)
-                      const rightBoxXHeader = 15 + boxWidth + 5;
-                      doc.roundedRect(rightBoxXHeader, boxY, boxWidth, boxHeight, 2, 2);
-                      
-                      doc.setFontSize(9);
-                      doc.setFont('helvetica', 'bold');
-                      doc.text('Destinataire :', rightBoxXHeader + 3, boxY + 6);
-                      doc.setFontSize(10);
-                      doc.text(clientNameLines, rightBoxXHeader + 3, boxY + 11);
-                      
-                      doc.setFontSize(8);
-                      doc.setFont('helvetica', 'normal');
-                      let cly = boxY + 11 + (clientNameLines.length * 4) + 1;
-                      if (client?.adresse) {
-                        const addrLines = doc.splitTextToSize(client.adresse, boxWidth - 6);
-                        doc.text(addrLines, rightBoxXHeader + 3, cly);
-                        cly += addrLines.length * 4;
-                      }
-                      if (client?.telephone) {
-                        doc.text(`Tél : ${client.telephone}`, rightBoxXHeader + 3, cly);
-                        cly += 4;
-                      }
-                      if (client?.email) {
-                        doc.text(`Email : ${client.email}`, rightBoxXHeader + 3, cly);
-                        cly += 5;
-                      }
-                      doc.setTextColor(80, 80, 80);
-                      if (client?.rc) { doc.text(`RC : ${client.rc}`, rightBoxXHeader + 3, cly); cly += 4; }
-                      if (client?.nif) { doc.text(`NIF : ${client.nif}`, rightBoxXHeader + 3, cly); cly += 4; }
-                      if (client?.nis) { doc.text(`NIS : ${client.nis}`, rightBoxXHeader + 3, cly); cly += 4; }
-                      if (client?.ai) { doc.text(`AI : ${client.ai}`, rightBoxXHeader + 3, cly); cly += 4; }
-                      doc.setTextColor(0, 0, 0);
-                  
-                      y = boxY + boxHeight + 6;
-                  
-                      const tableColumn = ["Désignation", "Dim. / Options", "Quantité (m²/ml)", "Pièces", "P.U. HT", "Total HT"];
-                      const tableRows = [];
-                  
-                      items.forEach(item => {
-                        const dims = (item.l || item.h) ? `${item.l} x ${item.h} mm` : '';
-                        let optStr = '';
-                        if (item.glassId) {
-                          const g = (database.glass||[]).find(x=>x.id===item.glassId);
-                          if(g) optStr += g.name + ' ';
-                        }
-                        if (item.colorId) {
-                          const c = (database.colors||[]).find(x=>x.id===item.colorId);
-                          if(c) optStr += c.name;
-                        }
-                        const descLine2 = [dims, optStr].filter(Boolean).join(' | ');
+                  <>
+                    <button 
+                      className="btn btn-primary" 
+                      onClick={() => {
+                        if (!window.confirm("Générer une facture pour ce devis validé ?")) return;
+                        // Generate a simple Invoice PDF for the shop quote
+                        const currentCounter = database.invoiceCounter || 1;
+                        const invoiceNumber = String(currentCounter).padStart(2, '0');
+                        const tvaRateToUse = vq.tvaRate !== undefined ? vq.tvaRate : (quoteSettings?.tvaRate ?? 9);
                         
-                        let totalMeasurementQty = item.qty;
-                        let measureUnit = item.unit === 'unité' ? 'U' : item.unit;
-                        
-                        if (item.unit === 'm2') {
-                           totalMeasurementQty = ((item.h || 0) / 1000) * ((item.l || 0) / 1000) * item.qty;
-                        } else if (item.unit === 'm') {
-                           totalMeasurementQty = ((item.l || item.h || 0) / 1000) * item.qty;
+                        const doc = new jsPDF({ format: 'a4' });
+                        const pw = doc.internal.pageSize.getWidth();
+                        let y = 15;
+                        const formatPrice = (val) => Number(val || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+                    
+                        if (quoteSettings?.logoBase64) {
+                          try {
+                            const imgProps = doc.getImageProperties(quoteSettings.logoBase64);
+                            const maxW = 60; const maxH = 25;
+                            const ratio = Math.min(maxW / imgProps.width, maxH / imgProps.height);
+                            doc.addImage(quoteSettings.logoBase64, 'PNG', 15, y, imgProps.width * ratio, imgProps.height * ratio, '', 'FAST');
+                          } catch (e) {
+                            try { doc.addImage(quoteSettings.logoBase64, 'PNG', 15, y, 60, 25, '', 'FAST'); } catch(e2) {}
+                          }
                         }
                         
-                        const puHT = (totalMeasurementQty > 0) ? (item.totalHT / totalMeasurementQty) : item.totalHT;
+                        doc.setFontSize(22);
+                        doc.setFont('helvetica', 'bold');
+                        doc.text('FACTURE', pw - 15, y + 15, { align: 'right' });
                         
-                        const rowData = [
-                          `${item.nom}\n${item.designation || ''}`,
-                          descLine2 || '-',
-                          item.unit === 'unité' ? '-' : `${totalMeasurementQty.toFixed(2)} ${measureUnit}`,
-                          `${item.qty} pces`,
-                          `${formatPrice(puHT)} DZD`,
-                          `${formatPrice(item.totalHT)} DZD`
-                        ];
-                        tableRows.push(rowData);
-                      });
-                  
-                      autoTable(doc, {
-                        startY: y,
-                        head: [tableColumn],
-                        body: tableRows,
-                        theme: 'grid',
-                        headStyles: { fillColor: [40, 40, 40], textColor: [255, 255, 255] },
-                        styles: { fontSize: 9, cellPadding: 3, textColor: [0, 0, 0] },
-                        columnStyles: { 0: { cellWidth: 50 }, 4: { halign: 'right' }, 5: { halign: 'right', fontStyle: 'bold' } }
-                      });
-                  
-                      let finalY = (doc.lastAutoTable?.finalY || doc.previousAutoTable?.finalY || y + 20) + 10;
-                      if (finalY > 220) { doc.addPage(); finalY = 20; }
-                  
-                      const rightBoxX = 110;
-                      let boxHeightBottom = 22;
-                      if (vq.totals?.remise > 0) boxHeightBottom += 14;
-
-                      doc.setDrawColor(150, 150, 150);
-                      doc.setLineWidth(0.5);
-                      doc.roundedRect(rightBoxX, finalY, pw - 15 - rightBoxX, boxHeightBottom, 3, 3);
-                      
-                      let currentTotalY = finalY + 9;
-                      if (vq.totals?.remise > 0) {
-                        doc.setFontSize(8.5);
+                        y += 35;
+                        doc.setFontSize(11);
+                        doc.setFont('helvetica', 'bold');
+                        doc.text(`Facture N° : ${invoiceNumber}`, 15, y);
+                        doc.setFontSize(9);
                         doc.setFont('helvetica', 'normal');
-                        doc.text('MONTANT BRUT', rightBoxX + 5, currentTotalY);
-                        doc.text(`${formatPrice(vq.totals.htBrut || totalHT)} DZD`, pw - 20, currentTotalY, { align: 'right' });
+                        doc.text(`Date : ${new Date().toLocaleDateString('fr-FR')}`, 15, y + 5);
                         
-                        currentTotalY += 7;
-                        doc.text('REMISE', rightBoxX + 5, currentTotalY);
-                        doc.text(`- ${formatPrice(vq.totals.remise)} DZD`, pw - 20, currentTotalY, { align: 'right' });
-
-                        currentTotalY += 7;
-                      }
-
-                      doc.setFontSize(9.5);
-                      doc.setFont('helvetica', 'bold');
-                      doc.text('MONTANT TOTAL HT', rightBoxX + 5, currentTotalY);
-                      doc.text(`${formatPrice(totalHT)} DZD`, pw - 20, currentTotalY, { align: 'right' });
-                      
-                      doc.setFont('helvetica', 'normal');
-                      doc.setFontSize(8.5);
-                      doc.text(`TVA ${tvaRateToUse}% :`, rightBoxX + 5, currentTotalY + 7);
-                      doc.text(`${formatPrice(tva)} DZD`, pw - 20, currentTotalY + 7, { align: 'right' });
-                  
-                      finalY += boxHeightBottom + 15;
-                      
-                      doc.setFontSize(14);
-                      doc.setFont('helvetica', 'bold');
-                      doc.text(`NET À PAYER TTC : ${formatPrice(totalTTC)} DZD`, pw - 15, finalY, { align: 'right' });
-                  
-                      if (quoteSettings?.cachetBase64) {
-                        try { doc.addImage(quoteSettings.cachetBase64, 'PNG', 25, finalY, 35, 35); } catch (e) {}
-                      }
-                  
-                      doc.save(`Facture_${invoiceNumber}.pdf`);
-                      
-                      setDatabase(prev => {
-                        let newCounter = prev.invoiceCounter || 1;
-                        if (currentCounter >= newCounter) {
-                           newCounter = currentCounter + 1;
+                        y += 8;
+                        const boxY = y;
+                        const boxWidth = (pw - 35) / 2;
+                        
+                        const companyNameLines = doc.splitTextToSize(quoteSettings?.companyName || 'Mon Entreprise', boxWidth - 6);
+                        const clientNameLines = doc.splitTextToSize(client?.nom || 'Client', boxWidth - 6);
+                    
+                        let tempCyLeft = boxY + 6 + (companyNameLines.length * 4) + 1;
+                        if (quoteSettings?.companyAddress) {
+                          tempCyLeft += doc.splitTextToSize(quoteSettings.companyAddress, boxWidth - 6).length * 4;
                         }
-                        return { ...prev, invoiceCounter: newCounter };
-                      });
-                    }}
-                    style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.5rem', fontSize: '1rem', background: '#8b5cf6', border: 'none', color: 'white' }}
-                  >
-                    <Printer size={18} /> Générer Facture
-                  </button>
+                        const phone = quoteSettings?.companyPhone || '';
+                        const email = quoteSettings?.companyEmail || '';
+                        if (phone || email) tempCyLeft += 5;
+                        if (quoteSettings?.companyRC) tempCyLeft += 4;
+                        if (quoteSettings?.companyIMP) tempCyLeft += 4;
+                        if (quoteSettings?.companyMF) tempCyLeft += 4;
+                    
+                        let tempCyRight = boxY + 11 + (clientNameLines.length * 4) + 1;
+                        if (client?.adresse) {
+                          tempCyRight += doc.splitTextToSize(client.adresse, boxWidth - 6).length * 4;
+                        }
+                        if (client?.telephone) tempCyRight += 4;
+                        if (client?.email) tempCyRight += 5;
+                        if (client?.rc) tempCyRight += 4;
+                        if (client?.nif) tempCyRight += 4;
+                        if (client?.nis) tempCyRight += 4;
+                        if (client?.ai) tempCyRight += 4;
+                    
+                        const boxHeight = Math.max(tempCyLeft - boxY + 4, tempCyRight - boxY + 4, 42);
+  
+                        // Company box (Left)
+                        doc.setDrawColor(150, 150, 150);
+                        doc.setLineWidth(0.3);
+                        doc.roundedRect(15, boxY, boxWidth, boxHeight, 2, 2);
+                        
+                        doc.setFontSize(10);
+                        doc.setFont('helvetica', 'bold');
+                        doc.text(companyNameLines, 18, boxY + 6);
+                        doc.setFontSize(8);
+                        doc.setFont('helvetica', 'normal');
+                        let cy = boxY + 6 + (companyNameLines.length * 4) + 1;
+                        if (quoteSettings?.companyAddress) {
+                          const addressLines = doc.splitTextToSize(quoteSettings.companyAddress, boxWidth - 6);
+                          doc.text(addressLines, 18, cy);
+                          cy += addressLines.length * 4;
+                        }
+                        if (phone || email) {
+                          doc.text(`${phone} ${email ? ' - ' + email : ''}`, 18, cy);
+                          cy += 5;
+                        }
+                        doc.setTextColor(80, 80, 80);
+                        if (quoteSettings?.companyRC) { doc.text(`RC N°: ${quoteSettings.companyRC}`, 18, cy); cy += 4; }
+                        if (quoteSettings?.companyIMP) { doc.text(`AI N°: ${quoteSettings.companyIMP}`, 18, cy); cy += 4; }
+                        if (quoteSettings?.companyMF) { doc.text(`NIF N°: ${quoteSettings.companyMF}`, 18, cy); cy += 4; }
+                        doc.setTextColor(0, 0, 0);
+                    
+                        // Client box (Right)
+                        const rightBoxXHeader = 15 + boxWidth + 5;
+                        doc.roundedRect(rightBoxXHeader, boxY, boxWidth, boxHeight, 2, 2);
+                        
+                        doc.setFontSize(9);
+                        doc.setFont('helvetica', 'bold');
+                        doc.text('Destinataire :', rightBoxXHeader + 3, boxY + 6);
+                        doc.setFontSize(10);
+                        doc.text(clientNameLines, rightBoxXHeader + 3, boxY + 11);
+                        
+                        doc.setFontSize(8);
+                        doc.setFont('helvetica', 'normal');
+                        let cly = boxY + 11 + (clientNameLines.length * 4) + 1;
+                        if (client?.adresse) {
+                          const addrLines = doc.splitTextToSize(client.adresse, boxWidth - 6);
+                          doc.text(addrLines, rightBoxXHeader + 3, cly);
+                          cly += addrLines.length * 4;
+                        }
+                        if (client?.telephone) {
+                          doc.text(`Tél : ${client.telephone}`, rightBoxXHeader + 3, cly);
+                          cly += 4;
+                        }
+                        if (client?.email) {
+                          doc.text(`Email : ${client.email}`, rightBoxXHeader + 3, cly);
+                          cly += 5;
+                        }
+                        doc.setTextColor(80, 80, 80);
+                        if (client?.rc) { doc.text(`RC : ${client.rc}`, rightBoxXHeader + 3, cly); cly += 4; }
+                        if (client?.nif) { doc.text(`NIF : ${client.nif}`, rightBoxXHeader + 3, cly); cly += 4; }
+                        if (client?.nis) { doc.text(`NIS : ${client.nis}`, rightBoxXHeader + 3, cly); cly += 4; }
+                        if (client?.ai) { doc.text(`AI : ${client.ai}`, rightBoxXHeader + 3, cly); cly += 4; }
+                        doc.setTextColor(0, 0, 0);
+                    
+                        y = boxY + boxHeight + 6;
+                    
+                        const tableColumn = ["Désignation", "Dim. / Options", "Quantité (m²/ml)", "Pièces", "P.U. HT", "Total HT"];
+                        const tableRows = [];
+                    
+                        items.forEach(item => {
+                          const dims = (item.l || item.h) ? `${item.l} x ${item.h} mm` : '';
+                          let optStr = '';
+                          if (item.glassId) {
+                            const g = (database.glass||[]).find(x=>x.id===item.glassId);
+                            if(g) optStr += g.name + ' ';
+                          }
+                          if (item.colorId) {
+                            const c = (database.colors||[]).find(x=>x.id===item.colorId);
+                            if(c) optStr += c.name;
+                          }
+                          const descLine2 = [dims, optStr].filter(Boolean).join(' | ');
+                          
+                          let totalMeasurementQty = item.qty;
+                          let measureUnit = item.unit === 'unité' ? 'U' : item.unit;
+                          
+                          if (item.unit === 'm2') {
+                             totalMeasurementQty = ((item.h || 0) / 1000) * ((item.l || 0) / 1000) * item.qty;
+                          } else if (item.unit === 'm') {
+                             totalMeasurementQty = ((item.l || item.h || 0) / 1000) * item.qty;
+                          }
+                          
+                          const puHT = (totalMeasurementQty > 0) ? (item.totalHT / totalMeasurementQty) : item.totalHT;
+                          
+                          const rowData = [
+                            `${item.nom}\n${item.designation || ''}`,
+                            descLine2 || '-',
+                            item.unit === 'unité' ? '-' : `${totalMeasurementQty.toFixed(2)} ${measureUnit}`,
+                            `${item.qty} pces`,
+                            `${formatPrice(puHT)} DZD`,
+                            `${formatPrice(item.totalHT)} DZD`
+                          ];
+                          tableRows.push(rowData);
+                        });
+                    
+                        autoTable(doc, {
+                          startY: y,
+                          head: [tableColumn],
+                          body: tableRows,
+                          theme: 'grid',
+                          headStyles: { fillColor: [40, 40, 40], textColor: [255, 255, 255] },
+                          styles: { fontSize: 9, cellPadding: 3, textColor: [0, 0, 0] },
+                          columnStyles: { 0: { cellWidth: 50 }, 4: { halign: 'right' }, 5: { halign: 'right', fontStyle: 'bold' } }
+                        });
+                    
+                        let finalY = (doc.lastAutoTable?.finalY || doc.previousAutoTable?.finalY || y + 20) + 10;
+                        if (finalY > 220) { doc.addPage(); finalY = 20; }
+                    
+                        const rightBoxX = 110;
+                        let boxHeightBottom = 22;
+                        if (vq.totals?.remise > 0) boxHeightBottom += 14;
+   
+                        doc.setDrawColor(150, 150, 150);
+                        doc.setLineWidth(0.5);
+                        doc.roundedRect(rightBoxX, finalY, pw - 15 - rightBoxX, boxHeightBottom, 3, 3);
+                        
+                        let currentTotalY = finalY + 9;
+                        if (vq.totals?.remise > 0) {
+                          doc.setFontSize(8.5);
+                          doc.setFont('helvetica', 'normal');
+                          doc.text('MONTANT BRUT', rightBoxX + 5, currentTotalY);
+                          doc.text(`${formatPrice(vq.totals.htBrut || totalHT)} DZD`, pw - 20, currentTotalY, { align: 'right' });
+                          
+                          currentTotalY += 7;
+                          doc.text('REMISE', rightBoxX + 5, currentTotalY);
+                          doc.text(`- ${formatPrice(vq.totals.remise)} DZD`, pw - 20, currentTotalY, { align: 'right' });
+   
+                          currentTotalY += 7;
+                        }
+   
+                        doc.setFontSize(9.5);
+                        doc.setFont('helvetica', 'bold');
+                        doc.text('MONTANT TOTAL HT', rightBoxX + 5, currentTotalY);
+                        doc.text(`${formatPrice(totalHT)} DZD`, pw - 20, currentTotalY, { align: 'right' });
+                        
+                        doc.setFont('helvetica', 'normal');
+                        doc.setFontSize(8.5);
+                        doc.text(`TVA ${tvaRateToUse}% :`, rightBoxX + 5, currentTotalY + 7);
+                        doc.text(`${formatPrice(tva)} DZD`, pw - 20, currentTotalY + 7, { align: 'right' });
+                    
+                        finalY += boxHeightBottom + 15;
+                        
+                        doc.setFontSize(14);
+                        doc.setFont('helvetica', 'bold');
+                        doc.text(`NET À PAYER TTC : ${formatPrice(totalTTC)} DZD`, pw - 15, finalY, { align: 'right' });
+                    
+                        if (quoteSettings?.cachetBase64) {
+                          try { doc.addImage(quoteSettings.cachetBase64, 'PNG', 25, finalY, 35, 35); } catch (e) {}
+                        }
+                    
+                        doc.save(`Facture_${invoiceNumber}.pdf`);
+                        
+                        setDatabase(prev => {
+                          let newCounter = prev.invoiceCounter || 1;
+                          if (currentCounter >= newCounter) {
+                             newCounter = currentCounter + 1;
+                          }
+                          return { ...prev, invoiceCounter: newCounter };
+                        });
+                      }}
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.5rem', fontSize: '1rem', background: '#8b5cf6', border: 'none', color: 'white' }}
+                    >
+                      <Printer size={18} /> Générer Facture
+                    </button>
+                    <button
+                      className="btn"
+                      onClick={() => {
+                        if (window.confirm("Réinitialiser le compteur de facture à 01 ?")) {
+                          setDatabase(prev => ({ ...prev, invoiceCounter: 1 }));
+                        }
+                      }}
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.5rem', fontSize: '1rem', background: '#ef4444', border: 'none', color: 'white' }}
+                      title="Réinitialiser l'ordre des factures à 01"
+                    >
+                      Réinitialiser l'ordre
+                    </button>
+                  </>
                 )}
                 <button 
                   className="btn btn-primary" 

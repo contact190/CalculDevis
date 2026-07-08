@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Receipt, Download, Filter, CheckCircle } from 'lucide-react';
 import jsPDF from 'jspdf';
 
@@ -7,8 +7,12 @@ const InvoiceGenerator = ({ data, setData, quoteSettings }) => {
   const [invoiceType, setInvoiceType] = useState('global'); // 'global' | 'partiel'
   const [selectedFloors, setSelectedFloors] = useState(new Set());
   const currentCounter = data.invoiceCounter || 1;
-  const [invoiceNumber, setInvoiceNumber] = useState(`FAC-${String(currentCounter).padStart(2, '0')}`);
+  const [invoiceNumber, setInvoiceNumber] = useState(String(currentCounter).padStart(2, '0'));
   const [isGenerating, setIsGenerating] = useState(false);
+
+  useEffect(() => {
+    setInvoiceNumber(String(currentCounter).padStart(2, '0'));
+  }, [currentCounter]);
 
   const orders = data.orders || [];
   const clients = data.clients || [];
@@ -376,9 +380,8 @@ const InvoiceGenerator = ({ data, setData, quoteSettings }) => {
     
     setData(prev => {
       let newCounter = prev.invoiceCounter || 1;
-      const numMatch = invoiceNumber.match(/FAC-(\d+)/);
-      if (numMatch) {
-         const num = parseInt(numMatch[1], 10);
+      const num = parseInt(invoiceNumber, 10);
+      if (!isNaN(num)) {
          if (num >= newCounter) {
             newCounter = num + 1;
          }
@@ -493,13 +496,26 @@ const InvoiceGenerator = ({ data, setData, quoteSettings }) => {
           </div>
         )}
 
-        <button
-          onClick={generateInvoicePDF}
-          disabled={isGenerating || filteredUnits.length === 0}
-          style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.75rem', background: filteredUnits.length === 0 ? '#94a3b8' : 'linear-gradient(135deg, #0f4c75, #1b6ca8)', color: 'white', border: 'none', borderRadius: '0.6rem', cursor: filteredUnits.length === 0 ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '0.95rem' }}
-        >
-          <Download size={18} /> {isGenerating ? 'Génération...' : 'Générer la Facture PDF'}
-        </button>
+        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+          <button
+            onClick={generateInvoicePDF}
+            disabled={isGenerating || filteredUnits.length === 0}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.75rem', background: filteredUnits.length === 0 ? '#94a3b8' : 'linear-gradient(135deg, #0f4c75, #1b6ca8)', color: 'white', border: 'none', borderRadius: '0.6rem', cursor: filteredUnits.length === 0 ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '0.95rem' }}
+          >
+            <Download size={18} /> {isGenerating ? 'Génération...' : 'Générer la Facture PDF'}
+          </button>
+          <button
+            onClick={() => {
+              if (window.confirm("Réinitialiser le compteur de facture à 01 ?")) {
+                setData(prev => ({ ...prev, invoiceCounter: 1 }));
+              }
+            }}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.75rem', background: '#ef4444', color: 'white', border: 'none', borderRadius: '0.6rem', cursor: 'pointer', fontWeight: 700, fontSize: '0.95rem' }}
+            title="Réinitialiser l'ordre des factures à 01"
+          >
+            Réinitialiser l'ordre
+          </button>
+        </div>
       </div>
 
       {/* Info about auto-billing */}

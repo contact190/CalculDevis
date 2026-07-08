@@ -119,12 +119,25 @@ export class FormulaEngine {
     const glassQtyRaw = this.evaluate(composition.glassFormulaQty || '1', tempScope, 'Quantité Vitre', errors);
     const glassQty = isNaN(glassQtyRaw) ? 0 : glassQtyRaw;
 
+    // Calculate glass2 dimensions if formulas are specified
+    const hasGlass2 = !!(composition.glass2FormulaL || composition.glass2FormulaH || composition.glass2FormulaQty);
+    let glass2L = 0;
+    let glass2H = 0;
+    let glass2Qty = 0;
+    if (hasGlass2) {
+      glass2L = this.evaluate(composition.glass2FormulaL || 'L', tempScope, 'Largeur Vitre 2', errors);
+      glass2H = this.evaluate(composition.glass2FormulaH || 'H', tempScope, 'Hauteur Vitre 2', errors);
+      const glass2QtyRaw = this.evaluate(composition.glass2FormulaQty || '1', tempScope, 'Quantité Vitre 2', errors);
+      glass2Qty = isNaN(glass2QtyRaw) ? 0 : glass2QtyRaw;
+    }
+
     // 2. Build the final enriched scope for all subsequent calculations
     const windowDir = (config.openingDirection || 'gauche').toLowerCase();
     const scope = { 
       ...tempScope,
       glassQty,
       qty: glassQty, // alias
+      glass2Qty,
       openingDirection: windowDir,
       isGauche: windowDir.includes('gauch'),
       isDroit: windowDir.includes('droit'),
@@ -454,6 +467,64 @@ export class FormulaEngine {
     const glassWeight = glass ? (glassArea * glass.weightPerM2) : 0;
     const glassCost = glass ? (glassArea * glass.pricePerM2) : 0;
 
+    let glass2 = null;
+    let gasket2 = null;
+    if (glass && hasGlass2 && glass2Qty > 0) {
+      const glass2Area = (((isNaN(glass2L)?0:glass2L) * (isNaN(glass2H)?0:glass2H)) / 1000000) * (isNaN(glass2Qty)?0:glass2Qty);
+      const glass2Weight = glass2Area * glass.weightPerM2;
+      const glass2Cost = glass2Area * glass.pricePerM2;
+      glass2 = {
+        ...glass,
+        label: 'Vitrage 2',
+        width: isNaN(glass2L)?0:glass2L,
+        height: isNaN(glass2H)?0:glass2H,
+        qty: isNaN(glass2Qty)?0:glass2Qty,
+        area: glass2Area,
+        weight: glass2Weight,
+        cost: glass2Cost,
+        calculation: `L: ${this.resolveFormula(composition.glass2FormulaL || 'L', scope)} = ${Math.round(glass2L)} | H: ${this.resolveFormula(composition.glass2FormulaH || 'H', scope)} = ${Math.round(glass2H)}`,
+        error: (isNaN(glass2L) || isNaN(glass2H) || isNaN(glass2Qty)) ? "Formule Invalide" : null
+      };
+
+      // Gasket for glass2
+      const allGasketEntries = this.db.gasketCompatibility || [];
+      let compatibility = allGasketEntries.find(
+        c => normalizeRangeId(c.rangeId) === compNormRangeId &&
+             parseFloat(c.glassThickness) === parseFloat(glass.thickness)
+      );
+      if (!compatibility && !composition.rangeId) {
+        compatibility = allGasketEntries.find(
+          c => parseFloat(c.glassThickness) === parseFloat(glass.thickness)
+        );
+      }
+      if (compatibility) {
+        const gRef = (this.db.accessories || []).find(a => a.id === compatibility.gasketId);
+        if (gRef) {
+          const formula = compatibility.formula || '(L+H)*2';
+          const scope2 = { ...scope, L: glass2L, H: glass2H };
+          const lenMm = this.evaluate(formula, scope2, 'Joint Vitrage 2', errors);
+          const isError = isNaN(lenMm);
+          const safeLenMm = isError ? 0 : lenMm;
+          const qtyMl = (safeLenMm / 1000) * glass2Qty;
+          
+          gasket2 = {
+            ...gRef,
+            isGlassGasket: true,
+            label: 'Joint de Vitrage 2',
+            qty: qtyMl,
+            multiplier: 1,
+            unit: 'Joint',
+            formula: formula,
+            resolvedFormula: this.resolveFormula(formula, scope2),
+            error: isError ? "Formule Invalide" : null,
+            unitPrice: gRef.price || 0,
+            totalMeasure: safeLenMm * glass2Qty,
+            cost: qtyMl * (gRef.price || 0)
+          };
+        }
+      }
+    }
+
     // Add Parcloses based on glass compatibility ONLY if not already present in profiles
     if (glass) {
       const hasManualParcloseH = profiles.some(p => p.label?.toLowerCase() === 'parcloseh');
@@ -489,7 +560,7 @@ export class FormulaEngine {
 
       glassProfiles.forEach(gp => {
         console.log(`[Parclose] Match found: H=${gp.profileHId} V=${gp.profileVId}`);
-        // Handle Parclose Horizontal
+        // Handle Parclose Horizontal for Glass 1
         const pHRef = (this.db.profiles || []).find(p => p.id === gp.profileHId);
         if (pHRef && !hasManualParcloseH) {
           const unitPrice = (pHRef.pricePerBar || pHRef.pricePerKg || 0);
@@ -515,7 +586,33 @@ export class FormulaEngine {
           });
         }
 
-        // Handle Parclose Vertical
+        // Handle Parclose Horizontal for Glass 2
+        if (pHRef && !hasManualParcloseH && glass2Qty > 0) {
+          const unitPrice = (pHRef.pricePerBar || pHRef.pricePerKg || 0);
+          const formulaH2 = gp.formulaH === composition.glassFormulaL ? composition.glass2FormulaL : (gp.formulaH || composition.glass2FormulaL || 'L');
+          const scope2 = { ...scope, L: glass2L, H: glass2H };
+          const hValue = this.evaluate(formulaH2, scope2, 'ParcloseH 2', errors);
+          const isErrorH = isNaN(hValue);
+          const safeHValue = isErrorH ? 0 : hValue;
+          const hQty = (gp.qtyH || 2) * glass2Qty;
+          
+          profiles.push({
+            ...pHRef,
+            label: 'ParcloseH 2',
+            isFrame: false,
+            isCouvreJoint: false,
+            qty: hQty,
+            length: safeHValue,
+            formula: formulaH2,
+            resolvedFormula: this.resolveFormula(formulaH2, scope2),
+            error: isErrorH ? "Formule Invalide" : null,
+            unitPrice: unitPrice,
+            totalMeasure: safeHValue * hQty,
+            cost: ((safeHValue * hQty) / (pHRef.barLength || 6000)) * unitPrice
+          });
+        }
+
+        // Handle Parclose Vertical for Glass 1
         const pVRef = (this.db.profiles || []).find(p => p.id === gp.profileVId);
         if (pVRef && !hasManualParcloseV) {
           const unitPrice = (pVRef.pricePerBar || pVRef.pricePerKg || 0);
@@ -542,6 +639,34 @@ export class FormulaEngine {
               : ((safeVValue * vQty) / 1000) * (pVRef.weightPerM || 1) * unitPrice
           });
         }
+
+        // Handle Parclose Vertical for Glass 2
+        if (pVRef && !hasManualParcloseV && glass2Qty > 0) {
+          const unitPrice = (pVRef.pricePerBar || pVRef.pricePerKg || 0);
+          const formulaV2 = gp.formulaV === composition.glassFormulaH ? composition.glass2FormulaH : (gp.formulaV || composition.glass2FormulaH || 'H');
+          const scope2 = { ...scope, L: glass2L, H: glass2H };
+          const vValue = this.evaluate(formulaV2, scope2, 'ParcloseV 2', errors);
+          const isErrorV = isNaN(vValue);
+          const safeVValue = isErrorV ? 0 : vValue;
+          const vQty = (gp.qtyV || 2) * glass2Qty;
+          
+          profiles.push({
+            ...pVRef,
+            label: 'ParcloseV 2',
+            isFrame: false,
+            isCouvreJoint: false,
+            qty: vQty,
+            length: safeVValue,
+            formula: formulaV2,
+            resolvedFormula: this.resolveFormula(formulaV2, scope2),
+            error: isErrorV ? "Formule Invalide" : null,
+            unitPrice: unitPrice,
+            totalMeasure: safeVValue * vQty,
+            cost: pVRef.pricePerBar 
+              ? ((safeVValue * vQty) / (pVRef.barLength || 6000)) * unitPrice
+              : ((safeVValue * vQty) / 1000) * (pVRef.weightPerM || 1) * unitPrice
+          });
+        }
       });
     }
 
@@ -559,7 +684,9 @@ export class FormulaEngine {
         calculation: `L: ${this.resolveFormula(composition.glassFormulaL || 'L', scope)} = ${Math.round(glassL)} | H: ${this.resolveFormula(composition.glassFormulaH || 'H', scope)} = ${Math.round(glassH)}`,
         error: (isNaN(glassL) || isNaN(glassH) || isNaN(glassQty)) ? "Formule Invalide" : null
       } : { name: 'Vitrage Manquant', width: 0, height: 0, qty: 0, area: 0, weight: 0, cost: 0 },
-      gasket
+      glass2,
+      gasket,
+      gasket2
     };
   }
 
@@ -599,8 +726,10 @@ export class FormulaEngine {
           const res = this.calculateComponentBOM(config, Lc, Hc, compId, glId, config.optionalSides, totalH, originalL, originalH, 0, errors);
           profiles = [...profiles, ...res.profiles];
           accessories = [...accessories, ...res.accessories];
-          if (res.gasket) accessories.push(res.gasket);
+           if (res.gasket) accessories.push(res.gasket);
+          if (res.gasket2) accessories.push(res.gasket2);
           if (res.glass) glasses.push(res.glass);
+          if (res.glass2) glasses.push(res.glass2);
         }
       });
     });
@@ -1194,7 +1323,9 @@ export class FormulaEngine {
         results.profiles.push(...(res.profiles || []).filter(filterFn).map(p => ({ ...p, source: sourceLabel })));
         results.accessories.push(...(res.accessories || []).filter(filterFn).map(a => ({ ...a, source: sourceLabel })));
         if (res.gasket) results.accessories.push({ ...res.gasket, source: sourceLabel });
+        if (res.gasket2) results.accessories.push({ ...res.gasket2, source: sourceLabel });
         if (res.glass) results.glasses.push({ ...res.glass, source: sourceLabel });
+        if (res.glass2) results.glasses.push({ ...res.glass2, source: sourceLabel });
       });
     };
 
@@ -1288,7 +1419,9 @@ export class FormulaEngine {
         profiles = res.profiles;
         accessories = res.accessories;
         if (res.gasket) accessories.push(res.gasket);
+        if (res.gasket2) accessories.push(res.gasket2);
         if (res.glass) glasses.push(res.glass);
+        if (res.glass2) glasses.push(res.glass2);
       }
     }
 
