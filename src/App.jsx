@@ -375,12 +375,13 @@ function App() {
 
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
 
-    // Détection immédiate des actions critiques (comme les suppressions)
+    // Pré-calcul unique des opérations pour détection critique ET sauvegarde
+    let cachedOps = null;
     let isCriticalChange = false;
     if (previousDbRef.current && !isApplyingRemoteOps.current) {
-      const ops = generateOps(previousDbRef.current, database);
-      isCriticalChange = ops.some(op => 
-        (op.op === 'update' || op.op === 'replace_key') && op.data && op.data._deleted
+      cachedOps = generateOps(previousDbRef.current, database);
+      isCriticalChange = cachedOps.some(op => 
+        op.data && op.data._deleted
       );
     }
 
@@ -390,13 +391,15 @@ function App() {
         const now = new Date().toISOString();
         
         let stampedDb = database;
-        let generatedOps = [];
+        let generatedOps = cachedOps || [];
         // ─── Stamp local changes in database before saving ───
         if (!isApplyingRemoteOps.current && previousDbRef.current) {
-          const ops = generateOps(previousDbRef.current, database);
-          generatedOps = ops;
-          if (ops.length > 0) {
-            const applyResult = applyOps(database, ops);
+          // Réutiliser les ops pré-calculées au lieu de recalculer
+          if (!cachedOps) {
+            generatedOps = generateOps(previousDbRef.current, database);
+          }
+          if (generatedOps.length > 0) {
+            const applyResult = applyOps(database, generatedOps);
             if (applyResult && applyResult.appliedCount > 0) {
               stampedDb = applyResult.db;
               setDatabase(stampedDb);

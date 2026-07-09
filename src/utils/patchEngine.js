@@ -272,7 +272,7 @@ export function applyOp(db, op) {
       } else {
         currentArr.push(data);
       }
-      const newDb = op._inPlace ? db : JSON.parse(JSON.stringify(db)); // clone only if not in-place
+      const newDb = op._inPlace ? db : cloneAlongPath(db, collection);
       setPath(newDb, collection, currentArr);
       return {
         db: newDb,
@@ -285,7 +285,7 @@ export function applyOp(db, op) {
       if (idx < 0) {
         // Item doesn't exist locally — add it
         currentArr.push(data);
-        const newDb = op._inPlace ? db : JSON.parse(JSON.stringify(db));
+        const newDb = op._inPlace ? db : cloneAlongPath(db, collection);
         setPath(newDb, collection, currentArr);
         return {
           db: newDb,
@@ -300,7 +300,7 @@ export function applyOp(db, op) {
       }
       
       currentArr[idx] = data;
-      const newDb = op._inPlace ? db : JSON.parse(JSON.stringify(db));
+      const newDb = op._inPlace ? db : cloneAlongPath(db, collection);
       setPath(newDb, collection, currentArr);
       return {
         db: newDb,
@@ -327,7 +327,7 @@ export function applyOp(db, op) {
         _lastModified: timestamp
       };
 
-      const newDb = op._inPlace ? db : JSON.parse(JSON.stringify(db));
+      const newDb = op._inPlace ? db : cloneAlongPath(db, collection);
       setPath(newDb, collection, currentArr);
       return {
         db: newDb,
