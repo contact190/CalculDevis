@@ -633,6 +633,36 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                         {part.type === 'group' && part.subParts && (
                            <div style={{ marginLeft: '3rem', marginTop: '0.5rem', padding: '0.8rem', borderLeft: '3px solid #7c3aed', background: '#f5f3ff', borderRadius: '0 8px 8px 0' }}>
                               <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#7c3aed', marginBottom: '0.5rem' }}>DIVISION {config.compoundConfig.orientation === 'horizontal' ? 'VERTICALE' : 'HORIZONTALE'}</div>
+                              
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.8rem', background: 'white', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid #ddd6fe' }}>
+                                 <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#4b5563', whiteSpace: 'nowrap' }}>Traverse de Division :</label>
+                                 <select 
+                                   className="input" 
+                                   style={{ width: '220px', fontSize: '0.75rem', padding: '0.2rem', height: 'auto' }} 
+                                   value={part.traverseId || ''} 
+                                   onChange={e => {
+                                     const newList = [...config.compoundConfig.parts];
+                                     newList[idx].traverseId = e.target.value;
+                                     setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, parts: newList } }));
+                                   }}
+                                 >
+                                   <option value="">(Par défaut)</option>
+                                   {(database.traverses || []).filter(t => {
+                                      const normalize = (s) => (s || '').replace(/[-\s]+/g, '').toLowerCase();
+                                      const currentNorm = normalize(currentComp?.rangeId || ((database.ranges || [])[0]?.id || ''));
+                                      return (t.rangeIds || []).some(rid => normalize(rid) === currentNorm);
+                                   }).map(t => { 
+                                      const p = (database.profiles || []).find(px => px.id === t.profileId); 
+                                      if (!p) return null; 
+                                      return <option key={t.id} value={p.id}>{t.name}</option>; 
+                                   }).filter(Boolean)}
+                                   <option disabled>── PROFILÉS JONCTION ──</option>
+                                   {(database.profiles || []).filter(p => p.category === 'divider').map(p => (
+                                      <option key={p.id} value={p.id}>{p.name} ({p.thickness}mm)</option>
+                                   ))}
+                                 </select>
+                              </div>
+
                               {part.subParts.map((sub, sidx) => (
                                  <div key={sub.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 40px', gap: '0.5rem', alignItems: 'center', marginBottom: '0.3rem' }}>
                                     <div style={{ display: 'flex', gap: '0.3rem' }}>

@@ -363,14 +363,14 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
       const { parts, orientation, unionId, traverseId } = config.compoundConfig;
       const isMulti = config.compoundType === 'fix_coulissant';
       
-      const drawPartList = (list, bx, by, bw, bh, dir, depth = 0) => {
+      const drawPartList = (list, bx, by, bw, bh, dir, depth = 0, parentPart = null) => {
         if (!list || !Array.isArray(list)) return;
         const isH = dir !== 'vertical';
         let cx = bx;
         let cy = by;
 
         // Resolve division profile and thickness dynamically based on depth
-        let currentDivId = (isMulti && depth === 0) ? unionId : traverseId;
+        let currentDivId = (isMulti && depth === 0) ? unionId : (parentPart?.traverseId || traverseId);
         if (currentDivId === 'AUTO') {
           const targetRole = isH ? 'traverse_v' : 'traverse_h';
           const normalize = (s) => (s || '').replace(/[-\s]+/g, '').toLowerCase();
@@ -406,7 +406,7 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
           const pH = isH ? bh : (part.height ? part.height * scale : (bh / list.length));
 
           if (part.type === 'group' && part.subParts) {
-             drawPartList(part.subParts, cx, cy, pW, pH, isH ? 'vertical' : 'horizontal', depth + 1);
+             drawPartList(part.subParts, cx, cy, pW, pH, isH ? 'vertical' : 'horizontal', depth + 1, part);
           } else {
              drawJoinery(cx, cy, pW, pH, part.compositionId || compositionId);
           }

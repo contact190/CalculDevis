@@ -1142,7 +1142,7 @@ export class FormulaEngine {
     }
 
     // --- 3. RECURSIVE PROCESSING ---
-    const processPartList = (partList, boxL, boxH, direction, depth = 0) => {
+    const processPartList = (partList, boxL, boxH, direction, depth = 0, parentPart = null) => {
       if (isMultiChassis && depth === 0) {
         boxH -= 3;
       }
@@ -1150,7 +1150,7 @@ export class FormulaEngine {
       const divQty = (partList || []).length - 1;
 
       // Determine division profile and thickness dynamically based on depth
-      let currentDivId = (isMultiChassis && depth === 0) ? unionId : traverseId;
+      let currentDivId = (isMultiChassis && depth === 0) ? unionId : (parentPart?.traverseId || traverseId);
       if (currentDivId === 'AUTO') {
         const targetRole = isDividerHorizontal ? 'traverse_h' : 'traverse_v';
         const dividerEntry = (this.db.traverses || []).find(t => 
@@ -1282,7 +1282,7 @@ export class FormulaEngine {
         }
 
         if (part.type === 'group' && part.subParts) {
-           processPartList(part.subParts, calcL, calcH, direction === 'horizontal' ? 'vertical' : 'horizontal', depth + 1);
+           processPartList(part.subParts, calcL, calcH, direction === 'horizontal' ? 'vertical' : 'horizontal', depth + 1, part);
            return;
         }
 
