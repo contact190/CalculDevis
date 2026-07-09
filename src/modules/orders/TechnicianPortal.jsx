@@ -149,6 +149,8 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
   const [selectedVoidsForLaunch, setSelectedVoidsForLaunch] = useState({});
   const [assignPopupState, setAssignPopupState] = useState(null);
   const [selectedVoidsForAssign, setSelectedVoidsForAssign] = useState({});
+  const [showRelaunchModal, setShowRelaunchModal] = useState(false);
+  const [selectedVoidsForRelaunch, setSelectedVoidsForRelaunch] = useState({});
 
   const order = useMemo(() => {
     return (data.orders || []).find(o => o.id === orderId);
@@ -334,6 +336,57 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
     });
   };
 
+  const relaunchVoidProduction = (floorId, aptId, voidId) => {
+    if (!order || !selectedClient) return;
+
+    const currentPlan = activeSitePlan;
+    const updatedPlan = {
+      ...currentPlan,
+      floors: (currentPlan.floors || []).map(f => {
+        if (f.id !== floorId) return f;
+        return {
+          ...f,
+          apartments: (f.apartments || []).map(a => {
+            if (a.id !== aptId) return a;
+            return {
+              ...a,
+              voids: (a.voids || []).map(v => {
+                if (v.id !== voidId) return v;
+                return {
+                  ...v,
+                  productionLaunched: false,
+                  measurementsValidated: false
+                };
+              })
+            };
+          })
+        };
+      })
+    };
+
+    const updatedItems = syncSitePlanToMeasurements(updatedPlan, order.items);
+
+    setData(prev => {
+      const updatedClients = (prev.clients || []).map(c => {
+        if (c.id !== selectedClient.id) return c;
+        const plans = c.sitePlans || [];
+        const planExists = plans.some(p => p.id === updatedPlan.id);
+        const newPlans = planExists 
+          ? plans.map(p => p.id === updatedPlan.id ? updatedPlan : p)
+          : [...plans, updatedPlan];
+        return { ...c, sitePlans: newPlans };
+      });
+      const updatedOrders = (prev.orders || []).map(o => 
+        o.id === order.id ? { ...o, items: updatedItems } : o
+      );
+      return {
+        ...prev,
+        clients: updatedClients,
+        orders: updatedOrders
+      };
+    });
+  };
+
   const applyGlobalVoidAssignment = (sourceVoid) => {
     if (!order || !selectedClient || !assignPopupState) return;
 
@@ -421,6 +474,22 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
       setSelectedVoidsForLaunch(initialSelection);
     }
   }, [showValidation, activeSitePlan]);
+
+  React.useEffect(() => {
+    if (showRelaunchModal) {
+      const initialSelection = {};
+      (activeSitePlan.floors || []).forEach(f => {
+        (f.apartments || []).forEach(a => {
+          (a.voids || []).forEach(v => {
+            if (v.productionLaunched) {
+               initialSelection[v.id] = selectedVoidsForRelaunch[v.id] !== undefined ? selectedVoidsForRelaunch[v.id] : true;
+            }
+          });
+        });
+      });
+      setSelectedVoidsForRelaunch(initialSelection);
+    }
+  }, [showRelaunchModal, activeSitePlan]);
 
   React.useEffect(() => {
     if (assignPopupState) {
@@ -700,6 +769,194 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
               style={{ flex: 2, padding: '0.75rem', borderRadius: '0.5rem', border: 'none', background: validatedVoids.length === 0 ? '#94a3b8' : '#0f766e', color: 'white', fontWeight: 700, cursor: validatedVoids.length === 0 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
             >
               <CheckCircle size={18} /> Lancer la sélection
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderRelaunchPopup = () => {
+    if (!showRelaunchModal) return null;
+
+    const launchedVoids = [];
+    (activeSitePlan.floors || []).forEach(f => {
+      (f.apartments || []).forEach(a => {
+        (a.voids || []).forEach(v => {
+          if (v.productionLaunched) {
+            const item = order.items.find(i => i.id === v.itemId);
+            launchedVoids.push({ floor: f, apt: a, void: v, item });
+          }
+        });
+      });
+    });
+
+    const handleRelaunch = () => {
+      const selectedCount = Object.values(selectedVoidsForRelaunch).filter(Boolean).length;
+      if (selectedCount === 0) {
+        alert("Veuillez sélectionner au moins une fenêtre à relancer.");
+        return;
+      }
+
+      if (!window.confirm(`Voulez-vous relancer la production pour les ${selectedCount} fenêtres sélectionnées ? Leurs cotes seront débloquées et vous pourrez générer un nouveau lot.`)) return;
+
+      const currentPlan = activeSitePlan;
+      const updatedPlan = {
+        ...currentPlan,
+        floors: (currentPlan.floors || []).map(f => ({
+          ...f,
+          apartments: (f.apartments || []).map(a => ({
+            ...a,
+            voids: (a.voids || []).map(v => {
+              if (selectedVoidsForRelaunch[v.id]) {
+                return { ...v, productionLaunched: false, measurementsValidated: false };
+              }
+              return v;
+            })
+          }))
+        }))
+      };
+
+      const updatedItems = syncSitePlanToMeasurements(updatedPlan, order.items);
+
+      setData(prev => {
+        const updatedClients = (prev.clients || []).map(c => {
+          if (c.id !== selectedClient.id) return c;
+          const plans = c.sitePlans || [];
+          const planExists = plans.some(p => p.id === updatedPlan.id);
+          const newPlans = planExists 
+            ? plans.map(p => p.id === updatedPlan.id ? updatedPlan : p)
+            : [...plans, updatedPlan];
+          return { ...c, sitePlans: newPlans };
+        });
+        const updatedOrders = (prev.orders || []).map(o => 
+          o.id === order.id ? { ...o, items: updatedItems } : o
+        );
+        return { ...prev, clients: updatedClients, orders: updatedOrders };
+      });
+
+      setShowRelaunchModal(false);
+      setSelectedVoidsForRelaunch({});
+      alert('Fenêtres débloquées avec succès. Vous pouvez maintenant modifier leurs cotes, les valider et les relancer en production.');
+    };
+
+    return (
+      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}>
+        <div style={{ background: 'white', padding: '1.5rem', borderRadius: '1rem', maxWidth: '500px', width: '100%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#991b1b', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <RefreshCw size={24} color="#991b1b" />
+              Relancer la Production
+            </h2>
+            <button 
+              onClick={() => setShowRelaunchModal(false)}
+              style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.25rem', fontSize: '1.2rem', fontWeight: 'bold' }}
+            >
+              ✕
+            </button>
+          </div>
+          
+          {launchedVoids.length === 0 ? (
+            <div style={{ padding: '1rem', background: '#f8fafc', borderRadius: '0.5rem', textAlign: 'center', color: '#64748b', marginBottom: '1.5rem' }}>
+              Aucune fenêtre lancée en production pour le moment.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1.5rem' }}>
+              {Array.from(new Set(launchedVoids.map(v => v.floor.id))).map(floorId => {
+                const floorVoids = launchedVoids.filter(v => v.floor.id === floorId);
+                const floor = floorVoids[0].floor;
+                const isFloorFullySelected = floorVoids.every(v => selectedVoidsForRelaunch[v.void.id]);
+                const isFloorPartiallySelected = !isFloorFullySelected && floorVoids.some(v => selectedVoidsForRelaunch[v.void.id]);
+
+                return (
+                  <div key={floor.id} style={{ border: '1px solid #fca5a5', borderRadius: '0.75rem', overflow: 'hidden' }}>
+                    <div style={{ background: '#fef2f2', padding: '0.75rem 1rem', display: 'flex', alignItems: 'center', gap: '0.75rem', borderBottom: '1px solid #fca5a5' }}>
+                      <input 
+                        type="checkbox"
+                        checked={isFloorFullySelected}
+                        ref={el => { if(el) el.indeterminate = isFloorPartiallySelected; }}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setSelectedVoidsForRelaunch(prev => {
+                            const next = { ...prev };
+                            floorVoids.forEach(v => { next[v.void.id] = checked; });
+                            return next;
+                          });
+                        }}
+                        style={{ width: '1.2rem', height: '1.2rem', cursor: 'pointer' }}
+                      />
+                      <strong style={{ fontSize: '0.95rem', color: '#991b1b', textTransform: 'uppercase' }}>{floor.name}</strong>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      {Array.from(new Set(floorVoids.map(v => v.apt.id))).map(aptId => {
+                        const aptVoids = floorVoids.filter(v => v.apt.id === aptId);
+                        const apt = aptVoids[0].apt;
+                        const isAptFullySelected = aptVoids.every(v => selectedVoidsForRelaunch[v.void.id]);
+                        const isAptPartiallySelected = !isAptFullySelected && aptVoids.some(v => selectedVoidsForRelaunch[v.void.id]);
+
+                        return (
+                          <div key={apt.id} style={{ borderBottom: '1px solid #fee2e2' }}>
+                            <div style={{ background: '#fff5f5', padding: '0.5rem 1rem 0.5rem 2.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', borderBottom: '1px solid #fee2e2' }}>
+                              <input 
+                                type="checkbox"
+                                checked={isAptFullySelected}
+                                ref={el => { if(el) el.indeterminate = isAptPartiallySelected; }}
+                                onChange={(e) => {
+                                  const checked = e.target.checked;
+                                  setSelectedVoidsForRelaunch(prev => {
+                                    const next = { ...prev };
+                                    aptVoids.forEach(v => { next[v.void.id] = checked; });
+                                    return next;
+                                  });
+                                }}
+                                style={{ width: '1rem', height: '1rem', cursor: 'pointer' }}
+                              />
+                              <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#7f1d1d' }}>{apt.name}</span>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                              {aptVoids.map(({ void: v, item }) => (
+                                <div key={v.id} style={{ padding: '0.5rem 1rem 0.5rem 4rem', display: 'flex', gap: '1rem', alignItems: 'center', background: 'white' }}>
+                                  <input 
+                                    type="checkbox" 
+                                    checked={!!selectedVoidsForRelaunch[v.id]}
+                                    onChange={(e) => setSelectedVoidsForRelaunch(prev => ({ ...prev, [v.id]: e.target.checked }))}
+                                    style={{ width: '1rem', height: '1rem', cursor: 'pointer' }}
+                                  />
+                                  <div style={{ flex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#475569' }}>
+                                      {v.name}
+                                    </span>
+                                    <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                                      Cotes: <strong>{v.L !== undefined ? v.L : item.config.L} x {v.H !== undefined ? v.H : item.config.H}</strong>
+                                    </span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: '0.75rem' }}>
+            <button 
+              onClick={() => setShowRelaunchModal(false)}
+              style={{ flex: 1, padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', background: 'white', color: '#475569', fontWeight: 700, cursor: 'pointer' }}
+            >
+              Fermer
+            </button>
+            <button 
+              onClick={handleRelaunch}
+              disabled={launchedVoids.length === 0}
+              style={{ flex: 2, padding: '0.75rem', borderRadius: '0.5rem', border: 'none', background: launchedVoids.length === 0 ? '#94a3b8' : '#991b1b', color: 'white', fontWeight: 700, cursor: launchedVoids.length === 0 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+            >
+              <RefreshCw size={18} /> Relancer la sélection
             </button>
           </div>
         </div>
@@ -1346,16 +1603,28 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
           </div>
         )}
 
-        {/* Lancement de Production Button */}
+        {/* Action Buttons */}
         {hasPlan && (
-          <button 
-            onClick={() => setShowValidation(true)}
-            className="btn btn-primary"
-            style={{ width: '100%', padding: '1rem', fontSize: '1rem', fontWeight: 800, borderRadius: '0.75rem', marginTop: '1rem', background: '#0f766e', color: 'white', border: 'none', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(15, 118, 110, 0.4)' }}
-          >
-            <CheckCircle size={20} style={{ verticalAlign: 'middle', marginRight: '0.5rem' }} />
-            Lancement en Production
-          </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '1rem' }}>
+            <button 
+              onClick={() => setShowValidation(true)}
+              className="btn btn-primary"
+              style={{ width: '100%', padding: '1rem', fontSize: '1rem', fontWeight: 800, borderRadius: '0.75rem', background: '#0f766e', color: 'white', border: 'none', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(15, 118, 110, 0.4)' }}
+            >
+              <CheckCircle size={20} style={{ verticalAlign: 'middle', marginRight: '0.5rem' }} />
+              Lancement en Production
+            </button>
+            {stats.launched > 0 && (
+              <button 
+                onClick={() => setShowRelaunchModal(true)}
+                className="btn btn-secondary"
+                style={{ width: '100%', padding: '1rem', fontSize: '1rem', fontWeight: 800, borderRadius: '0.75rem', background: '#fef2f2', border: '1.5px solid #fca5a5', color: '#991b1b', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+              >
+                <RefreshCw size={20} />
+                Relancer de la Production ({stats.launched})
+              </button>
+            )}
+          </div>
         )}
 
         {/* Footer info */}
@@ -1365,6 +1634,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
         </div>
         {renderValidationPopup()}
         {renderIndividualValidationPopup()}
+        {renderRelaunchPopup()}
         {renderAssignPopup()}
       </div>
     </div>
