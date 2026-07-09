@@ -1213,8 +1213,8 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
                       onClick={() => {
                         if (!window.confirm("Générer une facture pour ce devis validé ?")) return;
                         // Generate a simple Invoice PDF for the shop quote
-                        const currentCounter = database.invoiceCounter || 1;
-                        const invoiceNumber = String(currentCounter).padStart(2, '0');
+                        const invoiceNumber = vq.invoiceNumber || String(database.invoiceCounter || 1).padStart(2, '0');
+                        const isNewInvoice = !vq.invoiceNumber;
                         const tvaRateToUse = vq.tvaRate !== undefined ? vq.tvaRate : (quoteSettings?.tvaRate ?? 9);
                         
                         const doc = new jsPDF({ format: 'a4' });
@@ -1391,7 +1391,7 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
                         const rightBoxX = 110;
                         let boxHeightBottom = 22;
                         if (vq.totals?.remise > 0) boxHeightBottom += 14;
-   
+    
                         doc.setDrawColor(150, 150, 150);
                         doc.setLineWidth(0.5);
                         doc.roundedRect(rightBoxX, finalY, pw - 15 - rightBoxX, boxHeightBottom, 3, 3);
@@ -1406,10 +1406,10 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
                           currentTotalY += 7;
                           doc.text('REMISE', rightBoxX + 5, currentTotalY);
                           doc.text(`- ${formatPrice(vq.totals.remise)} DZD`, pw - 20, currentTotalY, { align: 'right' });
-   
+    
                           currentTotalY += 7;
                         }
-   
+    
                         doc.setFontSize(9.5);
                         doc.setFont('helvetica', 'bold');
                         doc.text('MONTANT TOTAL HT', rightBoxX + 5, currentTotalY);
@@ -1424,7 +1424,7 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
                         
                         doc.setFontSize(14);
                         doc.setFont('helvetica', 'bold');
-                        doc.text(`NET À PAYER TTC : ${formatPrice(totalTTC)} DZD`, pw - 15, finalY, { align: 'right' });
+                        doc.text('NET À PAYER TTC : ' + formatPrice(totalTTC) + ' DZD', pw - 15, finalY, { align: 'right' });
                     
                         if (quoteSettings?.cachetBase64) {
                           try { doc.addImage(quoteSettings.cachetBase64, 'PNG', 25, finalY, 35, 35); } catch (e) {}
@@ -1434,11 +1434,33 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
                         
                         setDatabase(prev => {
                           let newCounter = prev.invoiceCounter || 1;
-                          if (currentCounter >= newCounter) {
-                             newCounter = currentCounter + 1;
+                          if (isNewInvoice) {
+                            const parsed = parseInt(invoiceNumber, 10);
+                            if (!isNaN(parsed) && parsed >= newCounter) {
+                              newCounter = parsed + 1;
+                            }
                           }
-                          return { ...prev, invoiceCounter: newCounter };
+                          
+                          // Save the invoice number on the quote
+                          const updatedQuotes = (prev.quotes || []).map(q => {
+                            if (q.id === vq.id) {
+                              return { 
+                                ...q, 
+                                invoiceNumber: invoiceNumber,
+                                invoicedAt: q.invoicedAt || new Date().toISOString()
+                              };
+                            }
+                            return q;
+                          });
+                          
+                          return { 
+                            ...prev, 
+                            invoiceCounter: newCounter,
+                            quotes: updatedQuotes
+                          };
                         });
+                        
+                        setViewingQuote(prev => ({ ...prev, invoiceNumber }));
                       }}
                       style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.5rem', fontSize: '1rem', background: '#8b5cf6', border: 'none', color: 'white' }}
                     >
