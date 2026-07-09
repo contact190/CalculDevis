@@ -3,6 +3,36 @@ import { Store, Plus, Edit2, Trash2, FileText, Search, Save, X, ExternalLink, Pr
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
+const compressImage = (base64Str, callback) => {
+  const img = new Image();
+  img.src = base64Str;
+  img.onload = () => {
+    const canvas = document.createElement('canvas');
+    const MAX_WIDTH = 200;
+    const MAX_HEIGHT = 200;
+    let width = img.width;
+    let height = img.height;
+
+    if (width > height) {
+      if (width > MAX_WIDTH) {
+        height = Math.round((height * MAX_WIDTH) / width);
+        width = MAX_WIDTH;
+      }
+    } else {
+      if (height > MAX_HEIGHT) {
+        width = Math.round((width * MAX_HEIGHT) / height);
+        height = MAX_HEIGHT;
+      }
+    }
+
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, width, height);
+    callback(canvas.toDataURL('image/jpeg', 0.8));
+  };
+};
+
 const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onClearSelectedQuote }) => {
   const [activeTab, setActiveTab] = useState('products'); // 'products', 'quotes', or 'viewQuote'
   const [editingProduct, setEditingProduct] = useState(null);
@@ -404,14 +434,14 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
           const imageToShow = item?.image || prod?.image;
           if (imageToShow) {
             try {
-              let format = 'JPEG';
-              if (imageToShow.includes('png') || imageToShow.startsWith('data:image/png')) format = 'PNG';
-              else if (imageToShow.includes('webp') || imageToShow.startsWith('data:image/webp')) format = 'WEBP';
+              const match = imageToShow.match(/^data:image\/([a-zA-Z+]+);base64,/);
+              let format = match ? match[1].toUpperCase() : 'JPEG';
+              if (format === 'JPG') format = 'JPEG';
               
               const dim = 14;
               const x = data.cell.x + (data.cell.width - dim) / 2;
               const yPos = data.cell.y + (data.cell.height - dim) / 2;
-              doc.addImage(imageToShow, format, x, yPos, dim, dim, '', 'FAST');
+              data.doc.addImage(imageToShow, format, x, yPos, dim, dim, '', 'FAST');
             } catch (e) {
               console.warn('Could not draw image in shop quote PDF:', e);
             }
@@ -743,7 +773,9 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
                          if (file) {
                            const reader = new FileReader();
                            reader.onload = (event) => {
-                             setEditingProduct({...editingProduct, image: event.target.result});
+                             compressImage(event.target.result, (compressed) => {
+                               setEditingProduct({...editingProduct, image: compressed});
+                             });
                            };
                            reader.readAsDataURL(file);
                          }
@@ -1073,8 +1105,21 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
                   {quoteItems.map((item, idx) => (
                     <tr key={item.id}>
                       <td data-label="Article">
-                        <div style={{ fontWeight: 600, color: '#1e293b' }}>{item.nom}</div>
-                        <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{item.designation}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                          {(() => {
+                            const prod = (database.shopProducts || []).find(p => p.id === item.productId);
+                            const img = item.image || prod?.image;
+                            return img ? (
+                              <img src={img} alt={item.nom} style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '8px', flexShrink: 0 }} />
+                            ) : (
+                              <div style={{ width: '40px', height: '40px', background: '#e2e8f0', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', color: '#94a3b8', flexShrink: 0 }}>N/A</div>
+                            );
+                          })()}
+                          <div>
+                            <div style={{ fontWeight: 600, color: '#1e293b' }}>{item.nom}</div>
+                            <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{item.designation}</div>
+                          </div>
+                        </div>
                       </td>
                       <td data-label="Dimensions">{item.l || item.h ? `${item.l} x ${item.h} mm` : '-'}</td>
                       <td data-label="Options">
@@ -1482,8 +1527,21 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
                   {items.map((item, idx) => (
                     <tr key={item.id || idx}>
                       <td data-label="Article">
-                        <div style={{ fontWeight: 600, color: '#1e293b' }}>{item.nom}</div>
-                        <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{item.designation}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                          {(() => {
+                            const prod = (database.shopProducts || []).find(p => p.id === item.productId);
+                            const img = item.image || prod?.image;
+                            return img ? (
+                              <img src={img} alt={item.nom} style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '8px', flexShrink: 0 }} />
+                            ) : (
+                              <div style={{ width: '40px', height: '40px', background: '#e2e8f0', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', color: '#94a3b8', flexShrink: 0 }}>N/A</div>
+                            );
+                          })()}
+                          <div>
+                            <div style={{ fontWeight: 600, color: '#1e293b' }}>{item.nom}</div>
+                            <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{item.designation}</div>
+                          </div>
+                        </div>
                       </td>
                       <td data-label="Dimensions">{item.l || item.h ? `${item.l} x ${item.h} mm` : '-'}</td>
                       <td data-label="Options">
