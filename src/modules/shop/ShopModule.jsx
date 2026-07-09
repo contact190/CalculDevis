@@ -400,16 +400,18 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
       didDrawCell: (data) => {
         if (data.section === 'body' && data.column.index === 0) {
           const item = items[data.row.index];
-          if (item && item.image) {
+          const prod = (database.shopProducts || []).find(p => p.id === item?.productId);
+          const imageToShow = item?.image || prod?.image;
+          if (imageToShow) {
             try {
               let format = 'JPEG';
-              if (item.image.includes('png') || item.image.startsWith('data:image/png')) format = 'PNG';
-              else if (item.image.includes('webp') || item.image.startsWith('data:image/webp')) format = 'WEBP';
+              if (imageToShow.includes('png') || imageToShow.startsWith('data:image/png')) format = 'PNG';
+              else if (imageToShow.includes('webp') || imageToShow.startsWith('data:image/webp')) format = 'WEBP';
               
               const dim = 14;
               const x = data.cell.x + (data.cell.width - dim) / 2;
               const yPos = data.cell.y + (data.cell.height - dim) / 2;
-              doc.addImage(item.image, format, x, yPos, dim, dim, '', 'FAST');
+              doc.addImage(imageToShow, format, x, yPos, dim, dim, '', 'FAST');
             } catch (e) {
               console.warn('Could not draw image in shop quote PDF:', e);
             }
@@ -1309,7 +1311,7 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
                           let measureUnit = item.unit === 'unité' ? 'U' : item.unit;
                           
                           if (item.unit === 'm2') {
-                             totalMeasurementQty = ((item.h || 0) / 1000) * ((item.l || 0) / 1000) * item.qty;
+                             totalMeasurementQty = (item.m2 !== undefined && item.m2 !== null) ? (item.m2 * item.qty) : (((item.h || 0) / 1000) * ((item.l || 0) / 1000) * item.qty);
                           } else if (item.unit === 'm') {
                              totalMeasurementQty = ((item.l || item.h || 0) / 1000) * item.qty;
                           }
