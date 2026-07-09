@@ -25,3 +25,7 @@ dist-ssr
 
 # Database backups (too large for GitHub)
 local-server/backups/
+local-server/database.json
+backup_*.json
+backup_merged_catalog.json
+scratch/
