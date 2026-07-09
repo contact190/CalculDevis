@@ -375,7 +375,16 @@ function App() {
 
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
 
-    saveTimerRef.current = setTimeout(async () => {
+    // Détection immédiate des actions critiques (comme les suppressions)
+    let isCriticalChange = false;
+    if (previousDbRef.current && !isApplyingRemoteOps.current) {
+      const ops = generateOps(previousDbRef.current, database);
+      isCriticalChange = ops.some(op => 
+        (op.op === 'update' || op.op === 'replace_key') && op.data && op.data._deleted
+      );
+    }
+
+    const saveAction = async () => {
       setSaveStatus('saving');
       try {
         const now = new Date().toISOString();
@@ -445,7 +454,14 @@ function App() {
         console.error('IndexedDB save error:', e);
         setSaveStatus('error');
       }
-    }, 1500); // Debounce set to 1500ms to prevent lag during rapid typing
+    };
+
+    if (isCriticalChange) {
+      console.log("⚡ Action critique (suppression) détectée ! Sauvegarde instantanée forcée.");
+      saveAction();
+    } else {
+      saveTimerRef.current = setTimeout(saveAction, 1500); // Debounce set to 1500ms to prevent lag during rapid typing
+    }
 
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
