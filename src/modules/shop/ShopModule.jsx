@@ -438,10 +438,11 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
               let format = match ? match[1].toUpperCase() : 'JPEG';
               if (format === 'JPG') format = 'JPEG';
               
-              const dim = 14;
-              const x = data.cell.x + (data.cell.width - dim) / 2;
-              const yPos = data.cell.y + (data.cell.height - dim) / 2;
-              data.doc.addImage(imageToShow, format, x, yPos, dim, dim, '', 'FAST');
+              const x = data.cell.x + 2;
+              const yPos = data.cell.y + 2;
+              const w = data.cell.width - 4;
+              const h = data.cell.height - 4;
+              data.doc.addImage(imageToShow, format, x, yPos, w, h);
             } catch (e) {
               console.warn('Could not draw image in shop quote PDF:', e);
             }
