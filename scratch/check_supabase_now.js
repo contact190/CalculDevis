@@ -16,6 +16,11 @@ const supabaseFetch = async (endpoint) => {
 
 async function main() {
   const rows = await supabaseFetch('app_state');
+  console.log('Response:', rows);
+  if (!Array.isArray(rows)) {
+    console.error('Response is not an array!');
+    return;
+  }
   console.log('Nombre de lignes:', rows.length);
   for (const row of rows) {
     console.log(`- ID: ${row.id}, updated_at: ${row.updated_at}`);
