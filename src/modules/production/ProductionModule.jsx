@@ -1174,6 +1174,25 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
       currentY += 7; // Space between items
     });
 
+    // Add page numbering, client name, and command number to each page
+    const pageCount = doc.internal.getNumberOfPages();
+    const clientNom = database.clients?.find(c => c.id === activeQuote?.clientId)?.nom || '—';
+    const cmdNum = activeQuote?.number || '—';
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(100, 100, 100);
+      
+      // Draw a line at the bottom
+      doc.setDrawColor(200, 200, 200);
+      doc.setLineWidth(0.2);
+      doc.line(20, 285, 190, 285);
+      
+      doc.text(`Client: ${clientNom}  |  Cmd: ${cmdNum}`, 20, 290);
+      doc.text(`Page ${i} / ${pageCount}`, 190, 290, { align: 'right' });
+    }
+
     doc.save(`PROD_${type.toUpperCase()}_${activeQuote?.number || 'EXPORT'}.pdf`);
   };
 
@@ -3084,6 +3103,26 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
             });
             currentY += 10;
           });
+
+          // Add page numbering, client name, and command number to each page
+          const pageCount = doc.internal.getNumberOfPages();
+          const clientNom = activeQuote?.clientNom || database.clients?.find(c => c.id === activeQuote?.clientId)?.nom || '—';
+          const cmdNum = activeQuote?.number || '—';
+          for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8);
+            doc.setTextColor(100, 100, 100);
+            
+            // Draw a line at the bottom
+            doc.setDrawColor(200, 200, 200);
+            doc.setLineWidth(0.2);
+            doc.line(15, 285, 195, 285);
+            
+            doc.text(`Client: ${clientNom}  |  Cmd: ${cmdNum}`, 15, 290);
+            doc.text(`Page ${i} / ${pageCount}`, 195, 290, { align: 'right' });
+          }
+
           doc.save(`OPTIM_COUPE_${activeQuote?.number || 'Export'}.pdf`);
         };
 
