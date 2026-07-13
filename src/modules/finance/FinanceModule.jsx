@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { TrendingUp, FileText, CreditCard, Receipt } from 'lucide-react';
+import { TrendingUp, FileText, CreditCard, Receipt, List } from 'lucide-react';
 import ContractGenerator from './ContractGenerator';
 import FinancialTracker from './FinancialTracker';
 import InvoiceGenerator from './InvoiceGenerator';
+import InvoiceList from './InvoiceList';
 
 const FinanceModule = ({ data, setData, quoteSettings }) => {
   const [activeTab, setActiveTab] = useState('contracts');
@@ -11,6 +12,7 @@ const FinanceModule = ({ data, setData, quoteSettings }) => {
     { id: 'contracts', label: 'Contrats', icon: FileText },
     { id: 'tracker', label: 'Suivi Financier', icon: CreditCard },
     { id: 'invoices', label: 'Factures', icon: Receipt },
+    { id: 'invoiceList', label: 'Liste de Factures', icon: List },
   ];
 
   return (
@@ -65,6 +67,9 @@ const FinanceModule = ({ data, setData, quoteSettings }) => {
       )}
       {activeTab === 'invoices' && (
         <InvoiceGenerator data={data} setData={setData} quoteSettings={quoteSettings} />
+      )}
+      {activeTab === 'invoiceList' && (
+        <InvoiceList data={data} setData={setData} quoteSettings={quoteSettings} />
       )}
     </div>
   );

@@ -387,12 +387,13 @@ const AdminDashboard = ({ data, setData }) => {
       gasketCompatibility: { id: generateId('GC'), rangeId: data.ranges?.[0]?.id || '', glassThickness: 4, gasketId: data.accessories.find(a => a.unit === 'Joint')?.id || '', formula: '(L+H)*2' },
       glassProfileCompatibility: { id: generateId('GPC'), rangeId: data.ranges?.[0]?.id || '', glassThickness: 4, profileHId: data.profiles?.[0]?.id || '', qtyH: 2, formulaH: 'L-80', profileVId: data.profiles?.[0]?.id || '', qtyV: 2, formulaV: 'H-80' },
       options: { id: generateId('OPT'), name: 'Nouvelle Option', rangeIds: [data.ranges?.[0]?.id || ''], addAccessoryId: data.accessories?.[0]?.id || '', removeAccessoryId: '', formula: '1' },
-      traverses: { id: generateId('TRV'), name: 'Nouvelle Traverse', type: 'horizontale', usage: 'fenetre', profileId: '', formula: 'L', priceUnit: 'ML' }
+      traverses: { id: generateId('TRV'), name: 'Nouvelle Traverse', type: 'horizontale', usage: 'fenetre', profileId: '', formula: 'L', priceUnit: 'ML' },
+      extraElements: { id: generateId('EX'), name: 'Nouvel élément sup', weightPerM: 1.0, pricePerKg: 5.0, barLength: 6000, thickness: 0, formula: 'H', rangeIds: [data.ranges?.[0]?.id || ''] }
     };
 
     setData(prev => ({
       ...prev,
-      [category]: [...prev[category], { ...defaultData[category], _isNew: true }]
+      [category]: [...(prev[category] || []), { ...defaultData[category], _isNew: true }]
     }));
   };
 
@@ -873,7 +874,8 @@ const AdminDashboard = ({ data, setData }) => {
             { id: 'compositions', label: 'Compositions (Modèles)' },
             { id: 'options', label: 'Options & Variantes' },
             { id: 'volets', label: 'Volets Roulants' },
-            { id: 'traverses', label: 'Traverses & Unions' }
+            { id: 'traverses', label: 'Traverses & Unions' },
+            { id: 'extraElements', label: 'Éléments supplémentaires' }
           ].map(tab => (
             <button
               key={tab.id}
@@ -2994,6 +2996,65 @@ const AdminDashboard = ({ data, setData }) => {
             </div>
           )}
 
+          {activeTab === 'extraElements' && (
+            <div className="table-container-sticky">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Code / ID</th>
+                    <th>Désignation</th>
+                    <th>Poids/m (kg)</th>
+                    <th>Prix/Kg (DZD)</th>
+                    <th>Prix/Barre (DZD)</th>
+                    <th>Épaisseur (mm)</th>
+                    <th>Lg Barre (mm)</th>
+                    <th>Formule Débit</th>
+                    <th>Gammes Compatibles</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(data.extraElements || []).map((el, idx) => (
+                    <tr key={`${el.id}-${idx}`} style={el._isNew ? { background: '#dcfce7', transition: 'background 1s' } : {}}>
+                      <td><BufferedInput className="input" value={el.id} onChange={val => handleUpdateItem('extraElements', el.id, 'id', val, idx)} style={{ width: '100px', fontWeight: 700 }} /></td>
+                      <td><BufferedInput className="input" value={el.name} onChange={val => handleUpdateItem('extraElements', el.id, 'name', val, idx)} style={{ width: '200px' }} /></td>
+                      <td><BufferedInput type="number" step="0.001" className="input" value={el.weightPerM} onChange={val => handleUpdateItem('extraElements', el.id, 'weightPerM', val, idx)} style={{ width: '80px' }} /></td>
+                      <td><BufferedInput type="number" step="0.01" className="input" value={el.pricePerKg} onChange={val => handleUpdateItem('extraElements', el.id, 'pricePerKg', val, idx)} style={{ width: '80px' }} /></td>
+                      <td><BufferedInput type="number" step="0.01" className="input" value={el.pricePerBar} onChange={val => handleUpdateItem('extraElements', el.id, 'pricePerBar', val, idx)} style={{ width: '80px' }} /></td>
+                      <td><BufferedInput type="number" className="input" value={el.thickness || 0} onChange={val => handleUpdateItem('extraElements', el.id, 'thickness', val, idx)} style={{ width: '60px' }} /></td>
+                      <td><BufferedInput type="number" className="input" value={el.barLength || 6000} onChange={val => handleUpdateItem('extraElements', el.id, 'barLength', val, idx)} style={{ width: '80px' }} /></td>
+                      <td>
+                        <FormulaInput 
+                          value={el.formula || 'H'} 
+                          onChange={val => handleUpdateItem('extraElements', el.id, 'formula', val, idx)} 
+                          variables={['L', 'H', 'HC', 'HT', 'totalH', 'originalL']}
+                        />
+                      </td>
+                      <td>
+                        <MultiSelectRange 
+                          selectedIds={el.rangeIds || []} 
+                          allRanges={data.ranges} 
+                          onChange={newIds => handleUpdateItem('extraElements', el.id, 'rangeIds', newIds, idx)} 
+                        />
+                      </td>
+                      <td style={{ display: 'flex', gap: '0.2rem' }}>
+                        <button className="btn" onClick={() => handleDuplicateItem('extraElements', el)} style={{ color: '#6366f1' }} title="Dupliquer"><Copy size={16} /></button>
+                        <button className="btn" onClick={() => handleDeleteItem('extraElements', el.id, idx)} style={{ color: '#ef4444' }} title="Supprimer"><Trash2 size={16} /></button>
+                      </td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td colSpan="10">
+                      <button className="btn btn-secondary" onClick={() => handleAddItem('extraElements')} style={{ width: '100%', marginTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                        <Plus size={16} /> Ajouter un élément supplémentaire au catalogue
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
+
           <div style={{ marginTop: '2rem', padding: '1rem', background: '#eff6ff', borderRadius: '0.75rem', display: 'flex', gap: '0.8rem', alignItems: 'flex-start' }}>
             <AlertCircle size={20} color="#3b82f6" style={{ marginTop: '0.2rem' }} />
             <div>
@@ -3014,7 +3075,7 @@ const AdminDashboard = ({ data, setData }) => {
       </div>
       
       {/* FLOATING ADD BUTTON */}
-      {['ranges', 'profiles', 'glass', 'colors', 'accessories', 'categories', 'compositions', 'options', 'traverses'].includes(activeTab) && (
+      {['ranges', 'profiles', 'glass', 'colors', 'accessories', 'categories', 'compositions', 'options', 'traverses', 'extraElements'].includes(activeTab) && (
         <button 
           onClick={() => activeTab === 'compositions' ? handleAddComposition() : handleAddItem(activeTab)}
           title={`Ajouter ${activeTab === 'compositions' ? 'un modèle' : 'un élément'}`}

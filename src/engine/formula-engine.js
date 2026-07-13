@@ -1141,7 +1141,7 @@ export class FormulaEngine {
                    (parts || [])[0];
     const frameCompId = (mainOp && mainOp.compositionId) || config.compositionId || '';
     
-    const isMultiChassis = (compoundType === 'fix_coulissant');
+    const isMultiChassis = (compoundType === 'fix_coulissant' || compoundType === 'structure');
     
     if (frameCompId) {
        const globalOpt = config.optionalSides || { top: true, bottom: true, left: true, right: true };
@@ -1208,7 +1208,11 @@ export class FormulaEngine {
       }
 
       const currentDivProfile = (this.db.profiles || []).find(p => p.id === currentDivId);
-      let currentDivThick = currentDivProfile?.thickness;
+      let currentDivThick = parentPart?.traverseThickness ?? (isMultiChassis && depth === 0 ? compoundConfig?.unionThickness : compoundConfig?.traverseThickness);
+      
+      if (currentDivThick == null || isNaN(Number(currentDivThick)) || Number(currentDivThick) === 0) {
+        currentDivThick = currentDivProfile?.thickness;
+      }
 
       if (!currentDivThick || parseFloat(currentDivThick) === 0) {
         // Fallback 1: Regex on name (e.g., "Traverse 25" -> 25)
@@ -1221,7 +1225,7 @@ export class FormulaEngine {
           if (trvEntry && trvEntry.thickness) {
             currentDivThick = trvEntry.thickness;
           } else {
-            currentDivThick = (isMultiChassis && depth === 0) ? 3 : 0;
+            currentDivThick = 25; // Default to 25mm as requested by user
           }
         }
       }
@@ -1330,6 +1334,39 @@ export class FormulaEngine {
           } else if (direction === 'vertical') {
             calcH += 25;
           }
+        }
+
+        if (part.type === 'extra') {
+          let extraRef = (this.db.extraElements || []).find(e => e.id === part.compositionId || e.id === part.extraElementId);
+          if (!extraRef) {
+            extraRef = (this.db.profiles || []).find(p => p.id === part.compositionId || p.id === part.extraElementId);
+          }
+          if (extraRef) {
+            const f = extraRef.formula || (part.extraOrientation === 'L' ? 'L' : 'H');
+            const evalScope = { L: calcL, H: calcH, HC: 0, totalH: totalH || calcH, originalL: originalL || calcL, EPt: 0, Epd: 40 };
+            const len = this.evaluate(f, evalScope, part.label || extraRef.name, errors);
+            
+            const itemQty = part.qty || 1;
+            let unitPrice = extraRef.pricePerBar || 0;
+            let cost = 0;
+            if (extraRef.pricePerBar) {
+              cost = (len / (extraRef.barLength || 6000)) * extraRef.pricePerBar;
+            } else if (extraRef.pricePerKg) {
+              cost = (len / 1000) * (extraRef.weightPerM || 1) * extraRef.pricePerKg;
+            }
+            results.profiles.push({
+              ...extraRef,
+              label: part.label || extraRef.name,
+              source: 'Élément Supplémentaire',
+              formula: f,
+              resolvedFormula: this.resolveFormula(f, evalScope),
+              qty: itemQty,
+              length: len,
+              totalMeasure: len * itemQty,
+              cost: cost * itemQty
+            });
+          }
+          return;
         }
 
         if (part.type === 'group' && part.subParts) {

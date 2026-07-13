@@ -1874,6 +1874,73 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
           </div>
         )}
 
+        {/* ── Panneau Bons de Livraison générés ─────────────────────────────────── */}
+        {selectedOrder.blDates && Object.keys(selectedOrder.blDates).length > 0 && (
+          <div className="glass" style={{ marginBottom: '1.5rem', padding: '1.25rem', borderLeft: '4px solid #3b82f6' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+              <Truck size={18} color="#3b82f6" />
+              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#1e293b' }}>
+                Bons de Livraison — Historique des BL générés
+              </h3>
+              <span style={{ fontSize: '0.8rem', color: '#64748b', background: '#f1f5f9', padding: '0.15rem 0.6rem', borderRadius: '999px' }}>
+                {Object.keys(selectedOrder.blDates).length} BL généré(s)
+              </span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {Object.entries(selectedOrder.blDates).map(([blType, blDateStr]) => {
+                return (
+                  <div key={blType} style={{
+                    display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap',
+                    padding: '0.85rem 1rem',
+                    borderRadius: '0.65rem',
+                    background: '#eff6ff',
+                    border: '1px solid #bfdbfe',
+                  }}>
+                    {/* Badge type */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: '160px' }}>
+                      <span style={{ fontWeight: 700, fontSize: '0.85rem', color: '#1e40af' }}>
+                        📦 BL {blType === 'CAISSON_TUNNEL' ? 'Caisson Tunnel' : blType}
+                      </span>
+                    </div>
+
+                    {/* Infos BL */}
+                    <div style={{ flex: 1, display: 'flex', gap: '1.5rem', flexWrap: 'wrap', fontSize: '0.82rem', color: '#475569' }}>
+                      <span>Généré le : <strong>{new Date(blDateStr).toLocaleDateString('fr-FR')}</strong></span>
+                    </div>
+
+                    {/* Exporter */}
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <button 
+                        onClick={() => {
+                          let deliveredUnits = [];
+                          if (blType === 'ALU') {
+                            deliveredUnits = allUnits.filter(u => u.statusAlu === 'Livré' || u.statusAlu === 'Posé' || u.statusAlu === 'Fini');
+                          } else if (blType === 'VITRAGE') {
+                            deliveredUnits = allUnits.filter(u => u.statusVitrage === 'Livré' || u.statusVitrage === 'Fini');
+                          } else if (blType === 'VOLET') {
+                            deliveredUnits = allUnits.filter(u => u.isExtrudedLame && (u.statusVolet === 'Livré' || u.statusVolet === 'Fini' || u.statusVolet === 'Posé'));
+                          } else if (blType === 'CAISSON_TUNNEL') {
+                            deliveredUnits = allUnits.filter(u => u.isCaissonTunnel && (u.statusCaissonTunnel === 'Livré' || u.statusCaissonTunnel === 'Fini' || u.statusCaissonTunnel === 'Posé'));
+                          }
+
+                          if (deliveredUnits.length === 0) {
+                            alert(`Aucun produit n'a été livré pour ${blType}`);
+                            return;
+                          }
+                          generateDeliveryNote(blType, deliveredUnits, true);
+                        }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.35rem 0.75rem', background: '#f0fdf4', border: '1px solid #a7f3d0', borderRadius: '0.4rem', cursor: 'pointer', fontSize: '0.78rem', color: '#15803d', fontWeight: 600 }}
+                      >
+                        <Download size={13} /> Télécharger le PDF (Date originale)
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <div className="glass" style={{ padding: '1rem', marginBottom: '1.5rem', background: '#f8fafc', display: 'flex', gap: '1rem', alignItems: 'center' }}>
             <div style={{ flex: 1 }}>
               <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.85rem', fontWeight: 700 }}>REMARQUES GÉNÉRALES POUR LE CLIENT</p>

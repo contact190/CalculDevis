@@ -187,6 +187,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
   const [compareModalOpen, setCompareModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('tech');
   const [showDetailsTablet, setShowDetailsTablet] = useState(false);
+  const [activePartPath, setActivePartPath] = useState([0]);
 
   const getDividerThickness = (cfg = config) => {
     const isMulti = cfg.compoundType === 'fix_coulissant';
@@ -363,7 +364,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
 
       <div className="configurator-grid">
         {/* Left: Config */}
-        <div className="glass shadow-lg" style={{ padding: '1.5rem' }}>
+        <div className="glass shadow-lg" style={{ padding: '1.5rem', minWidth: '0px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
             <Calculator size={20} color="#2563eb" />
             <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Détails de l'ouvrage</h2>
@@ -404,8 +405,29 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                   Standard
                 </button>
                 <button onClick={() => setConfig(prev => ({ ...prev, useCustomLayout: false, compoundType: 'fix_coulissant', compositionId: '' }))}
-                  style={{ flex: 1, padding: '0.45rem', borderRadius: '0.4rem', border: 'none', background: (config.compoundType !== 'none') ? 'white' : 'transparent', fontWeight: (config.compoundType !== 'none') ? 700 : 400, color: (config.compoundType !== 'none') ? '#0891b2' : '#64748b', cursor: 'pointer', fontSize: '0.75rem' }}>
+                  style={{ flex: 1, padding: '0.45rem', borderRadius: '0.4rem', border: 'none', background: (config.compoundType !== 'none' && config.compoundType !== 'structure') ? 'white' : 'transparent', fontWeight: (config.compoundType !== 'none' && config.compoundType !== 'structure') ? 700 : 400, color: (config.compoundType !== 'none' && config.compoundType !== 'structure') ? '#0891b2' : '#64748b', cursor: 'pointer', fontSize: '0.75rem' }}>
                   🧩 Assemblé
+                </button>
+                <button onClick={() => setConfig(prev => {
+                  const base = { ...prev, useCustomLayout: false, compoundType: 'structure', compositionId: '' };
+                  if (!base.compoundConfig || !base.compoundConfig.parts || base.compoundConfig.parts.length === 0) {
+                    base.compoundConfig = {
+                      parts: [
+                        { id: 'part1', type: 'opening', compositionId: '', glassId: '', width: 800, height: 1500, traverseId: 'AUTO', traverseThickness: 25 },
+                        { id: 'part2', type: 'fixe', compositionId: '', glassId: '', width: 400, height: 1500, traverseId: 'AUTO', traverseThickness: 25 }
+                      ],
+                      orientation: 'horizontal',
+                      unionId: 'AUTO',
+                      unionThickness: 25,
+                      traverseId: 'AUTO',
+                      traverseThickness: 25,
+                      shutterMode: 'total'
+                    };
+                  }
+                  return base;
+                })}
+                  style={{ flex: 1, padding: '0.45rem', borderRadius: '0.4rem', border: 'none', background: (config.compoundType === 'structure') ? 'white' : 'transparent', fontWeight: (config.compoundType === 'structure') ? 700 : 400, color: (config.compoundType === 'structure') ? '#7c3aed' : '#64748b', cursor: 'pointer', fontSize: '0.75rem' }}>
+                  🏗️ Structure
                 </button>
               </div>
             </div>
@@ -415,7 +437,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
             <LayoutComposer layout={config.customLayout || defaultLayout()} onChange={newLayout => setConfig(prev => ({ ...prev, customLayout: newLayout }))} database={database} globalConfig={config} />
           )}
 
-          {!config.isOnlyShutter && config.compoundType !== 'none' && (
+          {!config.isOnlyShutter && config.compoundType !== 'none' && config.compoundType !== 'structure' && (
             <div style={{ background: '#f8fafc', padding: '1.5rem', borderRadius: '15px', border: '1px solid #e2e8f0', marginBottom: '1.5rem', animation: 'slideUp 0.3s ease' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.5rem' }}>
                    <div style={{ background: '#3b82f6', color: 'white', width: '36px', height: '36px', borderRadius: '10px', display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: '1.2rem' }}>🧩</div>
@@ -806,6 +828,542 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                 </div>
             </div>
           )}
+
+          {!config.isOnlyShutter && config.compoundType === 'structure' && (() => {
+             const getParentOrientation = (path) => {
+                if (path.length === 1) {
+                   return config.compoundConfig?.orientation || 'horizontal';
+                }
+                const parentPath = path.slice(0, -1);
+                let current = config.compoundConfig?.parts;
+                let parentGroup = null;
+                for (let i = 0; i < parentPath.length; i++) {
+                   parentGroup = current[parentPath[i]];
+                   current = parentGroup.subParts;
+                }
+                return parentGroup?.orientation || 'horizontal';
+             };
+
+             let activePart = null;
+             let pathValid = true;
+             if (config.compoundConfig?.parts) {
+                let current = config.compoundConfig.parts;
+                for (let i = 0; i < activePartPath.length; i++) {
+                   const idx = activePartPath[i];
+                   if (current && current[idx]) {
+                      activePart = current[idx];
+                      current = current[idx].subParts;
+                   } else {
+                      pathValid = false;
+                      break;
+                   }
+                }
+             }
+             if (!pathValid || !activePart) {
+                activePart = config.compoundConfig?.parts?.[0] || null;
+                if (activePart && activePartPath.length !== 1) {
+                   setTimeout(() => setActivePartPath([0]), 0);
+                }
+             }
+
+             const updatePartInPath = (path, key, value) => {
+                setConfig(prev => {
+                   const parts = JSON.parse(JSON.stringify(prev.compoundConfig?.parts || []));
+                   let current = parts;
+                   for (let i = 0; i < path.length - 1; i++) {
+                      if (!current[path[i]].subParts) current[path[i]].subParts = [];
+                      current = current[path[i]].subParts;
+                   }
+                   const target = current[path[path.length - 1]];
+                   target[key] = value;
+                   if (key === 'type') {
+                      if (value === 'extra') {
+                         target.extraElementId = database.extraElements?.[0]?.id || database.profiles?.[0]?.id || '';
+                         target.compositionId = database.extraElements?.[0]?.id || database.profiles?.[0]?.id || '';
+                         delete target.subParts;
+                      } else if (value === 'group') {
+                         target.subParts = [
+                            { id: `sub-${Date.now()}-1`, type: 'opening', compositionId: '', glassId: '', width: 400, height: 1500, traverseThickness: 25 },
+                            { id: `sub-${Date.now()}-2`, type: 'fixe', compositionId: '', glassId: '', width: 400, height: 1500, traverseThickness: 25 }
+                         ];
+                         target.orientation = (prev.compoundConfig?.orientation === 'horizontal') ? 'vertical' : 'horizontal';
+                      } else {
+                         delete target.subParts;
+                      }
+                   }
+                   return { ...prev, compoundConfig: { ...prev.compoundConfig, parts } };
+                });
+             };
+
+             const deletePartInPath = (path) => {
+                setConfig(prev => {
+                   const parts = JSON.parse(JSON.stringify(prev.compoundConfig?.parts || []));
+                   if (path.length === 1) {
+                      if (parts.length <= 1) return prev;
+                      parts.splice(path[0], 1);
+                   } else {
+                      let current = parts;
+                      for (let i = 0; i < path.length - 2; i++) {
+                         current = current[path[i]].subParts;
+                      }
+                      const parent = current[path[path.length - 2]];
+                      if (parent.subParts.length <= 1) return prev;
+                      parent.subParts.splice(path[path.length - 1], 1);
+                   }
+                   return { ...prev, compoundConfig: { ...prev.compoundConfig, parts } };
+                });
+             };
+
+             const renderPartCard = (part, path) => {
+                const isGroup = part.type === 'group';
+                const isExtra = part.type === 'extra';
+                const isOpening = part.type === 'opening';
+                const isFixe = part.type === 'fixe';
+                const isActive = JSON.stringify(path) === JSON.stringify(activePartPath);
+                
+                if (isGroup) {
+                   return (
+                      <div onClick={(e) => { e.stopPropagation(); setActivePartPath(path); }} style={{
+                         flex: '1 1 0%',
+                         minWidth: '150px',
+                         maxWidth: '220px',
+                         padding: '0.5rem',
+                         border: isActive ? '2.5px solid #7c3aed' : '1.5px solid #ddd6fe',
+                         background: isActive ? '#fbfbfe' : '#f5f3ff',
+                         borderRadius: '8px',
+                         cursor: 'pointer',
+                         boxSizing: 'border-box',
+                         display: 'flex',
+                         flexDirection: 'column',
+                         gap: '0.3rem'
+                      }}>
+                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#7c3aed' }}>Groupe #{path[path.length-1]+1} ({part.orientation === 'vertical' ? 'V' : 'H'})</span>
+                            <button onClick={(e) => { e.stopPropagation(); deletePartInPath(path); if (isActive) setActivePartPath([0]); }} style={{ border: 'none', background: 'transparent', color: '#ef4444', cursor: 'pointer', padding: 0 }}>
+                               <Trash2 size={12} />
+                            </button>
+                         </div>
+                         <div style={{ display: 'flex', flexDirection: part.orientation === 'vertical' ? 'column' : 'row', gap: '0.2rem', background: 'rgba(255,255,255,0.6)', padding: '0.25rem', borderRadius: '4px' }}>
+                            {(part.subParts || []).map((sub, sidx) => (
+                               <div key={sub.id} onClick={(e) => { e.stopPropagation(); setActivePartPath([...path, sidx]); }} style={{
+                                  flex: 1,
+                                  padding: '0.2rem',
+                                  background: JSON.stringify([...path, sidx]) === JSON.stringify(activePartPath) ? '#ddd6fe' : '#f8fafc',
+                                  border: '1px solid #cbd5e1',
+                                  borderRadius: '3px',
+                                  fontSize: '0.6rem',
+                                  textAlign: 'center',
+                                  fontWeight: 600
+                               }}>
+                                  {sub.type === 'opening' ? 'Ouv' : (sub.type === 'extra' ? 'Pot' : 'Fix')} ({sub.width}x{sub.height})
+                               </div>
+                            ))}
+                         </div>
+                      </div>
+                   );
+                }
+
+                return (
+                   <div onClick={(e) => { e.stopPropagation(); setActivePartPath(path); }} style={{
+                      flex: '1 1 0%',
+                      minWidth: '90px',
+                      maxWidth: '130px',
+                      padding: '0.5rem',
+                      border: isActive ? '2.5px solid #7c3aed' : '1.5px solid #cbd5e1',
+                      background: isActive ? '#f5f3ff' : 'white',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      textAlign: 'center',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                      height: '100px',
+                      boxSizing: 'border-box'
+                   }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                         <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#64748b' }}>#{path[path.length-1]+1}</span>
+                         <button onClick={(e) => { e.stopPropagation(); deletePartInPath(path); if (isActive) setActivePartPath([0]); }} style={{ border: 'none', background: 'transparent', color: '#ef4444', cursor: 'pointer', padding: 0 }}>
+                            <Trash2 size={12} />
+                         </button>
+                      </div>
+                      <div style={{ fontSize: '0.75rem', fontWeight: 700, margin: '0.2rem 0' }}>
+                         {isOpening ? 'Ouvrant' : (isExtra ? 'Poteau' : 'Fixe')}
+                      </div>
+                      <div style={{ fontSize: '0.65rem', color: '#94a3b8' }}>
+                         {isOpening && path.length === 1 && config.compoundConfig?.orientation === 'horizontal' ? config.L : (part.width || 400)} x {part.height || 1500}
+                      </div>
+                   </div>
+                );
+             };
+
+             return (
+                <div style={{ background: '#f8fafc', padding: '1.5rem', borderRadius: '15px', border: '1px solid #7c3aed', marginBottom: '1.5rem', animation: 'slideUp 0.3s ease' }}>
+                   {/* Header */}
+                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.5rem' }}>
+                      <div style={{ background: '#7c3aed', color: 'white', width: '36px', height: '36px', borderRadius: '10px', display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: '1.2rem' }}>🏗️</div>
+                      <div style={{ flex: 1 }}>
+                         <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#1e293b' }}>Visualiseur de Structure Complexe (Grille 2D)</h3>
+                         <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>Sélectionnez un bloc pour configurer ses options détaillées ci-dessous.</p>
+                      </div>
+                   </div>
+
+                   {/* Main controls */}
+                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+                      <div className="form-group">
+                         <label className="label">Orientation Globale</label>
+                         <select className="input" value={config.compoundConfig?.orientation || 'horizontal'} onChange={e => {
+                            const newOri = e.target.value;
+                            const isH = newOri === 'horizontal';
+                            const totalDim = isH ? config.L : config.H;
+                            const otherDim = isH ? config.H : config.L;
+                            const newList = (config.compoundConfig?.parts || []).map(p => ({
+                              ...p,
+                              ...(isH ? { height: otherDim } : { width: otherDim })
+                            }));
+                            const fixeSum = newList.filter(p => p.type === 'fixe').reduce((s, p) => s + (isH ? (p.width || 0) : (p.height || 0)), 0);
+                            const divThick = config.compoundConfig?.unionThickness ?? 25;
+                            const divQty = newList.length - 1;
+                            const totalDivThick = divQty * divThick;
+                            const autoOpenDim = Math.max(0, totalDim - fixeSum - totalDivThick);
+                            const finalList = newList.map(p => p.type === 'opening' 
+                               ? { ...p, ...(isH ? { width: autoOpenDim } : { height: autoOpenDim }) }
+                               : p
+                            );
+                            setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, orientation: newOri, parts: finalList } }));
+                         }}>
+                           <option value="horizontal">Horizontal (Côte à côte)</option>
+                           <option value="vertical">Vertical (Superposé)</option>
+                         </select>
+                      </div>
+                      <div className="form-group">
+                         <label className="label">Gamme Principale</label>
+                         <select className="input" value={config.rangeId || ''} onChange={e => {
+                            const rangeId = e.target.value;
+                            setConfig(prev => ({ ...prev, rangeId }));
+                         }}>
+                            {database.ranges?.map(r => <option key={r.id} value={r.id}>{r.name} ({r.id})</option>)}
+                         </select>
+                      </div>
+                      <div className="form-group">
+                         <label className="label">Liaison Globale (Union)</label>
+                         <select className="input" value={config.compoundConfig?.unionId || ''} onChange={e => {
+                            const val = e.target.value;
+                            setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, unionId: val, traverseId: val } }));
+                         }}>
+                            <option value="AUTO">AUTO (Par défaut)</option>
+                            {(database.traverses || []).map(t => <option key={t.id} value={t.profileId}>{t.name}</option>)}
+                         </select>
+                      </div>
+                      <div className="form-group">
+                         <label className="label">Épaisseur Liaison (mm)</label>
+                         <input type="number" className="input" value={config.compoundConfig?.unionThickness ?? 25} onChange={e => {
+                            const val = parseFloat(e.target.value) || 0;
+                            setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, unionThickness: val, traverseThickness: val } }));
+                         }} />
+                      </div>
+                   </div>
+
+                   {/* Visual Cards Row */}
+                   <div style={{ display: 'flex', flexDirection: config.compoundConfig?.orientation === 'vertical' ? 'column' : 'row', gap: '1rem', alignItems: 'center', background: 'white', padding: '1rem 1.5rem', borderRadius: '12px', border: '1px dashed #cbd5e1', overflow: 'hidden', maxWidth: '100%', width: '100%', boxSizing: 'border-box', marginBottom: '1rem' }}>
+                      {(config.compoundConfig?.parts || []).map((part, idx) => (
+                         <React.Fragment key={part.id}>
+                            {renderPartCard(part, [idx])}
+
+                            {/* Traverse separator between cards */}
+                            {idx < config.compoundConfig.parts.length - 1 && (
+                               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.2rem', padding: '0.25rem', background: '#f1f5f9', borderRadius: '4px', border: '1px solid #cbd5e1', flexShrink: 0 }}>
+                                  <select className="input" style={{ width: '55px', padding: '0.05rem', fontSize: '0.65rem', height: 'auto', border: '1px solid #cbd5e1' }} value={part.traverseId || 'AUTO'} onChange={e => {
+                                     const val = e.target.value;
+                                     let th = part.traverseThickness ?? 25;
+                                     if (val !== 'AUTO') {
+                                        const trv = database.traverses?.find(t => t.id === val || t.profileId === val);
+                                        if (trv?.thickness) th = trv.thickness;
+                                        else {
+                                           const prof = database.profiles?.find(p => p.id === val);
+                                           if (prof?.thickness) th = prof.thickness;
+                                        }
+                                     }
+                                     setConfig(prev => {
+                                        const parts = [...prev.compoundConfig.parts];
+                                        parts[idx].traverseId = val;
+                                        parts[idx].traverseThickness = th;
+                                        return { ...prev, compoundConfig: { ...prev.compoundConfig, parts } };
+                                     });
+                                  }}>
+                                     <option value="AUTO">AUTO</option>
+                                     {(database.traverses || []).map(t => <option key={t.id} value={t.profileId || t.id}>{t.name}</option>)}
+                                  </select>
+                                  <input type="number" className="input" style={{ width: '38px', padding: '0.1rem', fontSize: '0.7rem', textAlign: 'center' }} value={part.traverseThickness ?? 25} onChange={e => {
+                                     const val = parseFloat(e.target.value) || 0;
+                                     setConfig(prev => {
+                                        const parts = [...prev.compoundConfig.parts];
+                                        parts[idx].traverseThickness = val;
+                                        return { ...prev, compoundConfig: { ...prev.compoundConfig, parts } };
+                                     });
+                                  }} title="Épaisseur de la traverse (mm)" />
+                               </div>
+                            )}
+                         </React.Fragment>
+                      ))}
+
+                      {/* Add card button */}
+                      <button className="shadow-sm flex-center" onClick={() => {
+                         const newList = [...(config.compoundConfig?.parts || [])];
+                         const newId = `part-${Date.now()}`;
+                         newList.push({
+                            id: newId,
+                            type: 'fixe',
+                            compositionId: '',
+                            glassId: '',
+                            width: 400,
+                            height: 1500,
+                            traverseId: 'AUTO',
+                            traverseThickness: 25
+                         });
+                         setConfig(prev => ({ ...prev, compoundConfig: { ...prev.compoundConfig, parts: newList } }));
+                      }} style={{ minWidth: '100px', background: 'rgba(124, 58, 237, 0.05)', color: '#7c3aed', border: '2px dashed #7c3aed', borderRadius: '8px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', padding: '0.8rem', height: '100px', boxSizing: 'border-box' }}>
+                         <Plus size={20} />
+                         <span style={{ fontSize: '0.75rem', fontWeight: 700 }}>Ajouter</span>
+                      </button>
+                   </div>
+
+                   {/* Configuration Edit Panel */}
+                   {activePart && (
+                      <div style={{ marginTop: '1.5rem', background: '#fbfbfe', padding: '1.2rem', borderRadius: '10px', border: '1.5px solid #7c3aed', animation: 'fadeIn 0.25s ease' }}>
+                         <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.9rem', fontWeight: 700, color: '#4c1d95', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <span>⚙️ Configuration du bloc sélectionné</span>
+                            <span style={{ background: '#ddd6fe', color: '#5b21b6', padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem' }}>
+                               Chemin: {activePartPath.map(i => i + 1).join(' ➔ ')}
+                            </span>
+                         </h4>
+                         
+                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                            <div className="form-group">
+                               <label className="label" style={{ fontSize: '0.8rem', color: '#64748b' }}>Type de bloc</label>
+                               <div style={{ display: 'flex', gap: '0.3rem' }}>
+                                  {['opening', 'fixe', 'extra', 'group'].map(t => (
+                                     <button key={t} onClick={() => updatePartInPath(activePartPath, 'type', t)} 
+                                        className="btn"
+                                        style={{ flex: 1, padding: '0.45rem', fontSize: '0.75rem', borderRadius: '6px', border: '1px solid', borderColor: activePart.type === t ? '#7c3aed' : '#cbd5e1', background: activePart.type === t ? '#f5f3ff' : 'white', color: activePart.type === t ? '#7c3aed' : '#64748b', cursor: 'pointer', fontWeight: 700, transition: 'all 0.15s' }}>
+                                        {t === 'opening' ? 'Ouvrant' : (t === 'extra' ? 'Poteau' : (t === 'group' ? 'Groupe' : 'Fixe'))}
+                                     </button>
+                                  ))}
+                                </div>
+                            </div>
+
+                            {activePart.type === 'group' ? (
+                               <div style={{ display: 'flex', gap: '1rem' }}>
+                                  <div className="form-group" style={{ flex: 1 }}>
+                                     <label className="label" style={{ fontSize: '0.8rem', color: '#64748b' }}>Orientation division</label>
+                                     <select className="input" value={activePart.orientation || 'vertical'} onChange={e => updatePartInPath(activePartPath, 'orientation', e.target.value)}>
+                                        <option value="horizontal">Horizontal (Côte à côte)</option>
+                                        <option value="vertical">Vertical (Superposé)</option>
+                                     </select>
+                                  </div>
+                                  <div className="form-group" style={{ flex: 1 }}>
+                                     <label className="label" style={{ fontSize: '0.8rem', color: '#64748b' }}>Épaisseur traverse (mm)</label>
+                                     <input type="number" className="input" value={activePart.traverseThickness ?? 25} onChange={e => updatePartInPath(activePartPath, 'traverseThickness', parseFloat(e.target.value) || 0)} />
+                                  </div>
+                               </div>
+                            ) : (
+                               <div style={{ display: 'flex', gap: '0.5rem', flex: 1 }}>
+                                  {(() => {
+                                     const parentOri = getParentOrientation(activePartPath);
+                                     if (activePart.type === 'extra') {
+                                        if (parentOri === 'horizontal') {
+                                           return (
+                                              <>
+                                                 <div className="form-group" style={{ flex: 1 }}>
+                                                    <label className="label" style={{ fontSize: '0.8rem', color: '#7c3aed', fontWeight: 700 }}>Épaisseur Poteau (Largeur en mm)</label>
+                                                    <input type="number" className="input" value={activePart.width || 60} onChange={e => updatePartInPath(activePartPath, 'width', parseInt(e.target.value) || 0)} />
+                                                 </div>
+                                                 <div className="form-group" style={{ flex: 1 }}>
+                                                    <label className="label" style={{ fontSize: '0.8rem', color: '#64748b' }}>Hauteur Poteau (mm)</label>
+                                                    <input type="number" className="input" value={activePartPath.length === 1 ? config.H : (activePart.height || 1500)} readOnly style={{ background: '#f8fafc' }} />
+                                                 </div>
+                                              </>
+                                           );
+                                        } else {
+                                           return (
+                                              <>
+                                                 <div className="form-group" style={{ flex: 1 }}>
+                                                    <label className="label" style={{ fontSize: '0.8rem', color: '#64748b' }}>Largeur Poteau (mm)</label>
+                                                    <input type="number" className="input" value={activePartPath.length === 1 ? config.L : (activePart.width || 400)} readOnly style={{ background: '#f8fafc' }} />
+                                                 </div>
+                                                 <div className="form-group" style={{ flex: 1 }}>
+                                                    <label className="label" style={{ fontSize: '0.8rem', color: '#7c3aed', fontWeight: 700 }}>Épaisseur Poteau (Hauteur en mm)</label>
+                                                    <input type="number" className="input" value={activePart.height || 60} onChange={e => updatePartInPath(activePartPath, 'height', parseInt(e.target.value) || 0)} />
+                                                 </div>
+                                              </>
+                                           );
+                                        }
+                                     }
+
+                                     return (
+                                        <>
+                                           <div className="form-group" style={{ flex: 1 }}>
+                                              <label className="label" style={{ fontSize: '0.8rem', color: '#64748b' }}>Largeur (mm)</label>
+                                              {activePart.type === 'opening' && activePartPath.length === 1 && config.compoundConfig?.orientation === 'horizontal' ? (
+                                                 <input type="number" className="input" value={config.L} readOnly style={{ background: '#f0fdf4' }} />
+                                              ) : (
+                                                 <input type="number" className="input" value={activePart.width || 400} onChange={e => updatePartInPath(activePartPath, 'width', parseInt(e.target.value) || 0)} />
+                                              )}
+                                           </div>
+                                           <div className="form-group" style={{ flex: 1 }}>
+                                              <label className="label" style={{ fontSize: '0.8rem', color: '#64748b' }}>Hauteur (mm)</label>
+                                              {activePart.type === 'opening' && activePartPath.length === 1 && config.compoundConfig?.orientation === 'vertical' ? (
+                                                 <input type="number" className="input" value={config.H} readOnly style={{ background: '#f0fdf4' }} />
+                                              ) : (
+                                                 <input type="number" className="input" value={activePart.height || 1500} onChange={e => updatePartInPath(activePartPath, 'height', parseInt(e.target.value) || 0)} />
+                                              )}
+                                           </div>
+                                        </>
+                                     );
+                                  })()}
+                               </div>
+                            )}
+                         </div>
+
+                         {activePart.type !== 'group' && (
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
+                               <div className="form-group">
+                                  <label className="label" style={{ fontSize: '0.8rem', color: '#64748b' }}>Modèle de menuiserie</label>
+                                  {activePart.type === 'extra' ? (
+                                     <select className="input" value={activePart.extraElementId || activePart.compositionId || ''} onChange={e => {
+                                        const val = e.target.value;
+                                        const extra = database.extraElements?.find(el => el.id === val);
+                                        const prof = database.profiles?.find(p => p.id === val);
+                                        const thick = extra?.thickness || prof?.thickness || 60;
+                                        
+                                        setConfig(prev => {
+                                           const parts = JSON.parse(JSON.stringify(prev.compoundConfig?.parts || []));
+                                           let current = parts;
+                                           for (let i = 0; i < activePartPath.length - 1; i++) {
+                                              current = current[activePartPath[i]].subParts;
+                                           }
+                                           const target = current[activePartPath[activePartPath.length - 1]];
+                                           target.extraElementId = val;
+                                           target.compositionId = val;
+                                           const parentOri = getParentOrientation(activePartPath);
+                                           if (parentOri === 'horizontal') {
+                                              target.width = thick;
+                                           } else {
+                                              target.height = thick;
+                                           }
+                                           return { ...prev, compoundConfig: { ...prev.compoundConfig, parts } };
+                                        });
+                                     }}>
+                                        <option value="">-- Choisir un poteau --</option>
+                                        {(database.extraElements || []).map(el => <option key={el.id} value={el.id}>{el.name} ({el.id})</option>)}
+                                        <optgroup label="Profilés Standard">
+                                           {(database.profiles || []).map(p => <option key={p.id} value={p.id}>{p.name} ({p.id})</option>)}
+                                        </optgroup>
+                                     </select>
+                                  ) : (
+                                     <select className="input" value={activePart.compositionId || ''} onChange={e => updatePartInPath(activePartPath, 'compositionId', e.target.value)}>
+                                        <option value="">-- Composition --</option>
+                                        {database.compositions.filter(c => {
+                                           if (activePart.type === 'opening') {
+                                              return c.openingType === 'Coulissant' || (c.openingType !== 'Fixe' && c.openingType !== 'Fixe Vitré');
+                                           } else {
+                                              return c.openingType === 'Fixe' || c.openingType === 'Fixe Vitré';
+                                           }
+                                        }).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                     </select>
+                                  )}
+                               </div>
+
+                               {activePart.type !== 'extra' ? (
+                                  <div className="form-group">
+                                     <label className="label" style={{ fontSize: '0.8rem', color: '#64748b' }}>Vitrage</label>
+                                     <select className="input" value={activePart.glassId || ''} onChange={e => updatePartInPath(activePartPath, 'glassId', e.target.value)}>
+                                        <option value="">(Vitrage global)</option>
+                                        {database.glass?.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                                     </select>
+                                  </div>
+                               ) : null}
+                            </div>
+                         )}
+
+                         {activePart.type !== 'group' && (
+                            (() => {
+                               const isSubPart = activePartPath.length > 1;
+                               const parentPath = activePartPath.slice(0, -1);
+                               let parentParts = config.compoundConfig?.parts;
+                               for(let i=0; i<parentPath.length; i++) {
+                                  parentParts = parentParts[parentPath[i]].subParts;
+                               }
+                               const targetIndex = activePartPath[activePartPath.length - 1];
+                               const hasNextSibling = parentParts && targetIndex < parentParts.length - 1;
+                               
+                               if (hasNextSibling) {
+                                  const targetPart = parentParts[targetIndex];
+                                  return (
+                                     <div style={{ marginTop: '1rem', padding: '0.8rem', background: '#f1f5f9', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+                                        <h5 style={{ margin: '0 0 0.5rem 0', fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>Liaison / Jonction après ce bloc</h5>
+                                        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                                           <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                                              <label className="label" style={{ fontSize: '0.75rem' }}>Traverse</label>
+                                              <select className="input" value={targetPart.traverseId || 'AUTO'} onChange={e => {
+                                                 const val = e.target.value;
+                                                 let th = targetPart.traverseThickness ?? 25;
+                                                 if (val !== 'AUTO') {
+                                                    const trv = database.traverses?.find(t => t.id === val || t.profileId === val);
+                                                    if (trv?.thickness) th = trv.thickness;
+                                                    else {
+                                                       const prof = database.profiles?.find(p => p.id === val);
+                                                       if (prof?.thickness) th = prof.thickness;
+                                                    }
+                                                 }
+                                                 updatePartInPath(activePartPath, 'traverseId', val);
+                                                 updatePartInPath(activePartPath, 'traverseThickness', th);
+                                              }}>
+                                                 <option value="AUTO">AUTO (Par défaut)</option>
+                                                 {(database.traverses || []).map(t => <option key={t.id} value={t.profileId || t.id}>{t.name}</option>)}
+                                              </select>
+                                           </div>
+                                           <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                                              <label className="label" style={{ fontSize: '0.75rem' }}>Épaisseur (mm)</label>
+                                              <input type="number" className="input" value={targetPart.traverseThickness ?? 25} onChange={e => updatePartInPath(activePartPath, 'traverseThickness', parseFloat(e.target.value) || 0)} />
+                                           </div>
+                                        </div>
+                                     </div>
+                                  );
+                               }
+                               return null;
+                            })()
+                         )}
+
+                         {activePart.type === 'group' && (
+                            <div style={{ marginTop: '1.2rem', display: 'flex', gap: '0.5rem' }}>
+                               <button className="btn btn-secondary" onClick={() => {
+                                  setConfig(prev => {
+                                     const parts = JSON.parse(JSON.stringify(prev.compoundConfig?.parts || []));
+                                     let current = parts;
+                                     for (let i = 0; i < activePartPath.length; i++) {
+                                        current = current[activePartPath[i]].subParts;
+                                     }
+                                     current.push({
+                                        id: `sub-${Date.now()}`,
+                                        type: 'fixe',
+                                        compositionId: '',
+                                        glassId: '',
+                                        width: 400,
+                                        height: 1500,
+                                        traverseThickness: 25
+                                     });
+                                     return { ...prev, compoundConfig: { ...prev.compoundConfig, parts } };
+                                  });
+                               }} style={{ fontSize: '0.75rem', padding: '0.4rem 0.8rem' }}>
+                                  + Ajouter un sous-bloc dans ce groupe
+                               </button>
+                            </div>
+                         )}
+                      </div>
+                   )}
+                </div>
+             );
+          })()}
 
           {!config.isOnlyShutter && (
             <div style={{ display: (config.useCustomLayout || config.compoundType !== 'none') ? 'none' : 'block' }}>

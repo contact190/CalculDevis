@@ -399,14 +399,25 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
           }
         }
 
-        const currentThickPx = isMulti ? (currentThickness * scale) : 0;
-
         list.forEach((part, idx) => {
           const pW = isH ? (part.width ? part.width * scale : (bw / list.length)) : bw;
           const pH = isH ? bh : (part.height ? part.height * scale : (bh / list.length));
+          const itemThickPx = (part.traverseThickness ?? 25) * scale;
 
           if (part.type === 'group' && part.subParts) {
              drawPartList(part.subParts, cx, cy, pW, pH, isH ? 'vertical' : 'horizontal', depth + 1, part);
+          } else if (part.type === 'extra') {
+             ctx.fillStyle = '#475569';
+             ctx.strokeStyle = '#1e293b';
+             ctx.lineWidth = 2;
+             ctx.fillRect(cx, cy, pW, pH);
+             ctx.strokeRect(cx, cy, pW, pH);
+             if (pW > 35) {
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 9px Inter, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('POTEAU', cx + pW/2, cy + pH/2 + 3);
+             }
           } else {
              drawJoinery(cx, cy, pW, pH, part.compositionId || compositionId);
           }
@@ -415,15 +426,15 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
              cx += pW;
              if (idx < list.length - 1) {
                 ctx.fillStyle = '#64748b';
-                ctx.fillRect(cx, by, currentThickPx, bh);
-                cx += currentThickPx;
+                ctx.fillRect(cx, by, itemThickPx, bh);
+                cx += itemThickPx;
              }
           } else {
              cy += pH;
              if (idx < list.length - 1) {
                 ctx.fillStyle = '#64748b';
-                ctx.fillRect(bx, cy, bw, currentThickPx);
-                cy += currentThickPx;
+                ctx.fillRect(bx, cy, bw, itemThickPx);
+                cy += itemThickPx;
              }
           }
         });

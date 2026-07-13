@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Receipt, Download, Filter, CheckCircle } from 'lucide-react';
 import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const InvoiceGenerator = ({ data, setData, quoteSettings }) => {
   const [selectedOrderId, setSelectedOrderId] = useState('');
@@ -251,132 +252,64 @@ const InvoiceGenerator = ({ data, setData, quoteSettings }) => {
       doc.text(lines, rightBoxXHeader + 3, cly); cly += lines.length * 4;
     }
     doc.setTextColor(0, 0, 0);
+    y = boxY + boxHeight + 6;
 
-    y = boxY + boxHeight + 12;
-    
-    // Table Header Borders
-    doc.setDrawColor(0, 0, 0);
-    doc.setLineWidth(0.3);
-    doc.rect(15, y - 6, pw - 30, 8); // Header border
+    const formatPricePDF = (val) => val.toLocaleString('fr-FR', { minimumFractionDigits: 2 }).replace(/[\s\u202F\u00A0]/g, ' ');
 
-    doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(0, 0, 0);
-    
-    // Column x positions & widths (Total usable width: pw - 30 = 180)
-    const colDesc = 15; const wDesc = 42;
-    const colHaut = colDesc + wDesc; const wHaut = 19;
-    const colLarg = colHaut + wHaut; const wLarg = 19;
-    const colM2 = colLarg + wLarg; const wM2 = 14;
-    const colQte = colM2 + wM2; const wQte = 15;
-    const colPrix = colQte + wQte; const wPrix = 22;
-    const colTax = colPrix + wPrix; const wTax = 16;
-    const colMont = colTax + wTax; const wMont = 33;
+    // Use autoTable matching the Shop invoices style
+    const tableColumn = ["Désignation", "Dimensions", "Quantité", "P.U. HT", "Total HT"];
+    const tableRows = filteredUnits.map(u => [
+      `${u.name}\n${u.label}`,
+      u.dimensions ? `${u.dimensions} mm` : '-',
+      "1 pces",
+      `${formatPricePDF(u.unitPriceHT)} DZD`,
+      `${formatPricePDF(u.unitPriceHT)} DZD`
+    ]);
 
-    // Draw vertical lines for header
-    doc.line(colHaut, y - 6, colHaut, y + 2);
-    doc.line(colLarg, y - 6, colLarg, y + 2);
-    doc.line(colM2, y - 6, colM2, y + 2);
-    doc.line(colQte, y - 6, colQte, y + 2);
-    doc.line(colPrix, y - 6, colPrix, y + 2);
-    doc.line(colTax, y - 6, colTax, y + 2);
-    doc.line(colMont, y - 6, colMont, y + 2);
-
-    // Centered text helper
-    const centerText = (txt, x, w, cy) => {
-      doc.text(txt, x + w / 2, cy, { align: 'center' });
-    };
-    const rightText = (txt, x, w, cy) => {
-      doc.text(txt, x + w - 2, cy, { align: 'right' });
-    };
-    const formatPrice = (val) => val.toLocaleString('fr-FR', { minimumFractionDigits: 2 }).replace(/[\s\u202F\u00A0]/g, ' ');
-
-    centerText('DESCRIPTION', colDesc, wDesc, y - 1);
-    centerText('HAUTEUR (MT)', colHaut, wHaut, y - 1);
-    centerText('LARGEUR (MT)', colLarg, wLarg, y - 1);
-    centerText('(MONT)2', colM2, wM2, y - 1);
-    centerText('QUANTITE', colQte, wQte, y - 1);
-    centerText('PRIX UNITAIRE', colPrix, wPrix, y - 1);
-    centerText('TAXES', colTax, wTax, y - 1);
-    centerText('MONTANT', colMont, wMont, y - 1);
-    
-    y += 2;
-
-    doc.setFont('helvetica', 'normal');
-    filteredUnits.forEach((unit, idx) => {
-      if (y > ph - 60) { doc.addPage(); y = 25; }
-      const rowH = 8;
-      
-      doc.rect(15, y, pw - 30, rowH); // Row border
-      // Vertical lines for row
-      doc.line(colHaut, y, colHaut, y + rowH);
-      doc.line(colLarg, y, colLarg, y + rowH);
-      doc.line(colM2, y, colM2, y + rowH);
-      doc.line(colQte, y, colQte, y + rowH);
-      doc.line(colPrix, y, colPrix, y + rowH);
-      doc.line(colTax, y, colTax, y + rowH);
-      doc.line(colMont, y, colMont, y + rowH);
-
-      doc.setFontSize(7);
-      const parts = unit.dimensions ? unit.dimensions.split('x').map(s => s.trim()) : ['0', '0'];
-      const L = parts[0] || '0';
-      const H = parts[1] || '0';
-
-      let descText = `${unit.name} - ${unit.label}`;
-      if (descText.length > 32) descText = descText.substring(0, 32) + '...';
-      doc.text(descText, colDesc + 2, y + 5);
-      centerText(H, colHaut, wHaut, y + 5);
-      centerText(L, colLarg, wLarg, y + 5);
-      centerText('1', colM2, wM2, y + 5);
-      centerText('1', colQte, wQte, y + 5);
-      rightText(formatPrice(unit.unitPriceHT), colPrix, wPrix, y + 5);
-      centerText(`TVA ${tvaRate}%`, colTax, wTax, y + 5);
-      rightText(`${formatPrice(unit.unitPriceHT)} DA`, colMont, wMont, y + 5);
-      
-      y += rowH;
+    autoTable(doc, {
+      startY: y,
+      head: [tableColumn],
+      body: tableRows,
+      theme: 'grid',
+      headStyles: { fillColor: [40, 40, 40], textColor: [255, 255, 255] },
+      styles: { fontSize: 9, cellPadding: 3, textColor: [0, 0, 0] },
+      columnStyles: { 0: { cellWidth: 70 }, 3: { halign: 'right' }, 4: { halign: 'right', fontStyle: 'bold' } }
     });
 
-    // ── Totals ──
-    y += 5;
-    const totalsX = colPrix;
-    const totalsW = pw - 15 - colPrix;
-    const splitX = colMont;
-    
-    doc.setDrawColor(0, 0, 0);
-    // HT Row
-    doc.rect(totalsX, y, totalsW, 6);
-    doc.line(splitX, y, splitX, y + 6);
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(8);
-    doc.text('Montant HT', totalsX + 2, y + 4);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`${formatPrice(totalHT)} DA`, pw - 17, y + 4, { align: 'right' });
-    y += 6;
+    let finalY = (doc.lastAutoTable?.finalY || doc.previousAutoTable?.finalY || y + 20) + 10;
+    if (finalY > 220) { doc.addPage(); finalY = 20; }
 
-    // TVA Row
-    doc.rect(totalsX, y, totalsW, 6);
-    doc.line(splitX, y, splitX, y + 6);
+    const rightBoxX = 110;
+    let boxHeightBottom = 22;
+
+    doc.setDrawColor(150, 150, 150);
+    doc.setLineWidth(0.5);
+    doc.roundedRect(rightBoxX, finalY, pw - 15 - rightBoxX, boxHeightBottom, 3, 3);
+
+    let currentTotalY = finalY + 9;
+    doc.setFontSize(9.5);
     doc.setFont('helvetica', 'bold');
-    doc.text(`TVA ${tvaRate}%`, totalsX + 2, y + 4);
+    doc.text('MONTANT TOTAL HT', rightBoxX + 5, currentTotalY);
+    doc.text(`${formatPricePDF(totalHT)} DZD`, pw - 20, currentTotalY, { align: 'right' });
+
     doc.setFont('helvetica', 'normal');
-    doc.text(`${formatPrice(totalTVA)} DA`, pw - 17, y + 4, { align: 'right' });
-    y += 6;
+    doc.setFontSize(8.5);
+    doc.text(`TVA ${tvaRate}% :`, rightBoxX + 5, currentTotalY + 7);
+    doc.text(`${formatPricePDF(totalTVA)} DZD`, pw - 20, currentTotalY + 7, { align: 'right' });
 
-    // TOTAL Row
-    doc.setFillColor(100, 100, 100);
-    doc.rect(totalsX, y, totalsW, 6, 'FD'); // Filled and stroke
-    doc.line(splitX, y, splitX, y + 6);
-    doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold');
-    doc.text('TOTAL', totalsX + 2, y + 4);
-    doc.text(`${formatPrice(totalTTC)} DA`, pw - 17, y + 4, { align: 'right' });
-    
-    doc.setTextColor(0, 0, 0);
-    y += 20;
+    finalY += boxHeightBottom + 15;
 
-    // ── Cachet (Bottom Left) ──
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('NET À PAYER TTC : ' + formatPricePDF(totalTTC) + ' DZD', pw - 15, finalY, { align: 'right' });
+
+    // Cachet
     if (quoteSettings?.cachetBase64) {
-      if (y > ph - 40) { doc.addPage(); y = 25; }
-      try { doc.addImage(quoteSettings.cachetBase64, 'PNG', 25, y, 35, 35); } catch (e) {}
+      if (finalY > ph - 40) { doc.addPage(); finalY = 20; }
+      try { doc.addImage(quoteSettings.cachetBase64, 'PNG', 25, finalY, 35, 35); } catch (e) {}
     }
 
-    doc.save(`${invoiceNumber}_${selectedOrder.id}.pdf`);
+    doc.save(`Facture_${invoiceNumber}_${selectedOrder.id}.pdf`);
     
     setData(prev => {
       let newCounter = prev.invoiceCounter || 1;
@@ -388,7 +321,24 @@ const InvoiceGenerator = ({ data, setData, quoteSettings }) => {
       } else {
          newCounter += 1;
       }
-      return { ...prev, invoiceCounter: newCounter };
+
+      // Save invoice record for the invoice list
+      const newRecord = {
+        id: `inv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        invoiceNumber,
+        clientId: selectedClient?.id,
+        clientName: selectedClient?.nom || 'Client inconnu',
+        orderId: selectedOrder.id,
+        date: new Date().toISOString(),
+        montantHT: totalHT,
+        montantTTC: totalTTC,
+        tvaRate,
+        type: invoiceType === 'global' ? 'Globale' : 'Partielle',
+        unitsCount: filteredUnits.length,
+      };
+      const existingRecords = prev.invoiceRecords || [];
+
+      return { ...prev, invoiceCounter: newCounter, invoiceRecords: [...existingRecords, newRecord] };
     });
     
     setIsGenerating(false);

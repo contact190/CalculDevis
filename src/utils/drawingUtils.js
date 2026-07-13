@@ -277,9 +277,7 @@ export const drawTechnicalDrawing = (canvas, cfg, database) => {
       }
     }
   } else if (cfg.compoundType && cfg.compoundType !== 'none' && cfg.compoundConfig?.parts) {
-    const { parts, orientation, unionId, traverseId } = cfg.compoundConfig;
-    const divRef = (database.profiles || []).find(p => p.id === (cfg.compoundType === 'fix_coulissant' ? unionId : traverseId));
-    const thick = (divRef?.thickness || 20) * scale;
+    const { parts, orientation } = cfg.compoundConfig;
 
     const drawPartList = (list, bx, by, bw, bh, dir) => {
       const isH = dir !== 'vertical';
@@ -287,17 +285,30 @@ export const drawTechnicalDrawing = (canvas, cfg, database) => {
       list.forEach((part, idx) => {
         const pW = isH ? (part.width ? part.width * scale : bw / list.length) : bw;
         const pH = isH ? bh : (part.height ? part.height * scale : bh / list.length);
+        const itemThick = (part.traverseThickness ?? 25) * scale;
         if (part.type === 'group' && part.subParts) {
           drawPartList(part.subParts, cx, cy, pW, pH, isH ? 'vertical' : 'horizontal');
+        } else if (part.type === 'extra') {
+          ctx.fillStyle = '#475569';
+          ctx.strokeStyle = '#1e293b';
+          ctx.lineWidth = 2;
+          ctx.fillRect(cx, cy, pW, pH);
+          ctx.strokeRect(cx, cy, pW, pH);
+          if (pW > 35) {
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 9px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('POTEAU', cx + pW/2, cy + pH/2 + 3);
+          }
         } else {
           drawJoinery(cx, cy, pW, pH, part.compositionId || compositionId);
         }
         if (isH) {
           cx += pW;
-          if (idx < list.length - 1) { ctx.fillStyle = '#64748b'; ctx.fillRect(cx, by, thick, bh); cx += thick; }
+          if (idx < list.length - 1) { ctx.fillStyle = '#64748b'; ctx.fillRect(cx, by, itemThick, bh); cx += itemThick; }
         } else {
           cy += pH;
-          if (idx < list.length - 1) { ctx.fillStyle = '#64748b'; ctx.fillRect(bx, cy, bw, thick); cy += thick; }
+          if (idx < list.length - 1) { ctx.fillStyle = '#64748b'; ctx.fillRect(bx, cy, bw, itemThick); cy += itemThick; }
         }
       });
     };
