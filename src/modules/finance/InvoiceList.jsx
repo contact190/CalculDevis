@@ -247,14 +247,17 @@ const InvoiceList = ({ data, setData, quoteSettings }) => {
     const clientNameLines = doc.splitTextToSize(client?.nom || inv.clientName || 'Client', boxWidth - 6);
 
     doc.setFontSize(8);
-    let cyLeft = boxY + 6 + (companyNameLines.length * 4) + 1;
+    let cyLeft = boxY + 11 + (companyNameLines.length * 4) + 1;
     if (quoteSettings?.companyAddress) cyLeft += doc.splitTextToSize(quoteSettings.companyAddress, boxWidth - 6).length * 4;
-    if (quoteSettings?.companyPhone || quoteSettings?.companyEmail) cyLeft += 5;
-    if (quoteSettings?.companyRC) cyLeft += 4;
-    if (quoteSettings?.companyIMP) cyLeft += 4;
-    if (quoteSettings?.companyMF) cyLeft += 4;
-    if (quoteSettings?.companyRIB) cyLeft += 4;
-    if (quoteSettings?.companyBank) cyLeft += 4;
+    if (quoteSettings?.companyPhone || quoteSettings?.companyEmail) {
+      const contactStr = `${quoteSettings?.companyPhone || ''} ${quoteSettings?.companyEmail ? ' - ' + quoteSettings.companyEmail : ''}`;
+      cyLeft += doc.splitTextToSize(contactStr, boxWidth - 6).length * 4;
+    }
+    if (quoteSettings?.companyRC) cyLeft += doc.splitTextToSize(`RC N°: ${quoteSettings.companyRC}`, boxWidth - 6).length * 4;
+    if (quoteSettings?.companyIMP) cyLeft += doc.splitTextToSize(`AI N°: ${quoteSettings.companyIMP}`, boxWidth - 6).length * 4;
+    if (quoteSettings?.companyMF) cyLeft += doc.splitTextToSize(`NIF/MF N°: ${quoteSettings.companyMF}`, boxWidth - 6).length * 4;
+    if (quoteSettings?.companyRIB) cyLeft += doc.splitTextToSize(`RIB: ${quoteSettings.companyRIB}`, boxWidth - 6).length * 4;
+    if (quoteSettings?.companyBank) cyLeft += doc.splitTextToSize(`Banque: ${quoteSettings.companyBank}`, boxWidth - 6).length * 4;
 
     let cyRight = boxY + 11 + (clientNameLines.length * 4) + 1;
     if (client?.adresse) cyRight += doc.splitTextToSize(client.adresse, boxWidth - 6).length * 4;
@@ -279,7 +282,7 @@ const InvoiceList = ({ data, setData, quoteSettings }) => {
     doc.text(companyNameLines, 18, boxY + 11);
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
-    let cy = boxY + 6 + (companyNameLines.length * 4) + 1;
+    let cy = boxY + 11 + (companyNameLines.length * 4) + 1;
     if (quoteSettings?.companyAddress) {
       const lines = doc.splitTextToSize(quoteSettings.companyAddress, boxWidth - 6);
       doc.text(lines, 18, cy); cy += lines.length * 4;
@@ -287,14 +290,31 @@ const InvoiceList = ({ data, setData, quoteSettings }) => {
     const phone = quoteSettings?.companyPhone || '';
     const email = quoteSettings?.companyEmail || '';
     if (phone || email) {
-      doc.text(`${phone}${email ? ' - ' + email : ''}`, 18, cy); cy += 5;
+      const contactStr = `${phone}${email ? ' - ' + email : ''}`;
+      const lines = doc.splitTextToSize(contactStr, boxWidth - 6);
+      doc.text(lines, 18, cy); cy += lines.length * 4;
     }
     doc.setTextColor(80, 80, 80);
-    if (quoteSettings?.companyRC) { doc.text(`RC N°: ${quoteSettings.companyRC}`, 18, cy); cy += 4; }
-    if (quoteSettings?.companyIMP) { doc.text(`AI N°: ${quoteSettings.companyIMP}`, 18, cy); cy += 4; }
-    if (quoteSettings?.companyMF) { doc.text(`NIF/MF N°: ${quoteSettings.companyMF}`, 18, cy); cy += 4; }
-    if (quoteSettings?.companyRIB) { doc.text(`RIB: ${quoteSettings.companyRIB}`, 18, cy); cy += 4; }
-    if (quoteSettings?.companyBank) { doc.text(`Banque: ${quoteSettings.companyBank}`, 18, cy); cy += 4; }
+    if (quoteSettings?.companyRC) {
+      const lines = doc.splitTextToSize(`RC N°: ${quoteSettings.companyRC}`, boxWidth - 6);
+      doc.text(lines, 18, cy); cy += lines.length * 4;
+    }
+    if (quoteSettings?.companyIMP) {
+      const lines = doc.splitTextToSize(`AI N°: ${quoteSettings.companyIMP}`, boxWidth - 6);
+      doc.text(lines, 18, cy); cy += lines.length * 4;
+    }
+    if (quoteSettings?.companyMF) {
+      const lines = doc.splitTextToSize(`NIF/MF N°: ${quoteSettings.companyMF}`, boxWidth - 6);
+      doc.text(lines, 18, cy); cy += lines.length * 4;
+    }
+    if (quoteSettings?.companyRIB) {
+      const lines = doc.splitTextToSize(`RIB: ${quoteSettings.companyRIB}`, boxWidth - 6);
+      doc.text(lines, 18, cy); cy += lines.length * 4;
+    }
+    if (quoteSettings?.companyBank) {
+      const lines = doc.splitTextToSize(`Banque: ${quoteSettings.companyBank}`, boxWidth - 6);
+      doc.text(lines, 18, cy); cy += lines.length * 4;
+    }
     doc.setTextColor(0, 0, 0);
 
     // ── Client box (Right) ──

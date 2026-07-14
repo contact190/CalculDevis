@@ -2054,10 +2054,25 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
 
                 <button 
                   onClick={() => {
-                    let csv = "Reference;Designation;Finition;Dimensions;Quantite;Unite\n";
+                    const q = (v) => `"${String(v || "").replace(/"/g, '""').replace(/;/g, ',')}"`;
+                    let csv = "";
+                    
+                    const glassByType = {};
                     purchasingGlass.forEach(g => {
-                      csv += `${resolveRef(g.baseId || g.id)};${g.name};${g.colorName};${g.width}x${g.height};${g.count};U\n`;
+                      const typeName = g.name || 'Vitrage';
+                      if (!glassByType[typeName]) glassByType[typeName] = [];
+                      glassByType[typeName].push(g);
                     });
+
+                    Object.entries(glassByType).forEach(([typeName, glassList]) => {
+                      csv += `TYPE DE VITRAGE: ${typeName};;;;;;;\n`;
+                      csv += "Reference;Designation;Finition;Dimensions;Quantite;Unite;Ref_Chassis;Position\n";
+                      glassList.forEach(g => {
+                        csv += `${q(resolveRef(g.baseId || g.id))};${q(g.name)};${q(g.colorName)};${q(`${g.width}x${g.height}`)};${g.count};U;${q(g.combinedRefs)};${q(g.combinedLabels)}\n`;
+                      });
+                      csv += "\n";
+                    });
+
                     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
                     const link = document.createElement("a");
                     link.href = URL.createObjectURL(blob);
