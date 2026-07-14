@@ -228,7 +228,22 @@ export const syncDatabase = {
             const val = downloadedData[i] || [];
             
             if (keyInfo === 'catalog') {
-              Object.assign(db, val);
+              // Merge catalog collections item-by-item using timestamps to avoid overwriting recent local edits
+              for (const subKey of Object.keys(val)) {
+                if (Array.isArray(val[subKey])) {
+                  const localArr = db[subKey] || [];
+                  const localItemsToKeep = localArr.filter(item => {
+                    if (!item || !item.id) return false;
+                    const localTime = item._lastModified ? new Date(item._lastModified).getTime() : 0;
+                    return localTime > cloudTime;
+                  });
+                  const keepIds = new Set(localItemsToKeep.map(item => item.id));
+                  const cloudItems = (val[subKey] || []).filter(item => !keepIds.has(item.id));
+                  db[subKey] = [...localItemsToKeep, ...cloudItems];
+                } else {
+                  db[subKey] = val[subKey];
+                }
+              }
             } else {
               const { collection, bucketIdx } = keyInfo;
               

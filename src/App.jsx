@@ -502,7 +502,19 @@ function App() {
           const { data: cloudData, updatedAt } = await syncDatabase.loadWithMeta();
           if (cloudData) {
             isApplyingRemoteOps.current = true;
-            const repaired = repairDatabase(cloudData);
+            let finalData = cloudData;
+            
+            // Apply any operations that occurred after the snapshot was saved to prevent losing real-time edits
+            if (updatedAt) {
+              const missedOps = await cloudSync.fetchOpsSince(updatedAt, getDeviceId());
+              if (missedOps && missedOps.length > 0) {
+                console.log(`☁️ Application de ${missedOps.length} opérations post-snapshot...`);
+                const { db: updatedDb } = applyOps(finalData, missedOps);
+                finalData = updatedDb;
+              }
+            }
+
+            const repaired = repairDatabase(finalData);
             setDatabase(repaired);
             previousDbRef.current = repaired;
             setCloudSyncStatus('ok');
