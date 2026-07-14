@@ -1278,7 +1278,7 @@ export class FormulaEngine {
 
       // 2. Recalculate auto parts in the splitting dimension
       // When some parts have explicit overrides, auto parts fill the remaining space
-      const available = (direction === 'horizontal' ? boxL : boxH) - (isMultiChassis ? 0 : divQty * divThickNum);
+      const available = (direction === 'horizontal' ? boxL : boxH) - ((isMultiChassis || compoundType === 'fix_ouvrant') ? 0 : divQty * divThickNum);
 
       const overriddenParts = items.filter(it => it._hasOverrideSplit);
       const autoParts = items.filter(it => !it._hasOverrideSplit);
@@ -1324,9 +1324,7 @@ export class FormulaEngine {
         let calcL = part.rawL;
         let calcH = part.rawH;
 
-        if (isMultiChassis && depth === 0 && part.type === 'opening') {
-          calcH -= 3;
-        }
+
 
         if (compoundType === 'fix_ouvrant' && part.type === 'opening') {
           if (direction === 'horizontal') {
