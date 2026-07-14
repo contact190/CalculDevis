@@ -43,10 +43,13 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
       createdAt: new Date().toISOString(),
       status: 'Confirmé',
       batches: [],
-      items: (quote.items || []).map(item => ({
-        ...item,
-        siteMeasurements: []
-      }))
+      items: (quote.items || []).map(item => {
+        const existingItem = existingOrder?.items?.find(i => i.id === item.id);
+        return {
+          ...item,
+          siteMeasurements: existingItem ? (existingItem.siteMeasurements || []) : []
+        };
+      })
     };
 
     setData(prev => {

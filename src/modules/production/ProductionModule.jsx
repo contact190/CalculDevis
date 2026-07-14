@@ -130,6 +130,25 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
     });
   };
 
+  const isListAllSelected = useCallback((list) => {
+    return list.length > 0 && list.every(item => proformaSelection.has(item.id));
+  }, [proformaSelection]);
+
+  const toggleSelectAllList = useCallback((list) => {
+    const allSel = list.length > 0 && list.every(item => proformaSelection.has(item.id));
+    setProformaSelection(prev => {
+      const next = new Set(prev);
+      list.forEach(item => {
+        if (allSel) {
+          next.delete(item.id);
+        } else {
+          next.add(item.id);
+        }
+      });
+      return next;
+    });
+  }, [proformaSelection]);
+
   const activeQuote = useMemo(() => {
     const allSources = [...(database?.orders || []), ...(database?.quotes || [])];
     return allSources.find(q => q.id === selectedGlobalQuoteId) || currentQuote;
@@ -375,7 +394,8 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                 baseId: p.id,
                 image: pRef?.image,
                 technicalDrawing: pRef?.technicalDrawing,
-                unitPrice
+                unitPrice,
+                isShutter: false
               };
             } else {
               map[mapKey].totalMeasure += measure;
@@ -419,13 +439,15 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
               totalMeasure: measure, 
               pieces: newPieces, 
               colorName,
-              baseId: s.id
+              baseId: s.id,
+              isShutter: true
             };
           } else {
             map[mapKey].totalMeasure += measure;
             map[mapKey].pieces = [...map[mapKey].pieces, ...newPieces];
             map[mapKey].originalNames.add(s.name);
             if (rangeName) map[mapKey].originalRanges.add(rangeName);
+            map[mapKey].isShutter = true;
           }
         });
       } catch (e) { console.warn(e); }
@@ -452,7 +474,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
         // Add non-BARRE shutter items: ML/JOINT (joint brosse, lame finale/ml) and unit items (motors, kits)
         (b.shutters || []).forEach(s => {
           const unitUpper = (s.priceUnit || s.unit || '').toUpperCase().trim();
-          if (unitUpper !== 'BARRE') items.push(s);
+          if (unitUpper !== 'BARRE') items.push({ ...s, isShutter: true });
         });
 
         items.forEach(a => {
@@ -462,11 +484,12 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
           const unitPrice = aRef?.price || 0;
           
           if (!map[mapKey]) {
-            map[mapKey] = { ...a, originalNames: new Set([displayName]), totalMeasure: (a.totalMeasure || 0) * cfgQty, totalQty: (a.qty || 0) * cfgQty, colorName, unitPrice };
+            map[mapKey] = { ...a, isShutter: !!a.isShutter, originalNames: new Set([displayName]), totalMeasure: (a.totalMeasure || 0) * cfgQty, totalQty: (a.qty || 0) * cfgQty, colorName, unitPrice };
           } else {
             map[mapKey].totalMeasure += (a.totalMeasure || 0) * cfgQty;
             map[mapKey].totalQty += (a.qty || 0) * cfgQty;
             map[mapKey].originalNames.add(displayName);
+            if (a.isShutter) map[mapKey].isShutter = true;
           }
         });
       } catch (e) { console.warn(e); }
@@ -516,9 +539,10 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
         });
       } catch (e) { console.warn(e); }
     });
-    return Object.values(map).map(item => ({
+    return Object.values(map).map((item, idx) => ({
       ...item, 
       baseId: item.id,
+      id: `${item.id}|${item.colorName}-${item.width}-${item.height}`,
       combinedLabels: Array.from(item.labels || []).join(', '),
       combinedRefs: Array.from(item.windowRefs || []).join(', ')
     }));
@@ -592,7 +616,8 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
         totalMeasure,
         pieces: allPieces,
         unitPrice: members[0].unitPrice,
-        _barKey: members[0].id // use first member's ID for bar length setting
+        _barKey: members[0].id, // use first member's ID for bar length setting
+        isShutter: members.some(m => m.isShutter)
       });
     });
 
@@ -603,6 +628,15 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
 
     return rows;
   }, [purchasingProfiles, jumelageGroups, barLengths]);
+
+  const profilesAlu = useMemo(() => displayProfiles.filter(p => !p.isShutter), [displayProfiles]);
+  const profilesVolet = useMemo(() => displayProfiles.filter(p => p.isShutter), [displayProfiles]);
+
+  const jointsAlu = useMemo(() => purchasingAccessories.filter(a => ['M', 'ML', 'JOINT'].includes((a.unit || a.priceUnit || '').toUpperCase().trim()) && !a.isShutter), [purchasingAccessories]);
+  const jointsVolet = useMemo(() => purchasingAccessories.filter(a => ['M', 'ML', 'JOINT'].includes((a.unit || a.priceUnit || '').toUpperCase().trim()) && a.isShutter), [purchasingAccessories]);
+
+  const accessoriesAlu = useMemo(() => purchasingAccessories.filter(a => !['M', 'ML', 'JOINT'].includes((a.unit || a.priceUnit || '').toUpperCase().trim()) && !a.isShutter), [purchasingAccessories]);
+  const accessoriesVolet = useMemo(() => purchasingAccessories.filter(a => !['M', 'ML', 'JOINT'].includes((a.unit || a.priceUnit || '').toUpperCase().trim()) && a.isShutter), [purchasingAccessories]);
 
   const chutesData = useMemo(() => {
     const scraps = [];
@@ -2028,11 +2062,13 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
 
                     // --- 1. PAGE 1: RÉCAPITULATIF GLOBAL ---
                     let currentY = renderHeader(true);
-                    renderRows(purchasingGlass, currentY);
+                    const selectedGlass = purchasingGlass.filter(g => proformaSelection.has(g.id));
+                    const glassToPrint = selectedGlass.length > 0 ? selectedGlass : purchasingGlass;
+                    renderRows(glassToPrint, currentY);
 
                     // --- 2. PAGES SUIVANTES: GROUPÉ PAR TYPE DE VITRAGE (Compo technique) ---
                     const glassByType = {};
-                    purchasingGlass.forEach(g => {
+                    glassToPrint.forEach(g => {
                       const typeName = g.name || 'Vitrage';
                       if (!glassByType[typeName]) glassByType[typeName] = [];
                       glassByType[typeName].push(g);
@@ -2057,8 +2093,11 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                     const q = (v) => `"${String(v || "").replace(/"/g, '""').replace(/;/g, ',')}"`;
                     let csv = "";
                     
+                    const selectedGlass = purchasingGlass.filter(g => proformaSelection.has(g.id));
+                    const glassToPrint = selectedGlass.length > 0 ? selectedGlass : purchasingGlass;
+                    
                     const glassByType = {};
-                    purchasingGlass.forEach(g => {
+                    glassToPrint.forEach(g => {
                       const typeName = g.name || 'Vitrage';
                       if (!glassByType[typeName]) glassByType[typeName] = [];
                       glassByType[typeName].push(g);
@@ -2149,77 +2188,72 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                 ℹ️ Cochez les profilés à jumeler ensemble, puis cliquez sur "Confirmer le jumelage".
               </div>
             )}
-            <div className="table-responsive">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: '40px' }}>
-                       <input 
-                         type="checkbox" 
-                         onChange={(e) => {
-                           if (e.target.checked) {
-                             setProformaSelection(new Set([...displayProfiles.map(p=>p.id), ...purchasingAccessories.map(a=>a.id)]));
-                           } else {
-                             setProformaSelection(new Set());
-                           }
-                         }}
-                         checked={proformaSelection.size > 0}
-                       />
-                    </th>
-                    {jumelageMode && <th style={{ width: '30px' }}></th>}
-                    <th style={{ width: '50px' }}>Photo</th>
-                    <th>Référence</th>
-                    <th>Finition</th>
-                    <th>RAL</th>
-                    <th>Désignation</th>
-                    <th>Longueur Barre (mm)</th>
-                    <th>Quantité (Barres)</th>
-                    <th>Stock (Chutes)</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {displayProfiles.map((p, i) => {
-                    const barKey = p.id;
-                    const adminBarLength = parseFloat(p.barLength) || 6400;
-                    const bLength = barLengths[barKey] !== undefined ? barLengths[barKey] : adminBarLength;
-                    const ml = p.totalMeasure;
-                    // Bin Packing Algorithm (1D Nesting / Next Fit Decreasing)
-                    const pieces = p.pieces ? [...p.pieces].sort((a,b) => b - a) : [];
-                    let bars = 0;
-                    const unitClean = (p.priceUnit || '').toUpperCase().trim();
-                    
-                    if ((unitClean === 'BARRE' || !unitClean) && pieces.length > 0) {
-                      // Optimization: BEST FIT into stock then new bars
-                      bars = calculateBarsNeeded(pieces, bLength, manualStockOffcuts[barKey] || []);
-                    } else {
-                      // No optimization for ML or other units, just straight division
-                      bars = Math.ceil(ml / bLength);
-                    }
-  
-                    const isSelected = jumelageSelection.has(p.id);
-                    const rowBg = p._isGroup ? '#faf5ff' : isSelected ? '#ede9fe' : 'transparent';
-                    return (
-                      <tr key={`dp-${i}`} style={{ background: proformaSelection.has(p.id) ? '#f0f9ff' : 'transparent' }}>
-                        <td>
-                           <input 
-                             type="checkbox" 
-                             checked={proformaSelection.has(p.id)} 
-                             onChange={() => toggleProformaSelection(p.id)} 
-                           />
-                        </td>
-                        {jumelageMode && !p._isGroup && (
-                          <td data-label="Sélec.">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => handleJumelageToggle(p.id)}
-                              style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+            {/* --- SECTION 1: PROFILÉS ALU --- */}
+            {profilesAlu.length > 0 && (
+              <div className="table-responsive" style={{ marginTop: '1.5rem' }}>
+                <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#4c1d95', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Package size={16} /> Profilés Alu (Fenêtre)
+                </h3>
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: '40px' }}>
+                        <input 
+                          type="checkbox" 
+                          onChange={() => toggleSelectAllList(profilesAlu)}
+                          checked={isListAllSelected(profilesAlu)}
+                        />
+                      </th>
+                      {jumelageMode && <th style={{ width: '30px' }}></th>}
+                      <th style={{ width: '50px' }}>Photo</th>
+                      <th>Référence</th>
+                      <th>Finition</th>
+                      <th>RAL</th>
+                      <th>Désignation</th>
+                      <th>Longueur Barre (mm)</th>
+                      <th>Quantité (Barres)</th>
+                      <th>Stock (Chutes)</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {profilesAlu.map((p, i) => {
+                      const barKey = p.id;
+                      const adminBarLength = parseFloat(p.barLength) || 6400;
+                      const bLength = barLengths[barKey] !== undefined ? barLengths[barKey] : adminBarLength;
+                      const ml = p.totalMeasure;
+                      const pieces = p.pieces ? [...p.pieces].sort((a,b) => b - a) : [];
+                      let bars = 0;
+                      const unitClean = (p.priceUnit || '').toUpperCase().trim();
+                      
+                      if ((unitClean === 'BARRE' || !unitClean) && pieces.length > 0) {
+                        bars = calculateBarsNeeded(pieces, bLength, manualStockOffcuts[barKey] || []);
+                      } else {
+                        bars = Math.ceil(ml / bLength);
+                      }
+    
+                      const isSelected = jumelageSelection.has(p.id);
+                      return (
+                        <tr key={`dp-alu-${i}`} style={{ background: proformaSelection.has(p.id) ? '#f0f9ff' : 'transparent' }}>
+                          <td>
+                            <input 
+                              type="checkbox" 
+                              checked={proformaSelection.has(p.id)} 
+                              onChange={() => toggleProformaSelection(p.id)} 
                             />
                           </td>
-                        )}
-                        {jumelageMode && p._isGroup && <td data-label="-"></td>}
-                        <td style={{ textAlign: 'center' }}>
+                          {jumelageMode && !p._isGroup && (
+                            <td data-label="Sélec.">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => handleJumelageToggle(p.id)}
+                                style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                              />
+                            </td>
+                          )}
+                          {jumelageMode && p._isGroup && <td data-label="-"></td>}
+                          <td style={{ textAlign: 'center' }}>
                             {p.image ? (
                               <img src={p.image} style={{ width: '35px', height: '35px', objectFit: 'contain', borderRadius: '4px' }} alt="" />
                             ) : (
@@ -2227,133 +2261,310 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                                 <Package size={14} color="#cbd5e1" />
                               </div>
                             )}
-                         </td>
-                         <td data-label="Réf." style={{ color: '#64748b', fontSize: '0.75rem', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                           {p._isGroup ? p.id.split(' + ').map(x => resolveRef(x)).join(' + ') : resolveRef(p.baseId || p.id)}
-                         </td>
-                         <td data-label="Finition" style={{ fontSize: '0.85rem' }}>{p._isGroup ? 'Multicolore / Varié' : p.colorName || 'Standard'}</td>
-                         <td data-label="RAL" style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b' }}>{p._isGroup ? '—' : p.colorId || 'Std'}</td>
-                        <td data-label="Nom" style={{ fontWeight: 600 }}>
-                          {p._isGroup && <span style={{ fontSize: '0.7rem', background: '#8b5cf6', color: 'white', padding: '0.1rem 0.4rem', borderRadius: '999px', marginRight: '0.4rem' }}>Jumelé</span>}
-                          {p.name || '—'}
-                          <div style={{ fontSize: '0.85rem', color: '#8b5cf6', marginTop: '0.2rem', fontWeight: 800 }}>
-                            Total Chantier: {(ml / 1000).toFixed(2)} ML
-                          </div>
-                        </td>
-                        <td data-label="Lg. Barre">
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <input 
-                              type="number" 
-                              className="input" 
-                              value={bLength}
-                              onChange={(e) => handleBarLengthChange(barKey, e.target.value)}
-                              style={{ width: '80px', padding: '0.2rem 0.5rem', fontSize: '0.8rem' }}
-                            />
-                            <Edit2 size={12} color="#94a3b8" />
-                          </div>
-                        </td>
-                        <td data-label="Barres">
-                          <div style={{ fontSize: '1.25rem', fontWeight: 800, color: bars > 0 ? '#1e293b' : '#10b981' }}>
-                            {bars}
-                          </div>
-                          {bars > 0 && <div style={{ fontSize: '0.65rem', color: '#64748b' }}>Achat nécessaire</div>}
-                          {bars === 0 && <div style={{ fontSize: '0.65rem', color: '#10b981' }}>Stock suffisant</div>}
-                        </td>
-                        <td data-label="Chutes Stock" style={{ minWidth: '180px' }}>
-                          {(unitClean === 'BARRE' || !unitClean) ? (
-                            <>
-                              <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '0.5rem' }}>
-                                <input 
-                                  type="number" 
-                                  placeholder="Lg. chute"
-                                  className="input"
-                                  value={offcutInputs[barKey] || ""}
-                                  onChange={(e) => setOffcutInputs(prev => ({ ...prev, [barKey]: e.target.value }))}
-                                  onKeyDown={(e) => { if (e.key === 'Enter') handleAddStockOffcut(barKey); }}
-                                  style={{ width: '80px', padding: '0.2rem 0.4rem', fontSize: '0.75rem' }}
-                                />
-                                <button 
-                                  onClick={() => handleAddStockOffcut(barKey)}
-                                  className="btn btn-secondary"
-                                  style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
-                                >
-                                  <Plus size={14} />
-                                </button>
-                              </div>
-                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.2rem' }}>
-                                {(manualStockOffcuts[barKey] || []).map((len, sIdx) => (
-                                  <span 
-                                    key={sIdx}
-                                    style={{ 
-                                      fontSize: '0.7rem', 
-                                      background: '#f1f5f9', 
-                                      padding: '0.1rem 0.4rem', 
-                                      borderRadius: '4px',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: '0.2rem',
-                                      border: '1px solid #e2e8f0'
-                                    }}
+                          </td>
+                          <td data-label="Réf." style={{ color: '#64748b', fontSize: '0.75rem', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {p._isGroup ? p.id.split(' + ').map(x => resolveRef(x)).join(' + ') : resolveRef(p.baseId || p.id)}
+                          </td>
+                          <td data-label="Finition" style={{ fontSize: '0.85rem' }}>{p._isGroup ? 'Multicolore / Varié' : p.colorName || 'Standard'}</td>
+                          <td data-label="RAL" style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b' }}>{p._isGroup ? '—' : p.colorId || 'Std'}</td>
+                          <td data-label="Nom" style={{ fontWeight: 600 }}>
+                            {p._isGroup && <span style={{ fontSize: '0.7rem', background: '#8b5cf6', color: 'white', padding: '0.1rem 0.4rem', borderRadius: '999px', marginRight: '0.4rem' }}>Jumelé</span>}
+                            {p.name || '—'}
+                            <div style={{ fontSize: '0.85rem', color: '#8b5cf6', marginTop: '0.2rem', fontWeight: 800 }}>
+                              Total Chantier: {(ml / 1000).toFixed(2)} ML
+                            </div>
+                          </td>
+                          <td data-label="Lg. Barre">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <input 
+                                type="number" 
+                                className="input" 
+                                value={bLength}
+                                onChange={(e) => handleBarLengthChange(barKey, e.target.value)}
+                                style={{ width: '80px', padding: '0.2rem 0.5rem', fontSize: '0.8rem' }}
+                              />
+                              <Edit2 size={12} color="#94a3b8" />
+                            </div>
+                          </td>
+                          <td data-label="Barres">
+                            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: bars > 0 ? '#1e293b' : '#10b981' }}>
+                              {bars}
+                            </div>
+                            {bars > 0 && <div style={{ fontSize: '0.65rem', color: '#64748b' }}>Achat nécessaire</div>}
+                            {bars === 0 && <div style={{ fontSize: '0.65rem', color: '#10b981' }}>Stock suffisant</div>}
+                          </td>
+                          <td data-label="Chutes Stock" style={{ minWidth: '180px' }}>
+                            {(unitClean === 'BARRE' || !unitClean) ? (
+                              <>
+                                <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '0.5rem' }}>
+                                  <input 
+                                    type="number" 
+                                    placeholder="Lg. chute"
+                                    className="input"
+                                    value={offcutInputs[barKey] || ""}
+                                    onChange={(e) => setOffcutInputs(prev => ({ ...prev, [barKey]: e.target.value }))}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') handleAddStockOffcut(barKey); }}
+                                    style={{ width: '80px', padding: '0.2rem 0.4rem', fontSize: '0.75rem' }}
+                                  />
+                                  <button 
+                                    onClick={() => handleAddStockOffcut(barKey)}
+                                    className="btn btn-secondary"
+                                    style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
                                   >
-                                    {len}
-                                    <Trash2 
-                                      size={10} 
-                                      style={{ cursor: 'pointer', color: '#ef4444' }} 
-                                      onClick={() => handleRemoveStockOffcut(barKey, sIdx)}
-                                    />
-                                  </span>
-                                ))}
+                                    <Plus size={14} />
+                                  </button>
+                                </div>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.2rem' }}>
+                                  {(manualStockOffcuts[barKey] || []).map((len, sIdx) => (
+                                    <span 
+                                      key={sIdx}
+                                      style={{ 
+                                        fontSize: '0.7rem', 
+                                        background: '#f1f5f9', 
+                                        padding: '0.1rem 0.4rem', 
+                                        borderRadius: '4px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.2rem',
+                                        border: '1px solid #e2e8f0'
+                                      }}
+                                    >
+                                      {len}
+                                      <Trash2 
+                                        size={10} 
+                                        style={{ cursor: 'pointer', color: '#ef4444' }} 
+                                        onClick={() => handleRemoveStockOffcut(barKey, sIdx)}
+                                      />
+                                    </span>
+                                  ))}
+                                </div>
+                              </>
+                            ) : (
+                              <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>N/A (Unité: {p.priceUnit})</span>
+                            )}
+                          </td>
+                          <td data-label="Action">
+                            {p._isGroup && (
+                              <button
+                                onClick={() => handleDissolveGroup(p._groupIndex)}
+                                title="Annuler ce jumelage"
+                                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#ef4444', padding: '0.2rem' }}
+                              >
+                                <Link2Off size={15} />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* --- SECTION 2: PROFILÉS VOLET --- */}
+            {profilesVolet.length > 0 && (
+              <div className="table-responsive" style={{ marginTop: '2rem' }}>
+                <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#6d28d9', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Package size={16} /> Barres de Volet (Profilés)
+                </h3>
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: '40px' }}>
+                        <input 
+                          type="checkbox" 
+                          onChange={() => toggleSelectAllList(profilesVolet)}
+                          checked={isListAllSelected(profilesVolet)}
+                        />
+                      </th>
+                      {jumelageMode && <th style={{ width: '30px' }}></th>}
+                      <th style={{ width: '50px' }}>Photo</th>
+                      <th>Référence</th>
+                      <th>Finition</th>
+                      <th>RAL</th>
+                      <th>Désignation</th>
+                      <th>Longueur Barre (mm)</th>
+                      <th>Quantité (Barres)</th>
+                      <th>Stock (Chutes)</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {profilesVolet.map((p, i) => {
+                      const barKey = p.id;
+                      const adminBarLength = parseFloat(p.barLength) || 6400;
+                      const bLength = barLengths[barKey] !== undefined ? barLengths[barKey] : adminBarLength;
+                      const ml = p.totalMeasure;
+                      const pieces = p.pieces ? [...p.pieces].sort((a,b) => b - a) : [];
+                      let bars = 0;
+                      const unitClean = (p.priceUnit || '').toUpperCase().trim();
+                      
+                      if ((unitClean === 'BARRE' || !unitClean) && pieces.length > 0) {
+                        bars = calculateBarsNeeded(pieces, bLength, manualStockOffcuts[barKey] || []);
+                      } else {
+                        bars = Math.ceil(ml / bLength);
+                      }
+    
+                      const isSelected = jumelageSelection.has(p.id);
+                      return (
+                        <tr key={`dp-volet-${i}`} style={{ background: proformaSelection.has(p.id) ? '#f0f9ff' : 'transparent' }}>
+                          <td>
+                            <input 
+                              type="checkbox" 
+                              checked={proformaSelection.has(p.id)} 
+                              onChange={() => toggleProformaSelection(p.id)} 
+                            />
+                          </td>
+                          {jumelageMode && !p._isGroup && (
+                            <td data-label="Sélec.">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => handleJumelageToggle(p.id)}
+                                style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                              />
+                            </td>
+                          )}
+                          {jumelageMode && p._isGroup && <td data-label="-"></td>}
+                          <td style={{ textAlign: 'center' }}>
+                            {p.image ? (
+                              <img src={p.image} style={{ width: '35px', height: '35px', objectFit: 'contain', borderRadius: '4px' }} alt="" />
+                            ) : (
+                              <div style={{ width: '35px', height: '35px', background: '#f8fafc', borderRadius: '4px', display: 'grid', placeItems: 'center' }}>
+                                <Package size={14} color="#cbd5e1" />
                               </div>
-                            </>
-                          ) : (
-                            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>N/A (Unité: {p.priceUnit})</span>
-                          )}
-                        </td>
-                        <td data-label="Action">
-                          {p._isGroup && (
-                            <button
-                              onClick={() => handleDissolveGroup(p._groupIndex)}
-                              title="Annuler ce jumelage"
-                              style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#ef4444', padding: '0.2rem' }}
-                            >
-                              <Link2Off size={15} />
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-  
-                  {displayProfiles.length === 0 && <tr><td colSpan="7">Aucun profilé trouvé.</td></tr>}
-                </tbody>
-              </table>
-            </div>
+                            )}
+                          </td>
+                          <td data-label="Réf." style={{ color: '#64748b', fontSize: '0.75rem', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {p._isGroup ? p.id.split(' + ').map(x => resolveRef(x)).join(' + ') : resolveRef(p.baseId || p.id)}
+                          </td>
+                          <td data-label="Finition" style={{ fontSize: '0.85rem' }}>{p._isGroup ? 'Multicolore / Varié' : p.colorName || 'Standard'}</td>
+                          <td data-label="RAL" style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b' }}>{p._isGroup ? '—' : p.colorId || 'Std'}</td>
+                          <td data-label="Nom" style={{ fontWeight: 600 }}>
+                            {p._isGroup && <span style={{ fontSize: '0.7rem', background: '#8b5cf6', color: 'white', padding: '0.1rem 0.4rem', borderRadius: '999px', marginRight: '0.4rem' }}>Jumelé</span>}
+                            {p.name || '—'}
+                            <div style={{ fontSize: '0.85rem', color: '#8b5cf6', marginTop: '0.2rem', fontWeight: 800 }}>
+                              Total Chantier: {(ml / 1000).toFixed(2)} ML
+                            </div>
+                          </td>
+                          <td data-label="Lg. Barre">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <input 
+                                type="number" 
+                                className="input" 
+                                value={bLength}
+                                onChange={(e) => handleBarLengthChange(barKey, e.target.value)}
+                                style={{ width: '80px', padding: '0.2rem 0.5rem', fontSize: '0.8rem' }}
+                              />
+                              <Edit2 size={12} color="#94a3b8" />
+                            </div>
+                          </td>
+                          <td data-label="Barres">
+                            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: bars > 0 ? '#1e293b' : '#10b981' }}>
+                              {bars}
+                            </div>
+                            {bars > 0 && <div style={{ fontSize: '0.65rem', color: '#64748b' }}>Achat nécessaire</div>}
+                            {bars === 0 && <div style={{ fontSize: '0.65rem', color: '#10b981' }}>Stock suffisant</div>}
+                          </td>
+                          <td data-label="Chutes Stock" style={{ minWidth: '180px' }}>
+                            {(unitClean === 'BARRE' || !unitClean) ? (
+                              <>
+                                <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '0.5rem' }}>
+                                  <input 
+                                    type="number" 
+                                    placeholder="Lg. chute"
+                                    className="input"
+                                    value={offcutInputs[barKey] || ""}
+                                    onChange={(e) => setOffcutInputs(prev => ({ ...prev, [barKey]: e.target.value }))}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') handleAddStockOffcut(barKey); }}
+                                    style={{ width: '80px', padding: '0.2rem 0.4rem', fontSize: '0.75rem' }}
+                                  />
+                                  <button 
+                                    onClick={() => handleAddStockOffcut(barKey)}
+                                    className="btn btn-secondary"
+                                    style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
+                                  >
+                                    <Plus size={14} />
+                                  </button>
+                                </div>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.2rem' }}>
+                                  {(manualStockOffcuts[barKey] || []).map((len, sIdx) => (
+                                    <span 
+                                      key={sIdx}
+                                      style={{ 
+                                        fontSize: '0.7rem', 
+                                        background: '#f1f5f9', 
+                                        padding: '0.1rem 0.4rem', 
+                                        borderRadius: '4px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.2rem',
+                                        border: '1px solid #e2e8f0'
+                                      }}
+                                    >
+                                      {len}
+                                      <Trash2 
+                                        size={10} 
+                                        style={{ cursor: 'pointer', color: '#ef4444' }} 
+                                        onClick={() => handleRemoveStockOffcut(barKey, sIdx)}
+                                      />
+                                    </span>
+                                  ))}
+                                </div>
+                              </>
+                            ) : (
+                              <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>N/A (Unité: {p.priceUnit})</span>
+                            )}
+                          </td>
+                          <td data-label="Action">
+                            {p._isGroup && (
+                              <button
+                                onClick={() => handleDissolveGroup(p._groupIndex)}
+                                title="Annuler ce jumelage"
+                                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#ef4444', padding: '0.2rem' }}
+                              >
+                                <Link2Off size={15} />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
-          {/* Table: Joints & Elements ML */}
-          {purchasingAccessories.some(a => ['M', 'ML', 'JOINT'].includes((a.unit || a.priceUnit || '').toUpperCase().trim())) && (
-          <div className="glass shadow-md" style={{ borderLeft: '4px solid #06b6d4' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.5rem' }}>
-              <Package size={20} color="#06b6d4" />
-              <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Liste d'Achat : Joints & Éléments Linéaires</h2>
-              <span style={{ fontSize: '0.72rem', background: '#0e7490', color: 'white', padding: '0.15rem 0.5rem', borderRadius: '999px', fontWeight: 700 }}>ML</span>
-            </div>
-            <div className="table-responsive">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: '40px' }}></th>
-                    <th>Référence</th>
-                    <th>Finition</th>
-                    <th>Désignation</th>
-                    <th>Longueur Totale</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {purchasingAccessories
-                    .filter(a => ['M', 'ML', 'JOINT'].includes((a.unit || a.priceUnit || '').toUpperCase().trim()))
-                    .map((a, i) => (
-                      <tr key={`ml-${i}`} style={{ background: proformaSelection.has(a.id) ? '#ecfeff' : 'transparent' }}>
+          {/* --- SECTION 3: JOINTS & ÉLÉMENTS LINÉAIRES ALU --- */}
+          {jointsAlu.length > 0 && (
+            <div className="glass shadow-md" style={{ borderLeft: '4px solid #06b6d4' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.5rem' }}>
+                <Package size={20} color="#06b6d4" />
+                <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Liste d'Achat : Joints & Éléments Linéaires Alu</h2>
+                <span style={{ fontSize: '0.72rem', background: '#0e7490', color: 'white', padding: '0.15rem 0.5rem', borderRadius: '999px', fontWeight: 700 }}>ML</span>
+              </div>
+              <div className="table-responsive">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: '40px' }}>
+                        <input 
+                          type="checkbox" 
+                          onChange={() => toggleSelectAllList(jointsAlu)}
+                          checked={isListAllSelected(jointsAlu)}
+                        />
+                      </th>
+                      <th>Référence</th>
+                      <th>Finition</th>
+                      <th>Désignation</th>
+                      <th>Longueur Totale</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {jointsAlu.map((a, i) => (
+                      <tr key={`ml-alu-${i}`} style={{ background: proformaSelection.has(a.id) ? '#ecfeff' : 'transparent' }}>
                         <td><input type="checkbox" checked={proformaSelection.has(a.id)} onChange={() => toggleProformaSelection(a.id)} /></td>
                         <td data-label="Réf." style={{ color: '#64748b', fontSize: '0.75rem', fontFamily: 'monospace' }}>{resolveRef(a.baseId || a.id)}</td>
                         <td data-label="Finition" style={{ fontSize: '0.85rem' }}>{a.colorName || 'Standard'}</td>
@@ -2362,42 +2573,88 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                           {(a.totalMeasure / 1000).toFixed(2)} m
                         </td>
                       </tr>
-                    ))
-                  }
-                </tbody>
-              </table>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
           )}
 
-          {/* Table: Accessoires Unité */}
-          {purchasingAccessories.some(a => !['M', 'ML', 'JOINT'].includes((a.unit || a.priceUnit || '').toUpperCase().trim())) && (
-          <div className="glass shadow-md" style={{ borderLeft: '4px solid #f59e0b' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.5rem' }}>
-              <Package size={20} color="#f59e0b" />
-              <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Liste d'Achat : Accessoires</h2>
-              <span style={{ fontSize: '0.72rem', background: '#d97706', color: 'white', padding: '0.15rem 0.5rem', borderRadius: '999px', fontWeight: 700 }}>Unité</span>
+          {/* --- SECTION 4: JOINTS & ÉLÉMENTS LINÉAIRES VOLET --- */}
+          {jointsVolet.length > 0 && (
+            <div className="glass shadow-md" style={{ borderLeft: '4px solid #22d3ee' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.5rem' }}>
+                <Package size={20} color="#22d3ee" />
+                <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Liste d'Achat : Joints & Éléments Linéaires Volet</h2>
+                <span style={{ fontSize: '0.72rem', background: '#0891b2', color: 'white', padding: '0.15rem 0.5rem', borderRadius: '999px', fontWeight: 700 }}>ML</span>
+              </div>
+              <div className="table-responsive">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: '40px' }}>
+                        <input 
+                          type="checkbox" 
+                          onChange={() => toggleSelectAllList(jointsVolet)}
+                          checked={isListAllSelected(jointsVolet)}
+                        />
+                      </th>
+                      <th>Référence</th>
+                      <th>Finition</th>
+                      <th>Désignation</th>
+                      <th>Longueur Totale</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {jointsVolet.map((a, i) => (
+                      <tr key={`ml-volet-${i}`} style={{ background: proformaSelection.has(a.id) ? '#ecfeff' : 'transparent' }}>
+                        <td><input type="checkbox" checked={proformaSelection.has(a.id)} onChange={() => toggleProformaSelection(a.id)} /></td>
+                        <td data-label="Réf." style={{ color: '#64748b', fontSize: '0.75rem', fontFamily: 'monospace' }}>{resolveRef(a.baseId || a.id)}</td>
+                        <td data-label="Finition" style={{ fontSize: '0.85rem' }}>{a.colorName || 'Standard'}</td>
+                        <td data-label="Nom" style={{ fontWeight: 600 }}>{a.combinedName || 'Joint'}</td>
+                        <td data-label="ML" style={{ color: '#0891b2', fontWeight: 800, fontSize: '1rem' }}>
+                          {(a.totalMeasure / 1000).toFixed(2)} m
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-            <div className="table-responsive">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: '40px' }}></th>
-                    <th>Référence</th>
-                    <th>Finition</th>
-                    <th>Désignation</th>
-                    <th>Unité</th>
-                    <th>Quantité</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {purchasingAccessories
-                    .filter(a => !['M', 'ML', 'JOINT'].includes((a.unit || a.priceUnit || '').toUpperCase().trim()))
-                    .map((a, i) => {
+          )}
+
+          {/* --- SECTION 5: ACCESSOIRES ALU --- */}
+          {accessoriesAlu.length > 0 && (
+            <div className="glass shadow-md" style={{ borderLeft: '4px solid #f59e0b' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.5rem' }}>
+                <Package size={20} color="#f59e0b" />
+                <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Liste d'Achat : Accessoires Alu</h2>
+                <span style={{ fontSize: '0.72rem', background: '#d97706', color: 'white', padding: '0.15rem 0.5rem', borderRadius: '999px', fontWeight: 700 }}>Unité</span>
+              </div>
+              <div className="table-responsive">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: '40px' }}>
+                        <input 
+                          type="checkbox" 
+                          onChange={() => toggleSelectAllList(accessoriesAlu)}
+                          checked={isListAllSelected(accessoriesAlu)}
+                        />
+                      </th>
+                      <th>Référence</th>
+                      <th>Finition</th>
+                      <th>Désignation</th>
+                      <th>Unité</th>
+                      <th>Quantité</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {accessoriesAlu.map((a, i) => {
                       const unitLabel = a.unit || a.priceUnit || 'U';
                       const isAddon = a.id?.includes('-addon-');
                       return (
-                        <tr key={`ua-${i}`} style={{ background: proformaSelection.has(a.id) ? '#fffbeb' : 'transparent' }}>
+                        <tr key={`ua-alu-${i}`} style={{ background: proformaSelection.has(a.id) ? '#fffbeb' : 'transparent' }}>
                           <td><input type="checkbox" checked={proformaSelection.has(a.id)} onChange={() => toggleProformaSelection(a.id)} /></td>
                           <td data-label="Réf." style={{ color: '#64748b', fontSize: '0.75rem', fontFamily: 'monospace' }}>{resolveRef(a.baseId || a.id)}</td>
                           <td data-label="Finition" style={{ fontSize: '0.85rem' }}>{a.colorName || 'Standard'}</td>
@@ -2415,44 +2672,113 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                           </td>
                         </tr>
                       );
-                    })
-                  }
-                </tbody>
-              </table>
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
           )}
 
-          {/* Table: Détails Vitrage */}
-          <div className="glass shadow-md" style={{ borderLeft: '4px solid #06b6d4' }}>
+          {/* --- SECTION 6: ACCESSOIRES VOLET --- */}
+          {accessoriesVolet.length > 0 && (
+            <div className="glass shadow-md" style={{ borderLeft: '4px solid #fbbf24' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.5rem' }}>
+                <Package size={20} color="#fbbf24" />
+                <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Liste d'Achat : Accessoires Volet</h2>
+                <span style={{ fontSize: '0.72rem', background: '#d97706', color: 'white', padding: '0.15rem 0.5rem', borderRadius: '999px', fontWeight: 700 }}>Unité</span>
+              </div>
+              <div className="table-responsive">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: '40px' }}>
+                        <input 
+                          type="checkbox" 
+                          onChange={() => toggleSelectAllList(accessoriesVolet)}
+                          checked={isListAllSelected(accessoriesVolet)}
+                        />
+                      </th>
+                      <th>Référence</th>
+                      <th>Finition</th>
+                      <th>Désignation</th>
+                      <th>Unité</th>
+                      <th>Quantité</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {accessoriesVolet.map((a, i) => {
+                      const unitLabel = a.unit || a.priceUnit || 'U';
+                      const isAddon = a.id?.includes('-addon-');
+                      return (
+                        <tr key={`ua-volet-${i}`} style={{ background: proformaSelection.has(a.id) ? '#fffbeb' : 'transparent' }}>
+                          <td><input type="checkbox" checked={proformaSelection.has(a.id)} onChange={() => toggleProformaSelection(a.id)} /></td>
+                          <td data-label="Réf." style={{ color: '#64748b', fontSize: '0.75rem', fontFamily: 'monospace' }}>{resolveRef(a.baseId || a.id)}</td>
+                          <td data-label="Finition" style={{ fontSize: '0.85rem' }}>{a.colorName || 'Standard'}</td>
+                          <td data-label="Nom" style={{ fontWeight: 600 }}>
+                            {a.combinedName || 'Accessoire'}
+                            {isAddon && a.resolvedFormula && (
+                              <div style={{ fontSize: '0.68rem', color: '#94a3b8', fontWeight: 400, marginTop: '0.15rem', fontFamily: 'monospace' }}>
+                                📐 {a.resolvedFormula}
+                              </div>
+                            )}
+                          </td>
+                          <td data-label="Unité" style={{ fontSize: '0.8rem', color: '#64748b' }}>{unitLabel}</td>
+                          <td data-label="Qté" style={{ color: '#f59e0b', fontWeight: 800, fontSize: '1rem' }}>
+                            {Number.isInteger(a.totalQty) ? a.totalQty : a.totalQty.toFixed(2)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* --- SECTION 7: VITRAGES DÉTAILLÉS --- */}
+          <div className="glass shadow-md" style={{ borderLeft: '4px solid #10b981' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.5rem' }}>
-              <Layers size={20} color="#06b6d4" />
+              <Layers size={20} color="#10b981" />
               <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Liste d'Achat : Vitrages Détaillés</h2>
             </div>
             <div className="table-responsive">
               <table className="data-table">
                 <thead>
-                    <tr>
-                      <th>Référence</th>
-                      <th>Finition</th>
-                      <th>Désignation</th>
-                      <th>Réf. Fenêtre</th>
-                      <th>Dimensions (L x H)</th>
-                      <th>Quantité</th>
+                  <tr>
+                    <th style={{ width: '40px' }}>
+                      <input 
+                        type="checkbox" 
+                        onChange={() => toggleSelectAllList(purchasingGlass)}
+                        checked={isListAllSelected(purchasingGlass)}
+                      />
+                    </th>
+                    <th>Référence</th>
+                    <th>Finition</th>
+                    <th>Désignation</th>
+                    <th>Réf. Fenêtre</th>
+                    <th>Dimensions (L x H)</th>
+                    <th>Quantité</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {purchasingGlass.map((g, i) => (
+                    <tr key={`ag-${i}`} style={{ background: proformaSelection.has(g.id) ? '#ecfeff' : 'transparent' }}>
+                      <td>
+                        <input 
+                          type="checkbox" 
+                          checked={proformaSelection.has(g.id)} 
+                          onChange={() => toggleProformaSelection(g.id)} 
+                        />
+                      </td>
+                      <td data-label="Réf." style={{ color: '#64748b', fontSize: '0.75rem', fontFamily: 'monospace' }}>{resolveRef(g.baseId || g.id)}</td>
+                      <td data-label="Finition" style={{ fontSize: '0.85rem' }}>{g.colorName || 'Standard'}</td>
+                      <td data-label="Nom" style={{ fontWeight: 600 }}>{g.name}</td>
+                      <td data-label="Réf. Fen.">{g.combinedRefs || '—'}</td>
+                      <td data-label="Dim." style={{ fontWeight: 500 }}>{g.width} x {g.height} mm</td>
+                      <td data-label="Qté" style={{ color: '#10b981', fontWeight: 700 }}>{g.count}u</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {purchasingGlass.map((g, i) => (
-                      <tr key={`ag-${i}`}>
-                        <td data-label="Réf." style={{ color: '#64748b', fontSize: '0.75rem', fontFamily: 'monospace' }}>{resolveRef(g.baseId || g.id)}</td>
-                        <td data-label="Finition" style={{ fontSize: '0.85rem' }}>{g.colorName || 'Standard'}</td>
-                        <td data-label="Nom" style={{ fontWeight: 600 }}>{g.name}</td>
-                        <td data-label="Réf. Fen.">{g.combinedRefs || '—'}</td>
-                        <td data-label="Dim." style={{ fontWeight: 500 }}>{g.width} x {g.height} mm</td>
-                        <td data-label="Qté" style={{ color: '#06b6d4', fontWeight: 700 }}>{g.count}u</td>
-                      </tr>
-                    ))}
-                  {purchasingGlass.length === 0 && <tr><td colSpan="5">Aucun vitrage détaillé trouvé.</td></tr>}
+                  ))}
+                  {purchasingGlass.length === 0 && <tr><td colSpan="7">Aucun vitrage détaillé trouvé.</td></tr>}
                 </tbody>
               </table>
             </div>
