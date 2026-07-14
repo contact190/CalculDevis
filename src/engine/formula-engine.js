@@ -1244,6 +1244,48 @@ export class FormulaEngine {
           unitPrice: prof.pricePerBar ? (prof.pricePerBar / (prof.barLength || 6000)) : ((prof.weightPerM||0) * (prof.pricePerKg||0) / 1000),
           qty: divQty, length: len, totalMeasure: len * divQty, cost: cost * divQty
         });
+
+        // Process add-ons for divider/jonction profiles
+        if (prof.addOns && Array.isArray(prof.addOns) && prof.addOns.length > 0) {
+          const divAddonScope = { L: boxL, H: boxH, len };
+          prof.addOns.forEach(addon => {
+            // Compatibility check
+            if (addon.compatibilityFormula) {
+              try {
+                const isCompatible = this.evaluate(addon.compatibilityFormula, divAddonScope, `Compatibilité Add-on Jonction ${addon.name}`, errors);
+                if (!isCompatible) return;
+              } catch(e) { return; }
+            }
+
+            const addonFormula = addon.formula || '1';
+            let baseAddonQty = 1;
+            try {
+              baseAddonQty = this.evaluate(addonFormula, divAddonScope, `Qté Add-on Jonction ${addon.name}`, errors);
+            } catch(e) { baseAddonQty = 1; }
+
+            const totalAddonQty = baseAddonQty * divQty;
+            if (totalAddonQty <= 0) return;
+
+            const addonPrice = addon.price || 0;
+            const addonUnit = (addon.unit || 'Unité').toUpperCase();
+            let addonCost = addonUnit === 'ML' ? (totalAddonQty / 1000 * addonPrice) : (totalAddonQty * addonPrice);
+
+            results.accessories.push({
+              id: `${prof.id}-addon-${(addon.name || 'opt').replace(/\s+/g, '-').toLowerCase()}`,
+              name: `Add-on (${prof.name}): ${addon.name}`,
+              label: addon.name,
+              qty: totalAddonQty,
+              totalMeasure: addonUnit === 'ML' ? totalAddonQty : 0,
+              unit: addon.unit || 'Unité',
+              priceUnit: addon.unit || 'Unité',
+              price: addonPrice,
+              formula: addonFormula,
+              resolvedFormula: `${addonFormula} (${baseAddonQty}) x ${divQty} jonctions = ${totalAddonQty}`,
+              source: 'Jonction',
+              cost: addonCost
+            });
+          });
+        }
       }
 
       // Pre-calculate divider thickness (must be before items map)
