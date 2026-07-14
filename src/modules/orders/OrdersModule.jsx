@@ -207,10 +207,18 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
     if (!orderToDelete) return;
     if (confirmText !== orderToDelete.id) return;
 
-    setData(prev => ({
-      ...prev,
-      orders: (prev.orders || []).filter(o => o.id !== orderToDelete.id)
-    }));
+    setData(prev => {
+      const orderNumStr = orderToDelete.id.split('-')[1];
+      const deletedNum = parseInt(orderNumStr, 10);
+      const currentCounter = prev.orderCounter || 1;
+      const updates = {
+        orders: (prev.orders || []).filter(o => o.id !== orderToDelete.id)
+      };
+      if (!isNaN(deletedNum) && deletedNum < currentCounter) {
+        updates.orderCounter = deletedNum;
+      }
+      return { ...prev, ...updates };
+    });
     setOrderToDelete(null);
     setConfirmText('');
     alert("Commande supprimée.");

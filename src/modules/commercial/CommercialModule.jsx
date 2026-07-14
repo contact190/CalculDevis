@@ -2764,19 +2764,26 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
 
         // Update orders list if status is "Confirmé"
         let orders = prev.orders || [];
+        let nextOrderCounter = prev.orderCounter || 1;
         if (finalQuote.status === 'Confirmé') {
-          const orderNum = finalQuote.number.split('-')[1] || finalQuote.id;
-          const orderId = `CMD-${orderNum}`;
-          const existsInOrders = orders.some(o => o.quoteId === finalQuote.id || o.id === orderId);
+          const existingOrder = orders.find(o => o.quoteId === finalQuote.id);
+          let orderId = existingOrder ? existingOrder.id : null;
+          
+          if (!orderId) {
+            orderId = `CMD-${String(nextOrderCounter).padStart(2, '0')}`;
+            nextOrderCounter += 1;
+          }
+
+          const existsInOrders = orders.some(o => o.id === orderId);
           if (!existsInOrders) {
             orders = [...orders, { ...finalQuote, id: orderId, quoteId: finalQuote.id, batches: [], createdAt: new Date().toISOString() }];
           } else {
             // Update order info but preserve existing batches and site measurements
-            orders = orders.map(o => (o.quoteId === finalQuote.id || o.id === orderId) ? { ...o, ...finalQuote, id: orderId, quoteId: finalQuote.id, batches: o.batches || [] } : o);
+            orders = orders.map(o => o.id === orderId ? { ...o, ...finalQuote, id: orderId, quoteId: finalQuote.id, batches: o.batches || [] } : o);
           }
         }
 
-        return { ...prev, quotes, orders };
+        return { ...prev, quotes, orders, orderCounter: nextOrderCounter };
       });
 
       if (isNewQuote && setQuoteSettings) {

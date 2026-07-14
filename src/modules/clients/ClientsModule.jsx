@@ -32,8 +32,8 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
   const handleConvertToOrder = (quote) => {
     if (!window.confirm(`Voulez-vous transformer le devis ${quote.number} en commande active ?`)) return;
     
-    const orderNum = quote.number.split('-')[1] || quote.id;
-    const orderId = `CMD-${orderNum}`;
+    const existingOrder = (data.orders || []).find(o => o.quoteId === quote.id);
+    const orderId = existingOrder ? existingOrder.id : `CMD-${String(data.orderCounter || 1).padStart(2, '0')}`;
     
     const newOrder = {
       ...quote,
@@ -55,11 +55,15 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
       
       // 2. Add or Update Order
       const orders = prev.orders || [];
-      const orderExists = orders.some(o => o.quoteId === quote.id || o.id === orderId);
+      const orderExists = orders.some(o => o.id === orderId);
+      let nextOrderCounter = prev.orderCounter || 1;
+      if (!existingOrder) {
+        nextOrderCounter += 1;
+      }
       
       let finalOrders;
       if (orderExists) {
-        finalOrders = orders.map(o => (o.quoteId === quote.id || o.id === orderId) 
+        finalOrders = orders.map(o => o.id === orderId 
           ? { ...o, ...newOrder, batches: o.batches || [] } 
           : o);
       } else {
@@ -69,7 +73,8 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
       return {
         ...prev,
         quotes,
-        orders: finalOrders
+        orders: finalOrders,
+        orderCounter: nextOrderCounter
       };
     });
     alert(`Commande ${orderId} créée avec succès ! Retrouvez-la dans l'onglet "Commandes".`);

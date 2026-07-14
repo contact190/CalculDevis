@@ -191,6 +191,21 @@ function App() {
     if (!repaired.quotes) repaired.quotes = [];
     if (!repaired.contracts) repaired.contracts = [];
     if (!repaired.financialTrackers) repaired.financialTrackers = [];
+    
+    if (repaired.orderCounter === undefined || repaired.orderCounter === null) {
+      let maxCounter = 1;
+      (repaired.orders || []).forEach(o => {
+        if (o.id && o.id.startsWith('CMD-')) {
+          const numPart = o.id.split('-')[1];
+          const parsed = parseInt(numPart, 10);
+          if (!isNaN(parsed) && parsed >= maxCounter) {
+            maxCounter = parsed + 1;
+          }
+        }
+      });
+      repaired.orderCounter = maxCounter;
+    }
+
     return repaired;
   }, []);
 
