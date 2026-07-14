@@ -123,6 +123,14 @@ body {
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
+/* Force dropdown options to always be readable (dark text on white bg)
+   even when the <select> itself uses color: white on a dark panel */
+select.input option,
+select.input optgroup {
+  color: #1e293b;
+  background: white;
+}
+
 .btn {
   display: flex;
   align-items: center;
