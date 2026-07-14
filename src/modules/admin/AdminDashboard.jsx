@@ -4,6 +4,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { DEFAULT_DATA } from '../../data/default-data';
 import * as XLSX from 'xlsx';
 import { create, all } from 'mathjs';
+import { getDeviceId } from '../../utils/patchEngine';
 
 const math = create(all);
 
@@ -292,9 +293,13 @@ const AdminDashboard = ({ data, setData }) => {
       const updated = [...list];
       let targetIdx = -1;
       if (id) targetIdx = updated.findIndex(item => item && item.id === id);
-      if (targetIdx === -1) targetIdx = index;
       if (targetIdx !== -1 && targetIdx < updated.length) {
-        const item = { ...updated[targetIdx], [field]: (field === 'price' || field === 'height' || field === 'jointPrice' || field === 'baguettePrice' || field === 'barLength' || field === 'scrapThreshold') ? parseFloat(value) || 0 : value };
+        const item = { 
+          ...updated[targetIdx], 
+          [field]: (field === 'price' || field === 'height' || field === 'jointPrice' || field === 'baguettePrice' || field === 'barLength' || field === 'scrapThreshold') ? parseFloat(value) || 0 : value,
+          _lastModified: new Date().toISOString(),
+          _modifiedBy: getDeviceId()
+        };
         delete item._isNew;
         updated[targetIdx] = item;
       }
@@ -541,7 +546,12 @@ const AdminDashboard = ({ data, setData }) => {
       }
 
       if (targetIdx !== -1 && targetIdx < updatedCategoryList.length) {
-        const item = { ...updatedCategoryList[targetIdx], [field]: parseValue(value, updatedCategoryList[targetIdx][field]) };
+        const item = { 
+          ...updatedCategoryList[targetIdx], 
+          [field]: parseValue(value, updatedCategoryList[targetIdx][field]),
+          _lastModified: new Date().toISOString(),
+          _modifiedBy: getDeviceId()
+        };
         delete item._isNew;
         updatedCategoryList[targetIdx] = item;
       }
@@ -642,7 +652,11 @@ const AdminDashboard = ({ data, setData }) => {
   };
 
   const handleUpdateComposition = (updated) => {
-    const cleanUpdated = { ...updated };
+    const cleanUpdated = { 
+      ...updated,
+      _lastModified: new Date().toISOString(),
+      _modifiedBy: getDeviceId()
+    };
     delete cleanUpdated._isNew;
     setData(prev => ({
       ...prev,
@@ -1428,6 +1442,7 @@ const AdminDashboard = ({ data, setData }) => {
                             <th>Poids/m</th>
                             <th>P. Kg</th>
                             <th>P. Barre</th>
+                            <th>Lg Barre</th>
                             <th>Épaisseur</th>
                             <th>Gammes Compatibles</th>
                             <th>Actions</th>
@@ -1450,6 +1465,7 @@ const AdminDashboard = ({ data, setData }) => {
                                 <td><BufferedInput type="number" className="input" value={p.weightPerM} onChange={val => handleUpdateItem('profiles', p.id, 'weightPerM', val, idx)} style={{ width: '60px' }} /></td>
                                 <td><BufferedInput type="number" className="input" value={p.pricePerKg} onChange={val => handleUpdateItem('profiles', p.id, 'pricePerKg', val, idx)} style={{ width: '60px' }} /></td>
                                 <td><BufferedInput type="number" className="input" value={p.pricePerBar || 0} onChange={val => handleUpdateItem('profiles', p.id, 'pricePerBar', val, idx)} style={{ width: '60px' }} /></td>
+                                <td><BufferedInput type="number" className="input" value={p.barLength || 6000} onChange={val => handleUpdateItem('profiles', p.id, 'barLength', val, idx)} style={{ width: '60px' }} title="Lg Barre" /></td>
                                 <td><BufferedInput type="number" className="input" value={p.thickness || 0} onChange={val => handleUpdateItem('profiles', p.id, 'thickness', val, idx)} style={{ width: '50px' }} /></td>
                                 <td><MultiSelectRange selectedIds={p.rangeIds || []} allRanges={data.ranges} onChange={newR => handleUpdateItem('profiles', p.id, 'rangeIds', newR, idx)} /></td>
                                 <td style={{ display: 'flex', gap: '0.2rem' }}>
