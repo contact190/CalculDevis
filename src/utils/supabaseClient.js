@@ -385,7 +385,7 @@ export const syncDatabase = {
         catalog: ''
       };
       
-      const uploadPromises = [];
+      const uploadTasks = [];
 
       // ─── A. Partition large collections into buckets ───
       for (const key of ['clients', 'orders', 'quotes']) {
@@ -412,14 +412,15 @@ export const syncDatabase = {
           
           const cloudBucketHash = cloudBucketHashes[bucketIdx];
           if (bucketHash !== cloudBucketHash) {
-            console.log(`Uploading modified partition: ${key}/bucket-${bucketIdx}.json`);
-            const blob = new Blob([bucketStr], { type: 'application/json' });
-            uploadPromises.push(
-              bucket.upload(`${key}/bucket-${bucketIdx}.json`, blob, { 
+            uploadTasks.push(async () => {
+              console.log(`Uploading modified partition: ${key}/bucket-${bucketIdx}.json`);
+              const blob = new Blob([bucketStr], { type: 'application/json' });
+              const { error } = await bucket.upload(`${key}/bucket-${bucketIdx}.json`, blob, { 
                 upsert: true,
                 contentType: 'application/json'
-              }).then(({ error }) => { if (error) throw error; })
-            );
+              });
+              if (error) throw error;
+            });
           }
         }
       }
@@ -436,19 +437,33 @@ export const syncDatabase = {
       localHashes.catalog = catalogHash;
       
       if (catalogHash !== cloudHashes.catalog) {
-        console.log(`Uploading modified catalog.json`);
-        const blob = new Blob([catalogStr], { type: 'application/json' });
-        uploadPromises.push(
-          bucket.upload('catalog.json', blob, { 
+        uploadTasks.push(async () => {
+          console.log(`Uploading modified catalog.json`);
+          const blob = new Blob([catalogStr], { type: 'application/json' });
+          const { error } = await bucket.upload('catalog.json', blob, { 
             upsert: true,
             contentType: 'application/json'
-          }).then(({ error }) => { if (error) throw error; })
-        );
+          });
+          if (error) throw error;
+        });
       }
       
-      // Wait for all modified data partitions to upload concurrently
-      if (uploadPromises.length > 0) {
-        await Promise.all(uploadPromises);
+      // ─── C. Execute uploads with a concurrency limit to prevent Out Of Memory on slow networks ───
+      if (uploadTasks.length > 0) {
+        const MAX_CONCURRENCY = 4;
+        const executing = new Set();
+        const results = [];
+        for (const task of uploadTasks) {
+          const p = Promise.resolve().then(() => task());
+          results.push(p);
+          executing.add(p);
+          const clean = () => executing.delete(p);
+          p.then(clean, clean);
+          if (executing.size >= MAX_CONCURRENCY) {
+            await Promise.race(executing);
+          }
+        }
+        await Promise.all(results);
       }
       
       // ─── D. Update meta.json ───
