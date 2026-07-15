@@ -564,6 +564,8 @@ export class FormulaEngine {
 
       if (glassProfiles.length === 0) {
           console.warn(`[Parclose] No compatibility found for range=${composition.rangeId} thickness=${glass.thickness}`);
+      } else {
+          glassProfiles = [glassProfiles[0]]; // Only take the first matching configuration to prevent duplicate parclose generation
       }
 
       glassProfiles.forEach(gp => {
