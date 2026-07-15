@@ -484,17 +484,46 @@ export const cloudSync = {
     if (!ops || ops.length === 0) return { success: true, applied: 0 };
     
     try {
-      const rows = ops.map(op => ({
-        op: op.op,
-        collection: op.collection,
-        doc_id: op.id,
-        data: op.data,
-        timestamp: op.timestamp,
-        device_id: op.deviceId
-      }));
-      
-      const { error } = await supabase.from('operations_log').insert(rows);
-      if (error) throw error;
+      // ─── Filter out huge operations that would crash Supabase Realtime ───
+      const safeRows = [];
+      let needsForceRefresh = false;
+
+      for (const op of ops) {
+        const row = {
+          op: op.op,
+          collection: op.collection,
+          doc_id: op.id,
+          data: op.data,
+          timestamp: op.timestamp,
+          device_id: op.deviceId
+        };
+        
+        // Check size of payload
+        const sizeEstimate = JSON.stringify(row.data || {}).length;
+        if (sizeEstimate > 500000) { // 500 KB limit for realtime message
+          console.warn(`Operation for ${op.collection} is too large (${(sizeEstimate/1024).toFixed(1)} KB). Converting to force_refresh.`);
+          needsForceRefresh = true;
+        } else {
+          safeRows.push(row);
+        }
+      }
+
+      if (needsForceRefresh) {
+        // Add a force_refresh signal so other devices know to download the snapshot
+        safeRows.push({
+          op: 'replace_key',
+          collection: '_meta',
+          doc_id: 'force_refresh',
+          data: new Date().toISOString(),
+          timestamp: new Date().toISOString(),
+          device_id: ops[0]?.deviceId || 'unknown'
+        });
+      }
+
+      if (safeRows.length > 0) {
+        const { error } = await supabase.from('operations_log').insert(safeRows);
+        if (error) throw error;
+      }
       return { success: true, applied: ops.length };
     } catch (e) {
       console.error("Failed to push ops to cloud:", e);

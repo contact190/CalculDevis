@@ -408,13 +408,9 @@ function App() {
     let isCriticalChange = false;
     if (previousDbRef.current && !isApplyingRemoteOps.current) {
       cachedOps = generateOps(previousDbRef.current, database);
-      // Treat deletions AND all orders/clients/quotes changes as critical (instant sync)
-      isCriticalChange = cachedOps.some(op => 
-        (op.data && op.data._deleted) ||
-        op.collection === 'orders' ||
-        op.collection === 'clients' ||
-        op.collection === 'quotes'
-      );
+      // All tracked collections (clients, quotes, orders, and all Admin catalog items) 
+      // are now considered critical for instant real-time sync.
+      isCriticalChange = cachedOps.length > 0;
     }
 
     const saveAction = async () => {
