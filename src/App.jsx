@@ -408,8 +408,12 @@ function App() {
     let isCriticalChange = false;
     if (previousDbRef.current && !isApplyingRemoteOps.current) {
       cachedOps = generateOps(previousDbRef.current, database);
+      // Treat deletions AND all orders/clients/quotes changes as critical (instant sync)
       isCriticalChange = cachedOps.some(op => 
-        op.data && op.data._deleted
+        (op.data && op.data._deleted) ||
+        op.collection === 'orders' ||
+        op.collection === 'clients' ||
+        op.collection === 'quotes'
       );
     }
 
@@ -488,10 +492,10 @@ function App() {
     };
 
     if (isCriticalChange) {
-      console.log("⚡ Action critique (suppression) détectée ! Sauvegarde instantanée forcée.");
+      console.log("⚡ Action critique détectée ! Sauvegarde instantanée forcée.");
       saveAction();
     } else {
-      saveTimerRef.current = setTimeout(saveAction, 1500); // Debounce set to 1500ms to prevent lag during rapid typing
+      saveTimerRef.current = setTimeout(saveAction, 800); // Debounce reduced to 800ms for faster sync
     }
 
     return () => {
@@ -624,7 +628,7 @@ function App() {
         // Silent fail for cloud backup — not critical
         setSupabaseSyncStatus('error');
       }
-    }, 600000); // 10 minutes
+    }, 120000); // 2 minutes — ensures Cloud snapshot is always fresh
 
     return () => {
       localSync.disconnect();
@@ -640,6 +644,47 @@ function App() {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
     return () => { window.removeEventListener('online', handleOnline); window.removeEventListener('offline', handleOffline); };
+  }, []);
+
+  // ─── CRITICAL: Force save to Cloud before page close ──────────────────────
+  useEffect(() => {
+    // Save snapshot to Cloud when user leaves/closes the page
+    const handleBeforeUnload = async () => {
+      const db = databaseRef.current;
+      if (!db) return;
+      try {
+        // Force flush any pending debounced saves
+        if (saveTimerRef.current) {
+          clearTimeout(saveTimerRef.current);
+          saveTimerRef.current = null;
+        }
+        // Save to IndexedDB synchronously (best effort)
+        persistentStorage.save(LOCAL_KEY, db).catch(() => {});
+        // Push pending ops to Cloud (best effort, non-blocking)
+        if (previousDbRef.current && !isApplyingRemoteOps.current) {
+          const ops = generateOps(previousDbRef.current, db);
+          if (ops.length > 0) {
+            cloudSync.pushOps(ops).catch(() => {});
+          }
+        }
+      } catch (e) {
+        // Best effort — don't block page close
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        // User switched tabs or minimized — force save
+        handleBeforeUnload();
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   // ─── Fix current config if catalog changes ────────────────────────────────
