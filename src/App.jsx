@@ -329,15 +329,6 @@ function App() {
                 }
              }
              
-             // Auto-recover lost items
-             try {
-               const { recoveryData } = await import('./recoveryData.js');
-               finalData = smartMerge(finalData, recoveryData);
-               console.log("♻️ Données de récupération appliquées avec succès");
-             } catch(e) {
-               console.log("No recovery data found or error", e);
-             }
-             
              // Now fetch missed ops
              setLoadingMessage('Récupération des opérations récentes...');
              const missedOps = await cloudSync.fetchOpsSince(baseTimestamp, getDeviceId());
