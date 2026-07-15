@@ -576,7 +576,7 @@ export class FormulaEngine {
           const hValue = this.evaluate(formulaH, glassScope, 'ParcloseH', errors);
           const isErrorH = isNaN(hValue);
           const safeHValue = isErrorH ? 0 : hValue;
-          const hQty = (gp.qtyH || 2) * (isNaN(glassQty)?0:glassQty);
+          const hQty = gp.qtyH || 2;
           
           profiles.push({
             ...pHRef,
@@ -602,7 +602,7 @@ export class FormulaEngine {
           const hValue = this.evaluate(formulaH2, scope2, 'ParcloseH 2', errors);
           const isErrorH = isNaN(hValue);
           const safeHValue = isErrorH ? 0 : hValue;
-          const hQty = (gp.qtyH || 2) * glass2Qty;
+          const hQty = gp.qtyH || 2;
           
           profiles.push({
             ...pHRef,
@@ -628,7 +628,7 @@ export class FormulaEngine {
           const vValue = this.evaluate(formulaV, glassScope, 'ParcloseV', errors);
           const isErrorV = isNaN(vValue);
           const safeVValue = isErrorV ? 0 : vValue;
-          const vQty = (gp.qtyV || 2) * (isNaN(glassQty)?0:glassQty);
+          const vQty = gp.qtyV || 2;
           
           profiles.push({
             ...pVRef,
@@ -656,7 +656,7 @@ export class FormulaEngine {
           const vValue = this.evaluate(formulaV2, scope2, 'ParcloseV 2', errors);
           const isErrorV = isNaN(vValue);
           const safeVValue = isErrorV ? 0 : vValue;
-          const vQty = (gp.qtyV || 2) * glass2Qty;
+          const vQty = gp.qtyV || 2;
           
           profiles.push({
             ...pVRef,
