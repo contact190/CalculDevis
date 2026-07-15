@@ -545,7 +545,6 @@ export const cloudSync = {
         .from('operations_log')
         .select('*')
         .gt('timestamp', timestampIso)
-        .neq('device_id', currentDeviceId)
         .order('timestamp', { ascending: true });
         
       if (error) throw error;

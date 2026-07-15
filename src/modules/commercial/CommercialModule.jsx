@@ -1272,7 +1272,6 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                                      </select>
                                   )}
                                </div>
-
                                {activePart.type !== 'extra' ? (
                                   <div className="form-group">
                                      <label className="label" style={{ fontSize: '0.8rem', color: '#64748b' }}>Vitrage</label>
@@ -1282,6 +1281,17 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                                      </select>
                                   </div>
                                ) : null}
+
+                               {activePart.type === 'opening' && (
+                                   <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                                      <label className="label" style={{ fontSize: '0.8rem', color: '#64748b' }}>Sens d'ouverture</label>
+                                      <select className="input" value={activePart.openingDirection || ''} onChange={e => updatePartInPath(activePartPath, 'openingDirection', e.target.value)}>
+                                         <option value="">(Par défaut global)</option>
+                                         <option value="gauche">Ouvrant Gauche (G)</option>
+                                         <option value="droit">Ouvrant Droit (D)</option>
+                                      </select>
+                                   </div>
+                                )}
                             </div>
                          )}
 

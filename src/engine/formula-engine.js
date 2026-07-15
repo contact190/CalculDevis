@@ -1438,6 +1438,7 @@ export class FormulaEngine {
         const res = this.calculateComponentBOM({
           ...config,
           compositionId: compId,
+          openingDirection: part.openingDirection || config.openingDirection || 'gauche',
           _compoundMode: true,
           _filterDormant: compoundType === 'fix_ouvrant' // Only filter dormant if we handled it globally
         }, calcL, calcH, compId, part.glassId || config.glassId, subPartOpt, calcH, Number(originalL || L), totalH, currentEPt, errors, glassLAdj, glassHAdj);

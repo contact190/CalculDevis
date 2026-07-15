@@ -287,16 +287,33 @@ const AdminDashboard = ({ data, setData }) => {
 
   // Shutter Helpers (Moved to Top for Accessibility)
   const updateShutterItem = (family, id, index, field, value) => {
+    let actualId = id;
+    let actualIndex = index;
+    let actualField = field;
+    let actualValue = value;
+
+    if (typeof index === 'string' && value === undefined) {
+      actualIndex = id;
+      actualField = index;
+      actualValue = field;
+      const components = data.shutterComponents || {};
+      const list = components[family] || [];
+      const item = list[actualIndex];
+      actualId = item ? item.id : null;
+    }
+
     setData(prev => {
       const components = prev.shutterComponents || {};
       const list = components[family] || [];
       const updated = [...list];
       let targetIdx = -1;
-      if (id) targetIdx = updated.findIndex(item => item && item.id === id);
+      if (actualId) targetIdx = updated.findIndex(item => item && item.id === actualId);
+      if (targetIdx === -1 && typeof actualIndex === 'number') targetIdx = actualIndex;
+
       if (targetIdx !== -1 && targetIdx < updated.length) {
         const item = { 
           ...updated[targetIdx], 
-          [field]: (field === 'price' || field === 'height' || field === 'jointPrice' || field === 'baguettePrice' || field === 'barLength' || field === 'scrapThreshold') ? parseFloat(value) || 0 : value,
+          [actualField]: (actualField === 'price' || actualField === 'height' || actualField === 'jointPrice' || actualField === 'baguettePrice' || actualField === 'barLength' || actualField === 'scrapThreshold') ? parseFloat(actualValue) || 0 : actualValue,
           _lastModified: new Date().toISOString(),
           _modifiedBy: getDeviceId()
         };
@@ -316,7 +333,12 @@ const AdminDashboard = ({ data, setData }) => {
       if (id) targetIdx = updated.findIndex(item => item && item.id === id);
       if (targetIdx === -1) targetIdx = index;
       if (targetIdx !== -1 && targetIdx < updated.length) {
-        updated[targetIdx] = { ...updated[targetIdx], _deleted: true, _lastModified: new Date().toISOString() };
+        updated[targetIdx] = { 
+          ...updated[targetIdx], 
+          _deleted: true, 
+          _lastModified: new Date().toISOString(),
+          _modifiedBy: getDeviceId()
+        };
       }
       return { ...prev, shutterComponents: { ...components, [family]: updated } };
     });
@@ -571,7 +593,12 @@ const AdminDashboard = ({ data, setData }) => {
         targetIdx = index;
       }
       if (targetIdx !== -1 && targetIdx < updated.length) {
-        updated.splice(targetIdx, 1);
+        updated[targetIdx] = {
+          ...updated[targetIdx],
+          _deleted: true,
+          _lastModified: new Date().toISOString(),
+          _modifiedBy: getDeviceId()
+        };
       }
       return { ...prev, [category]: updated };
     });
@@ -604,7 +631,12 @@ const AdminDashboard = ({ data, setData }) => {
       if (id) targetIdx = list.findIndex(item => item && item.id === id);
       if (targetIdx === -1) targetIdx = index;
       if (targetIdx !== -1 && targetIdx < list.length) {
-        list.splice(targetIdx, 1);
+        list[targetIdx] = {
+          ...list[targetIdx],
+          _deleted: true,
+          _lastModified: new Date().toISOString(),
+          _modifiedBy: getDeviceId()
+        };
       }
       return { ...prev, glassProfileCompatibility: list };
     });
@@ -617,7 +649,12 @@ const AdminDashboard = ({ data, setData }) => {
       if (id) targetIdx = list.findIndex(item => item && item.id === id);
       if (targetIdx === -1) targetIdx = index;
       if (targetIdx !== -1 && targetIdx < list.length) {
-        list.splice(targetIdx, 1);
+        list[targetIdx] = {
+          ...list[targetIdx],
+          _deleted: true,
+          _lastModified: new Date().toISOString(),
+          _modifiedBy: getDeviceId()
+        };
       }
       return { ...prev, gasketCompatibility: list };
     });

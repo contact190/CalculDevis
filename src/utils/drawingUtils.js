@@ -75,10 +75,10 @@ export const drawTechnicalDrawing = (canvas, cfg, database) => {
   };
 
   // Inner drawJoinery function
-  const drawJoinery = (x, y, w, h, compId) => {
+  const drawJoinery = (x, y, w, h, compId, partDirection) => {
     const comp = database.compositions?.find(c => c.id === compId) || database.compositions?.find(c => c.id === compositionId);
     const oType = comp?.openingType || 'Fixe';
-    const dir = cfg.openingDirection || 'gauche';
+    const dir = partDirection || cfg.openingDirection || 'gauche';
 
     ctx.strokeStyle = '#334155';
     ctx.lineWidth = 2;
@@ -301,7 +301,7 @@ export const drawTechnicalDrawing = (canvas, cfg, database) => {
             ctx.fillText('POTEAU', cx + pW/2, cy + pH/2 + 3);
           }
         } else {
-          drawJoinery(cx, cy, pW, pH, part.compositionId || compositionId);
+          drawJoinery(cx, cy, pW, pH, part.compositionId || compositionId, part.openingDirection);
         }
         if (isH) {
           cx += pW;
@@ -314,7 +314,7 @@ export const drawTechnicalDrawing = (canvas, cfg, database) => {
     };
     drawPartList(parts, offsetX, winOffsetY, dW, dH_window, orientation);
   } else {
-    drawJoinery(offsetX, winOffsetY, dW, dH_window, compositionId);
+    drawJoinery(offsetX, winOffsetY, dW, dH_window, compositionId, cfg.openingDirection);
   }
 
   // 3. Couvre-joints (Architraves)

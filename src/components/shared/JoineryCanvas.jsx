@@ -119,10 +119,10 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
       return rangeId.includes('VASISTAS');
     };
 
-    const drawJoinery = (x, y, w, h, compId) => {
+    const drawJoinery = (x, y, w, h, compId, partDirection) => {
       const comp = database.compositions?.find(c => c.id === compId);
       const openingType = comp?.openingType || 'Fixe';
-      const dir = config.openingDirection || 'gauche';
+      const dir = partDirection || config.openingDirection || 'gauche';
       
       // Frame
       ctx.strokeStyle = '#334155';
@@ -419,7 +419,7 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
                 ctx.fillText('POTEAU', cx + pW/2, cy + pH/2 + 3);
              }
           } else {
-             drawJoinery(cx, cy, pW, pH, part.compositionId || compositionId);
+             drawJoinery(cx, cy, pW, pH, part.compositionId || compositionId, part.openingDirection);
           }
 
           if (isH) {
@@ -445,7 +445,7 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
       }
     } else {
       if (!isOnlyShutter) {
-        drawJoinery(offsetX, winOffsetY, dW, dH, compositionId);
+        drawJoinery(offsetX, winOffsetY, dW, dH, compositionId, config.openingDirection);
       }
     }
 

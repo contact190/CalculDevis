@@ -296,11 +296,10 @@ function App() {
              let baseTimestamp = localTimestamp || "1970-01-01T00:00:00.000Z";
              
              if (cloudData) {
-                const hasPendingOps = localSync.getPendingCount() > 0;
-                if (!localData || !hasPendingOps) {
+                if (!localData) {
                   finalData = cloudData;
                   baseTimestamp = updatedAt || baseTimestamp;
-                  console.log("☁️ Snapshot Cloud chargé (cache écrasé).");
+                  console.log("☁️ Snapshot Cloud chargé (pas de cache local).");
                 } else {
                   console.log("☁️ Fusion intelligente (Smart Merge) des données locales avec le Cloud...");
                   finalData = smartMerge(localData, cloudData);
