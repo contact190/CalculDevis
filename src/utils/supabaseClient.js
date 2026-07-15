@@ -385,6 +385,8 @@ export const syncDatabase = {
         catalog: ''
       };
       
+      const uploadPromises = [];
+
       // ─── A. Partition large collections into buckets ───
       for (const key of ['clients', 'orders', 'quotes']) {
         const numBuckets = PARTITIONS[key];
@@ -412,11 +414,12 @@ export const syncDatabase = {
           if (bucketHash !== cloudBucketHash) {
             console.log(`Uploading modified partition: ${key}/bucket-${bucketIdx}.json`);
             const blob = new Blob([bucketStr], { type: 'application/json' });
-            const { error } = await bucket.upload(`${key}/bucket-${bucketIdx}.json`, blob, { 
-              upsert: true,
-              contentType: 'application/json'
-            });
-            if (error) throw error;
+            uploadPromises.push(
+              bucket.upload(`${key}/bucket-${bucketIdx}.json`, blob, { 
+                upsert: true,
+                contentType: 'application/json'
+              }).then(({ error }) => { if (error) throw error; })
+            );
           }
         }
       }
@@ -435,11 +438,17 @@ export const syncDatabase = {
       if (catalogHash !== cloudHashes.catalog) {
         console.log(`Uploading modified catalog.json`);
         const blob = new Blob([catalogStr], { type: 'application/json' });
-        const { error } = await bucket.upload('catalog.json', blob, { 
-          upsert: true,
-          contentType: 'application/json'
-        });
-        if (error) throw error;
+        uploadPromises.push(
+          bucket.upload('catalog.json', blob, { 
+            upsert: true,
+            contentType: 'application/json'
+          }).then(({ error }) => { if (error) throw error; })
+        );
+      }
+      
+      // Wait for all modified data partitions to upload concurrently
+      if (uploadPromises.length > 0) {
+        await Promise.all(uploadPromises);
       }
       
       // ─── D. Update meta.json ───
