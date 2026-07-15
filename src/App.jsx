@@ -265,6 +265,20 @@ function App() {
           console.warn("Local server not found, falling back to offline mode");
         }
 
+        // Purge obsolete local server queue if server is unreachable
+        if (!serverData) {
+          try {
+            const pendingOps = localStorage.getItem('calculDevis_pendingOps');
+            if (pendingOps) {
+              const parsed = JSON.parse(pendingOps);
+              if (parsed.length > 50) {
+                console.log(`🧹 Purge de la file d'attente locale obsolète (${parsed.length} ops).`);
+                localStorage.removeItem('calculDevis_pendingOps');
+              }
+            }
+          } catch(e) {}
+        }
+
         if (serverData) {
           console.log('🔗 Serveur local trouvé !');
           const hasPendingOps = localSync.getPendingCount() > 0;
