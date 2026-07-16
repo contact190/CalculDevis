@@ -33,7 +33,19 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
     if (!window.confirm(`Voulez-vous transformer le devis ${quote.number} en commande active ?`)) return;
     
     const existingOrder = (data.orders || []).find(o => o.quoteId === quote.id);
-    const orderId = existingOrder ? existingOrder.id : `CMD-${String(data.orderCounter || 1).padStart(2, '0')}`;
+    let orderId = existingOrder ? existingOrder.id : null;
+    if (!orderId) {
+      const ids = (data.orders || [])
+        .map(o => o.id)
+        .filter(id => id && id.startsWith('CMD-'))
+        .map(id => parseInt(id.split('-')[1], 10))
+        .filter(num => !isNaN(num));
+      let candidate = 1;
+      while (ids.includes(candidate)) {
+        candidate++;
+      }
+      orderId = `CMD-${String(candidate).padStart(2, '0')}`;
+    }
     
     const newOrder = {
       ...quote,
@@ -59,10 +71,6 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
       // 2. Add or Update Order
       const orders = prev.orders || [];
       const orderExists = orders.some(o => o.id === orderId);
-      let nextOrderCounter = prev.orderCounter || 1;
-      if (!existingOrder) {
-        nextOrderCounter += 1;
-      }
       
       let finalOrders;
       if (orderExists) {
@@ -71,6 +79,16 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
           : o);
       } else {
         finalOrders = [...orders, newOrder];
+      }
+
+      const updatedIds = finalOrders
+        .map(o => o.id)
+        .filter(id => id && id.startsWith('CMD-'))
+        .map(id => parseInt(id.split('-')[1], 10))
+        .filter(num => !isNaN(num));
+      let nextOrderCounter = 1;
+      while (updatedIds.includes(nextOrderCounter)) {
+        nextOrderCounter++;
       }
       
       return {

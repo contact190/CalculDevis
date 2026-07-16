@@ -2783,14 +2783,21 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
 
         // Update orders list if status is "Confirmé"
         let orders = prev.orders || [];
-        let nextOrderCounter = prev.orderCounter || 1;
         if (finalQuote.status === 'Confirmé') {
           const existingOrder = orders.find(o => o.quoteId === finalQuote.id);
           let orderId = existingOrder ? existingOrder.id : null;
           
           if (!orderId) {
-            orderId = `CMD-${String(nextOrderCounter).padStart(2, '0')}`;
-            nextOrderCounter += 1;
+            const ids = orders
+              .map(o => o.id)
+              .filter(id => id && id.startsWith('CMD-'))
+              .map(id => parseInt(id.split('-')[1], 10))
+              .filter(num => !isNaN(num));
+            let candidate = 1;
+            while (ids.includes(candidate)) {
+              candidate++;
+            }
+            orderId = `CMD-${String(candidate).padStart(2, '0')}`;
           }
 
           const existsInOrders = orders.some(o => o.id === orderId);
@@ -2800,6 +2807,16 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
             // Update order info but preserve existing batches and site measurements
             orders = orders.map(o => o.id === orderId ? { ...o, ...finalQuote, id: orderId, quoteId: finalQuote.id, batches: o.batches || [] } : o);
           }
+        }
+
+        const updatedIds = orders
+          .map(o => o.id)
+          .filter(id => id && id.startsWith('CMD-'))
+          .map(id => parseInt(id.split('-')[1], 10))
+          .filter(num => !isNaN(num));
+        let nextOrderCounter = 1;
+        while (updatedIds.includes(nextOrderCounter)) {
+          nextOrderCounter++;
         }
 
         return { ...prev, quotes, orders, orderCounter: nextOrderCounter };

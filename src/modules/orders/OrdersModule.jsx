@@ -208,16 +208,21 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
     if (confirmText !== orderToDelete.id) return;
 
     setData(prev => {
-      const orderNumStr = orderToDelete.id.split('-')[1];
-      const deletedNum = parseInt(orderNumStr, 10);
-      const currentCounter = prev.orderCounter || 1;
-      const updates = {
-        orders: (prev.orders || []).filter(o => o.id !== orderToDelete.id)
-      };
-      if (!isNaN(deletedNum) && deletedNum < currentCounter) {
-        updates.orderCounter = deletedNum;
+      const remainingOrders = (prev.orders || []).filter(o => o.id !== orderToDelete.id);
+      const updatedIds = remainingOrders
+        .map(o => o.id)
+        .filter(id => id && id.startsWith('CMD-'))
+        .map(id => parseInt(id.split('-')[1], 10))
+        .filter(num => !isNaN(num));
+      let nextOrderCounter = 1;
+      while (updatedIds.includes(nextOrderCounter)) {
+        nextOrderCounter++;
       }
-      return { ...prev, ...updates };
+      return {
+        ...prev,
+        orders: remainingOrders,
+        orderCounter: nextOrderCounter
+      };
     });
     setOrderToDelete(null);
     setConfirmText('');

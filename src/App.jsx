@@ -193,17 +193,16 @@ function App() {
     if (!repaired.financialTrackers) repaired.financialTrackers = [];
     
     if (repaired.orderCounter === undefined || repaired.orderCounter === null) {
-      let maxCounter = 1;
-      (repaired.orders || []).forEach(o => {
-        if (o.id && o.id.startsWith('CMD-')) {
-          const numPart = o.id.split('-')[1];
-          const parsed = parseInt(numPart, 10);
-          if (!isNaN(parsed) && parsed >= maxCounter) {
-            maxCounter = parsed + 1;
-          }
-        }
-      });
-      repaired.orderCounter = maxCounter;
+      const ids = (repaired.orders || [])
+        .map(o => o.id)
+        .filter(id => id && id.startsWith('CMD-'))
+        .map(id => parseInt(id.split('-')[1], 10))
+        .filter(num => !isNaN(num));
+      let candidate = 1;
+      while (ids.includes(candidate)) {
+        candidate++;
+      }
+      repaired.orderCounter = candidate;
     }
 
     return repaired;
