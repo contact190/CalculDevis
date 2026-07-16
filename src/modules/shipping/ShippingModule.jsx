@@ -34,7 +34,31 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
   const [sendByEmail, setSendByEmail] = useState(false);
   const [blModalType, setBlModalType] = useState(null); // 'ALU' | 'VITRAGE' | 'VOLET' | 'CAISSON_TUNNEL' | null
   const [blSelectedUnitIds, setBlSelectedUnitIds] = useState(new Set());
+  const [blSelectedGlassPanes, setBlSelectedGlassPanes] = useState({}); // { [unitId]: { [paneKey]: boolean } }
+  const [expandedUnits, setExpandedUnits] = useState(new Set()); // Set of unitIds
   const [listTab, setListTab] = useState('ongoing'); // 'ongoing' | 'history'
+
+  React.useEffect(() => {
+    if (blModalType === 'VITRAGE') {
+      const initialPanes = {};
+      remainingBLUnits.forEach(u => {
+        const uPanes = {};
+        const delivered = selectedOrder.deliveredGlassPanes?.[u.id] || {};
+        (u.glassPanes || []).forEach(g => {
+          const paneKey = `${g.id || g.name}_${g.width}_${g.height}`;
+          if ((delivered[paneKey] || 0) < g.qty) {
+            uPanes[paneKey] = true;
+          }
+        });
+        initialPanes[u.id] = uPanes;
+      });
+      setBlSelectedGlassPanes(initialPanes);
+      setExpandedUnits(new Set());
+    } else {
+      setBlSelectedGlassPanes({});
+      setExpandedUnits(new Set());
+    }
+  }, [blModalType, remainingBLUnits, selectedOrder]);
 
 
   React.useEffect(() => {
@@ -336,6 +360,18 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
               console.warn("Glass calculation failed for unit", e);
             }
 
+            let openingType = itemComp?.openingType || 'Fixe';
+            if (item.config?.compoundType && item.config.compoundType !== 'none' && item.config.compoundConfig?.parts) {
+               const parts = item.config.compoundConfig.parts;
+               const hasCoulissant = parts.some(p => {
+                 const comp = (data.compositions || []).find(c => c.id === p.compositionId);
+                 return comp?.openingType === 'Coulissant';
+               });
+               if (hasCoulissant) {
+                 openingType = 'Coulissant';
+               }
+            }
+
             units.push({
               id: unitId,
               orderId: selectedOrder.id,
@@ -359,7 +395,8 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
               shutterInfo: shutterInfo,
               storageZoneId: storageZoneId,
               storageZone: zone?.name || '',
-              glassPanes: glassPanes
+              glassPanes: glassPanes,
+              openingType: openingType
             });
           }
         });
@@ -374,7 +411,16 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
       if (blModalType === 'ALU') {
         return u.statusAlu !== 'Livré' && u.statusAlu !== 'Posé' && u.statusAlu !== 'Fini';
       } else if (blModalType === 'VITRAGE') {
-        return u.statusVitrage !== 'Livré' && u.statusVitrage !== 'Fini';
+        if (u.statusVitrage === 'Livré' || u.statusVitrage === 'Fini') return false;
+        const panes = u.glassPanes || [];
+        if (panes.length === 0) return true;
+        const delivered = selectedOrder.deliveredGlassPanes?.[u.id] || {};
+        const remainingPanes = panes.filter(g => {
+          const paneKey = `${g.id || g.name}_${g.width}_${g.height}`;
+          const deliveredQty = delivered[paneKey] || 0;
+          return deliveredQty < g.qty;
+        });
+        return remainingPanes.length > 0;
       } else if (blModalType === 'VOLET') {
         return u.isExtrudedLame && u.statusVolet !== 'Livré' && u.statusVolet !== 'Fini' && u.statusVolet !== 'Posé';
       } else if (blModalType === 'CAISSON_TUNNEL') {
@@ -382,7 +428,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
       }
       return false;
     });
-  }, [allUnits, blModalType]);
+  }, [allUnits, blModalType, selectedOrder]);
 
   const groupedRemainingBLUnits = useMemo(() => {
     const grouped = {};
@@ -1443,8 +1489,15 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
     const firstDateStr = selectedOrder.blDates?.[type];
     const displayDate = (isRedownload && firstDateStr) ? new Date(firstDateStr).toLocaleDateString('fr-FR') : new Date().toLocaleDateString('fr-FR');
 
+    let titleText = `BON DE LIVRAISON : ${type === 'CAISSON_TUNNEL' ? 'CAISSON TUNNEL' : type}`;
+    if (type === 'VITRAGE_OUVRANT_FIX') {
+      titleText = 'BON DE LIVRAISON : VITRAGE OUVRANT & FIXE';
+    } else if (type === 'VITRAGE_COULISSANT') {
+      titleText = 'BON DE LIVRAISON : VITRAGE COULISSANT';
+    }
+
     let y = drawDocumentHeader(doc, quoteSettings, client, {
-      title: `BON DE LIVRAISON : ${type === 'CAISSON_TUNNEL' ? 'CAISSON TUNNEL' : type}`,
+      title: titleText,
       docLabel: 'Commande N°',
       docValue: selectedOrder.id,
       docDate: displayDate,
@@ -1507,15 +1560,26 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
       floorUnits.forEach(u => {
         const status = 'LIVRÉ';
         
-        if (type === 'VITRAGE') {
+        if (type.startsWith('VITRAGE')) {
           const panes = u.glassPanes && u.glassPanes.length > 0 ? u.glassPanes : [{ name: 'Vitrage Standard', width: '—', height: '—', qty: 1 }];
           panes.forEach(g => {
+            const paneKey = `${g.id || g.name}_${g.width}_${g.height}`;
+            const isPaneChecked = isRedownload || blSelectedGlassPanes[u.id]?.[paneKey] !== false;
+            
+            const deliveredQty = selectedOrder.deliveredGlassPanes?.[u.id]?.[paneKey] || 0;
+            const remainingQty = g.qty - deliveredQty;
+            const printQty = isRedownload ? (deliveredQty > 0 ? deliveredQty : g.qty) : remainingQty;
+            
+            if (printQty <= 0 || (!isRedownload && !isPaneChecked)) {
+              return; // skip this pane if not checked or already delivered
+            }
+
             checkPageOverflow(10);
             
             // Show glazing composition and dimensions
             const glassText = `${g.name} (${g.width} x ${g.height} mm)`;
             
-            doc.text(String(g.qty), 15, y); 
+            doc.text(String(printQty), 15, y); 
             doc.text(glassText.substring(0, 42), 30, y); 
             doc.text(u.name, 120, y);
             doc.text(status, 180, y);
@@ -1552,8 +1616,22 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
       checkPageOverflow(15);
       y += 2;
       doc.setFont('helvetica', 'bold');
-      if (type === 'VITRAGE') {
-        const totalGlassQty = floorUnits.reduce((acc, u) => acc + (u.glassPanes && u.glassPanes.length > 0 ? u.glassPanes.reduce((sum, g) => sum + g.qty, 0) : 1), 0);
+      if (type.startsWith('VITRAGE')) {
+        let totalGlassQty = 0;
+        floorUnits.forEach(u => {
+          const panes = u.glassPanes && u.glassPanes.length > 0 ? u.glassPanes : [{ name: 'Vitrage Standard', width: '—', height: '—', qty: 1 }];
+          panes.forEach(g => {
+            const paneKey = `${g.id || g.name}_${g.width}_${g.height}`;
+            const isPaneChecked = isRedownload || blSelectedGlassPanes[u.id]?.[paneKey] !== false;
+            const deliveredQty = selectedOrder.deliveredGlassPanes?.[u.id]?.[paneKey] || 0;
+            const remainingQty = g.qty - deliveredQty;
+            const printQty = isRedownload ? (deliveredQty > 0 ? deliveredQty : g.qty) : remainingQty;
+            
+            if (printQty > 0 && (isRedownload || isPaneChecked)) {
+              totalGlassQty += printQty;
+            }
+          });
+        });
         doc.text(`Nombre total de châssis : ${floorUnits.length} ; Total vitrages : ${totalGlassQty}`, 15, y);
       } else {
         doc.text(`Nombre total pour l'étage ${floor} : ${floorUnits.length}`, 15, y);
@@ -1618,19 +1696,45 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
 
         const dualStatuses = { ...(order.unitStatusesDual || {}) };
         const timeline = { ...(order.unitTimeline || {}) };
-        const component = type === 'ALU' ? 'alu' : (type === 'VITRAGE' ? 'vitrage' : (type === 'VOLET' ? 'volet' : 'caisson_tunnel'));
+        const deliveredGlass = { ...(order.deliveredGlassPanes || {}) };
+        const component = type.startsWith('VITRAGE') ? 'vitrage' : (type === 'ALU' ? 'alu' : (type === 'VOLET' ? 'volet' : 'caisson_tunnel'));
         const userName = 'ADMIN';
 
         unitsToDeliver.forEach(u => {
           const current = { ...(dualStatuses[u.id] || { alu: 'Produit', vitrage: 'Produit', volet: 'Produit', caisson_tunnel: 'Produit' }) };
-          current[component] = 'Livré';
+          
+          if (type.startsWith('VITRAGE')) {
+            const uDelivered = { ...(deliveredGlass[u.id] || {}) };
+            const panes = u.glassPanes || [];
+            panes.forEach(g => {
+              const paneKey = `${g.id || g.name}_${g.width}_${g.height}`;
+              const isPaneChecked = blSelectedGlassPanes[u.id]?.[paneKey] !== false;
+              if (isPaneChecked) {
+                uDelivered[paneKey] = g.qty;
+              }
+            });
+            deliveredGlass[u.id] = uDelivered;
+
+            const allDelivered = panes.every(g => {
+              const paneKey = `${g.id || g.name}_${g.width}_${g.height}`;
+              return (uDelivered[paneKey] || 0) >= g.qty;
+            });
+
+            if (allDelivered) {
+              current.vitrage = 'Livré';
+            } else {
+              current.vitrage = 'Produit';
+            }
+          } else {
+            current[component] = 'Livré';
+          }
           dualStatuses[u.id] = current;
 
           const event = {
             date: new Date().toISOString(),
             user: userName,
             component: component,
-            status: 'Livré',
+            status: current[component] === 'Livré' ? 'Livré' : 'Livraison Partielle Vitrage',
             action: 'finish',
             issue: null
           };
@@ -1640,6 +1744,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
 
         order.unitStatusesDual = dualStatuses;
         order.unitTimeline = timeline;
+        order.deliveredGlassPanes = deliveredGlass;
         orders[oIdx] = order;
         return { ...prev, orders };
       });
@@ -1915,7 +2020,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
                     {/* Badge type */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: '160px' }}>
                       <span style={{ fontWeight: 700, fontSize: '0.85rem', color: '#1e40af' }}>
-                        📦 BL {blType === 'CAISSON_TUNNEL' ? 'Caisson Tunnel' : blType}
+                        📦 BL {blType === 'CAISSON_TUNNEL' ? 'Caisson Tunnel' : (blType === 'VITRAGE_OUVRANT_FIX' ? 'Vitrage Ouvrant & Fixe' : (blType === 'VITRAGE_COULISSANT' ? 'Vitrage Coulissant' : blType))}
                       </span>
                     </div>
 
@@ -1933,6 +2038,10 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
                             deliveredUnits = allUnits.filter(u => u.statusAlu === 'Livré' || u.statusAlu === 'Posé' || u.statusAlu === 'Fini');
                           } else if (blType === 'VITRAGE') {
                             deliveredUnits = allUnits.filter(u => u.statusVitrage === 'Livré' || u.statusVitrage === 'Fini');
+                          } else if (blType === 'VITRAGE_OUVRANT_FIX') {
+                            deliveredUnits = allUnits.filter(u => u.openingType !== 'Coulissant' && (u.statusVitrage === 'Livré' || u.statusVitrage === 'Fini' || Object.values(selectedOrder.deliveredGlassPanes?.[u.id] || {}).some(qty => qty > 0)));
+                          } else if (blType === 'VITRAGE_COULISSANT') {
+                            deliveredUnits = allUnits.filter(u => u.openingType === 'Coulissant' && (u.statusVitrage === 'Livré' || u.statusVitrage === 'Fini' || Object.values(selectedOrder.deliveredGlassPanes?.[u.id] || {}).some(qty => qty > 0)));
                           } else if (blType === 'VOLET') {
                             deliveredUnits = allUnits.filter(u => u.isExtrudedLame && (u.statusVolet === 'Livré' || u.statusVolet === 'Fini' || u.statusVolet === 'Posé'));
                           } else if (blType === 'CAISSON_TUNNEL') {
@@ -2594,25 +2703,89 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginLeft: '0.75rem' }}>
                                 {aptUnits.map(unit => {
                                   const isSelected = blSelectedUnitIds.has(unit.id);
+                                  const hasGlass = blModalType === 'VITRAGE' && unit.glassPanes && unit.glassPanes.length > 0;
+                                  const isExpanded = expandedUnits.has(unit.id);
+                                  
+                                  const toggleExpand = (e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setExpandedUnits(prev => {
+                                      const next = new Set(prev);
+                                      if (next.has(unit.id)) next.delete(unit.id);
+                                      else next.add(unit.id);
+                                      return next;
+                                    });
+                                  };
+
                                   return (
-                                    <label key={unit.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0.5rem', borderRadius: '0.35rem', background: isSelected ? '#f0f9ff' : 'transparent', cursor: 'pointer' }}>
-                                      <input 
-                                        type="checkbox" 
-                                        checked={isSelected}
-                                        onChange={() => {
-                                          setBlSelectedUnitIds(prev => {
-                                            const next = new Set(prev);
-                                            if (next.has(unit.id)) next.delete(unit.id);
-                                            else next.add(unit.id);
-                                            return next;
-                                          });
-                                        }}
-                                      />
-                                      <div style={{ fontSize: '0.85rem', flex: 1, display: 'flex', justifyContent: 'space-between' }}>
-                                        <span style={{ fontWeight: 600 }}>{unit.name} <span style={{ fontWeight: 400, color: '#64748b' }}>({unit.label})</span></span>
-                                        <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{unit.dimensions}</span>
-                                      </div>
-                                    </label>
+                                    <div key={unit.id} style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', padding: '0.4rem', borderRadius: '0.5rem', background: isSelected ? '#f0f9ff' : 'transparent', border: isSelected ? '1px solid #bae6fd' : '1px solid transparent' }}>
+                                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', margin: 0 }}>
+                                        <input 
+                                          type="checkbox" 
+                                          checked={isSelected}
+                                          onChange={() => {
+                                            setBlSelectedUnitIds(prev => {
+                                              const next = new Set(prev);
+                                              if (next.has(unit.id)) next.delete(unit.id);
+                                              else next.add(unit.id);
+                                              return next;
+                                            });
+                                          }}
+                                        />
+                                        <div style={{ fontSize: '0.85rem', flex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                          <span style={{ fontWeight: 600 }}>
+                                            {unit.name} <span style={{ fontWeight: 400, color: '#64748b' }}>({unit.label})</span>
+                                            {unit.openingType && <span style={{ marginLeft: '0.5rem', fontSize: '0.7rem', padding: '0.1rem 0.3rem', borderRadius: '3px', background: unit.openingType === 'Coulissant' ? '#e8f5e9' : '#e3f2fd', color: unit.openingType === 'Coulissant' ? '#2e7d32' : '#1565c0' }}>{unit.openingType}</span>}
+                                          </span>
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{unit.dimensions}</span>
+                                            {hasGlass && isSelected && (
+                                              <button 
+                                                onClick={toggleExpand}
+                                                style={{ border: 'none', background: '#e2e8f0', padding: '0.2rem 0.4rem', borderRadius: '4px', fontSize: '0.7rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#475569' }}
+                                              >
+                                                Vitrages {isExpanded ? '▲' : '▼'}
+                                              </button>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </label>
+
+                                      {hasGlass && isExpanded && isSelected && (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', padding: '0.5rem 0.5rem 0.5rem 1.5rem', background: 'white', borderRadius: '0.35rem', marginTop: '0.25rem', borderLeft: '3px solid #3b82f6' }}>
+                                          {unit.glassPanes.map(g => {
+                                            const paneKey = `${g.id || g.name}_${g.width}_${g.height}`;
+                                            const deliveredQty = selectedOrder.deliveredGlassPanes?.[unit.id]?.[paneKey] || 0;
+                                            const remainingQty = g.qty - deliveredQty;
+                                            if (remainingQty <= 0) return null;
+
+                                            const isPaneChecked = blSelectedGlassPanes[unit.id]?.[paneKey] !== false;
+
+                                            return (
+                                              <label key={paneKey} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', cursor: 'pointer' }}>
+                                                <input 
+                                                  type="checkbox"
+                                                  checked={isPaneChecked}
+                                                  onChange={(e) => {
+                                                    const checked = e.target.checked;
+                                                    setBlSelectedGlassPanes(prev => ({
+                                                      ...prev,
+                                                      [unit.id]: {
+                                                        ...(prev[unit.id] || {}),
+                                                        [paneKey]: checked
+                                                      }
+                                                    }));
+                                                  }}
+                                                />
+                                                <span style={{ color: isPaneChecked ? '#0f172a' : '#94a3b8' }}>
+                                                  {g.name} ({g.width} x {g.height} mm) — <strong style={{ color: '#2563eb' }}>Qté: {remainingQty}</strong> {deliveredQty > 0 && <span style={{ color: '#10b981', fontSize: '0.7rem' }}>({deliveredQty} déjà livré(s))</span>}
+                                                </span>
+                                              </label>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+                                    </div>
                                   );
                                 })}
                               </div>
@@ -2632,17 +2805,29 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
                 >
                   Annuler
                 </button>
-                <button 
-                  onClick={() => {
-                    const unitsToDeliver = remainingBLUnits.filter(u => blSelectedUnitIds.has(u.id));
-                    generateDeliveryNote(blModalType, unitsToDeliver);
-                    setBlModalType(null);
-                  }}
-                  disabled={blSelectedUnitIds.size === 0}
-                  className="btn btn-primary" style={{ flex: 2, padding: '0.8rem', background: '#2563eb', border: 'none', boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)' }}
-                >
-                  Générer le BL ({blSelectedUnitIds.size})
-                </button>
+                 <button 
+                   onClick={() => {
+                     const unitsToDeliver = remainingBLUnits.filter(u => blSelectedUnitIds.has(u.id));
+                     if (blModalType === 'VITRAGE') {
+                       const coulissantUnits = unitsToDeliver.filter(u => u.openingType === 'Coulissant');
+                       const ouvrantFixUnits = unitsToDeliver.filter(u => u.openingType !== 'Coulissant');
+                       
+                       if (coulissantUnits.length > 0) {
+                         generateDeliveryNote('VITRAGE_COULISSANT', coulissantUnits);
+                       }
+                       if (ouvrantFixUnits.length > 0) {
+                         generateDeliveryNote('VITRAGE_OUVRANT_FIX', ouvrantFixUnits);
+                       }
+                     } else {
+                       generateDeliveryNote(blModalType, unitsToDeliver);
+                     }
+                     setBlModalType(null);
+                   }}
+                   disabled={blSelectedUnitIds.size === 0}
+                   className="btn btn-primary" style={{ flex: 2, padding: '0.8rem', background: '#2563eb', border: 'none', boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)' }}
+                 >
+                   Générer le BL ({blSelectedUnitIds.size})
+                 </button>
               </div>
             </div>
           </div>
