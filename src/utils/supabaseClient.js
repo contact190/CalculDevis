@@ -223,6 +223,30 @@ export const syncDatabase = {
           console.log(`Downloading ${downloadPromises.length} modified bucket partitions...`);
           const downloadedData = await Promise.all(downloadPromises);
           
+          const mergeItemArrays = (arrA, arrB) => {
+            const map = new Map();
+            if (Array.isArray(arrA)) {
+              arrA.forEach(item => { if (item && item.id) map.set(item.id, item); });
+            }
+            if (Array.isArray(arrB)) {
+              arrB.forEach(item => {
+                if (!item || !item.id) return;
+                const existing = map.get(item.id);
+                if (!existing) {
+                  map.set(item.id, item);
+                } else {
+                  const existingTime = existing._lastModified ? new Date(existing._lastModified).getTime() : 0;
+                  const incomingTime = item._lastModified ? new Date(item._lastModified).getTime() : 0;
+                  
+                  if (incomingTime >= existingTime) {
+                    map.set(item.id, item);
+                  }
+                }
+              });
+            }
+            return Array.from(map.values());
+          };
+
           for (let i = 0; i < downloadKeys.length; i++) {
             const keyInfo = downloadKeys[i];
             const val = downloadedData[i] || [];
@@ -231,15 +255,7 @@ export const syncDatabase = {
               // Merge catalog collections item-by-item using timestamps to avoid overwriting recent local edits
               for (const subKey of Object.keys(val)) {
                 if (Array.isArray(val[subKey])) {
-                  const localArr = db[subKey] || [];
-                  const localItemsToKeep = localArr.filter(item => {
-                    if (!item || !item.id) return false;
-                    const localTime = item._lastModified ? new Date(item._lastModified).getTime() : 0;
-                    return localTime > cloudTime;
-                  });
-                  const keepIds = new Set(localItemsToKeep.map(item => item.id));
-                  const cloudItems = (val[subKey] || []).filter(item => !keepIds.has(item.id));
-                  db[subKey] = [...localItemsToKeep, ...cloudItems];
+                  db[subKey] = mergeItemArrays(db[subKey] || [], val[subKey] || []);
                 } else {
                   db[subKey] = val[subKey];
                 }
@@ -247,18 +263,20 @@ export const syncDatabase = {
             } else {
               const { collection, bucketIdx } = keyInfo;
               
-              // Filter out local items belonging to this bucket, EXCEPT new offline modifications
-              db[collection] = (db[collection] || []).filter(item => {
+              // Filter out local items belonging to this bucket
+              const otherBucketItems = (db[collection] || []).filter(item => {
                 if (!item || !item.id) return false;
-                if (getBucketIndex(item.id, PARTITIONS[collection]) !== bucketIdx) return true; // keep other buckets
-                
-                // Keep local offline item if modified after the cloud snapshot
-                const localTime = item._lastModified ? new Date(item._lastModified).getTime() : 0;
-                return localTime > cloudTime;
+                return getBucketIndex(item.id, PARTITIONS[collection]) !== bucketIdx;
               });
               
-              // Push the downloaded partition items
-              db[collection].push(...val);
+              const localBucketItems = (db[collection] || []).filter(item => {
+                if (!item || !item.id) return false;
+                return getBucketIndex(item.id, PARTITIONS[collection]) === bucketIdx;
+              });
+              
+              const mergedBucketItems = mergeItemArrays(localBucketItems, val || []);
+              
+              db[collection] = [...otherBucketItems, ...mergedBucketItems];
             }
           }
         }
