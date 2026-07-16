@@ -32,51 +32,57 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
   const handleConvertToOrder = (quote) => {
     if (!window.confirm(`Voulez-vous transformer le devis ${quote.number} en commande active ?`)) return;
     
-    const existingOrder = (data.orders || []).find(o => o.quoteId === quote.id);
-    let orderId = existingOrder ? existingOrder.id : null;
-    if (!orderId) {
-      const ids = (data.orders || [])
-        .map(o => o.id)
-        .filter(id => id && id.startsWith('CMD-'))
-        .map(id => parseInt(id.split('-')[1], 10))
-        .filter(num => !isNaN(num));
-      let candidate = 1;
-      while (ids.includes(candidate)) {
-        candidate++;
-      }
-      orderId = `CMD-${String(candidate).padStart(2, '0')}`;
-    }
-    
-    const newOrder = {
-      ...quote,
-      id: orderId,
-      quoteId: quote.id,
-      quoteNumber: quote.number,
-      createdAt: new Date().toISOString(),
-      status: 'Confirmé',
-      batches: [],
-      items: (quote.items || []).map(item => {
-        const existingItem = existingOrder?.items?.find(i => i.id === item.id);
-        return {
-          ...item,
-          siteMeasurements: existingItem ? (existingItem.siteMeasurements || []) : []
-        };
-      })
-    };
-
     setData(prev => {
-      // 1. Update quote status to "Confirmé"
+      // 1. Calculate orderId inside the state updater to avoid stale state race conditions
+      const orders = prev.orders || [];
+      const existingOrder = orders.find(o => o.quoteId === quote.id);
+      let orderId = existingOrder ? existingOrder.id : null;
+      if (!orderId) {
+        const ids = orders
+          .map(o => o.id)
+          .filter(id => id && id.startsWith('CMD-'))
+          .map(id => parseInt(id.split('-')[1], 10))
+          .filter(num => !isNaN(num));
+        let candidate = 1;
+        while (ids.includes(candidate)) {
+          candidate++;
+        }
+        orderId = `CMD-${String(candidate).padStart(2, '0')}`;
+      }
+
+      const newOrder = {
+        ...quote,
+        id: orderId,
+        quoteId: quote.id,
+        quoteNumber: quote.number,
+        createdAt: new Date().toISOString(),
+        status: 'Confirmé',
+        batches: [],
+        items: (quote.items || []).map(item => {
+          const existingItem = existingOrder?.items?.find(i => i.id === item.id);
+          return {
+            ...item,
+            siteMeasurements: existingItem ? (existingItem.siteMeasurements || []) : []
+          };
+        })
+      };
+
+      // 2. Update quote status to "Confirmé"
       const quotes = (prev.quotes || []).map(q => q.id === quote.id ? { ...q, status: 'Confirmé' } : q);
       
-      // 2. Add or Update Order
-      const orders = prev.orders || [];
+      // 3. Add or Update Order
       const orderExists = orders.some(o => o.id === orderId);
       
       let finalOrders;
       if (orderExists) {
-        finalOrders = orders.map(o => o.id === orderId 
-          ? { ...o, ...newOrder, batches: o.batches || [] } 
-          : o);
+        finalOrders = orders.map(o => {
+          if (o.id === orderId) {
+            const updated = { ...o, ...newOrder, batches: o.batches || [] };
+            delete updated._deleted; // Remove deleted tombstone flag in case it was a recycled deleted ID
+            return updated;
+          }
+          return o;
+        });
       } else {
         finalOrders = [...orders, newOrder];
       }
@@ -91,6 +97,11 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
         nextOrderCounter++;
       }
       
+      // Defer the success alert to avoid blocking React state update
+      setTimeout(() => {
+        alert(`Commande ${orderId} créée avec succès ! Retrouvez-la dans l'onglet "Commandes".`);
+      }, 50);
+
       return {
         ...prev,
         quotes,
@@ -98,7 +109,6 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
         orderCounter: nextOrderCounter
       };
     });
-    alert(`Commande ${orderId} créée avec succès ! Retrouvez-la dans l'onglet "Commandes".`);
   };
 
   const handleDuplicateQuote = (quote) => {
