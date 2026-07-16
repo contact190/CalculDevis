@@ -208,8 +208,11 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
     if (confirmText !== orderToDelete.id) return;
 
     setData(prev => {
-      const remainingOrders = (prev.orders || []).filter(o => o.id !== orderToDelete.id);
-      const updatedIds = remainingOrders
+      const remainingOrders = (prev.orders || []).map(o => 
+        o.id === orderToDelete.id ? { ...o, _deleted: true, _lastModified: new Date().toISOString() } : o
+      );
+      const activeRemainingOrders = remainingOrders.filter(o => !o._deleted);
+      const updatedIds = activeRemainingOrders
         .map(o => o.id)
         .filter(id => id && id.startsWith('CMD-'))
         .map(id => parseInt(id.split('-')[1], 10))
