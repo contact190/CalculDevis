@@ -4,32 +4,51 @@ import { FormulaEngine } from '../../engine/formula-engine';
 import { getTechnicalDrawingDataURL, drawTechnicalDrawing } from '../../utils/drawingUtils';
 
 const ItemPreview = ({ config, database }) => {
+  const containerRef = useRef(null);
   const canvasRef = useRef(null);
-  
-  // Serialize config to avoid re-rendering on database reference changes
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsVisible(entry.isIntersecting);
+      },
+      { rootMargin: '200px 0px' } // Charger un peu avant l'affichage
+    );
+    if (containerRef.current) {
+      observer.observe(containerRef.current);
+    }
+    return () => observer.disconnect();
+  }, []);
+
   const configStr = React.useMemo(() => JSON.stringify(config), [config]);
   
   React.useEffect(() => {
-    if (config && database && canvasRef.current) {
+    if (isVisible && canvasRef.current) {
       drawTechnicalDrawing(canvasRef.current, config, database);
     }
-  }, [configStr, database]); // keep database in deps so it redraws if the database catalog changes
+  }, [configStr, database, isVisible]);
 
   return (
-    <div style={{ 
+    <div ref={containerRef} style={{ 
       width: '100%', 
-      height: '100%', 
+      height: '180px', 
       background: 'white', 
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       padding: '10px',
-      borderRadius: '0.5rem'
+      borderRadius: '0.5rem',
+      position: 'relative'
     }}>
-      <canvas 
-        ref={canvasRef}
-        style={{ width: '100%', maxHeight: '160px', objectFit: 'contain' }} 
-      />
+      {isVisible ? (
+        <canvas 
+          ref={canvasRef}
+          style={{ width: '100%', maxHeight: '160px', objectFit: 'contain' }} 
+        />
+      ) : (
+        <div style={{ color: '#94a3b8', fontSize: '0.8rem', fontWeight: 500 }}>Chargement de l'aperçu...</div>
+      )}
     </div>
   );
 };
