@@ -49,6 +49,18 @@ let onFullRefresh = null;      // Called when full refresh needed: () => void
 let onConnectionChange = null; // Called on connect/disconnect: (connected) => void
 let onSyncAck = null;          // Called when ops are acknowledged: ({applied, total}) => void
 
+function isLocalEnvironment() {
+  const hostname = window.location.hostname;
+  return (
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname.startsWith('192.168.') ||
+    hostname.startsWith('10.') ||
+    hostname.startsWith('172.') ||
+    hostname.endsWith('.local')
+  );
+}
+
 function getServerUrl() {
   if (serverUrl) return serverUrl;
   
@@ -76,6 +88,12 @@ export const localSync = {
     onFullRefresh = callbacks.onFullRefresh || null;
     onConnectionChange = callbacks.onConnectionChange || null;
     onSyncAck = callbacks.onSyncAck || null;
+
+    // Avoid connecting to local socket server if we are on a public HTTPS production domain (e.g. GitHub Pages)
+    if (window.location.protocol === 'https:' && !isLocalEnvironment()) {
+      console.log('ℹ️ LocalSync: Connexion au serveur local ignorée en production HTTPS.');
+      return null;
+    }
 
     const url = getServerUrl();
     const deviceId = getDeviceId();
@@ -178,6 +196,9 @@ export const localSync = {
    * @returns {Promise<Object|null>} Full database or null
    */
   async fetchData() {
+    if (window.location.protocol === 'https:' && !isLocalEnvironment()) {
+      return null;
+    }
     try {
       const url = getServerUrl();
       const res = await fetch(`${url}/api/data`);
@@ -307,6 +328,9 @@ export const localSync = {
    * Get server status
    */
   async getStatus() {
+    if (window.location.protocol === 'https:' && !isLocalEnvironment()) {
+      return null;
+    }
     try {
       const url = getServerUrl();
       const res = await fetch(`${url}/api/status`);

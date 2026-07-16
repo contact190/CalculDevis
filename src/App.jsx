@@ -1,19 +1,37 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo, Suspense } from 'react';
 import { Home, Package, Settings, ChevronRight, LayoutDashboard, Users, RefreshCw, ShoppingBag, Truck, CheckCircle, Building, Wifi, WifiOff, TrendingUp, Store } from 'lucide-react';
 
+// Helper to handle ChunkLoadError (e.g. after a new deployment, old chunks are missing on server)
+const lazyWithRetry = (importFn) => {
+  return React.lazy(async () => {
+    try {
+      return await importFn();
+    } catch (error) {
+      const hasRetried = sessionStorage.getItem('chunk-load-retry');
+      if (!hasRetried) {
+        sessionStorage.setItem('chunk-load-retry', 'true');
+        console.error("Failed to fetch dynamically imported module, forcing page reload...", error);
+        window.location.reload();
+        return new Promise(() => {}); // Keep in pending state while page reloads
+      }
+      throw error;
+    }
+  });
+};
+
 // ─── LAZY LOADING: Each module is loaded on-demand (code splitting) ──────────
 // This reduces initial bundle from ~5.3MB to ~500KB and saves 60-70% RAM
-const CommercialModule = React.lazy(() => import('./modules/commercial/CommercialModule'));
-const ShopModule = React.lazy(() => import('./modules/shop/ShopModule'));
-const ProductionModule = React.lazy(() => import('./modules/production/ProductionModule'));
-const AdminDashboard = React.lazy(() => import('./modules/admin/AdminDashboard'));
-const ClientsModule = React.lazy(() => import('./modules/clients/ClientsModule'));
-const OrdersModule = React.lazy(() => import('./modules/orders/OrdersModule'));
-const ShippingModule = React.lazy(() => import('./modules/shipping/ShippingModule'));
-const InstallerPortal = React.lazy(() => import('./modules/shipping/InstallerPortal'));
-const TechnicianPortal = React.lazy(() => import('./modules/orders/TechnicianPortal'));
-const SitePlanModule = React.lazy(() => import('./modules/siteplan/SitePlanModule'));
-const FinanceModule = React.lazy(() => import('./modules/finance/FinanceModule'));
+const CommercialModule = lazyWithRetry(() => import('./modules/commercial/CommercialModule'));
+const ShopModule = lazyWithRetry(() => import('./modules/shop/ShopModule'));
+const ProductionModule = lazyWithRetry(() => import('./modules/production/ProductionModule'));
+const AdminDashboard = lazyWithRetry(() => import('./modules/admin/AdminDashboard'));
+const ClientsModule = lazyWithRetry(() => import('./modules/clients/ClientsModule'));
+const OrdersModule = lazyWithRetry(() => import('./modules/orders/OrdersModule'));
+const ShippingModule = lazyWithRetry(() => import('./modules/shipping/ShippingModule'));
+const InstallerPortal = lazyWithRetry(() => import('./modules/shipping/InstallerPortal'));
+const TechnicianPortal = lazyWithRetry(() => import('./modules/orders/TechnicianPortal'));
+const SitePlanModule = lazyWithRetry(() => import('./modules/siteplan/SitePlanModule'));
+const FinanceModule = lazyWithRetry(() => import('./modules/finance/FinanceModule'));
 
 import { DEFAULT_DATA } from './data/default-data';
 import { syncDatabase, cloudSync } from './utils/supabaseClient';
@@ -220,6 +238,7 @@ function App() {
 
   // ─── STEP 1: Load local + Network comparison on mount ──────────────────────
   useEffect(() => {
+    sessionStorage.removeItem('chunk-load-retry');
     const loadAndSync = async () => {
       setIsLoading(true);
       try {
