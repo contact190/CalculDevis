@@ -61,10 +61,13 @@ const SearchableDropdown = ({ value, onChange, options, placeholder, style = {},
   const [search, setSearch] = useState('');
   const wrapperRef = useRef(null);
 
-  const filteredOptions = options.filter(o => 
-    o.label.toLowerCase().includes(search.toLowerCase()) || 
-    o.value.toString().toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredOptions = (options || []).filter(o => {
+    if (!o) return false;
+    const label = o.label ? String(o.label) : '';
+    const val = o.value != null ? String(o.value) : '';
+    return label.toLowerCase().includes(search.toLowerCase()) || 
+           val.toLowerCase().includes(search.toLowerCase());
+  });
 
   const selectedOption = options.find(o => o.value === value);
 

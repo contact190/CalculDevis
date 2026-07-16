@@ -400,6 +400,7 @@ function App() {
   useEffect(() => {
     if (!database || isLoading) return;
     if (isFirstLoad.current) { isFirstLoad.current = false; previousDbRef.current = database; return; }
+    if (database === previousDbRef.current) return;
 
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
 
@@ -408,29 +409,34 @@ function App() {
     let isCriticalChange = false;
     if (previousDbRef.current && !isApplyingRemoteOps.current) {
       cachedOps = generateOps(previousDbRef.current, database);
-      // All tracked collections (clients, quotes, orders, and all Admin catalog items) 
-      // are now considered critical for instant real-time sync.
-      isCriticalChange = cachedOps.length > 0;
+      if (cachedOps.length === 0) {
+        previousDbRef.current = database;
+        return;
+      }
+      // Only additions and deletions are considered critical for instant save.
+      // Updates (e.g., typing in a text field) are debounced to avoid lagging.
+      isCriticalChange = cachedOps.some(op => op.op === 'add' || op.op === 'delete');
     }
 
     const saveAction = async () => {
       setSaveStatus('saving');
       try {
         const now = new Date().toISOString();
+        const originalOldDb = previousDbRef.current;
         
         let stampedDb = database;
         let generatedOps = cachedOps || [];
         // ─── Stamp local changes in database before saving ───
-        if (!isApplyingRemoteOps.current && previousDbRef.current) {
+        if (!isApplyingRemoteOps.current && originalOldDb) {
           // Réutiliser les ops pré-calculées au lieu de recalculer
           if (!cachedOps) {
-            generatedOps = generateOps(previousDbRef.current, database);
+            generatedOps = generateOps(originalOldDb, database);
           }
           if (generatedOps.length > 0) {
             const applyResult = applyOps(database, generatedOps);
             if (applyResult && applyResult.appliedCount > 0) {
               stampedDb = applyResult.db;
-              setDatabase(stampedDb);
+              previousDbRef.current = database;
             }
           }
         }
@@ -452,11 +458,10 @@ function App() {
         setTimeout(() => setSaveStatus('idle'), 2000);
 
         // ─── Push delta ops to server (only if this is a LOCAL change) ─────
-        if (!isApplyingRemoteOps.current && previousDbRef.current) {
-          const oldDb = previousDbRef.current;
-          previousDbRef.current = stampedDb;
+        if (!isApplyingRemoteOps.current && originalOldDb) {
+          previousDbRef.current = database;
           
-          const result = await localSync.pushOps(stampedDb, oldDb);
+          const result = await localSync.pushOps(stampedDb, originalOldDb);
           if (result && result.success) {
             if (result.applied > 0) {
               setCloudSyncStatus('ok');
@@ -480,7 +485,7 @@ function App() {
              }
           }
         }
-        previousDbRef.current = stampedDb;
+        previousDbRef.current = database;
       } catch (e) {
         console.error('IndexedDB save error:', e);
         setSaveStatus('error');
@@ -491,7 +496,7 @@ function App() {
       console.log("⚡ Action critique détectée ! Sauvegarde instantanée forcée.");
       saveAction();
     } else {
-      saveTimerRef.current = setTimeout(saveAction, 800); // Debounce reduced to 800ms for faster sync
+      saveTimerRef.current = setTimeout(saveAction, 1500); // Debounce increased to 1500ms for non-critical changes
     }
 
     return () => {
