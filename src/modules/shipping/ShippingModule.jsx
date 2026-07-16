@@ -543,9 +543,23 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
           ctx.drawImage(img, 0, 0);
           resolve(canvas.toDataURL('image/png'));
         };
+        img.onerror = () => {
+          resolve(null); // Return null on error to avoid blocking
+        };
         img.src = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(data)}`;
       });
     };
+
+    // Pre-fetch all QR code data URLs in parallel batches of 15 to bypass API rate-limiting and maximize speed
+    const qrDataUrls = new Array(allUnits.length);
+    const batchSize = 15;
+    for (let i = 0; i < allUnits.length; i += batchSize) {
+      const batch = allUnits.slice(i, i + batchSize);
+      const results = await Promise.all(batch.map(unit => getQrDataUrl(unit.id)));
+      for (let j = 0; j < results.length; j++) {
+        qrDataUrls[i + j] = results[j];
+      }
+    }
 
     for (let idx = 0; idx < allUnits.length; idx++) {
       const unit = allUnits[idx];
@@ -610,8 +624,10 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
       doc.setFontSize(7.5); doc.setFont('helvetica', 'bold');
       doc.text('SCANNEZ POUR VALIDER (CHARGEMENT/LIVRAISON)', 50, 106, { align: 'center' });
       
-      const qrDataUrl = await getQrDataUrl(unit.id);
-      doc.addImage(qrDataUrl, 'PNG', 35, 110, 30, 30);
+      const qrDataUrl = qrDataUrls[idx];
+      if (qrDataUrl) {
+        doc.addImage(qrDataUrl, 'PNG', 35, 110, 30, 30);
+      }
       
       doc.setTextColor(0, 0, 0);
       doc.setFontSize(7); doc.setFont('helvetica', 'bold');
