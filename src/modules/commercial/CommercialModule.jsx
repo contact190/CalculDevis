@@ -2475,6 +2475,12 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
   const [editingOptionId, setEditingOptionId] = useState(null);
   const [editingOptionText, setEditingOptionText] = useState('');
 
+  // Per-product manual option editor state
+  const [expandedProductOptions, setExpandedProductOptions] = useState({}); // item.id -> boolean
+  const [productOptionInputs, setProductOptionInputs] = useState({}); // item.id -> string
+  const [editingProductOptionId, setEditingProductOptionId] = useState(null); // opt.id
+  const [editingProductOptionText, setEditingProductOptionText] = useState('');
+
   useEffect(() => {
     if (setCurrentQuote && !quote.clientId && database.clients?.length > 0) {
       setCurrentQuote(prev => ({ ...prev, clientId: database.clients[0].id }));
@@ -3050,6 +3056,14 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
           descLines.push(`Options : ${optNames}`);
         }
 
+        // Options manuelles du produit
+        if (item.manualOptions?.length > 0) {
+          descLines.push(`Options du produit :`);
+          item.manualOptions.forEach(opt => {
+            descLines.push(`  • ${opt.text}`);
+          });
+        }
+
         // Options manuelles du devis
         if (quote.manualOptions?.length > 0) {
           descLines.push(`Options supplémentaires :`);
@@ -3146,7 +3160,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
               totalWrappedLines += doc.splitTextToSize(line, 60).length;
               doc.setFont('helvetica', 'normal');
            } else {
-              const isBoldLabel = line === 'Volet Roulant :' || line === 'Volet Roulant (Double) :' || line === 'Options supplémentaires :';
+              const isBoldLabel = line === 'Volet Roulant :' || line === 'Volet Roulant (Double) :' || line === 'Options supplémentaires :' || line === 'Options du produit :';
               if (isBoldLabel) doc.setFont('helvetica', 'bold');
               totalWrappedLines += doc.splitTextToSize(line, 60).length;
               doc.setFont('helvetica', 'normal');
@@ -3217,7 +3231,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
             doc.setTextColor(0, 0, 0);
             doc.setFont('helvetica', 'normal');
           } else {
-            const isBoldLabel = line === 'Volet Roulant :' || line === 'Volet Roulant (Double) :';
+            const isBoldLabel = line === 'Volet Roulant :' || line === 'Volet Roulant (Double) :' || line === 'Options supplémentaires :' || line === 'Options du produit :';
             const isVoletSubItem = line.startsWith('  Caisson') || line.startsWith('  Glissière') || line.startsWith('  Lame') || line.startsWith('  Axe') || line.startsWith('  Moteur') || line.startsWith('  Kit') || line.startsWith('  Option') || line.startsWith('  •');
             
             if (isBoldLabel) {
@@ -3608,6 +3622,22 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
                                   {item.pairedGroupRef ? `Gr: ${item.pairedGroupRef}` : `Ref: ${item.ref}`}
                                 </span>
                               )}
+                              <button 
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  setExpandedProductOptions(prev => ({ ...prev, [item.id]: !prev[item.id] }));
+                                }} 
+                                title="Gérer les options de ce produit"
+                                style={{ 
+                                  display: 'inline-flex', alignItems: 'center', gap: '0.2rem', 
+                                  padding: '0.15rem 0.4rem', border: '1px solid #cbd5e1', 
+                                  borderRadius: '0.25rem', background: item.manualOptions?.length ? '#f5f3ff' : 'white', 
+                                  cursor: 'pointer', color: item.manualOptions?.length ? '#7c3aed' : '#64748b', 
+                                  fontSize: '0.65rem', fontWeight: 700, outline: 'none'
+                                }}
+                              >
+                                <span>+</span> Option{(item.manualOptions || []).length > 0 && ` (${(item.manualOptions || []).length})`}
+                              </button>
                             </div>
                             <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{comp?.name}</div>
                           </td>
@@ -3652,6 +3682,154 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
                                      ))}
                                   </div>
                                </div>
+                            </td>
+                          </tr>
+                        )}
+                        {expandedProductOptions[item.id] && (
+                          <tr>
+                            <td colSpan="7" style={{ padding: '0', background: '#fcfaff' }}>
+                              <div style={{ padding: '1rem 1.5rem', borderLeft: '4px solid #8b5cf6', margin: '0.5rem 0' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                    <span style={{ fontSize: '0.9rem' }}>✏️</span>
+                                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>Options Manuelles pour ce Produit</span>
+                                  </div>
+                                  <span style={{ background: '#f3e8ff', color: '#7c3aed', padding: '0.15rem 0.5rem', borderRadius: '999px', fontSize: '0.65rem', fontWeight: 700 }}>
+                                    {(item.manualOptions || []).length} option{(item.manualOptions || []).length !== 1 ? 's' : ''}
+                                  </span>
+                                </div>
+
+                                {/* Existing product manual options list */}
+                                {(item.manualOptions || []).length > 0 && (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.75rem' }}>
+                                    {(item.manualOptions || []).map((opt, oIdx) => (
+                                      <div key={opt.id} style={{
+                                        display: 'flex', alignItems: 'center', gap: '0.5rem',
+                                        padding: '0.4rem 0.6rem', background: '#faf5ff', borderRadius: '0.35rem',
+                                        border: '1px solid #e9d5ff'
+                                      }}>
+                                        <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#a78bfa', minWidth: '15px' }}>#{oIdx + 1}</span>
+                                        {editingProductOptionId === opt.id ? (
+                                          <input
+                                            autoFocus
+                                            className="input"
+                                            value={editingProductOptionText}
+                                            onChange={e => setEditingProductOptionText(e.target.value)}
+                                            onKeyDown={e => {
+                                              if (e.key === 'Enter' && editingProductOptionText.trim()) {
+                                                setCurrentQuote(prev => ({
+                                                  ...prev,
+                                                  items: (prev.items || []).map(it => it.id === item.id ? {
+                                                    ...it,
+                                                    manualOptions: (it.manualOptions || []).map(o => o.id === opt.id ? { ...o, text: editingProductOptionText.trim() } : o)
+                                                  } : it)
+                                                }));
+                                                setEditingProductOptionId(null);
+                                                setEditingProductOptionText('');
+                                              }
+                                              if (e.key === 'Escape') { setEditingProductOptionId(null); setEditingProductOptionText(''); }
+                                            }}
+                                            onBlur={() => {
+                                              if (editingProductOptionText.trim()) {
+                                                setCurrentQuote(prev => ({
+                                                  ...prev,
+                                                  items: (prev.items || []).map(it => it.id === item.id ? {
+                                                    ...it,
+                                                    manualOptions: (it.manualOptions || []).map(o => o.id === opt.id ? { ...o, text: editingProductOptionText.trim() } : o)
+                                                  } : it)
+                                                }));
+                                              }
+                                              setEditingProductOptionId(null);
+                                              setEditingProductOptionText('');
+                                            }}
+                                            style={{ flex: 1, fontSize: '0.8rem', padding: '0.25rem 0.5rem', height: 'auto', minHeight: 'unset', borderColor: '#8b5cf6' }}
+                                          />
+                                        ) : (
+                                          <span style={{ flex: 1, fontSize: '0.8rem', color: '#374151', fontWeight: 500 }}>{opt.text}</span>
+                                        )}
+                                        {!isQuoteFrozen && (
+                                          <div style={{ display: 'flex', gap: '0.2rem' }}>
+                                            <button
+                                              onClick={() => { setEditingProductOptionId(opt.id); setEditingProductOptionText(opt.text); }}
+                                              title="Modifier"
+                                              style={{ padding: '0.2rem', border: '1px solid #e9d5ff', borderRadius: '0.25rem', background: 'white', cursor: 'pointer', color: '#7c3aed', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                            >
+                                              <Edit2 size={11} />
+                                            </button>
+                                            <button
+                                              onClick={() => {
+                                                setCurrentQuote(prev => ({
+                                                  ...prev,
+                                                  items: (prev.items || []).map(it => it.id === item.id ? {
+                                                    ...it,
+                                                    manualOptions: (it.manualOptions || []).filter(o => o.id !== opt.id)
+                                                  } : it)
+                                                }));
+                                              }}
+                                              title="Supprimer"
+                                              style={{ padding: '0.2rem', border: '1px solid #fecaca', borderRadius: '0.25rem', background: '#fef2f2', cursor: 'pointer', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                            >
+                                              <Trash2 size={11} />
+                                            </button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {/* Add new product manual option */}
+                                {!isQuoteFrozen && (
+                                  <div style={{ display: 'flex', gap: '0.4rem' }}>
+                                    <input
+                                      className="input"
+                                      placeholder="Ajouter une option manuelle pour ce produit..."
+                                      value={productOptionInputs[item.id] || ''}
+                                      onChange={e => setProductOptionInputs(prev => ({ ...prev, [item.id]: e.target.value }))}
+                                      onKeyDown={e => {
+                                        const optText = productOptionInputs[item.id] || '';
+                                        if (e.key === 'Enter' && optText.trim()) {
+                                          setCurrentQuote(prev => ({
+                                            ...prev,
+                                            items: (prev.items || []).map(it => it.id === item.id ? {
+                                              ...it,
+                                              manualOptions: [...(it.manualOptions || []), { id: `PROPT-${Date.now()}-${Math.floor(Math.random() * 1000)}`, text: optText.trim() }]
+                                            } : it)
+                                          }));
+                                          setProductOptionInputs(prev => ({ ...prev, [item.id]: '' }));
+                                        }
+                                      }}
+                                      style={{ flex: 1, fontSize: '0.8rem', padding: '0.4rem 0.75rem', height: 'auto', minHeight: 'unset' }}
+                                    />
+                                    <button
+                                      onClick={() => {
+                                        const optText = productOptionInputs[item.id] || '';
+                                        if (optText.trim()) {
+                                          setCurrentQuote(prev => ({
+                                            ...prev,
+                                            items: (prev.items || []).map(it => it.id === item.id ? {
+                                              ...it,
+                                              manualOptions: [...(it.manualOptions || []), { id: `PROPT-${Date.now()}-${Math.floor(Math.random() * 1000)}`, text: optText.trim() }]
+                                            } : it)
+                                          }));
+                                          setProductOptionInputs(prev => ({ ...prev, [item.id]: '' }));
+                                        }
+                                      }}
+                                      disabled={!(productOptionInputs[item.id] || '').trim()}
+                                      style={{
+                                        display: 'flex', alignItems: 'center', gap: '0.25rem',
+                                        padding: '0.4rem 0.8rem', border: 'none', borderRadius: '0.35rem',
+                                        background: (productOptionInputs[item.id] || '').trim() ? 'linear-gradient(135deg, #8b5cf6, #6d28d9)' : '#e2e8f0',
+                                        color: (productOptionInputs[item.id] || '').trim() ? 'white' : '#94a3b8',
+                                        cursor: (productOptionInputs[item.id] || '').trim() ? 'pointer' : 'not-allowed',
+                                        fontWeight: 600, fontSize: '0.8rem', whiteSpace: 'nowrap'
+                                      }}
+                                    >
+                                      <Plus size={13} /> Ajouter
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         )}
