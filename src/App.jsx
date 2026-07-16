@@ -544,7 +544,7 @@ function App() {
           const { data: cloudData, updatedAt } = await syncDatabase.loadWithMeta();
           if (cloudData) {
             isApplyingRemoteOps.current = true;
-            let finalData = cloudData;
+            let finalData = smartMerge(databaseRef.current, cloudData);
             
             // Apply any operations that occurred after the snapshot was saved to prevent losing real-time edits
             if (updatedAt) {
