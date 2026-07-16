@@ -294,12 +294,48 @@ export function applyOp(db, op) {
       }
       
       const existing = currentArr[idx];
-      // Conflict resolution: most recent timestamp wins
-      if (existing._lastModified && timestamp < existing._lastModified) {
-        return { db, applied: false };
-      }
+      const existingTime = existing._lastModified ? new Date(existing._lastModified).getTime() : 0;
+      const incomingTime = timestamp ? new Date(timestamp).getTime() : 0;
+
+      // Deep merge the properties of the item to avoid overwriting nested fields (e.g. blDates)
+      const mergedItem = { ...existing };
+      Object.keys(data).forEach(key => {
+        if (key === '_lastModified' || key === '_modifiedBy') return;
+        const valA = existing[key];
+        const valB = data[key];
+        
+        if (valA === undefined) {
+          mergedItem[key] = valB;
+        } else if (valB === undefined) {
+          // Keep valA
+        } else if (Array.isArray(valA) && Array.isArray(valB)) {
+          if (valA.length > 0 && valA[0] && valA[0].id) {
+            const mapObj = new Map();
+            valA.forEach(x => { if (x && x.id) mapObj.set(x.id, x); });
+            valB.forEach(x => {
+              if (!x || !x.id) return;
+              const ext = mapObj.get(x.id);
+              if (!ext) {
+                mapObj.set(x.id, x);
+              } else {
+                mapObj.set(x.id, { ...ext, ...x });
+              }
+            });
+            mergedItem[key] = Array.from(mapObj.values());
+          } else {
+            mergedItem[key] = incomingTime >= existingTime ? valB : valA;
+          }
+        } else if (typeof valA === 'object' && valA !== null && typeof valB === 'object' && valB !== null) {
+          mergedItem[key] = { ...valA, ...valB };
+        } else {
+          mergedItem[key] = incomingTime >= existingTime ? valB : valA;
+        }
+      });
       
-      currentArr[idx] = data;
+      mergedItem._lastModified = incomingTime >= existingTime ? (timestamp || new Date().toISOString()) : existing._lastModified;
+      mergedItem._modifiedBy = incomingTime >= existingTime ? (op.deviceId || 'unknown') : existing._modifiedBy;
+      
+      currentArr[idx] = mergedItem;
       const newDb = op._inPlace ? db : cloneAlongPath(db, collection);
       setPath(newDb, collection, currentArr);
       return {

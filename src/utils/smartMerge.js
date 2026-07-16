@@ -36,15 +36,39 @@ export const smartMerge = (dbA, dbB) => {
           map.set(item.id, item);
         } else {
           // Conflict: same ID exists in both A and B
-          // Resolution: most recently modified wins
           const existingTime = existing._lastModified ? new Date(existing._lastModified).getTime() : 0;
           const incomingTime = item._lastModified ? new Date(item._lastModified).getTime() : 0;
           
-          if (incomingTime >= existingTime) {
-            // B's version is newer or same age — use B
-            map.set(item.id, item);
-          }
-          // Otherwise keep A's version (it's newer)
+          // Deep merge the two items instead of overwriting the whole object
+          const mergedItem = { ...existing };
+          
+          Object.keys(item).forEach(key => {
+            if (key === '_lastModified' || key === '_modifiedBy') return;
+            
+            const valA = existing[key];
+            const valB = item[key];
+            
+            if (valA === undefined) {
+              mergedItem[key] = valB;
+            } else if (valB === undefined) {
+              // Keep valA
+            } else if (Array.isArray(valA) && Array.isArray(valB)) {
+              if (valA.length > 0 && valA[0] && valA[0].id) {
+                mergedItem[key] = mergeArrays(valA, valB);
+              } else {
+                mergedItem[key] = incomingTime >= existingTime ? valB : valA;
+              }
+            } else if (typeof valA === 'object' && valA !== null && typeof valB === 'object' && valB !== null) {
+              mergedItem[key] = { ...valA, ...valB };
+            } else {
+              mergedItem[key] = incomingTime >= existingTime ? valB : valA;
+            }
+          });
+          
+          mergedItem._lastModified = incomingTime >= existingTime ? item._lastModified : existing._lastModified;
+          mergedItem._modifiedBy = incomingTime >= existingTime ? item._modifiedBy : existing._modifiedBy;
+          
+          map.set(item.id, mergedItem);
         }
       });
     }
