@@ -38,28 +38,6 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
   const [expandedUnits, setExpandedUnits] = useState(new Set()); // Set of unitIds
   const [listTab, setListTab] = useState('ongoing'); // 'ongoing' | 'history'
 
-  React.useEffect(() => {
-    if (blModalType === 'VITRAGE') {
-      const initialPanes = {};
-      remainingBLUnits.forEach(u => {
-        const uPanes = {};
-        const delivered = selectedOrder.deliveredGlassPanes?.[u.id] || {};
-        (u.glassPanes || []).forEach(g => {
-          const paneKey = `${g.id || g.name}_${g.width}_${g.height}`;
-          if ((delivered[paneKey] || 0) < g.qty) {
-            uPanes[paneKey] = true;
-          }
-        });
-        initialPanes[u.id] = uPanes;
-      });
-      setBlSelectedGlassPanes(initialPanes);
-      setExpandedUnits(new Set());
-    } else {
-      setBlSelectedGlassPanes({});
-      setExpandedUnits(new Set());
-    }
-  }, [blModalType, remainingBLUnits, selectedOrder]);
-
 
   React.useEffect(() => {
     if (quoteSettings?.companyName) {
@@ -441,6 +419,28 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
     });
     return grouped;
   }, [remainingBLUnits]);
+
+  React.useEffect(() => {
+    if (blModalType === 'VITRAGE') {
+      const initialPanes = {};
+      remainingBLUnits.forEach(u => {
+        const uPanes = {};
+        const delivered = selectedOrder.deliveredGlassPanes?.[u.id] || {};
+        (u.glassPanes || []).forEach(g => {
+          const paneKey = `${g.id || g.name}_${g.width}_${g.height}`;
+          if ((delivered[paneKey] || 0) < g.qty) {
+            uPanes[paneKey] = true;
+          }
+        });
+        initialPanes[u.id] = uPanes;
+      });
+      setBlSelectedGlassPanes(initialPanes);
+      setExpandedUnits(new Set());
+    } else {
+      setBlSelectedGlassPanes({});
+      setExpandedUnits(new Set());
+    }
+  }, [blModalType, remainingBLUnits, selectedOrder]);
 
   const handleUpdateUnitRemark = (unitId, remark) => {
     setData(prev => {
