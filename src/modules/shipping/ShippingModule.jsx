@@ -326,13 +326,19 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
             try {
               const bomResult = engine.calculateBOM(instanceConfig, []);
               if (bomResult && bomResult.glassDetails) {
-                glassPanes = bomResult.glassDetails.map(g => ({
-                  id: g.id,
-                  name: g.name || 'Vitrage',
-                  width: Math.round(g.width || 0),
-                  height: Math.round(g.height || 0),
-                  qty: g.qty || 1
-                }));
+                let paneIndex = 0;
+                bomResult.glassDetails.forEach(g => {
+                  const qty = g.qty || 1;
+                  for (let q = 0; q < qty; q++) {
+                    glassPanes.push({
+                      id: `${g.id || 'glass'}_${paneIndex++}`,
+                      name: g.name || 'Vitrage',
+                      width: Math.round(g.width || 0),
+                      height: Math.round(g.height || 0),
+                      qty: 1
+                    });
+                  }
+                });
               }
             } catch (e) {
               console.warn("Glass calculation failed for unit", e);
