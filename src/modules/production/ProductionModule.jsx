@@ -120,6 +120,17 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
   const [supplierName, setSupplierName] = useState('');
   const [docHeader, setDocHeader] = useState('DEMANDE DE PROFORMA');
   
+  // Auto-switch from Quote ID to its confirmed Order ID if it exists, so batches are immediately visible
+  useEffect(() => {
+    const targetId = selectedGlobalQuoteId || currentQuote?.id;
+    if (targetId && database?.orders) {
+      const associatedOrder = database.orders.find(o => o.quoteId === targetId || o.id === targetId);
+      if (associatedOrder && associatedOrder.id !== selectedGlobalQuoteId) {
+        setSelectedGlobalQuoteId(associatedOrder.id);
+      }
+    }
+  }, [selectedGlobalQuoteId, currentQuote?.id, database?.orders]);
+
   const [isKitSummaryCollapsed, setIsKitSummaryCollapsed] = useState(false);
   
   const toggleProformaSelection = (id) => {
@@ -151,7 +162,16 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
 
   const activeQuote = useMemo(() => {
     const allSources = [...(database?.orders || []), ...(database?.quotes || [])];
-    return allSources.find(q => q.id === selectedGlobalQuoteId) || currentQuote;
+    let found = allSources.find(q => q.id === selectedGlobalQuoteId) || currentQuote;
+    
+    // Auto-promote from Quote to confirmed Order in activeQuote memo for safety
+    if (found && database?.orders) {
+      const associatedOrder = database.orders.find(o => o.quoteId === found.id || o.id === found.id);
+      if (associatedOrder) {
+        found = associatedOrder;
+      }
+    }
+    return found;
   }, [database, selectedGlobalQuoteId, currentQuote]);
 
   const quoteItems = activeQuote?.items || [];
