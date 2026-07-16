@@ -93,7 +93,15 @@ const makeNewQuote = (settings, db) => {
 };
 
 function App() {
-  const [activeTab, setActiveTab] = useState('commercial');
+  const urlParams = new URLSearchParams(window.location.search);
+  const allowedTabs = urlParams.get('tabs') ? urlParams.get('tabs').split(',').map(t => t.trim()) : null;
+
+  const [activeTab, setActiveTab] = useState(() => {
+    const tabParam = urlParams.get('tab');
+    if (tabParam) return tabParam;
+    if (allowedTabs && allowedTabs.length > 0) return allowedTabs[0];
+    return 'commercial';
+  });
   const [database, setDatabase] = useState(null); // null = loading
   const [isLoading, setIsLoading] = useState(true);
   const [loadingMessage, setLoadingMessage] = useState('Chargement de vos données locales...');
@@ -886,9 +894,8 @@ function App() {
     { id: 'clients', label: 'Clients', icon: Users },
     { id: 'finance', label: 'Finance', icon: TrendingUp },
     { id: 'admin', label: 'Administration', icon: Settings },
-  ];
+  ].filter(item => !allowedTabs || allowedTabs.includes(item.id));
 
-  const urlParams = new URLSearchParams(window.location.search);
   const isInstallerMode = urlParams.get('mode') === 'installer';
   const installerOrderId = urlParams.get('orderId');
   const isTechnicianMode = urlParams.get('mode') === 'technician';
