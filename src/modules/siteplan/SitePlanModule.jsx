@@ -341,7 +341,7 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
         return { ...c, sitePlans: newPlans };
       });
 
-      // 2. Sync this plan to ALL quotes that are assigned to it
+      // 2. Sync this plan to ALL quotes and orders that are assigned to it
       let updatedQuotes = prev.quotes || [];
       const quotesToSync = updatedQuotes.filter(o => o.sitePlanId === updatedPlan.id);
       
@@ -352,10 +352,21 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
         );
       });
 
+      let updatedOrders = prev.orders || [];
+      const ordersToSync = updatedOrders.filter(o => o.sitePlanId === updatedPlan.id);
+      
+      ordersToSync.forEach(orderToSync => {
+        const syncedItems = syncSitePlanToMeasurements(updatedPlan, orderToSync.items);
+        updatedOrders = updatedOrders.map(o => 
+          o.id === orderToSync.id ? { ...o, items: syncedItems } : o
+        );
+      });
+
       return {
         ...prev,
         clients: updatedClients,
-        quotes: updatedQuotes
+        quotes: updatedQuotes,
+        orders: updatedOrders
       };
     });
   };
