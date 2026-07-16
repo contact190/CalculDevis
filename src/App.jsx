@@ -413,9 +413,19 @@ function App() {
         previousDbRef.current = database;
         return;
       }
-      // Only additions and deletions are considered critical for instant save.
-      // Updates (e.g., typing in a text field) are debounced to avoid lagging.
-      isCriticalChange = cachedOps.some(op => op.op === 'add' || op.op === 'delete');
+      // Only additions, deletions, orders/quotes status updates, and production launches/validations are instant.
+      // Normal typing updates (like typing dimensions) are debounced by 1500ms to avoid performance lag.
+      isCriticalChange = cachedOps.some(op => 
+        op.op === 'add' || 
+        op.op === 'delete' ||
+        op.collection === 'orders' ||
+        op.collection === 'quotes' ||
+        (op.op === 'update' && (
+          JSON.stringify(op.data).includes('Validated') || 
+          JSON.stringify(op.data).includes('Launched') ||
+          JSON.stringify(op.data).includes('batches')
+        ))
+      );
     }
 
     const saveAction = async () => {
@@ -483,6 +493,20 @@ function App() {
              } else {
                setSupabaseSyncStatus('error');
              }
+          }
+
+          // ─── If this was a critical change, force an immediate Cloud snapshot save! ───
+          if (isCriticalChange) {
+            try {
+              console.log('☁️ Lancement du snapshot Supabase pour modification critique...');
+              setSupabaseSyncStatus('syncing');
+              await syncDatabase.save({ mainDb: stampedDb, quotes: stampedDb.quotes || [] });
+              setSupabaseSyncStatus('ok');
+              setLastSupabaseSync(new Date());
+              console.log('☁️ Snapshot Supabase critique effectué avec succès.');
+            } catch (err) {
+              console.warn('Silent fail for cloud critical snapshot backup:', err);
+            }
           }
         }
         previousDbRef.current = database;
