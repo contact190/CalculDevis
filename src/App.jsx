@@ -445,7 +445,8 @@ function App() {
             const applyResult = applyOps(database, generatedOps);
             if (applyResult && applyResult.appliedCount > 0) {
               stampedDb = applyResult.db;
-              previousDbRef.current = database;
+              previousDbRef.current = stampedDb;
+              setDatabase(stampedDb);
             }
           }
         }
@@ -468,7 +469,7 @@ function App() {
 
         // ─── Push delta ops to server (only if this is a LOCAL change) ─────
         if (!isApplyingRemoteOps.current && originalOldDb) {
-          previousDbRef.current = database;
+          previousDbRef.current = stampedDb;
           
           const result = await localSync.pushOps(stampedDb, originalOldDb);
           if (result && result.success) {
