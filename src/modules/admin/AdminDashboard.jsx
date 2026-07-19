@@ -4,7 +4,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { DEFAULT_DATA } from '../../data/default-data';
 import * as XLSX from 'xlsx';
 import { create, all } from 'mathjs';
-import { getDeviceId } from '../../utils/patchEngine';
+import { getDeviceId, getSynchronizedDate } from '../../utils/patchEngine';
 
 const math = create(all);
 
@@ -355,7 +355,7 @@ const AdminDashboard = ({ data, setData }) => {
         const item = { 
           ...updated[targetIdx], 
           [actualField]: (actualField === 'price' || actualField === 'height' || actualField === 'jointPrice' || actualField === 'baguettePrice' || actualField === 'barLength' || actualField === 'scrapThreshold') ? parseFloat(actualValue) || 0 : actualValue,
-          _lastModified: new Date().toISOString(),
+          _lastModified: getSynchronizedDate().toISOString(),
           _modifiedBy: getDeviceId()
         };
         delete item._isNew;
@@ -377,7 +377,7 @@ const AdminDashboard = ({ data, setData }) => {
         updated[targetIdx] = { 
           ...updated[targetIdx], 
           _deleted: true, 
-          _lastModified: new Date().toISOString(),
+          _lastModified: getSynchronizedDate().toISOString(),
           _modifiedBy: getDeviceId()
         };
       }
@@ -434,7 +434,7 @@ const AdminDashboard = ({ data, setData }) => {
 
   const handleDeleteComposition = (id) => {
     setData(prev => {
-      const list = prev.compositions.map(c => c.id === id ? { ...c, _deleted: true, _lastModified: new Date().toISOString() } : c);
+      const list = prev.compositions.map(c => c.id === id ? { ...c, _deleted: true, _lastModified: getSynchronizedDate().toISOString() } : c);
       return { ...prev, compositions: list };
     });
     return true;
@@ -612,7 +612,7 @@ const AdminDashboard = ({ data, setData }) => {
         const item = { 
           ...updatedCategoryList[targetIdx], 
           [field]: parseValue(value, updatedCategoryList[targetIdx][field]),
-          _lastModified: new Date().toISOString(),
+          _lastModified: getSynchronizedDate().toISOString(),
           _modifiedBy: getDeviceId()
         };
         delete item._isNew;
@@ -637,7 +637,7 @@ const AdminDashboard = ({ data, setData }) => {
         updated[targetIdx] = {
           ...updated[targetIdx],
           _deleted: true,
-          _lastModified: new Date().toISOString(),
+          _lastModified: getSynchronizedDate().toISOString(),
           _modifiedBy: getDeviceId()
         };
       }
@@ -675,7 +675,7 @@ const AdminDashboard = ({ data, setData }) => {
         list[targetIdx] = {
           ...list[targetIdx],
           _deleted: true,
-          _lastModified: new Date().toISOString(),
+          _lastModified: getSynchronizedDate().toISOString(),
           _modifiedBy: getDeviceId()
         };
       }
@@ -693,7 +693,7 @@ const AdminDashboard = ({ data, setData }) => {
         list[targetIdx] = {
           ...list[targetIdx],
           _deleted: true,
-          _lastModified: new Date().toISOString(),
+          _lastModified: getSynchronizedDate().toISOString(),
           _modifiedBy: getDeviceId()
         };
       }
@@ -732,7 +732,7 @@ const AdminDashboard = ({ data, setData }) => {
   const handleUpdateComposition = (updated) => {
     const cleanUpdated = { 
       ...updated,
-      _lastModified: new Date().toISOString(),
+      _lastModified: getSynchronizedDate().toISOString(),
       _modifiedBy: getDeviceId()
     };
     delete cleanUpdated._isNew;

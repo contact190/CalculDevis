@@ -1,22 +1,17 @@
 import { createClient } from '@supabase/supabase-js';
 import { persistentStorage } from './storage.js';
-import { getDeviceId } from './patchEngine.js';
+import { getDeviceId, setClockSkew, getSynchronizedDate } from './patchEngine.js';
 
 const SUPABASE_URL = 'https://uxfktjdibabwcjinynlk.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV4Zmt0amRpYmFid2NqaW55bmxrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxMDczNTUsImV4cCI6MjA5OTY4MzM1NX0.p7tzcrPlxmes7pyoWES6bKsf7tO7HAGfgn7Cs5r_AE0';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-let clockSkew = 0;
 export function updateClockSkew(skew) {
   if (Math.abs(skew) > 1000) {
-    clockSkew = skew;
+    setClockSkew(skew);
     console.log(`[Sync] Ajustement de l'horloge locale avec le serveur : ${skew}ms`);
   }
-}
-
-export function getSynchronizedDate() {
-  return new Date(Date.now() + clockSkew);
 }
 
 export const fetchWithTimeout = async (resource, options = {}, timeout = 8000) => {

@@ -2961,11 +2961,29 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
     doc.setLineWidth(0.2);
 
     if (quote.items && quote.items.length > 0) {
+      // Helper to calculate the effective price including the margin if in draft/brouillon state
+      const getEffectivePriceHT = (itm) => {
+        let effectivePriceHT = itm.unitPriceHT || 0;
+        const validityDays = Number(quoteSettings?.validityDays || 30);
+        const isValidated = quote.status === 'Validé';
+        const isExpired = isValidated && quote.validatedAt && (new Date() - new Date(quote.validatedAt)) > (validityDays * 24 * 60 * 60 * 1000);
+        const shouldLiveRecalculate = !quote.status || quote.status === 'Brouillon' || isExpired;
+        if (shouldLiveRecalculate) {
+          try {
+            const tempConfig = { ...itm.config, margin: quote.globalMargin ?? quoteSettings?.globalMargin ?? 2.2 };
+            const pd = engine.calculatePrice(tempConfig);
+            if (pd && pd.priceHT) effectivePriceHT = pd.priceHT;
+          } catch(e) {}
+        }
+        return effectivePriceHT;
+      };
+
       // Group items before rendering
       const pdfItems = [];
       const groupsMap = {};
       
       quote.items.forEach(item => {
+        const effPrice = getEffectivePriceHT(item);
         if (item.pairedGroupId) {
           if (!groupsMap[item.pairedGroupId]) {
              groupsMap[item.pairedGroupId] = {
@@ -2973,7 +2991,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
                 id: item.pairedGroupId,
                 label: item.pairedGroupRef || 'Ensemble',
                 qty: 0,
-                unitPriceHT: item.unitPriceHT,
+                unitPriceHT: effPrice,
                 config: item.config || {},
                 originalItems: []
              };
@@ -2982,7 +3000,10 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
           groupsMap[item.pairedGroupId].originalItems.push(item);
           groupsMap[item.pairedGroupId].qty += item.qty;
         } else {
-          pdfItems.push(item);
+          pdfItems.push({
+            ...item,
+            unitPriceHT: effPrice
+          });
         }
       });
 
