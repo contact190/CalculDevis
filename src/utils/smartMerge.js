@@ -53,11 +53,9 @@ export const smartMerge = (dbA, dbB) => {
             } else if (valB === undefined) {
               // Keep valA
             } else if (Array.isArray(valA) && Array.isArray(valB)) {
-              if (valA.length > 0 && valA[0] && valA[0].id) {
-                mergedItem[key] = mergeArrays(valA, valB);
-              } else {
-                mergedItem[key] = incomingTime >= existingTime ? valB : valA;
-              }
+              // On ne fusionne pas les tableaux imbriqués (ex: elements de composition) élément par élément car
+              // l'id n'y est pas une clé primaire unique (c'est une clé étrangère). On prend le tableau de l'objet le plus récent.
+              mergedItem[key] = incomingTime >= existingTime ? valB : valA;
             } else if (typeof valA === 'object' && valA !== null && typeof valB === 'object' && valB !== null) {
               mergedItem[key] = { ...valA, ...valB };
             } else {
