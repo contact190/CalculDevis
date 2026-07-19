@@ -91,7 +91,10 @@ function getHash(str) {
 const PARTITIONS = {
   clients: 5,
   orders: 10,
-  quotes: 30
+  quotes: 30,
+  contracts: 5,
+  financialTrackers: 5,
+  invoiceRecords: 5
 };
 
 function getBucketIndex(id, numBuckets) {
@@ -172,25 +175,28 @@ export const syncDatabase = {
           clients: localDb?.clients || [],
           orders: localDb?.orders || [],
           quotes: localDb?.quotes || [],
+          contracts: localDb?.contracts || [],
+          financialTrackers: localDb?.financialTrackers || [],
+          invoiceRecords: localDb?.invoiceRecords || [],
           catalog: {}
         };
         
         if (localDb) {
           for (const key of Object.keys(localDb)) {
-            if (key !== 'clients' && key !== 'orders' && key !== 'quotes') {
+            if (key !== 'clients' && key !== 'orders' && key !== 'quotes' && key !== 'contracts' && key !== 'financialTrackers' && key !== 'invoiceRecords') {
               localSegments.catalog[key] = localDb[key];
             }
           }
         }
         
         const localCatalogHash = getHash(JSON.stringify(localSegments.catalog));
-        const db = localDb ? { ...localDb } : { clients: [], orders: [], quotes: [] };
+        const db = localDb ? { ...localDb } : { clients: [], orders: [], quotes: [], contracts: [], financialTrackers: [], invoiceRecords: [] };
         
         const downloadPromises = [];
         const downloadKeys = []; // Array of { collection, bucketIdx } or 'catalog'
         
         // ─── A. Process large collections bucket-by-bucket ───
-        for (const key of ['clients', 'orders', 'quotes']) {
+        for (const key of ['clients', 'orders', 'quotes', 'contracts', 'financialTrackers', 'invoiceRecords']) {
           const numBuckets = PARTITIONS[key];
           const cloudBucketHashes = cloudHashes[key] || [];
           
@@ -417,13 +423,16 @@ export const syncDatabase = {
         clients: [],
         orders: [],
         quotes: [],
+        contracts: [],
+        financialTrackers: [],
+        invoiceRecords: [],
         catalog: ''
       };
       
       const uploadTasks = [];
 
       // ─── A. Partition large collections into buckets ───
-      for (const key of ['clients', 'orders', 'quotes']) {
+      for (const key of ['clients', 'orders', 'quotes', 'contracts', 'financialTrackers', 'invoiceRecords']) {
         const numBuckets = PARTITIONS[key];
         const cloudBucketHashes = cloudHashes[key] || [];
         
@@ -463,7 +472,7 @@ export const syncDatabase = {
       // ─── B. Upload/Sync catalog ───
       const catalogObj = {};
       for (const key of Object.keys(db)) {
-        if (key !== 'clients' && key !== 'orders' && key !== 'quotes') {
+        if (key !== 'clients' && key !== 'orders' && key !== 'quotes' && key !== 'contracts' && key !== 'financialTrackers' && key !== 'invoiceRecords') {
           catalogObj[key] = db[key];
         }
       }

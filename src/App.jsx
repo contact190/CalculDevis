@@ -217,6 +217,7 @@ function App() {
     if (!repaired.quotes) repaired.quotes = [];
     if (!repaired.contracts) repaired.contracts = [];
     if (!repaired.financialTrackers) repaired.financialTrackers = [];
+    if (!repaired.invoiceRecords) repaired.invoiceRecords = [];
     
     if (repaired.orderCounter === undefined || repaired.orderCounter === null) {
       const ids = (repaired.orders || [])
@@ -830,7 +831,7 @@ function App() {
         const allOps = [];
         const now = new Date().toISOString();
         const deviceId = getDeviceId();
-        const TRACKABLE = ['clients', 'quotes', 'orders', 'contracts', 'financialTrackers'];
+        const TRACKABLE = ['clients', 'quotes', 'orders', 'contracts', 'financialTrackers', 'invoiceRecords'];
         
         for (const col of TRACKABLE) {
           const arr = database[col];

@@ -36,7 +36,7 @@ export function getDeviceId() {
  * Everything else (primitives, config objects) is treated as "full replace".
  */
 const TRACKABLE_COLLECTIONS = [
-  'clients', 'quotes', 'orders', 'compositions', 'glass', 'colors',
+  'clients', 'quotes', 'orders', 'contracts', 'financialTrackers', 'invoiceRecords', 'compositions', 'glass', 'colors',
   'options', 'accessories', 'profiles', 'joints', 'reinforcements', 'hardwareSets',
   'ranges', 'categories', 'traverses', 'glassProfileCompatibility', 'gasketCompatibility', 'shopProducts',
   'shutterComponents.caissons', 'shutterComponents.lames',
