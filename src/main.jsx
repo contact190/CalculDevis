@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import jsPDF from 'jspdf'
+import * as jspdfModule from 'jspdf'
 import App from './App.jsx'
 import './index.css'
 
@@ -25,7 +26,7 @@ const addPageNumbers = (doc) => {
       
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
-      doc.setTextColor(120, 120, 120);
+      doc.setTextColor('#64748b'); // Slate 500 (standard gray)
       
       // Draw at bottom center (10mm from the bottom)
       doc.text(`Page ${i} / ${totalPages}`, pageW / 2, pageH - 10, { align: 'center' });
@@ -35,17 +36,31 @@ const addPageNumbers = (doc) => {
   }
 };
 
-const origSave = jsPDF.prototype.save;
-jsPDF.prototype.save = function (...args) {
-  addPageNumbers(this);
-  return origSave.apply(this, args);
-};
+// Apply prototype patch to all potential jsPDF exports to handle bundler differences
+const targets = [jsPDF, jspdfModule?.jsPDF, jspdfModule?.default].filter(Boolean);
+const patched = new Set();
 
-const origOutput = jsPDF.prototype.output;
-jsPDF.prototype.output = function (...args) {
-  addPageNumbers(this);
-  return origOutput.apply(this, args);
-};
+targets.forEach(target => {
+  if (target.prototype && !patched.has(target.prototype)) {
+    patched.add(target.prototype);
+    
+    const origSave = target.prototype.save;
+    if (origSave) {
+      target.prototype.save = function (...args) {
+        addPageNumbers(this);
+        return origSave.apply(this, args);
+      };
+    }
+    
+    const origOutput = target.prototype.output;
+    if (origOutput) {
+      target.prototype.output = function (...args) {
+        addPageNumbers(this);
+        return origOutput.apply(this, args);
+      };
+    }
+  }
+});
 
 const queryClient = new QueryClient();
 
