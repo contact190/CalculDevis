@@ -198,22 +198,9 @@ function applyOpToDb(op) {
         } else if (valB === undefined) {
           // Keep valA
         } else if (Array.isArray(valA) && Array.isArray(valB)) {
-          if (valA.length > 0 && valA[0] && valA[0].id) {
-            const mapObj = new Map();
-            valA.forEach(x => { if (x && x.id) mapObj.set(x.id, x); });
-            valB.forEach(x => {
-              if (!x || !x.id) return;
-              const ext = mapObj.get(x.id);
-              if (!ext) {
-                mapObj.set(x.id, x);
-              } else {
-                mapObj.set(x.id, { ...ext, ...x });
-              }
-            });
-            mergedItem[key] = Array.from(mapObj.values());
-          } else {
-            mergedItem[key] = incomingTime >= existingTime ? valB : valA;
-          }
+          // On ne fusionne pas les tableaux imbriqués (ex: elements de composition) élément par élément car
+          // l'id n'y est pas une clé primaire unique. On prend le tableau de l'objet le plus récent.
+          mergedItem[key] = incomingTime >= existingTime ? valB : valA;
         } else if (typeof valA === 'object' && valA !== null && typeof valB === 'object' && valB !== null) {
           mergedItem[key] = { ...valA, ...valB };
         } else {

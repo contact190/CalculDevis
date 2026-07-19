@@ -59,6 +59,15 @@ function setPath(obj, path, value) {
   return obj;
 }
 
+let clockSkew = 0;
+export function setClockSkew(skew) {
+  clockSkew = skew;
+}
+
+export function getSynchronizedDate() {
+  return new Date(Date.now() + clockSkew);
+}
+
 /**
  * Stamp an item with _lastModified metadata
  */
@@ -66,7 +75,7 @@ export function stampItem(item) {
   if (!item || typeof item !== 'object') return item;
   return {
     ...item,
-    _lastModified: new Date().toISOString(),
+    _lastModified: getSynchronizedDate().toISOString(),
     _modifiedBy: getDeviceId()
   };
 }
@@ -110,7 +119,7 @@ export function generateOps(oldDb, newDb) {
   if (!oldDb || !newDb) return [];
   
   const ops = [];
-  const now = new Date().toISOString();
+  const now = getSynchronizedDate().toISOString();
   const deviceId = getDeviceId();
   
   for (const collection of TRACKABLE_COLLECTIONS) {
@@ -309,22 +318,9 @@ export function applyOp(db, op) {
         } else if (valB === undefined) {
           // Keep valA
         } else if (Array.isArray(valA) && Array.isArray(valB)) {
-          if (valA.length > 0 && valA[0] && valA[0].id) {
-            const mapObj = new Map();
-            valA.forEach(x => { if (x && x.id) mapObj.set(x.id, x); });
-            valB.forEach(x => {
-              if (!x || !x.id) return;
-              const ext = mapObj.get(x.id);
-              if (!ext) {
-                mapObj.set(x.id, x);
-              } else {
-                mapObj.set(x.id, { ...ext, ...x });
-              }
-            });
-            mergedItem[key] = Array.from(mapObj.values());
-          } else {
-            mergedItem[key] = incomingTime >= existingTime ? valB : valA;
-          }
+          // On ne fusionne pas les tableaux imbriqués (ex: elements de composition) élément par élément car
+          // l'id n'y est pas une clé primaire unique. On prend le tableau de l'objet le plus récent.
+          mergedItem[key] = incomingTime >= existingTime ? valB : valA;
         } else if (typeof valA === 'object' && valA !== null && typeof valB === 'object' && valB !== null) {
           mergedItem[key] = { ...valA, ...valB };
         } else {
@@ -332,7 +328,7 @@ export function applyOp(db, op) {
         }
       });
       
-      mergedItem._lastModified = incomingTime >= existingTime ? (timestamp || new Date().toISOString()) : existing._lastModified;
+      mergedItem._lastModified = incomingTime >= existingTime ? (timestamp || getSynchronizedDate().toISOString()) : existing._lastModified;
       mergedItem._modifiedBy = incomingTime >= existingTime ? (op.deviceId || 'unknown') : existing._modifiedBy;
       
       currentArr[idx] = mergedItem;
