@@ -11,6 +11,7 @@ const addPageNumbers = (doc) => {
   doc._pageNumbersAdded = true;
   try {
     const totalPages = doc.internal.getNumberOfPages();
+    console.log('[jsPDF Override] Adding page numbers to document. Total pages:', totalPages);
     for (let i = 1; i <= totalPages; i++) {
       doc.setPage(i);
       
@@ -26,8 +27,8 @@ const addPageNumbers = (doc) => {
       doc.setFontSize(8);
       doc.setTextColor(120, 120, 120);
       
-      // Draw at bottom center (8mm from the bottom)
-      doc.text(`Page ${i} / ${totalPages}`, pageW / 2, pageH - 8, { align: 'center' });
+      // Draw at bottom center (10mm from the bottom)
+      doc.text(`Page ${i} / ${totalPages}`, pageW / 2, pageH - 10, { align: 'center' });
     }
   } catch (e) {
     console.error('Error adding page numbers:', e);
