@@ -65,15 +65,56 @@ const FormulaInput = ({ value, onChange, placeholder, style = {}, variables = ['
 // ─── REUSABLE COMPONENT: BufferedInput to prevent lag and decimal loss ───────
 const BufferedInput = ({ value, onChange, type = "text", ...props }) => {
   const [localValue, setLocalValue] = useState(value);
+  const localValueRef = React.useRef(localValue);
+  const valueRef = React.useRef(value);
+  const onChangeRef = React.useRef(onChange);
 
-  useEffect(() => {
+  React.useEffect(() => {
+    localValueRef.current = localValue;
+  }, [localValue]);
+
+  React.useEffect(() => {
+    valueRef.current = value;
     setLocalValue(value);
   }, [value]);
 
-  const handleBlur = () => {
-    if (localValue !== value) {
-      onChange(localValue);
+  React.useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
+  const commit = React.useCallback(() => {
+    if (localValueRef.current !== valueRef.current) {
+      onChangeRef.current(localValueRef.current);
     }
+  }, []);
+
+  // Commit on unmount
+  React.useEffect(() => {
+    return () => {
+      commit();
+    };
+  }, [commit]);
+
+  // Commit on page unload or visibility change (backgrounding)
+  React.useEffect(() => {
+    const handleUnload = () => {
+      commit();
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        commit();
+      }
+    };
+    window.addEventListener('beforeunload', handleUnload);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      window.removeEventListener('beforeunload', handleUnload);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [commit]);
+
+  const handleBlur = () => {
+    commit();
   };
 
   const handleKeyDown = (e) => {

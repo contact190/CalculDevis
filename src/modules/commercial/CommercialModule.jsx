@@ -2549,7 +2549,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
     const netHT = Math.max(0, rawHT - discountAmount);
     const tva = netHT * ((quoteSettings?.tvaRate ?? 19) / 100);
     return { rawHT, discountAmount, ht: netHT, tva, ttc: netHT + tva, profiles, accessories, glass, shutters };
-  }, [quote.items, quote.discountType, quote.discountValue, quoteSettings, engine]);
+  }, [quote.items, quote.discountType, quote.discountValue, quote.globalMargin, quote.status, quote.validatedAt, quoteSettings, engine]);
 
   // Consolidated BOM for consumables
   const allBoms = useMemo(() => {
