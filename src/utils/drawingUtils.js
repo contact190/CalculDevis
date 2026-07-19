@@ -125,9 +125,21 @@ export const drawTechnicalDrawing = (canvas, cfg, database) => {
     if (oType.includes('Ouvrant') || oType.includes('Battant') || oType.includes('Porte')) {
       const combined = (comp?.name || '').toLowerCase();
       let sc = 1;
-      const m = combined.match(/(\d+)\s*(vantail|vanteau|vanteaux|battant|vant)/i);
-      if (m) sc = parseInt(m[1]);
-      else if (combined.includes('double') || combined.includes(' 2 ')) sc = 2;
+      
+      if (/\b(deux|2)\b.*\b(vantau|vantail|vantaux|battant|ouvrant|vant)/.test(combined) || combined.includes('double') || combined.includes(' 2 ')) {
+        sc = 2;
+      } else if (/\b(trois|3)\b.*\b(vantau|vantail|vantaux|battant|ouvrant|vant)/.test(combined) || combined.includes('triple') || combined.includes(' 3 ')) {
+        sc = 3;
+      } else if (/\b(quatre|4)\b.*\b(vantau|vantail|vantaux|battant|ouvrant|vant)/.test(combined) || combined.includes(' 4 ')) {
+        sc = 4;
+      } else {
+        const m = combined.match(/(\d+)\s*(vantail|vanteau|vanteaux|battant|ouvrant|vant)/);
+        if (m) {
+          const val = parseInt(m[1]);
+          if (val > 0 && val <= 10) sc = val;
+        }
+      }
+
       const sW = w / sc;
       for (let i = 0; i < sc; i++) {
         const sX = x + i * sW;

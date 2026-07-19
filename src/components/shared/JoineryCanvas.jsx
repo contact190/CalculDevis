@@ -176,15 +176,19 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
         const combined = name + ' ' + typeStr;
         
         let sashCount = 1;
-        const matches = combined.match(/(\d+)\s*(vantail|vanteau|vanteaux|ouvrant|battant|vant)/i);
-        if (matches) {
-          sashCount = parseInt(matches[1]);
-        } else if (combined.includes('double') || combined.includes(' 2 ')) {
+        if (/\b(deux|2)\b.*\b(vantau|vantail|vantaux|battant|ouvrant|vant)/.test(combined) || combined.includes('double') || combined.includes(' 2 ')) {
           sashCount = 2;
-        } else if (combined.includes('triple') || combined.includes(' 3 ')) {
+        } else if (/\b(trois|3)\b.*\b(vantau|vantail|vantaux|battant|ouvrant|vant)/.test(combined) || combined.includes('triple') || combined.includes(' 3 ')) {
           sashCount = 3;
+        } else if (/\b(quatre|4)\b.*\b(vantau|vantail|vantaux|battant|ouvrant|vant)/.test(combined) || combined.includes(' 4 ')) {
+          sashCount = 4;
+        } else {
+          const matches = combined.match(/(\d+)\s*(vantail|vanteau|vanteaux|ouvrant|battant|vant)/i);
+          if (matches) {
+            const val = parseInt(matches[1]);
+            if (val > 0 && val <= 10) sashCount = val;
+          }
         }
-
         const sW = w / sashCount;
         for (let i = 0; i < sashCount; i++) {
           const sX = x + i * sW;

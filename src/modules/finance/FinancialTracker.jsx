@@ -446,15 +446,35 @@ const TrackerView = ({ tracker, data, setData, onBack, quoteSettings }) => {
     doc.setFont('helvetica', 'normal');
     doc.text(`Fait à ${city} le ${new Date().toLocaleDateString('fr-FR')}`, 15, y);
 
-    y = Math.max(y + 20, ph - 45);
-    doc.setFontSize(8);
+    // Safe page check for signatures (needs about 25mm of space)
+    if (y + 25 > ph - 18) {
+      doc.addPage();
+      y = 20;
+    } else {
+      y = Math.max(y + 12, ph - 42); // ph - 42 is 255. Signature line will be at 255 + 16 = 271, which is safe.
+    }
+    
+    // Draw thin line for signatures
+    doc.setDrawColor(180, 180, 180);
+    doc.setLineWidth(0.3);
+    
+    // Entreprise
     doc.setFont('helvetica', 'bold');
-    doc.text('Entreprise', 15, y);
-    doc.text('Maître de l\'ouvrage', pw - 70, y);
+    doc.setFontSize(8.5);
+    doc.text('L\'Entreprise :', 15, y);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7);
-    doc.text('Signature et cachet', 15, y + 15);
-    doc.text('Signature', pw - 70, y + 15);
+    doc.text('(Signature et cachet)', 15, y + 4);
+    doc.line(15, y + 16, 75, y + 16);
+
+    // Maître d'ouvrage
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.text('Le Maître de l\'Ouvrage :', pw - 75, y);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.text('(Signature)', pw - 75, y + 4);
+    doc.line(pw - 75, y + 16, pw - 15, y + 16);
 
     doc.save(`Situation_${situationNum}_${versement.pvId || versement.id}.pdf`);
   };
@@ -530,7 +550,7 @@ const TrackerView = ({ tracker, data, setData, onBack, quoteSettings }) => {
     doc.setFontSize(6.5);
 
     rows.forEach(row => {
-      const desLines = doc.splitTextToSize(row.designation, 88);
+      const desLines = doc.splitTextToSize(row.designation, 80);
       const rowH = Math.max(desLines.length * 3.5, 8);
       if (y + rowH > 275) {
         doc.addPage();
@@ -570,24 +590,152 @@ const TrackerView = ({ tracker, data, setData, onBack, quoteSettings }) => {
   };
 
   const handleGenerateOrdreVersement = (montant, date, clientNom, orderId, mode) => {
+    const depositaire = window.prompt("Nom de la personne qui a effectué le versement :", clientNom || "");
+    if (depositaire === null) return; // user cancelled generation
+
     const doc = new jsPDF();
     const pw = doc.internal.pageSize.getWidth();
-    
-    doc.setFontSize(16); doc.setFont('helvetica', 'bold');
-    doc.text('EURL IDEAL ALUMINIUM', 15, 20);
-    
-    doc.setFontSize(14);
-    doc.text('ORDRE DE VERSEMENT', pw / 2, 40, { align: 'center' });
-    
-    doc.setFontSize(12); doc.setFont('helvetica', 'normal');
-    doc.text(`Reçu de : ${clientNom || 'Client'}`, 15, 60);
-    doc.text(`Commande N° : ${orderId}`, 15, 70);
-    doc.text(`Date : ${new Date(date || Date.now()).toLocaleDateString('fr-FR')}`, 15, 80);
-    doc.text(`Montant : ${Number(montant).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD`, 15, 90);
-    doc.text(`Mode de paiement : ${mode}`, 15, 100);
-    
-    doc.text('Signature / Cachet :', 15, 130);
-    
+    const ph = doc.internal.pageSize.getHeight();
+    const halfH = ph / 2;
+
+    const drawReceipt = (startY) => {
+      // 1. Logo
+      if (quoteSettings?.logoBase64) {
+        try {
+          const imgProps = doc.getImageProperties(quoteSettings.logoBase64);
+          const maxW = 45;
+          const maxH = 18;
+          const ratio = Math.min(maxW / imgProps.width, maxH / imgProps.height);
+          const w = imgProps.width * ratio;
+          const h = imgProps.height * ratio;
+          doc.addImage(quoteSettings.logoBase64, 'PNG', 15, startY + 12, w, h, '', 'FAST');
+        } catch (e) {
+          try {
+            doc.addImage(quoteSettings.logoBase64, 'PNG', 15, startY + 12, 45, 18, '', 'FAST');
+          } catch (e2) {}
+        }
+      }
+
+      // 2. Entreprise / Fournisseur
+      doc.setTextColor(30, 41, 59); // Slate-800
+      doc.setFontSize(13);
+      doc.setFont('helvetica', 'bold');
+      const companyName = quoteSettings?.companyName || 'EURL IDEAL ALUMINIUM';
+      doc.text(companyName, 65, startY + 17);
+
+      doc.setFontSize(7.5);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100, 116, 139); // Slate-500
+      const companyAddress = quoteSettings?.companyAddress || '';
+      const companyPhone = quoteSettings?.companyPhone || '';
+      let headerParts = [];
+      if (companyAddress) headerParts.push(companyAddress);
+      if (companyPhone) headerParts.push(`Tél : ${companyPhone}`);
+      if (headerParts.length > 0) {
+        doc.text(headerParts.join(' | '), 65, startY + 22);
+      }
+
+      // 3. Receipt Box
+      const boxY = startY + 34;
+      const boxW = pw - 30;
+      const boxH = 75;
+
+      doc.setDrawColor(203, 213, 225); // Slate-300
+      doc.setLineWidth(0.4);
+      doc.roundedRect(15, boxY, boxW, boxH, 2, 2);
+
+      // Header Bar inside Box
+      doc.setDrawColor(226, 232, 240); // Slate-200 (very sober and light)
+      doc.setLineWidth(0.25);
+      doc.line(15, boxY + 11, 15 + boxW, boxY + 11);
+
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(15, 76, 117); // Blue
+      doc.text('BON DE VERSEMENT', pw / 2, boxY + 7.5, { align: 'center' });
+
+      // Receipt details
+      doc.setFontSize(9);
+      doc.setTextColor(51, 65, 85); // Slate-700
+
+      // Client (Admin)
+      doc.setFont('helvetica', 'bold');
+      doc.text('Client :', 22, boxY + 18);
+      doc.setFont('helvetica', 'normal');
+      doc.text(clientNom || 'Client', 58, boxY + 18);
+
+      // Versé par (Manuel)
+      doc.setFont('helvetica', 'bold');
+      doc.text('Versé par :', 22, boxY + 25);
+      doc.setFont('helvetica', 'normal');
+      doc.text(depositaire || '—', 58, boxY + 25);
+
+      // Commande N°
+      doc.setFont('helvetica', 'bold');
+      doc.text('Commande N° :', 22, boxY + 32);
+      doc.setFont('helvetica', 'normal');
+      doc.text(String(orderId), 58, boxY + 32);
+
+      // Date
+      doc.setFont('helvetica', 'bold');
+      doc.text('Date de versement :', 22, boxY + 39);
+      doc.setFont('helvetica', 'normal');
+      doc.text(new Date(date || Date.now()).toLocaleDateString('fr-FR'), 58, boxY + 39);
+
+      // Mode
+      doc.setFont('helvetica', 'bold');
+      doc.text('Mode de paiement :', 22, boxY + 46);
+      doc.setFont('helvetica', 'normal');
+      doc.text(mode || 'Espèce', 58, boxY + 46);
+
+      // Montant
+      doc.setFont('helvetica', 'bold');
+      doc.text('Montant :', 22, boxY + 54);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10.5);
+      doc.setTextColor(5, 150, 105); // Green-600
+      const formattedMontant = (Number(montant).toLocaleString('fr-FR', { minimumFractionDigits: 2 }) + ' DZD').replace(/\s/g, ' ');
+      doc.text(formattedMontant, 58, boxY + 54);
+
+      // Montant en lettres
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'italic');
+      doc.setTextColor(100, 116, 139); // Slate-500
+      doc.text(`(soit : ${amountToWordsFR(montant)})`, 58, boxY + 60);
+
+      // Signature/Stamp Box
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(51, 65, 85);
+      doc.text('Signature & Cachet :', pw - 70, boxY + 20);
+
+      doc.setDrawColor(226, 232, 240);
+      doc.line(pw - 70, boxY + 66, pw - 22, boxY + 66);
+    };
+
+    // Draw first receipt (top half)
+    drawReceipt(0);
+
+    // Divider Line (dashed)
+    doc.setDrawColor(148, 163, 184); // Slate-400
+    doc.setLineWidth(0.4);
+    if (typeof doc.setLineDashPattern === 'function') {
+      doc.setLineDashPattern([2.5, 2.5], 0);
+    }
+    doc.line(10, halfH, pw - 10, halfH);
+    if (typeof doc.setLineDashPattern === 'function') {
+      doc.setLineDashPattern([], 0);
+    }
+
+    // Cut mark text
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(148, 163, 184);
+    doc.text('✂  DÉCOUPER ICI  ✂', pw - 45, halfH - 2);
+
+    // Draw second receipt (bottom half)
+    drawReceipt(halfH);
+
     doc.save(`Ordre_Versement_${orderId}.pdf`);
   };
 

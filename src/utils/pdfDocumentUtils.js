@@ -2,11 +2,13 @@
  * Shared PDF helpers for document headers and French formatting.
  */
 
-export const formatAmountFR = (val, decimals = 2) =>
-  Number(val || 0).toLocaleString('fr-FR', {
+export const formatAmountFR = (val, decimals = 2) => {
+  const formatted = Number(val || 0).toLocaleString('fr-FR', {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   });
+  return formatted.replace(/\s/g, ' ');
+};
 
 const UNITS = ['', 'UN', 'DEUX', 'TROIS', 'QUATRE', 'CINQ', 'SIX', 'SEPT', 'HUIT', 'NEUF'];
 const TEENS = ['DIX', 'ONZE', 'DOUZE', 'TREIZE', 'QUATORZE', 'QUINZE', 'SEIZE', 'DIX-SEPT', 'DIX-HUIT', 'DIX-NEUF'];
@@ -72,15 +74,17 @@ export const drawDocumentHeader = (doc, quoteSettings, client, options = {}) => 
   doc.setTextColor(0, 0, 0);
   let y = 15;
 
+  let logoH = 20;
   if (quoteSettings?.logoBase64) {
     try {
       const imgProps = doc.getImageProperties(quoteSettings.logoBase64);
       const maxW = 60;
       const maxH = 25;
       const ratio = Math.min(maxW / imgProps.width, maxH / imgProps.height);
-      doc.addImage(quoteSettings.logoBase64, 'PNG', 15, y, imgProps.width * ratio, imgProps.height * ratio, '', 'FAST');
+      logoH = imgProps.height * ratio;
+      doc.addImage(quoteSettings.logoBase64, 'PNG', 15, 15, imgProps.width * ratio, logoH, '', 'FAST');
     } catch (e) {
-      try { doc.addImage(quoteSettings.logoBase64, 'PNG', 15, y, 60, 25, '', 'FAST'); } catch (e2) {}
+      try { doc.addImage(quoteSettings.logoBase64, 'PNG', 15, 15, 60, 25, '', 'FAST'); logoH = 25; } catch (e2) {}
     }
   }
 
@@ -89,120 +93,132 @@ export const drawDocumentHeader = (doc, quoteSettings, client, options = {}) => 
     doc.setFont('helvetica', 'bold');
     const maxTitleWidth = pw - 90; // leave room for logo on the left
     const splitTitle = doc.splitTextToSize(title, maxTitleWidth);
-    doc.text(splitTitle, pw - 15, y + 12, { align: 'right' });
+    doc.text(splitTitle, pw - 15, 15 + 12, { align: 'right' });
   }
 
-  y += 35;
+  // Determine box placement
+  const boxY = showClientBox ? (15 + Math.max(logoH, title ? 22 : 0) + 6) : 15;
+  const boxWidth = showClientBox ? (pw - 35) / 2 : pw - 95; // 115mm width if single box
+  const boxX = showClientBox ? 15 : 80; // place beside logo if single box
+
+  // Draw docLabel & docValue if present
+  let labelH = 0;
+  if (docLabel && docValue) {
+    labelH = 10;
+  }
 
   if (docLabel && docValue) {
     doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
-    doc.text(`${docLabel} : ${docValue}`, 15, y);
+    // If showClientBox is true, draw above the boxes. If false, draw on the left under the logo.
+    const labelY = showClientBox ? boxY - 10 : 15 + logoH + 6;
+    doc.text(`${docLabel} : ${docValue}`, 15, labelY);
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Date : ${docDate}`, 15, y + 5);
-    y += 8;
+    doc.text(`Date : ${docDate}`, 15, labelY + 5);
   }
-
-  const boxY = y;
-  const boxWidth = showClientBox ? (pw - 35) / 2 : pw - 30;
 
   const companyNameLines = doc.splitTextToSize(quoteSettings?.companyName || 'Mon Entreprise', boxWidth - 6);
-  let cyLeft = boxY + 11 + (companyNameLines.length * 4) + 1;
-  if (quoteSettings?.companyAddress) cyLeft += doc.splitTextToSize(quoteSettings.companyAddress, boxWidth - 6).length * 4;
-  if (quoteSettings?.companyPhone || quoteSettings?.companyEmail) {
-    cyLeft += doc.splitTextToSize(`${quoteSettings?.companyPhone || ''} ${quoteSettings?.companyEmail ? ' - ' + quoteSettings.companyEmail : ''}`, boxWidth - 6).length * 4;
-  }
-  if (quoteSettings?.companyRC) cyLeft += 4;
-  if (quoteSettings?.companyIMP) cyLeft += 4;
-  if (quoteSettings?.companyMF) cyLeft += 4;
-  if (quoteSettings?.companyRIB) cyLeft += doc.splitTextToSize(`RIB: ${quoteSettings.companyRIB}`, boxWidth - 6).length * 4;
-  if (quoteSettings?.companyBank) cyLeft += doc.splitTextToSize(`Banque: ${quoteSettings.companyBank}`, boxWidth - 6).length * 4;
+  const phone = quoteSettings?.companyPhone || '';
+  const email = quoteSettings?.companyEmail || '';
 
-  let cyRight = boxY + 16;
+  // Calculate actual height of the left column (Fournisseur) text
+  let cyLeft = boxY + (showClientBox && labelH ? labelH : 0) + 11 + (companyNameLines.length * 4) + 1;
+  if (quoteSettings?.companyAddress) cyLeft += doc.splitTextToSize(quoteSettings.companyAddress, boxWidth - 6).length * 3.5;
+  if (phone || email) cyLeft += doc.splitTextToSize(`${phone}${email ? ' - ' + email : ''}`, boxWidth - 6).length * 3.5;
+  if (quoteSettings?.companyRC) cyLeft += 3.5;
+  if (quoteSettings?.companyIMP) cyLeft += 3.5;
+  if (quoteSettings?.companyMF) cyLeft += 3.5;
+  if (quoteSettings?.companyRIB) cyLeft += doc.splitTextToSize(`RIB: ${quoteSettings.companyRIB}`, boxWidth - 6).length * 3.5;
+  if (quoteSettings?.companyBank) cyLeft += doc.splitTextToSize(`Banque: ${quoteSettings.companyBank}`, boxWidth - 6).length * 3.5;
+
+  let cyRight = boxY + (showClientBox && labelH ? labelH : 0) + 16;
   let clientNameLines = [];
   if (showClientBox) {
     clientNameLines = doc.splitTextToSize(client?.nom || 'Client', boxWidth - 6);
-    cyRight = boxY + 11 + (clientNameLines.length * 4) + 1;
-    if (client?.adresse) cyRight += doc.splitTextToSize(client.adresse, boxWidth - 6).length * 4;
-    if (client?.telephone) cyRight += 4;
-    if (client?.email) cyRight += 4;
-    if (client?.rc) cyRight += 4;
-    if (client?.nif) cyRight += 4;
-    if (client?.nis) cyRight += 4;
-    if (client?.ai) cyRight += 4;
+    cyRight = boxY + labelH + 11 + (clientNameLines.length * 4) + 1;
+    if (client?.adresse) cyRight += doc.splitTextToSize(client.adresse, boxWidth - 6).length * 3.5;
+    if (client?.telephone) cyRight += 3.5;
+    if (client?.email) cyRight += 3.5;
+    if (client?.rc) cyRight += 3.5;
+    if (client?.nif) cyRight += 3.5;
+    if (client?.nis) cyRight += 3.5;
+    if (client?.ai) cyRight += 3.5;
   }
 
-  const boxHeight = Math.max(cyLeft - boxY + 8, showClientBox ? cyRight - boxY + 8 : 0, 42);
+  // Calculate exact box height with a small 2.5mm bottom padding
+  const minHeight = showClientBox ? 42 : 20;
+  const startOffset = boxY + (showClientBox && labelH ? labelH : 0);
+  const boxHeight = Math.max(cyLeft - startOffset + 2.5, showClientBox ? cyRight - (boxY + labelH) + 2.5 : 0, minHeight);
 
+  // Draw the Fournisseur Box
   doc.setDrawColor(150, 150, 150);
   doc.setLineWidth(0.3);
-  doc.roundedRect(15, boxY, boxWidth, boxHeight, 2, 2);
+  doc.roundedRect(boxX, startOffset, boxWidth, boxHeight, 2, 2);
 
   doc.setFontSize(9);
   doc.setFont('helvetica', 'bold');
-  doc.text('Fournisseur :', 18, boxY + 6);
+  doc.text('Fournisseur :', boxX + 3, startOffset + 6);
   doc.setFontSize(10);
-  doc.text(companyNameLines, 18, boxY + 11);
+  doc.text(companyNameLines, boxX + 3, startOffset + 11);
   doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
 
-  let cy = boxY + 11 + (companyNameLines.length * 4) + 1;
+  let cy = startOffset + 11 + (companyNameLines.length * 4) + 1;
   if (quoteSettings?.companyAddress) {
     const lines = doc.splitTextToSize(quoteSettings.companyAddress, boxWidth - 6);
-    doc.text(lines, 18, cy);
-    cy += lines.length * 4;
+    doc.text(lines, boxX + 3, cy);
+    cy += lines.length * 3.5;
   }
-  const phone = quoteSettings?.companyPhone || '';
-  const email = quoteSettings?.companyEmail || '';
   if (phone || email) {
     const lines = doc.splitTextToSize(`${phone}${email ? ' - ' + email : ''}`, boxWidth - 6);
-    doc.text(lines, 18, cy);
-    cy += lines.length * 4;
+    doc.text(lines, boxX + 3, cy);
+    cy += lines.length * 3.5;
   }
   doc.setTextColor(80, 80, 80);
-  if (quoteSettings?.companyRC) { doc.text(`RC N°: ${quoteSettings.companyRC}`, 18, cy); cy += 4; }
-  if (quoteSettings?.companyIMP) { doc.text(`AI N°: ${quoteSettings.companyIMP}`, 18, cy); cy += 4; }
-  if (quoteSettings?.companyMF) { doc.text(`NIF/MF N°: ${quoteSettings.companyMF}`, 18, cy); cy += 4; }
+  if (quoteSettings?.companyRC) { doc.text(`RC N°: ${quoteSettings.companyRC}`, boxX + 3, cy); cy += 3.5; }
+  if (quoteSettings?.companyIMP) { doc.text(`AI N°: ${quoteSettings.companyIMP}`, boxX + 3, cy); cy += 3.5; }
+  if (quoteSettings?.companyMF) { doc.text(`NIF/MF N°: ${quoteSettings.companyMF}`, boxX + 3, cy); cy += 3.5; }
   if (quoteSettings?.companyRIB) {
     const lines = doc.splitTextToSize(`RIB: ${quoteSettings.companyRIB}`, boxWidth - 6);
-    doc.text(lines, 18, cy);
-    cy += lines.length * 4;
+    doc.text(lines, boxX + 3, cy);
+    cy += lines.length * 3.5;
   }
   if (quoteSettings?.companyBank) {
     const lines = doc.splitTextToSize(`Banque: ${quoteSettings.companyBank}`, boxWidth - 6);
-    doc.text(lines, 18, cy);
-    cy += lines.length * 4;
+    doc.text(lines, boxX + 3, cy);
+    cy += lines.length * 3.5;
   }
   doc.setTextColor(0, 0, 0);
 
   if (showClientBox) {
     const rightBoxX = 15 + boxWidth + 5;
-    doc.roundedRect(rightBoxX, boxY, boxWidth, boxHeight, 2, 2);
+    doc.roundedRect(rightBoxX, boxY + labelH, boxWidth, boxHeight, 2, 2);
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
-    doc.text('Destinataire :', rightBoxX + 3, boxY + 6);
+    doc.text('Destinataire :', rightBoxX + 3, boxY + labelH + 6);
     doc.setFontSize(10);
-    doc.text(clientNameLines, rightBoxX + 3, boxY + 11);
+    doc.text(clientNameLines, rightBoxX + 3, boxY + labelH + 11);
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
-    let cly = boxY + 11 + (clientNameLines.length * 4) + 1;
+    let cly = boxY + labelH + 11 + (clientNameLines.length * 4) + 1;
     if (client?.adresse) {
       const lines = doc.splitTextToSize(client.adresse, boxWidth - 6);
       doc.text(lines, rightBoxX + 3, cly);
-      cly += lines.length * 4;
+      cly += lines.length * 3.5;
     }
-    if (client?.telephone) { doc.text(`Tél : ${client.telephone}`, rightBoxX + 3, cly); cly += 4; }
-    if (client?.email) { doc.text(`Email : ${client.email}`, rightBoxX + 3, cly); cly += 4; }
+    if (client?.telephone) { doc.text(`Tél : ${client.telephone}`, rightBoxX + 3, cly); cly += 3.5; }
+    if (client?.email) { doc.text(`Email : ${client.email}`, rightBoxX + 3, cly); cly += 3.5; }
     doc.setTextColor(80, 80, 80);
-    if (client?.rc) { doc.text(`RC : ${client.rc}`, rightBoxX + 3, cly); cly += 4; }
-    if (client?.nif) { doc.text(`NIF : ${client.nif}`, rightBoxX + 3, cly); cly += 4; }
-    if (client?.nis) { doc.text(`NIS : ${client.nis}`, rightBoxX + 3, cly); cly += 4; }
-    if (client?.ai) { doc.text(`AI : ${client.ai}`, rightBoxX + 3, cly); cly += 4; }
+    if (client?.rc) { doc.text(`RC : ${client.rc}`, rightBoxX + 3, cly); cly += 3.5; }
+    if (client?.nif) { doc.text(`NIF : ${client.nif}`, rightBoxX + 3, cly); cly += 3.5; }
+    if (client?.nis) { doc.text(`NIS : ${client.nis}`, rightBoxX + 3, cly); cly += 3.5; }
+    if (client?.ai) { doc.text(`AI : ${client.ai}`, rightBoxX + 3, cly); cly += 3.5; }
     doc.setTextColor(0, 0, 0);
   }
 
-  return boxY + boxHeight + 10;
+  const finalY = Math.max(15 + logoH + (showClientBox ? 0 : (docLabel && docValue ? 16 : 0)), boxY + (showClientBox && labelH ? labelH : 0) + boxHeight) + 8;
+  return finalY;
 };
 
 export const getCityFromAddress = (address, fallback = 'Oran') => {
