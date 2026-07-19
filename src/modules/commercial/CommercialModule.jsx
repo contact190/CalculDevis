@@ -3459,6 +3459,20 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
     doc.setFont('helvetica', 'normal');
     doc.text(quoteSettings?.footerText || '', pw / 2, 285, { align: 'center' });
 
+    // Page numbering
+    try {
+      const totalPages = doc.internal.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor('#64748b');
+        doc.text(`Page ${i} / ${totalPages}`, pw / 2, 290, { align: 'center' });
+      }
+    } catch (e) {
+      console.error('Failed to add page numbers', e);
+    }
+
     doc.save(`Devis_${quote.number}.pdf`);
   };
 
