@@ -2487,8 +2487,14 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
     }
   }, [database.clients, quote.clientId, setCurrentQuote]);
 
-
-
+  const isQuoteFrozen = useMemo(() => {
+    if (!quote.status || quote.status === 'Brouillon') return false;
+    if (quote.status !== 'Validé') return false; // Orders etc might be handled differently, but Validé is the target here
+    const validityDays = Number(quoteSettings?.validityDays || 30);
+    if (!quote.validatedAt) return false;
+    const diff = new Date() - new Date(quote.validatedAt);
+    return diff <= (validityDays * 24 * 60 * 60 * 1000);
+  }, [quote.status, quote.validatedAt, quoteSettings]);
 
   // Totals
   const [showKitDetails, setShowKitDetails] = useState(false);
@@ -2504,11 +2510,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
       let currentPriceHT = item.unitPriceHT || 0;
       let pd = item.priceData;
 
-      const validityDays = Number(quoteSettings?.validityDays || 30);
-      const isValidated = quote.status === 'Validé';
-      const isExpired = isValidated && quote.validatedAt && (new Date() - new Date(quote.validatedAt)) > (validityDays * 24 * 60 * 60 * 1000);
-      
-      const shouldLiveRecalculate = !quote.status || quote.status === 'Brouillon' || isExpired;
+      const shouldLiveRecalculate = !isQuoteFrozen;
 
           try {
             const tempConfig = { ...item.config, margin: quote.globalMargin ?? quoteSettings?.globalMargin ?? 2.2 };
@@ -2549,7 +2551,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
     const netHT = Math.max(0, rawHT - discountAmount);
     const tva = netHT * ((quoteSettings?.tvaRate ?? 19) / 100);
     return { rawHT, discountAmount, ht: netHT, tva, ttc: netHT + tva, profiles, accessories, glass, shutters };
-  }, [quote.items, quote.discountType, quote.discountValue, quote.globalMargin, quote.status, quote.validatedAt, quoteSettings, engine]);
+  }, [quote.items, quote.discountType, quote.discountValue, quote.globalMargin, isQuoteFrozen, engine]);
 
   // Consolidated BOM for consumables
   const allBoms = useMemo(() => {
@@ -2682,15 +2684,6 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
     setConfig(draftConfig);
     setLocalView('list');
   };
-
-  const isQuoteFrozen = useMemo(() => {
-    if (!quote.status || quote.status === 'Brouillon') return false;
-    if (quote.status !== 'Validé') return false; // Orders etc might be handled differently, but Validé is the target here
-    const validityDays = Number(quoteSettings?.validityDays || 30);
-    if (!quote.validatedAt) return false;
-    const diff = new Date() - new Date(quote.validatedAt);
-    return diff <= (validityDays * 24 * 60 * 60 * 1000);
-  }, [quote.status, quote.validatedAt, quoteSettings]);
 
 
   const handleDeleteItem = (id) => {
@@ -2964,10 +2957,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
       // Helper to calculate the effective price including the margin if in draft/brouillon state
       const getEffectivePriceHT = (itm) => {
         let effectivePriceHT = itm.unitPriceHT || 0;
-        const validityDays = Number(quoteSettings?.validityDays || 30);
-        const isValidated = quote.status === 'Validé';
-        const isExpired = isValidated && quote.validatedAt && (new Date() - new Date(quote.validatedAt)) > (validityDays * 24 * 60 * 60 * 1000);
-        const shouldLiveRecalculate = !quote.status || quote.status === 'Brouillon' || isExpired;
+        const shouldLiveRecalculate = !isQuoteFrozen;
         if (shouldLiveRecalculate) {
           try {
             const tempConfig = { ...itm.config, margin: quote.globalMargin ?? quoteSettings?.globalMargin ?? 2.2 };
@@ -3641,7 +3631,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
                     const comp = database.compositions?.find(c => c.id === item.config?.compositionId);
                     const color = database.colors?.find(c => c.id === item.config?.colorId);
                     let effectivePriceHT = item.unitPriceHT || 0;
-                    if (!quote.status || quote.status === 'Brouillon') {
+                    if (!isQuoteFrozen) {
                       try {
                         const tempConfig = { ...item.config, margin: quote.globalMargin ?? quoteSettings?.globalMargin ?? 2.2 };
                         const pd = engine.calculatePrice(tempConfig);
@@ -4096,6 +4086,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
                 <span>Marge Globale</span>
                 <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
                   <input type="number" step="0.1" min="1" value={quote.globalMargin ?? quoteSettings?.globalMargin ?? 2.2}
+                    disabled={isQuoteFrozen}
                     onChange={e => setCurrentQuote(prev => ({ ...prev, globalMargin: parseFloat(e.target.value) || 2.2 }))}
                     style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: 'white', borderRadius: '4px', padding: '2px 6px', width: '60px', fontSize: '0.8rem', fontWeight: 700, textAlign: 'right' }} />
                   <span style={{ fontSize: '0.75rem' }}>x</span>
