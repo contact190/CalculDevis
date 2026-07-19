@@ -143,14 +143,14 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
         ctx.lineWidth = 1.5;
         ctx.strokeRect(x + 2, y + 2, w - 4, h - 4);
 
-        // Diagonal lines from top corners to bottom-centre
+        // Diagonal lines from bottom corners to top-centre (pointing up for opening from the bottom)
         ctx.beginPath();
         ctx.setLineDash([5, 5]);
         ctx.strokeStyle = '#94a3b8';
         ctx.lineWidth = 1.2;
-        ctx.moveTo(x + 4,     y + 4);      // top-left
-        ctx.lineTo(x + w / 2, y + h - 4); // bottom-centre
-        ctx.lineTo(x + w - 4, y + 4);      // top-right
+        ctx.moveTo(x + 4,     y + h - 4);  // bottom-left
+        ctx.lineTo(x + w / 2, y + 4);      // top-centre
+        ctx.lineTo(x + w - 4, y + h - 4);  // bottom-right
         ctx.stroke();
         ctx.setLineDash([]);
 
