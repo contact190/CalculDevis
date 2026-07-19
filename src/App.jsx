@@ -547,13 +547,15 @@ function App() {
       console.log("⚡ Action critique détectée ! Sauvegarde instantanée forcée.");
       saveAction();
     } else {
-      saveTimerRef.current = setTimeout(saveAction, 1500); // Debounce increased to 1500ms for non-critical changes
+      // Dans l'onglet administration, on réduit le délai à 200ms car la saisie est déjà bufferisée par onBlur
+      const debounceTime = activeTab === 'admin' ? 200 : 1500;
+      saveTimerRef.current = setTimeout(saveAction, debounceTime);
     }
 
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
-  }, [database, isLoading]);
+  }, [database, isLoading, activeTab]);
 
   // ─── STEP 3: Connect to Local Server WebSocket (Real-time Delta Sync) ───────
   useEffect(() => {
