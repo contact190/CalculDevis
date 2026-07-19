@@ -7,6 +7,18 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+let clockSkew = 0;
+export function updateClockSkew(skew) {
+  if (Math.abs(skew) > 1000) {
+    clockSkew = skew;
+    console.log(`[Sync] Ajustement de l'horloge locale avec le serveur : ${skew}ms`);
+  }
+}
+
+export function getSynchronizedDate() {
+  return new Date(Date.now() + clockSkew);
+}
+
 export const fetchWithTimeout = async (resource, options = {}, timeout = 8000) => {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeout);
@@ -16,6 +28,16 @@ export const fetchWithTimeout = async (resource, options = {}, timeout = 8000) =
       signal: controller.signal
     });
     clearTimeout(id);
+    
+    // Extraction de la date du serveur pour corriger la désynchronisation horaire locale
+    const serverDate = response.headers.get('date') || response.headers.get('Date');
+    if (serverDate) {
+      const serverMs = new Date(serverDate).getTime();
+      if (!isNaN(serverMs)) {
+        updateClockSkew(serverMs - Date.now());
+      }
+    }
+
     return response;
   } catch (error) {
     clearTimeout(id);
@@ -366,7 +388,7 @@ export const syncDatabase = {
    * Compares hashes of individual partitions and only uploads modified ones.
    */
   async save({ mainDb, quotes }) {
-    const now = new Date().toISOString();
+    const now = getSynchronizedDate().toISOString();
     
     try {
       const db = { ...mainDb };
@@ -384,8 +406,8 @@ export const syncDatabase = {
           if (cloudMeta && cloudMeta.updated_at) {
             const cloudTime = new Date(cloudMeta.updated_at).getTime();
             const clientMaxTime = getClientMaxTime(db);
-            // 5s clock skew safety buffer
-            if (cloudTime > clientMaxTime + 5000) {
+            // 5 minutes clock skew safety buffer (increased from 5s)
+            if (cloudTime > clientMaxTime + 300000) {
               console.warn(`⚠️ Aborting cloud snapshot save: Cloud snapshot is newer than client database (${new Date(cloudTime).toISOString()} > ${new Date(clientMaxTime).toISOString()}).`);
               return cloudMeta.updated_at;
             }
@@ -556,8 +578,8 @@ export const cloudSync = {
           op: 'replace_key',
           collection: '_meta',
           doc_id: 'force_refresh',
-          data: new Date().toISOString(),
-          timestamp: new Date().toISOString(),
+          data: getSynchronizedDate().toISOString(),
+          timestamp: getSynchronizedDate().toISOString(),
           device_id: ops[0]?.deviceId || 'unknown'
         });
       }
