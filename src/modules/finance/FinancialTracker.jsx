@@ -769,7 +769,7 @@ const TrackerView = ({ tracker, data, setData, onBack, quoteSettings }) => {
       </div>
 
       {/* Info commande / contrat */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
         <div className="glass" style={{ padding: '1rem' }}>
           <p style={{ margin: '0 0 0.5rem', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Informations</p>
           <p style={{ margin: 0 }}><strong>Client :</strong> {client?.nom || tracker.clientId}</p>
@@ -824,6 +824,34 @@ const TrackerView = ({ tracker, data, setData, onBack, quoteSettings }) => {
           ) : (
             avance.attachment?.url ? <div style={{ fontSize: '0.8rem', marginTop: '0.5rem' }}><a href={avance.attachment.url} target="_blank" rel="noreferrer">Ouvrir le Lien Drive</a></div> : <div style={{ fontSize: '0.8rem', marginTop: '0.5rem', color: '#94a3b8' }}>Aucun lien Drive</div>
           )}
+        </div>
+        {/* Retenue de Garantie card */}
+        <div className="glass" style={{ padding: '1rem' }}>
+          <p style={{ margin: '0 0 0.5rem', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>🛡️ Retenue de Garantie</p>
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+            <div className="form-group" style={{ flex: 1, minWidth: '110px' }}>
+              <label className="label">Taux (%)</label>
+              <input className="input" type="number" min="0" max="100"
+                value={tracker.retenueTaux !== undefined ? tracker.retenueTaux : 5}
+                onChange={e => updateTracker({ ...tracker, retenueTaux: parseFloat(e.target.value) || 0 })}
+              />
+            </div>
+            <div className="form-group" style={{ flex: 1.5, minWidth: '150px' }}>
+              <label className="label">Montant (DZD)</label>
+              <input className="input" type="text" disabled
+                value={((montantContrat * (tracker.retenueTaux !== undefined ? tracker.retenueTaux : 5)) / 100).toLocaleString('fr-FR', { minimumFractionDigits: 2 }) + ' DZD'}
+              />
+            </div>
+          </div>
+          <p style={{ margin: '0.6rem 0 0', fontSize: '0.8rem', color: '#334155' }}>
+            <strong>Date Début (Contrat validé) :</strong> {contract?.acceptedAt ? new Date(contract.acceptedAt).toLocaleDateString('fr-FR') : (contract?.createdAt ? new Date(contract.createdAt).toLocaleDateString('fr-FR') : 'Non validé')}
+          </p>
+          <p style={{ margin: '0.3rem 0 0', fontSize: '0.8rem', color: '#334155' }}>
+            <strong>Date Fin (PV Réception Final) :</strong> {finalPV?.createdAt ? new Date(finalPV.createdAt).toLocaleDateString('fr-FR') : (finalPV?.date ? new Date(finalPV.date).toLocaleDateString('fr-FR') : 'En attente')}
+          </p>
+          <p style={{ margin: '0.3rem 0 0', fontSize: '0.8rem', color: '#0f4c75', fontWeight: 600 }}>
+            <strong>Durée de la retenue :</strong> {calculateDurationStr(contract?.acceptedAt || contract?.createdAt, finalPV?.createdAt || finalPV?.date)}
+          </p>
         </div>
       </div>
 

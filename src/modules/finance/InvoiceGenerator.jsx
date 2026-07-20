@@ -10,10 +10,47 @@ const InvoiceGenerator = ({ data, setData, quoteSettings }) => {
   const currentCounter = data.invoiceCounter || 1;
   const [invoiceNumber, setInvoiceNumber] = useState(String(currentCounter).padStart(2, '0'));
   const [isGenerating, setIsGenerating] = useState(false);
+  const [manualProducts, setManualProducts] = useState([]);
+  const [newManualProduct, setNewManualProduct] = useState({ name: '', designation: '', qty: 1, price: 0 });
+  const [unitOverrides, setUnitOverrides] = useState({});
 
   useEffect(() => {
     setInvoiceNumber(String(currentCounter).padStart(2, '0'));
   }, [currentCounter]);
+
+  useEffect(() => {
+    setManualProducts([]);
+    setUnitOverrides({});
+  }, [selectedOrderId]);
+
+  const handleUnitOverride = (unitId, field, value) => {
+    setUnitOverrides(prev => ({
+      ...prev,
+      [unitId]: { ...(prev[unitId] || {}), [field]: value }
+    }));
+  };
+
+  const handleAddManualProduct = () => {
+    if (!newManualProduct.name.trim()) {
+      alert("Veuillez saisir un nom de produit.");
+      return;
+    }
+    setManualProducts(prev => [
+      ...prev,
+      {
+        id: `manual-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        name: newManualProduct.name.trim(),
+        designation: newManualProduct.designation.trim(),
+        qty: Number(newManualProduct.qty) || 1,
+        price: Number(newManualProduct.price) || 0
+      }
+    ]);
+    setNewManualProduct({ name: '', designation: '', qty: 1, price: 0 });
+  };
+
+  const handleRemoveManualProduct = (id) => {
+    setManualProducts(prev => prev.filter(p => p.id !== id));
+  };
 
   const orders = data.orders || [];
   const clients = data.clients || [];
@@ -79,14 +116,19 @@ const InvoiceGenerator = ({ data, setData, quoteSettings }) => {
     });
   };
 
-  const totalHT = useMemo(() => filteredUnits.reduce((s, u) => s + (u.unitPriceHT || 0), 0), [filteredUnits]);
+  const totalHT = useMemo(() => {
+    const unitsTotal = filteredUnits.reduce((s, u) => s + (u.unitPriceHT || 0), 0);
+    const manualTotal = manualProducts.reduce((s, p) => s + ((p.price || 0) * (p.qty || 0)), 0);
+    return unitsTotal + manualTotal;
+  }, [filteredUnits, manualProducts]);
+
   const tvaRate = selectedContract?.tauxTVA || quoteSettings?.tvaRate || 19;
   const totalTVA = totalHT * tvaRate / 100;
   const totalTTC = totalHT + totalTVA;
 
   const generateInvoicePDF = async () => {
     if (!selectedOrder) { alert('Sélectionnez une commande.'); return; }
-    if (filteredUnits.length === 0) { alert('Aucune unité réceptionnée sélectionnée.'); return; }
+    if (filteredUnits.length === 0 && manualProducts.length === 0) { alert('Aucune unité réceptionnée ni produit manuel sélectionné.'); return; }
 
     setIsGenerating(true);
     const doc = new jsPDF();
@@ -258,13 +300,27 @@ const InvoiceGenerator = ({ data, setData, quoteSettings }) => {
 
     // Use autoTable matching the Shop invoices style
     const tableColumn = ["Désignation", "Dimensions", "Quantité", "P.U. HT", "Total HT"];
-    const tableRows = filteredUnits.map(u => [
-      `${u.name}\n${u.label}`,
-      u.dimensions ? `${u.dimensions} mm` : '-',
-      "1 pces",
-      `${formatPricePDF(u.unitPriceHT)} DZD`,
-      `${formatPricePDF(u.unitPriceHT)} DZD`
-    ]);
+    const tableRows = [
+      ...filteredUnits.map(u => {
+        const ov = unitOverrides[u.id] || {};
+        const displayName = ov.name !== undefined ? ov.name : u.name;
+        const displayLabel = ov.label !== undefined ? ov.label : u.label;
+        return [
+          `${displayName}\n${displayLabel}`,
+          u.dimensions ? `${u.dimensions} mm` : '-',
+          "1 pces",
+          `${formatPricePDF(u.unitPriceHT)} DZD`,
+          `${formatPricePDF(u.unitPriceHT)} DZD`
+        ];
+      }),
+      ...manualProducts.map(p => [
+        `${p.name}\n${p.designation}`,
+        '-',
+        `${p.qty} pces`,
+        `${formatPricePDF(p.price)} DZD`,
+        `${formatPricePDF(p.price * p.qty)} DZD`
+      ])
+    ];
 
     autoTable(doc, {
       startY: y,
@@ -335,6 +391,7 @@ const InvoiceGenerator = ({ data, setData, quoteSettings }) => {
         tvaRate,
         type: invoiceType === 'global' ? 'Globale' : 'Partielle',
         unitsCount: filteredUnits.length,
+        manualProducts, // Save manual products list
       };
       const existingRecords = prev.invoiceRecords || [];
 
@@ -401,12 +458,76 @@ const InvoiceGenerator = ({ data, setData, quoteSettings }) => {
           </div>
         )}
 
+        {/* Manual products selector */}
+        {selectedOrder && (
+          <div style={{ marginTop: '1.25rem', marginBottom: '1.25rem', padding: '1rem', background: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
+            <h3 style={{ margin: '0 0 0.75rem', fontSize: '0.9rem', fontWeight: 700, color: '#334155' }}>
+              ➕ Ajouter des produits manuels à la facture
+            </h3>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr 1.5fr auto', gap: '0.75rem', alignItems: 'flex-end', marginBottom: '1rem' }}>
+              <div className="form-group" style={{ margin: 0 }}>
+                <label className="label" style={{ fontSize: '0.75rem' }}>Nom du produit</label>
+                <input type="text" className="input" placeholder="Ex: Service de pose" value={newManualProduct.name} onChange={e => setNewManualProduct(prev => ({ ...prev, name: e.target.value }))} />
+              </div>
+              <div className="form-group" style={{ margin: 0 }}>
+                <label className="label" style={{ fontSize: '0.75rem' }}>Désignation / Détails</label>
+                <input type="text" className="input" placeholder="Ex: Pose et réglage" value={newManualProduct.designation} onChange={e => setNewManualProduct(prev => ({ ...prev, designation: e.target.value }))} />
+              </div>
+              <div className="form-group" style={{ margin: 0 }}>
+                <label className="label" style={{ fontSize: '0.75rem' }}>Qté</label>
+                <input type="number" min="1" className="input" value={newManualProduct.qty} onChange={e => setNewManualProduct(prev => ({ ...prev, qty: parseInt(e.target.value) || 1 }))} />
+              </div>
+              <div className="form-group" style={{ margin: 0 }}>
+                <label className="label" style={{ fontSize: '0.75rem' }}>Prix U. HT (DZD)</label>
+                <input type="number" min="0" className="input" placeholder="0.00" value={newManualProduct.price} onChange={e => setNewManualProduct(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))} />
+              </div>
+              <button onClick={handleAddManualProduct} style={{ padding: '0.6rem 1.25rem', background: '#0f4c75', color: 'white', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem', height: '38px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                Ajouter
+              </button>
+            </div>
+
+            {manualProducts.length > 0 && (
+              <div className="table-responsive" style={{ background: 'white', borderRadius: '0.5rem', border: '1px solid #e2e8f0' }}>
+                <table className="data-table" style={{ fontSize: '0.8rem', margin: 0 }}>
+                  <thead>
+                    <tr>
+                      <th>Nom</th>
+                      <th>Désignation</th>
+                      <th>Qté</th>
+                      <th>Prix U. HT</th>
+                      <th>Total HT</th>
+                      <th style={{ width: '80px', textAlign: 'center' }}>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {manualProducts.map(p => (
+                      <tr key={p.id}>
+                        <td style={{ fontWeight: 600 }}>{p.name}</td>
+                        <td>{p.designation}</td>
+                        <td>{p.qty} pces</td>
+                        <td>{p.price.toLocaleString('fr-FR')} DZD</td>
+                        <td style={{ fontWeight: 600 }}>{(p.price * p.qty).toLocaleString('fr-FR')} DZD</td>
+                        <td style={{ textAlign: 'center' }}>
+                          <button onClick={() => handleRemoveManualProduct(p.id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }}>
+                            Supprimer
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Preview table */}
-        {selectedOrder && filteredUnits.length > 0 && (
+        {selectedOrder && (filteredUnits.length > 0 || manualProducts.length > 0) && (
           <div style={{ marginBottom: '1.25rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '0.75rem' }}>
               <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#1e293b' }}>
-                Aperçu — {filteredUnits.length} unité(s) réceptionnée(s)
+                Aperçu — {filteredUnits.length} unité(s) et {manualProducts.length} produit(s) manuel(s)
               </h3>
               <div style={{ textAlign: 'right', fontSize: '0.9rem' }}>
                 <span style={{ color: '#64748b' }}>HT: {totalHT.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD | TVA: {totalTVA.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD | </span>
@@ -417,21 +538,49 @@ const InvoiceGenerator = ({ data, setData, quoteSettings }) => {
               <table className="data-table" style={{ fontSize: '0.82rem' }}>
                 <thead>
                   <tr>
-                    <th>Repère</th>
-                    <th>Type</th>
+                    <th>Repère / Nom</th>
+                    <th>Type / Désignation</th>
                     <th>Étage</th>
-                    <th>Dimensions</th>
+                    <th>Dimensions / Qté</th>
                     <th>Prix U. HT</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredUnits.map(u => (
-                    <tr key={u.id}>
-                      <td style={{ fontWeight: 600 }}>{u.name}</td>
-                      <td>{u.label}</td>
-                      <td>{u.floor}</td>
-                      <td>{u.dimensions} mm</td>
-                      <td style={{ fontWeight: 600 }}>{(u.unitPriceHT || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
+                  {filteredUnits.map(u => {
+                    const ov = unitOverrides[u.id] || {};
+                    return (
+                      <tr key={u.id}>
+                        <td>
+                          <input
+                            type="text"
+                            value={ov.name !== undefined ? ov.name : u.name}
+                            onChange={e => handleUnitOverride(u.id, 'name', e.target.value)}
+                            style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '0.3rem', padding: '0.2rem 0.4rem', fontSize: '0.8rem', fontWeight: 600, background: ov.name !== undefined ? '#eff6ff' : 'transparent' }}
+                            title="Modifier le repère"
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            value={ov.label !== undefined ? ov.label : u.label}
+                            onChange={e => handleUnitOverride(u.id, 'label', e.target.value)}
+                            style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '0.3rem', padding: '0.2rem 0.4rem', fontSize: '0.8rem', background: ov.label !== undefined ? '#eff6ff' : 'transparent' }}
+                            title="Modifier la désignation"
+                          />
+                        </td>
+                        <td>{u.floor}</td>
+                        <td>{u.dimensions} mm</td>
+                        <td style={{ fontWeight: 600 }}>{(u.unitPriceHT || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
+                      </tr>
+                    );
+                  })}
+                  {manualProducts.map(p => (
+                    <tr key={p.id} style={{ background: '#f8fafc' }}>
+                      <td style={{ fontWeight: 600, color: '#0f4c75' }}>{p.name} (manuel)</td>
+                      <td>{p.designation}</td>
+                      <td>—</td>
+                      <td>{p.qty} pces</td>
+                      <td style={{ fontWeight: 600 }}>{(p.price || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
                     </tr>
                   ))}
                 </tbody>
@@ -440,17 +589,17 @@ const InvoiceGenerator = ({ data, setData, quoteSettings }) => {
           </div>
         )}
 
-        {selectedOrder && filteredUnits.length === 0 && (
+        {selectedOrder && filteredUnits.length === 0 && manualProducts.length === 0 && (
           <div style={{ padding: '1rem', background: '#fef3c7', borderRadius: '0.5rem', color: '#d97706', fontSize: '0.9rem', marginBottom: '1rem' }}>
-            ⚠️ Aucune unité réceptionnée trouvée pour la sélection actuelle. Vérifiez les statuts dans l'onglet Expédition.
+            ⚠️ Aucune unité réceptionnée ni produit manuel trouvé. Ajoutez un produit manuel ci-dessus ou vérifiez les statuts dans l'onglet Expédition.
           </div>
         )}
 
         <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
           <button
             onClick={generateInvoicePDF}
-            disabled={isGenerating || filteredUnits.length === 0}
-            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.75rem', background: filteredUnits.length === 0 ? '#94a3b8' : 'linear-gradient(135deg, #0f4c75, #1b6ca8)', color: 'white', border: 'none', borderRadius: '0.6rem', cursor: filteredUnits.length === 0 ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '0.95rem' }}
+            disabled={isGenerating || (filteredUnits.length === 0 && manualProducts.length === 0)}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.75rem', background: (filteredUnits.length === 0 && manualProducts.length === 0) ? '#94a3b8' : 'linear-gradient(135deg, #0f4c75, #1b6ca8)', color: 'white', border: 'none', borderRadius: '0.6rem', cursor: (filteredUnits.length === 0 && manualProducts.length === 0) ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '0.95rem' }}
           >
             <Download size={18} /> {isGenerating ? 'Génération...' : 'Générer la Facture PDF'}
           </button>

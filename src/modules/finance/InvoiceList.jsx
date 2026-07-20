@@ -36,6 +36,7 @@ const InvoiceList = ({ data, setData, quoteSettings }) => {
         orderRef: order?.id || rec.orderId,
         type: rec.type || 'Globale',
         unitsCount: rec.unitsCount || 0,
+        manualProducts: rec.manualProducts || [],
       });
     });
 
@@ -189,6 +190,11 @@ const InvoiceList = ({ data, setData, quoteSettings }) => {
     const order = orders.find(o => o.id === inv.orderId);
     if (!order) { alert('Commande introuvable.'); return; }
     const client = clients.find(c => c.id === order.clientId);
+    
+    const manualLines = (inv.manualProducts || []).map((p, i) =>
+      `  ${i + 1}. ${p.name} — Qté: ${p.qty} — ${Number(p.price * p.qty || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD`
+    ).join('\n');
+
     alert(
       `Détails de la commande\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
@@ -197,6 +203,8 @@ const InvoiceList = ({ data, setData, quoteSettings }) => {
       `N° Facture: ${inv.invoiceNumber}\n` +
       `Type: ${inv.type}\n` +
       `Unités facturées: ${inv.unitsCount}\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `Produits additionnels (${(inv.manualProducts || []).length}):\n${manualLines || '  Aucun'}\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
       `Montant HT: ${formatPrice(inv.montantHT)} DZD\n` +
       `TVA: ${inv.tvaRate}%\n` +
@@ -377,13 +385,22 @@ const InvoiceList = ({ data, setData, quoteSettings }) => {
         });
 
         const tableColumn = ["Désignation", "Dimensions", "Quantité", "P.U. HT", "Total HT"];
-        const tableRows = units.map(u => [
-          `${u.name}\n${u.label}`,
-          u.dimensions ? `${u.dimensions} mm` : '-',
-          "1 pces",
-          `${formatPricePDF(u.unitPriceHT)} DZD`,
-          `${formatPricePDF(u.unitPriceHT)} DZD`
-        ]);
+        const tableRows = [
+          ...units.map(u => [
+            `${u.name}\n${u.label}`,
+            u.dimensions ? `${u.dimensions} mm` : '-',
+            "1 pces",
+            `${formatPricePDF(u.unitPriceHT)} DZD`,
+            `${formatPricePDF(u.unitPriceHT)} DZD`
+          ]),
+          ...(inv.manualProducts || []).map(p => [
+            `${p.name}\n${p.designation}`,
+            '-',
+            `${p.qty} pces`,
+            `${formatPricePDF(p.price)} DZD`,
+            `${formatPricePDF(p.price * p.qty)} DZD`
+          ])
+        ];
 
         autoTable(doc, {
           startY: y,
@@ -405,7 +422,7 @@ const InvoiceList = ({ data, setData, quoteSettings }) => {
         doc.setLineWidth(0.5);
         doc.roundedRect(rightBoxX, finalY, pw - 15 - rightBoxX, boxHeightBottom, 3, 3);
 
-        const totalHT = units.reduce((sum, u) => sum + u.unitPriceHT, 0) || inv.montantHT;
+        const totalHT = units.reduce((sum, u) => sum + u.unitPriceHT, 0) + (inv.manualProducts || []).reduce((sum, p) => sum + (p.price * p.qty), 0) || inv.montantHT;
         const totalTVA = totalHT * tvaRate / 100;
         const totalTTC = totalHT + totalTVA;
 

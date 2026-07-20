@@ -2850,89 +2850,89 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
       }
     }
     
-    // Top Right: Title
-    doc.setFontSize(22);
-    doc.setFont('helvetica', 'bold');
-    doc.text('DEVIS ESTIMATIF', pw - 15, y + 15, { align: 'right' });
-    
-    // Gauche: Devis number and date
-    y += 35;
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
-    const quoteYear = new Date(quote.createdAt || Date.now()).getFullYear().toString().slice(-2);
-    doc.text(`Devis N° : ${quote.number} / ${quoteYear}`, 15, y);
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Date : ${new Date().toLocaleDateString('fr-FR')}`, 15, y + 5);
-    
-    y += 8;
-    
-    const boxY = y;
-    const boxWidth = (pw - 35) / 2; // 15 margin L/R, 5 gap = 35
-    
-    // Company box (Left)
-    doc.setDrawColor(150, 150, 150);
-    doc.setLineWidth(0.3);
-    doc.roundedRect(15, boxY, boxWidth, 42, 2, 2);
-    
+    // Right of logo: Company info (no box, just text)
+    const companyInfoX = 85;
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
-    doc.text(quoteSettings?.companyName || 'Mon Entreprise', 18, boxY + 6);
+    doc.text(quoteSettings?.companyName || 'Mon Entreprise', companyInfoX, y + 2);
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
-    let cy = boxY + 11;
+    let ciY = y + 7;
     if (quoteSettings?.companyAddress) {
-      const addressLines = doc.splitTextToSize(quoteSettings.companyAddress, boxWidth - 6);
-      doc.text(addressLines, 18, cy);
-      cy += addressLines.length * 4;
+      const addressLines = doc.splitTextToSize(quoteSettings.companyAddress, pw - companyInfoX - 15);
+      doc.text(addressLines, companyInfoX, ciY);
+      ciY += addressLines.length * 4;
     }
     const phone = quoteSettings?.companyPhone || '';
     const email = quoteSettings?.companyEmail || '';
     if (phone || email) {
-      doc.text(`${phone} ${email ? ' - ' + email : ''}`, 18, cy);
-      cy += 5;
+      doc.text(`${phone} ${email ? ' - ' + email : ''}`, companyInfoX, ciY);
+      ciY += 4;
     }
     doc.setTextColor(80, 80, 80);
-    if (quoteSettings?.companyRC) { doc.text(`RC N°: ${quoteSettings.companyRC}`, 18, cy); cy += 4; }
-    if (quoteSettings?.companyIMP) { doc.text(`AI N°: ${quoteSettings.companyIMP}`, 18, cy); cy += 4; }
-    if (quoteSettings?.companyMF) { doc.text(`NIF N°: ${quoteSettings.companyMF}`, 18, cy); cy += 4; }
+    if (quoteSettings?.companyRC) { doc.text(`RC N°: ${quoteSettings.companyRC}`, companyInfoX, ciY); ciY += 4; }
+    if (quoteSettings?.companyIMP) { doc.text(`AI N°: ${quoteSettings.companyIMP}`, companyInfoX, ciY); ciY += 4; }
+    if (quoteSettings?.companyMF) { doc.text(`NIF N°: ${quoteSettings.companyMF}`, companyInfoX, ciY); ciY += 4; }
     doc.setTextColor(0, 0, 0);
-
-    // Client box (Right)
+    
+    y = Math.max(y + 30, ciY + 4);
+    
+    // Client box (Stop at the red line, width = 125, height = 32)
+    const boxY = y;
+    const boxWidth = 125;
+    const clientBoxHeight = 32;
     const currentClient = database.clients?.find(c => c.id === quote.clientId);
-    const rightBoxXHeader = 15 + boxWidth + 5;
-    doc.roundedRect(rightBoxXHeader, boxY, boxWidth, 42, 2, 2);
+    doc.setDrawColor(150, 150, 150);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(15, boxY, boxWidth, clientBoxHeight, 2, 2);
     
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
-    doc.text('Destinataire :', rightBoxXHeader + 3, boxY + 6);
+    doc.text('Client :', 18, boxY + 6);
     doc.setFontSize(10);
-    doc.text(currentClient?.nom || 'Client', rightBoxXHeader + 3, boxY + 11);
+    doc.text(currentClient?.nom || 'Client', 18, boxY + 11);
     
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
     let cly = boxY + 16;
     if (currentClient?.adresse) {
-      const addrLines = doc.splitTextToSize(currentClient.adresse, boxWidth - 6);
-      doc.text(addrLines, rightBoxXHeader + 3, cly);
+      const addrLines = doc.splitTextToSize(currentClient.adresse, 54);
+      doc.text(addrLines, 18, cly);
       cly += addrLines.length * 4;
     }
     if (currentClient?.telephone) {
-      doc.text(`Tél : ${currentClient.telephone}`, rightBoxXHeader + 3, cly);
+      doc.text(`Tél : ${currentClient.telephone}`, 18, cly);
       cly += 4;
     }
     if (currentClient?.email) {
-      doc.text(`Email : ${currentClient.email}`, rightBoxXHeader + 3, cly);
+      doc.text(`Email : ${currentClient.email}`, 18, cly);
       cly += 5;
     }
+
+    // Right column info
+    let rightY = boxY + 11;
     doc.setTextColor(80, 80, 80);
-    if (currentClient?.rc) { doc.text(`RC : ${currentClient.rc}`, rightBoxXHeader + 3, cly); cly += 4; }
-    if (currentClient?.nif) { doc.text(`NIF : ${currentClient.nif}`, rightBoxXHeader + 3, cly); cly += 4; }
-    if (currentClient?.nis) { doc.text(`NIS : ${currentClient.nis}`, rightBoxXHeader + 3, cly); cly += 4; }
-    if (currentClient?.ai) { doc.text(`AI : ${currentClient.ai}`, rightBoxXHeader + 3, cly); cly += 4; }
+    if (currentClient?.rc) { doc.text(`RC : ${currentClient.rc}`, 78, rightY); rightY += 4; }
+    if (currentClient?.nif) { doc.text(`NIF : ${currentClient.nif}`, 78, rightY); rightY += 4; }
+    if (currentClient?.nis) { doc.text(`NIS : ${currentClient.nis}`, 78, rightY); rightY += 4; }
+    if (currentClient?.ai) { doc.text(`AI : ${currentClient.ai}`, 78, rightY); rightY += 4; }
     doc.setTextColor(0, 0, 0);
 
-    y = boxY + 48;
+    // Date next to the rectangle on the same level (at the bottom-right of that level)
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Date : ${new Date().toLocaleDateString('fr-FR')}`, pw - 15, boxY + 28, { align: 'right' });
+
+    // Devis number (centered below client box)
+    y = boxY + 38;
+    const quoteYear = new Date(quote.createdAt || Date.now()).getFullYear().toString().slice(-2);
+    
+    // Devis N° centered on the page
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Devis N° : ${quote.number} / ${quoteYear}`, pw / 2, y, { align: 'center' });
+
+    y += 10;
 
     // ----- TABLE HEADER -----
     doc.setFillColor(40, 40, 40);
