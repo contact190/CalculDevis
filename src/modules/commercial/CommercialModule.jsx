@@ -2746,7 +2746,9 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
         // Snapshot
         q.items = (q.items || []).map(item => {
           try {
-            const pd = engine.calculatePrice(item.config);
+            if (item.isManual) { return { ...item }; }
+              const itemMargin = q.globalMargin ?? quoteSettings?.globalMargin ?? 2.2;
+              const pd = engine.calculatePrice({ ...item.config, margin: itemMargin });
             return {
               ...item,
               unitPriceHT: pd?.priceHT || item.unitPriceHT,
