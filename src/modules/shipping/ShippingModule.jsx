@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Truck, Package, QrCode, CheckCircle, AlertTriangle, XCircle, Download, Search, Plus, Trash2, ArrowLeft, ClipboardCheck, UserCheck, ShieldCheck, Layers, Wrench, FileText, MapPin, Share2, Camera, RefreshCw, MessageSquare, Trash } from 'lucide-react';
+import { Truck, Package, QrCode, CheckCircle, AlertTriangle, XCircle, Download, Search, Plus, Trash2, ArrowLeft, ClipboardCheck, UserCheck, ShieldCheck, Layers, Wrench, FileText, MapPin, Share2, Camera, RefreshCw, MessageSquare, Trash, Clock, Factory, Play } from 'lucide-react';
 import { syncDatabase, invokeFunction } from '../../utils/supabaseClient';
 import jsPDF from 'jspdf';
 import QRScanner from './QRScanner';
@@ -231,7 +231,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
             }
 
 
-            const dualStatus = selectedOrder.unitStatusesDual?.[unitId] || { alu: 'Produit', vitrage: 'Produit', volet: 'Produit' };
+            const dualStatus = selectedOrder.unitStatusesDual?.[unitId] || { alu: 'En production', vitrage: 'En production', volet: 'En production', caisson_tunnel: 'En production' };
             const storageZoneId = selectedOrder.unitStorageZones?.[unitId];
             const zone = storageZones.find(z => z.id === storageZoneId);
 
@@ -371,8 +371,8 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
               dimensions: `${m.L} x ${m.H}`,
               statusAlu: dualStatus.alu,
               statusVitrage: dualStatus.vitrage,
-              statusVolet: dualStatus.volet || 'Produit',
-              statusCaissonTunnel: dualStatus.caisson_tunnel || 'Produit',
+              statusVolet: dualStatus.volet || 'En production',
+              statusCaissonTunnel: dualStatus.caisson_tunnel || 'En production',
               hasShutter: hasShutter,
               isExtrudedLame: isExtrudedLame,
               isCaissonTunnel: isCaissonTunnel,
@@ -470,7 +470,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
       if (oIdx === -1) return prev;
       const order = { ...orders[oIdx] };
       const dualStatuses = { ...(order.unitStatusesDual || {}) };
-      const current = dualStatuses[unitId] || { alu: 'Produit', vitrage: 'Produit', volet: 'Produit', caisson_tunnel: 'Produit' };
+      const current = dualStatuses[unitId] || { alu: 'En production', vitrage: 'En production', volet: 'En production', caisson_tunnel: 'En production' };
       
       const event = {
         date: new Date().toISOString(),
@@ -481,7 +481,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
         issue: issueType
       };
 
-      if (actionType === 'finish') {
+      if (actionType !== 'issue') {
         if (component === 'both') {
           current.alu = newStatus;
           current.vitrage = newStatus;
@@ -497,6 +497,103 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
       timeline[unitId].push(event);
 
       dualStatuses[unitId] = { ...current };
+      order.unitStatusesDual = dualStatuses;
+      order.unitTimeline = timeline;
+      orders[oIdx] = order;
+      return { ...prev, orders };
+    });
+  };
+
+  const handleBulkUpdateStatusDual = (component, newStatus, actionType = 'finish') => {
+    if (selectedUnitIds.size === 0) return;
+    setData(prev => {
+      const orders = [...(prev.orders || [])];
+      const oIdx = orders.findIndex(o => o.id === selectedOrderId);
+      if (oIdx === -1) return prev;
+      const order = { ...orders[oIdx] };
+      const dualStatuses = { ...(order.unitStatusesDual || {}) };
+      const timeline = { ...(order.unitTimeline || {}) };
+      const userName = 'ADMIN';
+
+      selectedUnitIds.forEach(unitId => {
+        const current = { ...(dualStatuses[unitId] || { alu: 'En production', vitrage: 'En production', volet: 'En production', caisson_tunnel: 'En production' }) };
+        if (component === 'both') {
+          current.alu = newStatus;
+          current.vitrage = newStatus;
+          current.volet = newStatus;
+          current.caisson_tunnel = newStatus;
+        } else {
+          current[component] = newStatus;
+        }
+        dualStatuses[unitId] = { ...current };
+
+        const event = {
+          date: new Date().toISOString(),
+          user: userName,
+          component: component,
+          status: newStatus,
+          action: actionType,
+          issue: null
+        };
+        if (!timeline[unitId]) timeline[unitId] = [];
+        timeline[unitId].push(event);
+      });
+
+      order.unitStatusesDual = dualStatuses;
+      order.unitTimeline = timeline;
+      orders[oIdx] = order;
+      return { ...prev, orders };
+    });
+    setSelectedUnitIds(new Set());
+  };
+
+  const handleBatchUpdateStatus = (batchId, newStatus, actionType = 'finish') => {
+    // Get all units for this order and batch
+    if (!selectedOrder) return;
+    const batchUnitIds = [];
+    (selectedOrder.batches || []).forEach(b => {
+      if (b.id !== batchId) return;
+      (b.items || []).forEach(item => {
+        (item.measurements || []).forEach(m => {
+          for (let i = 0; i < (m.qty || 1); i++) {
+            batchUnitIds.push(`${selectedOrder.id}-${b.id}-${item.id}-${m.id}-${i}`);
+          }
+        });
+      });
+    });
+
+    if (batchUnitIds.length === 0) return;
+
+    setData(prev => {
+      const orders = [...(prev.orders || [])];
+      const oIdx = orders.findIndex(o => o.id === selectedOrderId);
+      if (oIdx === -1) return prev;
+      const order = { ...orders[oIdx] };
+      const dualStatuses = { ...(order.unitStatusesDual || {}) };
+      const timeline = { ...(order.unitTimeline || {}) };
+      const userName = 'ADMIN';
+
+      batchUnitIds.forEach(unitId => {
+        const current = { ...(dualStatuses[unitId] || { alu: 'En production', vitrage: 'En production', volet: 'En production', caisson_tunnel: 'En production' }) };
+        current.alu = newStatus;
+        current.vitrage = newStatus;
+        current.volet = newStatus;
+        current.caisson_tunnel = newStatus;
+        
+        dualStatuses[unitId] = { ...current };
+
+        const event = {
+          date: new Date().toISOString(),
+          user: userName,
+          component: 'both',
+          status: newStatus,
+          action: actionType,
+          issue: null
+        };
+        if (!timeline[unitId]) timeline[unitId] = [];
+        timeline[unitId] = [...timeline[unitId], event];
+      });
+
       order.unitStatusesDual = dualStatuses;
       order.unitTimeline = timeline;
       orders[oIdx] = order;
@@ -1031,6 +1128,178 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
     });
 
     doc.save(`RAPPORT_AUDIT_V3_${selectedOrder.id}.pdf`);
+  };
+
+  const generateProductionReport = () => {
+    const doc = new jsPDF();
+    const pw = doc.internal.pageSize.getWidth();
+    const ph = doc.internal.pageSize.getHeight();
+    const timeline = selectedOrder.unitTimeline || {};
+
+    const client = (data.clients || []).find(c => c.id === selectedOrder.clientId) || { nom: selectedOrder.clientName };
+    let y = drawDocumentHeader(doc, quoteSettings, client, {
+      title: "RAPPORT DE PRODUCTION & DÉLAIS",
+      docLabel: 'Commande N°',
+      docValue: selectedOrder.id,
+      docDate: new Date().toLocaleDateString('fr-FR'),
+      showClientBox: true
+    });
+
+    const formatDuration = (ms) => {
+      if (!ms || ms <= 0) return '—';
+      const totalMinutes = Math.floor(ms / (1000 * 60));
+      const days = Math.floor(totalMinutes / (24 * 60));
+      const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+      const minutes = totalMinutes % 60;
+      
+      const parts = [];
+      if (days > 0) parts.push(`${days}j`);
+      if (hours > 0) parts.push(`${hours}h`);
+      if (minutes > 0 || parts.length === 0) parts.push(`${minutes}m`);
+      return parts.join(' ');
+    };
+
+    // Calculate production metrics for units
+    let totalUnits = allUnits.length;
+    let unitsInProduction = 0;
+    let unitsProduced = 0;
+    let totalProdDurationMs = 0;
+    let producedCountForAverage = 0;
+
+    const unitProdDetails = allUnits.map(unit => {
+      const events = timeline[unit.id] || [];
+      const orderCreatedDate = selectedOrder.createdAt ? new Date(selectedOrder.createdAt) : null;
+      
+      // Find start event (En production or earliest event)
+      let startEvent = events.find(e => e.status === 'En production' || e.action === 'start_production');
+      let startDate = startEvent ? new Date(startEvent.date) : (events[0] ? new Date(events[0].date) : orderCreatedDate);
+
+      // Find finish production event (status === 'Produit' or 'finish_production' or 'Chargé'/'Livré'/'Posé'/'Fini')
+      let finishEvent = events.find(e => e.status === 'Produit' || e.action === 'finish_production' || e.status === 'Chargé' || e.status === 'Livré' || e.status === 'Posé' || e.status === 'Fini');
+      let finishDate = finishEvent ? new Date(finishEvent.date) : null;
+
+      const isProduced = unit.statusAlu !== 'En production' || finishDate !== null;
+      if (isProduced) {
+        unitsProduced++;
+      } else {
+        unitsInProduction++;
+      }
+
+      let durationMs = 0;
+      if (startDate) {
+        const endDate = finishDate || new Date();
+        durationMs = Math.max(0, endDate - startDate);
+      }
+
+      if (isProduced && durationMs > 0) {
+        totalProdDurationMs += durationMs;
+        producedCountForAverage++;
+      }
+
+      return {
+        ...unit,
+        startDate: startDate ? startDate.toLocaleDateString('fr-FR') + ' ' + startDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '—',
+        finishDate: finishDate ? finishDate.toLocaleDateString('fr-FR') + ' ' + finishDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : (isProduced ? 'Produit' : 'En cours'),
+        durationMs: durationMs,
+        durationStr: formatDuration(durationMs),
+        isProduced: isProduced
+      };
+    });
+
+    const avgProdDurationMs = producedCountForAverage > 0 ? (totalProdDurationMs / producedCountForAverage) : 0;
+
+    // --- KPI BOXES ---
+    const drawBox = (x, y, w, h, label, value, color) => {
+      doc.setFillColor(248, 250, 252); doc.roundedRect(x, y, w, h, 2, 2, 'F');
+      doc.setDrawColor(226, 232, 240); doc.rect(x, y, w, h, 'S');
+      doc.setTextColor(100, 116, 139); doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.text(label.toUpperCase(), x + 4, y + 7);
+      doc.setTextColor(color[0], color[1], color[2]); doc.setFontSize(14); doc.text(value, x + 4, y + 19);
+    };
+
+    let bx = 15;
+    const bw = (pw - 30 - 9) / 4;
+    const boxY = y + 4;
+    drawBox(bx, boxY, bw, 24, 'Total Châssis', `${totalUnits}`, [30, 41, 59]);
+    drawBox(bx + bw + 3, boxY, bw, 24, 'En Production', `${unitsInProduction}`, [217, 119, 6]);
+    drawBox(bx + (bw + 3)*2, boxY, bw, 24, 'Fabriqués', `${unitsProduced}`, [16, 185, 129]);
+    drawBox(bx + (bw + 3)*3, boxY, bw, 24, 'Durée Moyenne', `${formatDuration(avgProdDurationMs)}`, [99, 102, 241]);
+
+    y = boxY + 32;
+
+    // --- TABLE OF UNITS PRODUCTION DETAILS ---
+    doc.setTextColor(30, 41, 59); doc.setFontSize(12); doc.setFont('helvetica', 'bold');
+    doc.text('DÉTAILS DES DURÉES DE PRODUCTION PAR UNITÉ', 15, y);
+    doc.setDrawColor(99, 102, 241); doc.setLineWidth(0.8); doc.line(15, y + 2, 45, y + 2);
+    y += 8;
+
+    const checkPageOverflow = (neededSpace) => {
+      if (y + neededSpace > ph - 20) {
+        doc.addPage();
+        y = 20;
+        return true;
+      }
+      return false;
+    };
+
+    // Table Headers
+    const colW = [25, 45, 25, 25, 30, 30]; // total 180mm
+    const tableX = 15;
+    
+    const drawTableHeader = () => {
+      doc.setFillColor(241, 245, 249);
+      doc.rect(tableX, y, pw - 30, 8, 'F');
+      doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(51, 65, 85);
+      
+      let cx = tableX + 3;
+      doc.text('REPÈRE', cx, y + 5.5); cx += colW[0];
+      doc.text('PRODUIT / DÉSIGNATION', cx, y + 5.5); cx += colW[1];
+      doc.text('DIMENSIONS', cx, y + 5.5); cx += colW[2];
+      doc.text('STATUT', cx, y + 5.5); cx += colW[3];
+      doc.text('DÉBUT PROD.', cx, y + 5.5); cx += colW[4];
+      doc.text('DURÉE PROD.', cx, y + 5.5);
+      y += 8;
+    };
+
+    drawTableHeader();
+
+    unitProdDetails.forEach((unit, idx) => {
+      checkPageOverflow(10);
+      if (idx % 2 === 1) {
+        doc.setFillColor(250, 250, 250);
+        doc.rect(tableX, y, pw - 30, 7, 'F');
+      }
+      doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 41, 59);
+
+      let cx = tableX + 3;
+      doc.setFont('helvetica', 'bold');
+      doc.text(unit.name.substring(0, 14), cx, y + 4.5); cx += colW[0];
+      doc.setFont('helvetica', 'normal');
+      doc.text(unit.label.substring(0, 26), cx, y + 4.5); cx += colW[1];
+      doc.text(`${unit.dimensions} mm`, cx, y + 4.5); cx += colW[2];
+
+      const statusStr = unit.statusAlu === 'En production' ? 'En Production' : (unit.statusAlu === 'Produit' ? 'Produit' : unit.statusAlu);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(unit.statusAlu === 'En production' ? 217 : 16, unit.statusAlu === 'En production' ? 119 : 185, unit.statusAlu === 'En production' ? 6 : 129);
+      doc.text(statusStr.substring(0, 14), cx, y + 4.5); cx += colW[3];
+
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(71, 85, 105);
+      doc.text(unit.startDate, cx, y + 4.5); cx += colW[4];
+      doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 41, 59);
+      doc.text(unit.durationStr, cx, y + 4.5);
+
+      y += 7;
+      doc.setDrawColor(241, 245, 249); doc.setLineWidth(0.1);
+      doc.line(tableX, y, pw - 15, y);
+    });
+
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8); doc.setTextColor(148, 163, 184);
+      doc.text(`Page ${i} / ${pageCount}`, pw - 15, ph - 10, { align: 'right' });
+    }
+
+    doc.save(`Rapport_Production_${selectedOrder.id}.pdf`);
   };
 
   const generatePVReception = () => {
@@ -1810,6 +2079,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
                 <RefreshCw size={18} />
               </button>
               <button onClick={generatePackingLabels} className="btn btn-secondary" disabled={allUnits.length === 0}><QrCode size={16} /> Étiquettes</button>
+              <button onClick={generateProductionReport} className="btn btn-secondary" style={{ color: '#d97706', borderColor: '#fde68a' }} disabled={allUnits.length === 0}><Clock size={16} /> Rapport Production</button>
               <button onClick={generateStatusReport} className="btn btn-secondary" style={{ color: '#10b981', borderColor: '#a7f3d0' }} disabled={allUnits.length === 0}><Camera size={16} /> Rapport d'État</button>
               <button onClick={generatePerformanceReport} className="btn btn-secondary" style={{ color: '#f59e0b', borderColor: '#fef3c7' }} disabled={allUnits.length === 0}><FileText size={16} /> Rapport Performance</button>
               <button onClick={() => {
@@ -2089,15 +2359,51 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
             </div>
          </div>
 
-        <div className="glass" style={{ padding: '1rem', marginBottom: '1.5rem', background: '#f8fafc' }}>
-          <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', fontWeight: 700, color: '#475569' }}><Layers size={14} /> SÉLECTION DES LOTS :</p>
-          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+        <div className="glass" style={{ padding: '1.25rem', marginBottom: '1.5rem', background: '#f8fafc', borderLeft: '4px solid #3b82f6' }}>
+          <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Layers size={16} color="#3b82f6" /> SÉLECTION & GESTION DE PRODUCTION PAR LOT :
+          </p>
+          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
             {(selectedOrder.batches || []).map(batch => {
               const isActive = selectedBatchIds.has(batch.id);
               return (
-                <button key={batch.id} onClick={() => toggleBatchSelection(batch.id)} className="btn" style={{ background: isActive ? '#3b82f6' : 'white', color: isActive ? 'white' : '#64748b', borderColor: isActive ? '#3b82f6' : '#e2e8f0', fontSize: '0.8rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  {isActive ? <CheckCircle size={14} /> : <div style={{ width: 14, height: 14, borderRadius: '50%', border: '1.5px solid #cbd5e1' }} />} Lot : {batch.id}
-                </button>
+                <div key={batch.id} style={{ 
+                  display: 'flex', alignItems: 'center', background: 'white', borderRadius: '0.75rem', 
+                  border: `2px solid ${isActive ? '#3b82f6' : '#e2e8f0'}`, padding: '0.4rem 0.75rem', gap: '0.6rem',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.03)'
+                }}>
+                  <button 
+                    onClick={() => toggleBatchSelection(batch.id)} 
+                    className="btn" 
+                    style={{ border: 'none', background: 'transparent', padding: 0, color: isActive ? '#1e40af' : '#64748b', fontSize: '0.85rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                    title="Cliquer pour afficher/masquer ce lot dans le tableau"
+                  >
+                    {isActive ? <CheckCircle size={16} color="#2563eb" /> : <div style={{ width: 16, height: 16, borderRadius: '50%', border: '2px solid #cbd5e1' }} />} Lot : {batch.id}
+                  </button>
+                  <div style={{ borderLeft: '1px solid #cbd5e1', height: '20px', margin: '0 0.1rem' }} />
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleBatchUpdateStatus(batch.id, 'En production', 'start_production');
+                    }} 
+                    className="btn" 
+                    style={{ padding: '0.3rem 0.65rem', fontSize: '0.75rem', background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a', fontWeight: 800, borderRadius: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                    title="Lancer la production de TOUT ce lot"
+                  >
+                    <Play size={12} /> Lancer Lot
+                  </button>
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleBatchUpdateStatus(batch.id, 'Produit', 'finish_production');
+                    }} 
+                    className="btn" 
+                    style={{ padding: '0.3rem 0.65rem', fontSize: '0.75rem', background: '#f0fdf4', color: '#15803d', border: '1px solid #a7f3d0', fontWeight: 800, borderRadius: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                    title="Déclarer TOUT ce lot comme produit (fabriqué)"
+                  >
+                    <Factory size={12} /> Lot Produit
+                  </button>
+                </div>
               );
             })}
           </div>
@@ -2130,8 +2436,22 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                   <h3 style={{ margin: 0, fontWeight: 700 }}>Contrôle par Scanner</h3>
                   {selectedUnitIds.size > 0 && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: '#eff6ff', padding: '0.4rem 1rem', borderRadius: '0.75rem', border: '1px solid #bfdbfe' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: '#eff6ff', padding: '0.4rem 1rem', borderRadius: '0.75rem', border: '1px solid #bfdbfe', flexWrap: 'wrap' }}>
                       <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1e40af' }}>{selectedUnitIds.size} sélectionné(s) :</span>
+                      <button 
+                        onClick={() => handleBulkUpdateStatusDual('both', 'En production', 'start_production')} 
+                        className="btn btn-secondary" 
+                        style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem', background: '#fffbeb', color: '#b45309', borderColor: '#fde68a', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                      >
+                        <Play size={12} /> Lancer Prod.
+                      </button>
+                      <button 
+                        onClick={() => handleBulkUpdateStatusDual('both', 'Produit', 'finish_production')} 
+                        className="btn btn-secondary" 
+                        style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem', background: '#f0fdf4', color: '#15803d', borderColor: '#a7f3d0', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                      >
+                        <Factory size={12} /> Marquer Produit
+                      </button>
                       <select 
                         className="input" 
                         style={{ padding: '0.2rem', fontSize: '0.8rem', width: 'auto', minWidth: '150px' }}
@@ -2226,7 +2546,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
                             </button>
                             {unit.isExtrudedLame && (
                               <span style={{ fontSize: '0.65rem', color: '#8b5cf6', fontWeight: 'bold' }}>
-                                 {unit.statusVolet}
+                                  {unit.statusVolet}
                               </span>
                             )}
                           </div>
@@ -2259,8 +2579,22 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
                       </td>
                       <td>
                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                           <span style={{ padding: '0.1rem 0.5rem', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 800, background: unit.statusAlu === 'Produit' ? '#f1f5f9' : '#dcfce7', color: unit.statusAlu === 'Produit' ? '#64748b' : '#166534' }}>ALU: {unit.statusAlu}</span>
-                           <span style={{ padding: '0.1rem 0.5rem', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 800, background: unit.statusVitrage === 'Produit' ? '#f1f5f9' : '#dbeafe', color: unit.statusVitrage === 'Produit' ? '#64748b' : '#1e40af' }}>VIT: {unit.statusVitrage}</span>
+                           <span style={{ 
+                             padding: '0.1rem 0.5rem', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 800, 
+                             background: unit.statusAlu === 'En production' ? '#fffbeb' : (unit.statusAlu === 'Produit' ? '#f0fdf4' : '#dcfce7'), 
+                             color: unit.statusAlu === 'En production' ? '#b45309' : (unit.statusAlu === 'Produit' ? '#15803d' : '#166534'),
+                             border: `1px solid ${unit.statusAlu === 'En production' ? '#fde68a' : (unit.statusAlu === 'Produit' ? '#a7f3d0' : 'transparent')}`
+                           }}>
+                             ALU: {unit.statusAlu}
+                           </span>
+                           <span style={{ 
+                             padding: '0.1rem 0.5rem', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 800, 
+                             background: unit.statusVitrage === 'En production' ? '#fffbeb' : (unit.statusVitrage === 'Produit' ? '#f0fdf4' : '#dbeafe'), 
+                             color: unit.statusVitrage === 'En production' ? '#b45309' : (unit.statusVitrage === 'Produit' ? '#15803d' : '#1e40af'),
+                             border: `1px solid ${unit.statusVitrage === 'En production' ? '#fde68a' : (unit.statusVitrage === 'Produit' ? '#a7f3d0' : 'transparent')}`
+                           }}>
+                             VIT: {unit.statusVitrage}
+                           </span>
                            {selectedOrder.unitPVs?.[unit.id] && (
                              <span style={{ padding: '0.1rem 0.5rem', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 800, background: '#fef3c7', color: '#b45309', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
                                <CheckCircle size={10} /> Réceptionné
@@ -2269,7 +2603,9 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
                          </div>
                        </td>
                        <td>
-                         <div style={{ display: 'flex', gap: '0.3rem' }}>
+                         <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
+                           <button onClick={() => handleUpdateUnitStatusDual(unit.id, 'both', 'En production', 'ADMIN', 'start_production')} className="btn btn-secondary" style={{ padding: '0.2rem', color: '#b45309' }} title="Lancer Production"><Play size={12} /></button>
+                           <button onClick={() => handleUpdateUnitStatusDual(unit.id, 'both', 'Produit', 'ADMIN', 'finish_production')} className="btn btn-secondary" style={{ padding: '0.2rem', color: '#16a34a' }} title="Marquer Produit (Fabriqué)"><Factory size={12} /></button>
                            <button onClick={() => handleUpdateUnitStatusDual(unit.id, 'alu', 'Livré')} className="btn btn-secondary" style={{ padding: '0.2rem' }} title="Livrer Alu"><Truck size={12} /></button>
                            <button onClick={() => handleUpdateUnitStatusDual(unit.id, 'vitrage', 'Livré')} className="btn btn-secondary" style={{ padding: '0.2rem', color: '#3b82f6' }} title="Livrer Vitrage"><Truck size={12} /></button>
                            <button onClick={() => handleUpdateUnitStatusDual(unit.id, 'alu', 'Posé')} className="btn btn-secondary" style={{ padding: '0.2rem' }} title="Poser Alu"><Wrench size={12} /></button>

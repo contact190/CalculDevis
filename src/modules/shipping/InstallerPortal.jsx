@@ -24,7 +24,7 @@ const InstallerPortal = ({ data, setData, orderId, refetchData, isOnline, isSync
         (item.measurements || []).forEach(m => {
           for (let i = 0; i < m.qty; i++) {
             const unitId = `${order.id}-${batch.id}-${item.id}-${m.id}-${i}`;
-            const dual = order.unitStatusesDual?.[unitId] || { alu: 'Produit', vitrage: 'Produit' };
+            const dual = order.unitStatusesDual?.[unitId] || { alu: 'En production', vitrage: 'En production' };
             list.push({
               id: unitId,
               name: m.instanceNames?.[i] || `${item.label} #${i + 1}`,
@@ -60,7 +60,7 @@ const InstallerPortal = ({ data, setData, orderId, refetchData, isOnline, isSync
       };
 
       unitIds.forEach(id => { 
-        const current = dualStatuses[id] || { alu: 'Produit', vitrage: 'Produit' };
+        const current = dualStatuses[id] || { alu: 'En production', vitrage: 'En production' };
         
         // Only update the main status if it's a 'finish' action
         if (actionType === 'finish') {
@@ -145,7 +145,7 @@ const InstallerPortal = ({ data, setData, orderId, refetchData, isOnline, isSync
 
   const installationPhotos = order?.unitInstallationPhotos || {};
 
-  const unitsToDeliver = units.filter(u => activeTab === 'alu' ? u.statusAlu === 'Produit' : u.statusVitrage === 'Produit');
+  const unitsToDeliver = units.filter(u => activeTab === 'alu' ? (u.statusAlu === 'Produit' || u.statusAlu === 'En production') : (u.statusVitrage === 'Produit' || u.statusVitrage === 'En production'));
   const unitsToManut = units.filter(u => activeTab === 'alu' ? u.statusAlu === 'Livré' : u.statusVitrage === 'Livré');
   const installableUnits = units.filter(u => u.statusAlu === 'Livré' || u.statusAlu === 'Manutention' || u.statusAlu === 'Posé');
 

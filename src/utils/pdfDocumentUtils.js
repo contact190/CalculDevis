@@ -299,6 +299,7 @@ export const buildAttachementRows = (order, versement, prevVersements) => {
         qtePrece,
         qteMois,
         qteCumul,
+        prixUnitaire: originalItem.prixUnitaireHT || originalItem.prixHT || item.prixUnitaireHT || item.prixHT || 0,
         observations: '',
       });
       index += 1;
@@ -306,6 +307,109 @@ export const buildAttachementRows = (order, versement, prevVersements) => {
   });
 
   return rows;
+};
+
+export const drawDecompteTableHeader = (doc, y, pw) => {
+  const tableX = 10;
+  const tableW = pw - 20;
+  
+  // Width definitions optimized for A4 portrait (210mm)
+  const wNum = 8;
+  const wDes = 45;
+  const wU = 7;
+  const wQteParent = 28;
+  const wQteChild = wQteParent / 4;
+  const wPU = 14;
+  const wMontantParent = 88;
+  const wMontantChild = wMontantParent / 4;
+
+  const colNum = tableX;
+  const colDes = colNum + wNum;
+  const colU = colDes + wDes;
+  const colQteParent = colU + wU;
+  
+  const colQC = colQteParent;
+  const colQP = colQC + wQteChild;
+  const colQM = colQP + wQteChild;
+  const colQCu = colQM + wQteChild;
+  
+  const colPU = colQteParent + wQteParent;
+  
+  const colMontantParent = colPU + wPU;
+  const colMC = colMontantParent;
+  const colMP = colMC + wMontantChild;
+  const colMM = colMP + wMontantChild;
+  const colMCu = colMM + wMontantChild;
+
+  const hRow1 = 5;
+  const hRow2 = 10;
+  const hTotal = hRow1 + hRow2;
+
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.3);
+  doc.rect(tableX, y, tableW, hTotal);
+  
+  // Vertical lines
+  doc.line(colDes, y, colDes, y + hTotal);
+  doc.line(colU, y, colU, y + hTotal);
+  doc.line(colQteParent, y, colQteParent, y + hTotal);
+  
+  // Quantité sub-columns vertical lines
+  doc.line(colQP, y + hRow1, colQP, y + hTotal);
+  doc.line(colQM, y + hRow1, colQM, y + hTotal);
+  doc.line(colQCu, y + hRow1, colQCu, y + hTotal);
+  
+  doc.line(colPU, y, colPU, y + hTotal);
+  doc.line(colMontantParent, y, colMontantParent, y + hTotal);
+  
+  // Montant sub-columns vertical lines
+  doc.line(colMP, y + hRow1, colMP, y + hTotal);
+  doc.line(colMM, y + hRow1, colMM, y + hTotal);
+  doc.line(colMCu, y + hRow1, colMCu, y + hTotal);
+
+  // Horizontal lines for multi-level headers
+  doc.line(colQteParent, y + hRow1, colQteParent + wQteParent, y + hRow1);
+  doc.line(colMontantParent, y + hRow1, colMontantParent + wMontantParent, y + hRow1);
+
+  // Texts
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6.5);
+  
+  // Single-level texts (centered vertically)
+  const textY = y + 8.5;
+  doc.text("N°", colNum + (wNum / 2), textY, { align: 'center' });
+  doc.text("Désignation des Ouvrages", colDes + (wDes / 2), textY, { align: 'center' });
+  doc.text("U", colU + (wU / 2), textY, { align: 'center' });
+  doc.text("Prix Unit.", colPU + (wPU / 2), textY, { align: 'center' });
+
+  // Multi-level text parent
+  doc.text("Quantité", colQteParent + (wQteParent / 2), y + 3.5, { align: 'center' });
+  doc.text("Montant (DZD)", colMontantParent + (wMontantParent / 2), y + 3.5, { align: 'center' });
+
+  // Multi-level text children
+  const childY = y + 10;
+  doc.setFontSize(5.5);
+  // Quantités
+  doc.text("QTE\nContrat", colQC + (wQteChild / 2), childY, { align: 'center' });
+  doc.text("QTE\nPréce", colQP + (wQteChild / 2), childY, { align: 'center' });
+  doc.text("QTE\nMois", colQM + (wQteChild / 2), childY, { align: 'center' });
+  doc.text("QTE\nCumul", colQCu + (wQteChild / 2), childY, { align: 'center' });
+  
+  // Montants
+  doc.text("Montant\nContrat", colMC + (wMontantChild / 2), childY, { align: 'center' });
+  doc.text("Montant\nPrece", colMP + (wMontantChild / 2), childY, { align: 'center' });
+  doc.text("Montant\nMois", colMM + (wMontantChild / 2), childY, { align: 'center' });
+  doc.text("Montant\nCumulee", colMCu + (wMontantChild / 2), childY, { align: 'center' });
+
+  return {
+    y: y + hTotal,
+    tableX, tableW,
+    colNum, colDes, colU,
+    colQC, colQP, colQM, colQCu,
+    colPU,
+    colMC, colMP, colMM, colMCu,
+    wNum, wDes, wU, wQteChild, wPU, wMontantChild
+  };
 };
 
 export const getSituationNumber = (versements, versement) => {

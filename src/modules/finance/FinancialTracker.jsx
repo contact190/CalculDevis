@@ -11,6 +11,7 @@ import {
   resolveClientRecord,
   drawSituationClientBlock,
   drawSituationTable,
+  drawDecompteTableHeader,
 } from '../../utils/pdfDocumentUtils';
 
 const paymentStatuses = {
@@ -37,7 +38,7 @@ const AttachmentInput = ({ value, onChange, label = 'Lien Drive' }) => {
 };
 
 // ─── Versement Row ────────────────────────────────────────────
-const VersementRow = ({ versement, onUpdate, onDelete, delaiPaiementJours, onGenerateSituation, onGenerateAttachement, onGenerateOrdreVersement }) => {
+const VersementRow = ({ versement, onUpdate, onDelete, delaiPaiementJours, onGenerateSituation, onGenerateAttachement, onGenerateDecompte, onGenerateOrdreVersement }) => {
   const [expanded, setExpanded] = useState(false);
 
   const pvBloque = versement.pvId && versement.pvStatus !== 'Validé';
@@ -157,7 +158,7 @@ const VersementRow = ({ versement, onUpdate, onDelete, delaiPaiementJours, onGen
       {expanded && (
         <div style={{ padding: '1rem', borderTop: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column', gap: '1rem', opacity: pvBloque ? 0.6 : 1 }}>
           {isPV && !pvBloque && (
-            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
                <button onClick={(e) => { e.stopPropagation(); onGenerateSituation(versement); }}
                  style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.8rem', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '0.4rem', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600, color: '#334155' }}>
                  <Download size={14} /> Situation des travaux
@@ -165,6 +166,10 @@ const VersementRow = ({ versement, onUpdate, onDelete, delaiPaiementJours, onGen
                <button onClick={(e) => { e.stopPropagation(); onGenerateAttachement(versement); }}
                  style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.8rem', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '0.4rem', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600, color: '#334155' }}>
                  <Download size={14} /> Attachement des travaux
+               </button>
+               <button onClick={(e) => { e.stopPropagation(); onGenerateDecompte(versement); }}
+                 style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.8rem', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '0.4rem', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600, color: '#334155' }}>
+                 <Download size={14} /> Décompte des travaux
                </button>
             </div>
           )}
@@ -335,6 +340,29 @@ const TrackerView = ({ tracker, data, setData, onBack, quoteSettings }) => {
   const montantContrat = tracker.montantContrat || 0;
   const resteTotal = montantContrat - totalVerse;
   const pctPaye = montantContrat > 0 ? Math.min(100, (totalVerse / montantContrat) * 100) : 0;
+
+  // Dernier PV de réception validé et soldé (pour la retenue de garantie)
+  const finalPV = useMemo(() => {
+    const pvVersements = versements.filter(v => v.pvId);
+    if (pvVersements.length === 0) return null;
+    // Le dernier PV (par ordre chronologique)
+    return pvVersements[pvVersements.length - 1];
+  }, [versements]);
+
+  const calculateDurationStr = (startDateStr, endDateStr) => {
+    if (!startDateStr || !endDateStr) return '—';
+    const start = new Date(startDateStr);
+    const end = new Date(endDateStr);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) return '—';
+    const diffMs = end - start;
+    if (diffMs <= 0) return '0 jours';
+    const totalDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const months = Math.floor(totalDays / 30);
+    const days = totalDays % 30;
+    if (months > 0 && days > 0) return `${months} mois et ${days} jours`;
+    if (months > 0) return `${months} mois`;
+    return `${totalDays} jours`;
+  };
 
   const updateTracker = (updatedTracker) => {
     setData(prev => ({
@@ -587,6 +615,121 @@ const TrackerView = ({ tracker, data, setData, onBack, quoteSettings }) => {
     }
 
     doc.save(`Attachement_${situationNum}_${versement.pvId || versement.id}.pdf`);
+  };
+
+  const handleGenerateDecompte = (versement) => {
+    const doc = new jsPDF({ format: 'a4' });
+    const pw = doc.internal.pageSize.getWidth();
+    const clientRecord = resolveClientRecord(tracker, order, contract, data.clients, data.quotes);
+    const situationNum = getSituationNumber(versements, versement);
+    const versementIndex = versements.findIndex(v => v.id === versement.id);
+    const prevVersements = versements.slice(0, versementIndex);
+    const rows = buildAttachementRows(order, versement, prevVersements);
+
+    let y = drawDocumentHeader(doc, quoteSettings, clientRecord, { showClientBox: false });
+
+    doc.setFontSize(13);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`DECOMPTE DE LA SITUATION DES TRAVAUX N° ${situationNum}`, pw / 2, y + 4, { align: 'center' });
+    const city = getCityFromAddress(quoteSettings?.companyAddress);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`${city} le : ${new Date().toLocaleDateString('fr-FR')}`, pw - 15, y + 4, { align: 'right' });
+    y += 12;
+    doc.text(`Projet : ${order?.projectName || clientRecord?.nom || tracker.orderId}`, 15, y);
+    y += 8;
+
+    let cols = drawDecompteTableHeader(doc, y, pw);
+    y = cols.y;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.5);
+
+    let globalTotalContrat = 0;
+    let globalTotalPrece = 0;
+    let globalTotalMois = 0;
+    let globalTotalCumul = 0;
+
+    rows.forEach(row => {
+      const desLines = doc.splitTextToSize(row.designation, cols.wDes - 2);
+      const rowH = Math.max(desLines.length * 3.5, 8);
+      if (y + rowH > 280) { // A4 portrait height is ~297mm
+        doc.addPage();
+        cols = drawDecompteTableHeader(doc, 20, pw);
+        y = cols.y;
+      }
+
+      const mContrat = row.qteContrat * row.prixUnitaire;
+      const mPrece = row.qtePrece * row.prixUnitaire;
+      const mMois = row.qteMois * row.prixUnitaire;
+      const mCumul = row.qteCumul * row.prixUnitaire;
+
+      globalTotalContrat += mContrat;
+      globalTotalPrece += mPrece;
+      globalTotalMois += mMois;
+      globalTotalCumul += mCumul;
+
+      doc.rect(cols.tableX, y, cols.tableW, rowH);
+      doc.line(cols.colDes, y, cols.colDes, y + rowH);
+      doc.line(cols.colU, y, cols.colU, y + rowH);
+      
+      doc.line(cols.colQC, y, cols.colQC, y + rowH);
+      doc.line(cols.colQP, y, cols.colQP, y + rowH);
+      doc.line(cols.colQM, y, cols.colQM, y + rowH);
+      doc.line(cols.colQCu, y, cols.colQCu, y + rowH);
+      
+      doc.line(cols.colPU, y, cols.colPU, y + rowH);
+      
+      doc.line(cols.colMC, y, cols.colMC, y + rowH);
+      doc.line(cols.colMP, y, cols.colMP, y + rowH);
+      doc.line(cols.colMM, y, cols.colMM, y + rowH);
+      doc.line(cols.colMCu, y, cols.colMCu, y + rowH);
+
+      doc.text(row.num, cols.colNum + (cols.wNum / 2), y + 4, { align: 'center' });
+      doc.text(desLines, cols.colDes + 1, y + 4);
+      doc.text(row.unit, cols.colU + (cols.wU / 2), y + 4, { align: 'center' });
+      
+      doc.text(formatAmountFR(row.qteContrat, 0), cols.colQC + cols.wQteChild - 1, y + 4, { align: 'right' });
+      doc.text(formatAmountFR(row.qtePrece, 2), cols.colQP + cols.wQteChild - 1, y + 4, { align: 'right' });
+      doc.text(formatAmountFR(row.qteMois, 2), cols.colQM + cols.wQteChild - 1, y + 4, { align: 'right' });
+      doc.text(formatAmountFR(row.qteCumul, 2), cols.colQCu + cols.wQteChild - 1, y + 4, { align: 'right' });
+      
+      doc.text(formatAmountFR(row.prixUnitaire, 2), cols.colPU + cols.wPU - 1, y + 4, { align: 'right' });
+
+      doc.text(formatAmountFR(mContrat, 2), cols.colMC + cols.wMontantChild - 1, y + 4, { align: 'right' });
+      doc.text(formatAmountFR(mPrece, 2), cols.colMP + cols.wMontantChild - 1, y + 4, { align: 'right' });
+      doc.text(formatAmountFR(mMois, 2), cols.colMM + cols.wMontantChild - 1, y + 4, { align: 'right' });
+      doc.text(formatAmountFR(mCumul, 2), cols.colMCu + cols.wMontantChild - 1, y + 4, { align: 'right' });
+
+      y += rowH;
+    });
+
+    if (rows.length === 0) {
+      doc.rect(cols.tableX, y, cols.tableW, 10);
+      doc.text('Aucun ouvrage réceptionné pour ce PV.', cols.colDes + 1, y + 6);
+      y += 10;
+    }
+
+    // Render Totals
+    if (y + 10 > 280) {
+      doc.addPage();
+      y = 20;
+    }
+    doc.setFont('helvetica', 'bold');
+    doc.rect(cols.tableX, y, cols.tableW, 8);
+    doc.text("TOTAL (HT)", cols.colDes + (cols.wDes / 2), y + 5, { align: 'center' });
+    
+    // Draw vertical lines for the totals row to align with columns
+    doc.line(cols.colMC, y, cols.colMC, y + 8);
+    doc.line(cols.colMP, y, cols.colMP, y + 8);
+    doc.line(cols.colMM, y, cols.colMM, y + 8);
+    doc.line(cols.colMCu, y, cols.colMCu, y + 8);
+
+    doc.text(formatAmountFR(globalTotalContrat, 2), cols.colMC + cols.wMontantChild - 1, y + 5, { align: 'right' });
+    doc.text(formatAmountFR(globalTotalPrece, 2), cols.colMP + cols.wMontantChild - 1, y + 5, { align: 'right' });
+    doc.text(formatAmountFR(globalTotalMois, 2), cols.colMM + cols.wMontantChild - 1, y + 5, { align: 'right' });
+    doc.text(formatAmountFR(globalTotalCumul, 2), cols.colMCu + cols.wMontantChild - 1, y + 5, { align: 'right' });
+
+    doc.save(`Decompte_${situationNum}_${versement.pvId || versement.id}.pdf`);
   };
 
   const handleGenerateOrdreVersement = (montant, date, clientNom, orderId, mode) => {
@@ -874,6 +1017,7 @@ const TrackerView = ({ tracker, data, setData, onBack, quoteSettings }) => {
               delaiPaiementJours={contract?.delaiPaiementJours || 30} 
               onGenerateSituation={handleGenerateSituation}
               onGenerateAttachement={handleGenerateAttachement}
+              onGenerateDecompte={handleGenerateDecompte}
               onGenerateOrdreVersement={(montant, date, mode) => handleGenerateOrdreVersement(montant, date, client?.nom, tracker.orderId, mode)}
             />
           ))}

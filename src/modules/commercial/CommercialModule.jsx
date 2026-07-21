@@ -2701,7 +2701,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
     const q = Math.max(1, parseInt(val) || 1);
     setCurrentQuote(prev => ({ 
       ...prev, 
-      items: prev.items.map(i => {
+      items: (prev.items || []).map(i => {
         if (i.id === id) {
           const updated = { ...i, qty: q };
           if (updated.measurements && updated.measurements.length > 0) {
@@ -2713,60 +2713,15 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
           return updated;
         }
         return i;
-      }) 
+      })
     }));
   };
 
   const filteredBoms = consumableFilter === 'all' ? allBoms : allBoms.filter(b => b.itemId === consumableFilter);
 
-  if (localView === 'configure') {
-    return (
-      <ProductConfigurator
-        config={draftConfig}
-        setConfig={setDraftConfig}
-        database={database}
-        onSave={handleSaveProduct}
-        onCancel={() => setLocalView('list')}
-        label={draftLabel}
-        setLabel={setDraftLabel}
-        itemRef={draftRef}
-        setItemRef={setDraftRef}
-        qty={draftQty}
-        setQty={setDraftQty}
-        globalMargin={quote.globalMargin ?? quoteSettings?.globalMargin ?? 2.2}
-      />
-    );
-  }
-
-  const handleStatusChange = (newStatus) => {
-    setCurrentQuote(prev => {
-      const q = { ...prev, status: newStatus };
-      if (newStatus === 'Validé') {
-        q.validatedAt = new Date().toISOString();
-        // Snapshot
-        q.items = (q.items || []).map(item => {
-          try {
-            if (item.isManual) { return { ...item }; }
-              const itemMargin = q.globalMargin ?? quoteSettings?.globalMargin ?? 2.2;
-              const pd = engine.calculatePrice({ ...item.config, margin: itemMargin });
-            return {
-              ...item,
-              unitPriceHT: pd?.priceHT || item.unitPriceHT,
-              unitPriceTTC: pd?.priceTTC || item.unitPriceTTC,
-              priceData: JSON.parse(JSON.stringify(pd)),
-              config: JSON.parse(JSON.stringify(item.config))
-            };
-          } catch(e) { return item; }
-        });
-      }
-      return q;
-    });
-  };
-
-
-  const handleSaveGlobalQuote = () => {
-    if (setDatabase) {
-      const finalQuote = { ...quote, totals };
+  const saveQuoteToDatabase = (quoteToSave, showAlert = false) => {
+    if (setDatabase && quoteToSave) {
+      const finalQuote = { ...quoteToSave, totals };
       const isNewQuote = !(database?.quotes || []).some(q => q.id === finalQuote.id);
 
       setDatabase(prev => {
@@ -2824,10 +2779,47 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
         }));
       }
 
-      alert('Devis enregistré avec succès !');
-    } else {
+      if (showAlert) {
+        alert('Devis enregistré avec succès !');
+      }
+    } else if (!setDatabase) {
       console.error('setDatabase est introuvable');
     }
+  };
+
+  const handleStatusChange = (newStatus) => {
+    let updatedQuote;
+    setCurrentQuote(prev => {
+      const q = { ...prev, status: newStatus };
+      if (newStatus === 'Validé') {
+        q.validatedAt = new Date().toISOString();
+        // Snapshot
+        q.items = (q.items || []).map(item => {
+          try {
+            if (item.isManual) { return { ...item }; }
+            const itemMargin = q.globalMargin ?? quoteSettings?.globalMargin ?? 2.2;
+            const pd = engine.calculatePrice({ ...item.config, margin: itemMargin });
+            return {
+              ...item,
+              unitPriceHT: pd?.priceHT || item.unitPriceHT,
+              unitPriceTTC: pd?.priceTTC || item.unitPriceTTC,
+              priceData: JSON.parse(JSON.stringify(pd)),
+              config: JSON.parse(JSON.stringify(item.config))
+            };
+          } catch(e) { return item; }
+        });
+      }
+      updatedQuote = q;
+      return q;
+    });
+
+    if (updatedQuote) {
+      saveQuoteToDatabase(updatedQuote, false);
+    }
+  };
+
+  const handleSaveGlobalQuote = () => {
+    saveQuoteToDatabase(quote, true);
   };
 
   const generatePDF = () => {

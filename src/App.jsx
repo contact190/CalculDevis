@@ -266,6 +266,13 @@ function App() {
           } catch(e) {}
         }
 
+        try {
+          const savedActiveQuote = await persistentStorage.load('calculDevis_activeQuote');
+          if (savedActiveQuote && savedActiveQuote.id) {
+            setCurrentQuote(savedActiveQuote);
+          }
+        } catch(e) {}
+
         setLoadingMessage('Chargement des données locales...');
         let localData = await persistentStorage.load(LOCAL_KEY);
         const localTimestamp = await persistentStorage.load('calculDevis_lastModified');
@@ -415,8 +422,22 @@ function App() {
         setDatabase(db => ({ ...db, quoteSettings: quoteSettings }));
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [database?.quoteSettings]);
+  }, [database]);
+  // ─── Save active currentQuote to persistentStorage and sync with database ──
+  useEffect(() => {
+    if (currentQuote && currentQuote.id) {
+      persistentStorage.save('calculDevis_activeQuote', currentQuote).catch(() => {});
+    }
+  }, [currentQuote]);
+
+  useEffect(() => {
+    if (database && database.quotes && currentQuote && currentQuote.id) {
+      const dbQuote = database.quotes.find(q => q.id === currentQuote.id);
+      if (dbQuote && JSON.stringify(dbQuote) !== JSON.stringify(currentQuote)) {
+        setCurrentQuote(dbQuote);
+      }
+    }
+  }, [database?.quotes, currentQuote?.id]);
 
   // ─── Keep databaseRef in sync ───────────────────────────────────────────
   useEffect(() => {
