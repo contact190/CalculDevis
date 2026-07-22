@@ -1577,6 +1577,20 @@ export class FormulaEngine {
     }
 
     // 6. Global Options & Variantes processing on the accumulated accessories
+    const windowDir = (config.openingDirection || 'gauche').toLowerCase();
+    const scope = {
+      L: L,
+      H: windowH,
+      totalH: totalH,
+      originalL: initialL,
+      HC: shutterHeight,
+      qty: 1,
+      openingDirection: windowDir,
+      isGauche: windowDir.includes('gauch'),
+      isDroit: windowDir.includes('droit'),
+      isDroite: windowDir.includes('droit')
+    };
+
     if (!isOnlyShutter && config.selectedOptions && config.selectedOptions.length > 0) {
       config.selectedOptions.forEach(optId => {
         const option = this.db.options?.find(o => o.id === optId);
@@ -1599,23 +1613,22 @@ export class FormulaEngine {
                 }
               }
 
-              const windowDir = config.openingDirection || 'gauche';
               const optionSide = config.optionSides?.[optId] || 'both';
-              
-              // NEW: Filter by side. If option is for Gauche and window is Droit, skip it.
-              if (optionSide !== 'both' && optionSide !== windowDir) {
-                return; // Skip this option as it's for the other side
-              }
+              const multiplier = optionSide === 'both' ? 2 : 1;
               
               const rawQty = this.evaluate(option.formula || '1', scope, `Option: ${option.name}`, errors);
-              const qty = rawQty; 
+              const qty = rawQty * multiplier; 
               
               if (qty <= 0) return; // Skip if qty is 0              
               activeAccessories.push({
                 ...addRef,
                 label: `Option: ${option.name}${optionSide !== 'both' ? ' (' + optionSide + ')' : ''}`,
                 qty: qty,
+                multiplier: qty,
+                totalMeasure: qty,
                 formula: option.formula || '1',
+                resolvedFormula: this.resolveFormula(option.formula || '1', scope),
+                unitPrice: addRef.price || 0,
                 cost: qty * (addRef.price || 0),
                 side: optionSide
               });
