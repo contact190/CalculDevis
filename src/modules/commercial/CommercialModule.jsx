@@ -1668,19 +1668,36 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                       filteredItems = filteredItems.filter(i => !i.rangeId || i.rangeId === currentComp.rangeId);
                   }
                   
+                  // Unified evaluation scope matching the backend formula-engine
+                  const isDouble = config.shutterConfig?.isDoubleShutter || false;
+                  const L_comp = (isDouble && key !== 'caissonId') ? (config.L || 0) / 2 : (config.L || 0);
+                  const H = config.H || 0;
+                  const area = (L_comp * H) / 1000000;
+
+                  const selectedCaisson = (database.shutterComponents?.caissons || []).find(c => c.id === config.shutterConfig?.caissonId);
+                  const caissonSize = parseFloat(selectedCaisson?.height) || parseFloat(selectedCaisson?.size) || parseFloat(selectedCaisson?.thickness) || 0;
+                  const customHC = config.shutterOverrides?.customHC;
+                  const HC = (customHC !== undefined && customHC !== null && customHC !== '') ? parseFloat(customHC) : caissonSize;
+
+                  const selectedLame = (database.shutterComponents?.lames || []).find(l => l.id === config.shutterConfig?.lameId);
+                  const lameWidth = parseFloat(selectedLame?.lameWidth) || 0;
+                  const weightPerM2 = parseFloat(selectedLame?.weightPerM2) || 0;
+                  const totalWeight = area * weightPerM2;
+                  const liftingWeight = totalWeight;
+
+                  const selectedAxeId = config.shutterConfig?.axeId;
+                  const axes = database.shutterComponents?.axes || [];
+                  const selectedAxe = axes.find(a => a.id === selectedAxeId) || axes[0];
+                  const axeDiameter = selectedAxe ? parseFloat(selectedAxe.diameter) || parseFloat((selectedAxe.name || '').match(/\d+/)?.[0]) || 0 : 0;
+
+                  const scope = { L: L_comp, H, area, caissonSize, HC, lameWidth, weightPerM2, totalWeight, liftingWeight, axeDiameter };
+
                   // Apply compatibility formula for caissons (based on L and lameWidth of selected lame)
                   if (key === 'caissonId') {
-                    const L = config.L || 0;
-                    const H = config.H || 0;
-                    const selectedLame = (database.shutterComponents?.lames || []).find(l => l.id === config.shutterConfig?.lameId);
-                    const lameWidth = parseFloat(selectedLame?.lameWidth) || 0;
-                    
                     filteredItems = filteredItems.filter(caisson => {
                       const formula = caisson.compatibilityFormula;
                       if (!formula || formula.trim() === '') return true;
                       try {
-                        const area = (L * H) / 1000000;
-                        const scope = { L, H, area, lameWidth };
                         return engine.evaluate(formula, scope);
                       } catch (e) {
                         console.warn(`[Caisson Compatibility] Formula error for "${caisson.name}":`, e.message);
@@ -1691,24 +1708,10 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
 
                   // Apply compatibility formula for lames
                   if (key === 'lameId') {
-                    const isDouble = config.shutterConfig?.isDoubleShutter || false;
-                    const L = isDouble ? (config.L || 0) / 2 : (config.L || 0);
-                    const H = config.H || 0;
-                    const selectedAxeId = config.shutterConfig?.axeId;
-                    const axes = database.shutterComponents?.axes || [];
-                    const selectedAxe = axes.find(a => a.id === selectedAxeId) || axes[0]; // Fallback to first axe if none
-                    const axeDiameter = selectedAxe ? parseFloat(selectedAxe.diameter) || 0 : 0;
-                    
                     filteredItems = filteredItems.filter(lame => {
                       const formula = lame.compatibilityFormula;
                       if (!formula || formula.trim() === '') return true;
                       try {
-                        const area = (L * H) / 1000000;
-                        const weightPerM2 = parseFloat(lame.weightPerM2) || 0;
-                        const totalWeight = area * weightPerM2;
-                        const liftingWeight = totalWeight;
-                        const lameWidth = parseFloat(lame.lameWidth) || 0;
-                        const scope = { L, H, area, axeDiameter, weightPerM2, totalWeight, liftingWeight, lameWidth };
                         return engine.evaluate(formula, scope);
                       } catch (e) {
                         console.warn(`[Lame Compatibility] Formula error for "${lame.name}":`, e.message);
@@ -1719,23 +1722,6 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
 
                   // Apply compatibility formula for motors
                   if (key === 'moteurId') {
-                    const isDouble = config.shutterConfig?.isDoubleShutter || false;
-                    const L = isDouble ? (config.L || 0) / 2 : (config.L || 0);
-                    const H = config.H || 0;
-                    
-                    const selectedLame = (database.shutterComponents?.lames || []).find(l => l.id === config.shutterConfig?.lameId);
-                    const weightPerM2 = parseFloat(selectedLame?.weightPerM2) || 0;
-                    const area = (L * H) / 1000000;
-                    const totalWeight = area * weightPerM2;
-
-                    // Lifting weight logic based on axle diameter
-                    const selectedAxeId = config.shutterConfig?.axeId;
-                    const axes = database.shutterComponents?.axes || [];
-                    const selectedAxe = axes.find(a => a.id === selectedAxeId) || axes[0];
-                    const axeDiameter = selectedAxe ? parseFloat(selectedAxe.diameter) || 0 : 0;
-
-                    const liftingWeight = totalWeight;
-
                     filteredItems = filteredItems.filter(moteur => {
                       const formula = moteur.compatibilityFormula;
                       if (!formula || formula.trim() === '') {
@@ -1743,10 +1729,8 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                         return true;
                       }
                       try {
-                        const lameWidth = parseFloat(selectedLame?.lameWidth) || 0;
-                        const scope = { L, H, area, totalWeight, weightPerM2, liftingWeight, axeDiameter, lameWidth };
                         const res = engine.evaluate(formula, scope);
-                        console.log(`[Motor Debug] ${moteur.name} | Formula: "${formula}" | Scope: L=${L}, H=${H}, area=${area.toFixed(3)}, weight=${totalWeight.toFixed(2)}, lift=${liftingWeight.toFixed(2)}, axe=${axeDiameter} | Result -> ${res} (usage=${moteur.usageVolet || 'BOTH'})`);
+                        console.log(`[Motor Debug] ${moteur.name} | Formula: "${formula}" | Scope: L=${scope.L}, H=${scope.H}, area=${scope.area.toFixed(3)}, weight=${scope.totalWeight.toFixed(2)}, lift=${scope.liftingWeight.toFixed(2)}, axe=${scope.axeDiameter} | Result -> ${res} (usage=${moteur.usageVolet || 'BOTH'})`);
                         return res;
                       } catch (e) {
                         console.log(`[Motor Debug] ${moteur.name} | Formula: "${formula}" | Error: ${e.message}`);
@@ -1758,22 +1742,10 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
 
                   // Apply compatibility formula for axes
                   if (key === 'axeId') {
-                    const isDouble = config.shutterConfig?.isDoubleShutter || false;
-                    const L = isDouble ? (config.L || 0) / 2 : (config.L || 0);
-                    const H = config.H || 0;
-                    
-                    const selectedLame = (database.shutterComponents?.lames || []).find(l => l.id === config.shutterConfig?.lameId);
-                    const weightPerM2 = parseFloat(selectedLame?.weightPerM2) || 0;
-                    const area = (L * H) / 1000000;
-                    const totalWeight = area * weightPerM2;
-
                     filteredItems = filteredItems.filter(axe => {
                       const formula = axe.compatibilityFormula;
                       if (!formula || formula.trim() === '') return true;
                       try {
-                        const lameWidth = parseFloat(selectedLame?.lameWidth) || 0;
-                        const liftingWeight = totalWeight;
-                        const scope = { L, H, area, totalWeight, liftingWeight, weightPerM2, lameWidth };
                         return engine.evaluate(formula, scope);
                       } catch (e) {
                         console.warn(`[Axe Compatibility] Formula error for "${axe.name}":`, e.message);
@@ -1784,28 +1756,10 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
 
                   // Apply compatibility formula for kits
                   if (key === 'kitId' || key === 'kits') {
-                    const isDouble = config.shutterConfig?.isDoubleShutter || false;
-                    const L = isDouble ? (config.L || 0) / 2 : (config.L || 0);
-                    const H = config.H || 0;
-                    const area = (L * H) / 1000000;
-                    
-                    const selectedLame = (database.shutterComponents?.lames || []).find(l => l.id === config.shutterConfig?.lameId);
-                    const weightPerM2 = parseFloat(selectedLame?.weightPerM2) || 0;
-                    const totalWeight = area * weightPerM2;
-
-                    const selectedCaissonKit = (database.shutterComponents?.caissons || []).find(c => c.id === config.shutterConfig?.caissonId);
-                    const caissonSize = parseFloat(selectedCaissonKit?.height) || parseFloat(selectedCaissonKit?.size) || parseFloat(selectedCaissonKit?.thickness) || 0;
-
-                    const axesKit = database.shutterComponents?.axes || [];
-                    const selectedAxeKit = axesKit.find(a => a.id === config.shutterConfig?.axeId) || axesKit[0];
-                    const axeDiameter = selectedAxeKit ? parseFloat(selectedAxeKit.diameter) || parseFloat((selectedAxeKit.name || '').match(/\d+/)?.[0]) || 0 : 0;
-
                     filteredItems = filteredItems.filter(kit => {
                       const formula = kit.compatibilityFormula;
                       if (!formula || formula.trim() === '') return true;
                       try {
-                        const lameWidth = parseFloat(selectedLame?.lameWidth) || 0;
-                        const scope = { L, H, area, totalWeight, weightPerM2, lameWidth, caissonSize, axeDiameter };
                         return engine.evaluate(formula, scope);
                       } catch (e) {
                         console.warn(`[Kit Compatibility] Formula error for "${kit.name}":`, e.message);
@@ -1816,28 +1770,10 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
 
                   // Apply compatibility formula for extras
                   if (key === 'extraId' || key === 'extras') {
-                    const isDouble = config.shutterConfig?.isDoubleShutter || false;
-                    const L = isDouble ? (config.L || 0) / 2 : (config.L || 0);
-                    const H = config.H || 0;
-                    const area = (L * H) / 1000000;
-
-                    const selectedLame = (database.shutterComponents?.lames || []).find(l => l.id === config.shutterConfig?.lameId);
-                    const lameWidth = parseFloat(selectedLame?.lameWidth) || 0;
-                    const weightPerM2 = parseFloat(selectedLame?.weightPerM2) || 0;
-                    const totalWeight = area * weightPerM2;
-
-                    const selectedCaissonKit = (database.shutterComponents?.caissons || []).find(c => c.id === config.shutterConfig?.caissonId);
-                    const caissonSize = parseFloat(selectedCaissonKit?.height) || parseFloat(selectedCaissonKit?.size) || parseFloat(selectedCaissonKit?.thickness) || 0;
-
-                    const axesKit = database.shutterComponents?.axes || [];
-                    const selectedAxeKit = axesKit.find(a => a.id === config.shutterConfig?.axeId) || axesKit[0];
-                    const axeDiameter = selectedAxeKit ? parseFloat(selectedAxeKit.diameter) || parseFloat((selectedAxeKit.name || '').match(/\d+/)?.[0]) || 0 : 0;
-
                     filteredItems = filteredItems.filter(extra => {
                       const formula = extra.compatibilityFormula;
                       if (!formula || formula.trim() === '') return true;
                       try {
-                        const scope = { L, H, area, lameWidth, totalWeight, weightPerM2, caissonSize, axeDiameter };
                         return engine.evaluate(formula, scope);
                       } catch (e) {
                         console.warn(`[Extra Compatibility] Formula error for "${extra.name}":`, e.message);

@@ -97,7 +97,7 @@ export const drawDocumentHeader = (doc, quoteSettings, client, options = {}) => 
   }
 
   // Determine box placement
-  const boxY = showClientBox ? (15 + Math.max(logoH, title ? 22 : 0) + 6) : 15;
+  const boxY = showClientBox ? (15 + Math.max(logoH, title ? 22 : 0) + 18) : 15;
   const boxWidth = showClientBox ? (pw - 35) / 2 : pw - 95; // 115mm width if single box
   const boxX = showClientBox ? 15 : 80; // place beside logo if single box
 

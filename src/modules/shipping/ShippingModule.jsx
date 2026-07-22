@@ -231,7 +231,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
             }
 
 
-            const dualStatus = selectedOrder.unitStatusesDual?.[unitId] || { alu: 'En production', vitrage: 'En production', volet: 'En production', caisson_tunnel: 'En production' };
+            const dualStatus = selectedOrder.unitStatusesDual?.[unitId] || { alu: 'En production', vitrage: 'En production', volet: 'En production', caisson_tunnel: 'En production', glissiere: 'En production' };
             const storageZoneId = selectedOrder.unitStorageZones?.[unitId];
             const zone = storageZones.find(z => z.id === storageZoneId);
 
@@ -240,6 +240,8 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
             let shutterInfo = 'SANS VOLET';
             let isExtrudedLame = false;
             let isCaissonTunnel = false;
+            let caissonSizeVal = 0;
+            let glissiereNameVal = '';
             let offset = 0;
             const shutterOverridden = (m.shutterList || []).length > 0;
 
@@ -279,6 +281,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
                   const caisson = sh.overrides?.caissonId || item.config.shutterConfig?.caissonId;
                   const kit = sh.overrides?.kitId || item.config.shutterConfig?.kitId;
                   const lameId = sh.overrides?.lameId || item.config.shutterConfig?.lameId;
+                  const glissiereId = sh.overrides?.glissiereId || item.config.shutterConfig?.glissiereId;
                   
                   const lameObj = data.shutterComponents?.lames?.find(l => l.id === lameId);
                   if (lameObj && lameObj.hasBaguette) isExtrudedLame = true;
@@ -286,10 +289,15 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
                   const caissonObj = data.shutterComponents?.caissons?.find(c => c.id === caisson);
                   const caissonName = caissonObj?.name || caisson || '';
                   const caissonSize = parseFloat(caissonObj?.height) || parseFloat(caissonObj?.size) || parseFloat(caissonObj?.thickness) || 0;
-                  if (caissonSize === 300) isCaissonTunnel = true;
+                  caissonSizeVal = caissonSize;
+                  if (caissonSize === 300 || caissonSize === 0) isCaissonTunnel = true;
                   
                   const kitName = data.shutterComponents?.kits?.find(k => k.id === kit)?.name || kit || '';
                   const lameName = lameObj?.name || lameId || '';
+                  
+                  const glissiereObj = data.shutterComponents?.glissieres?.find(g => g.id === glissiereId);
+                  const glissiereName = glissiereObj?.name || glissiereId || '';
+                  glissiereNameVal = glissiereName;
                   
                   shutterInfo = `${caissonName} ${lameName} ${kitName}`.trim() || 'AVEC VOLET';
 
@@ -307,6 +315,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
               const caisson = item.config.shutterConfig?.caissonId;
               const kit = item.config.shutterConfig?.kitId;
               const lameId = item.config.shutterConfig?.lameId;
+              const glissiereId = item.config.shutterConfig?.glissiereId;
               
               const lameObj = data.shutterComponents?.lames?.find(l => l.id === lameId);
               if (lameObj && lameObj.hasBaguette) isExtrudedLame = true;
@@ -314,10 +323,15 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
               const caissonObj = data.shutterComponents?.caissons?.find(c => c.id === caisson);
               const caissonName = caissonObj?.name || caisson || '';
               const caissonSize = parseFloat(caissonObj?.height) || parseFloat(caissonObj?.size) || parseFloat(caissonObj?.thickness) || 0;
-              if (caissonSize === 300) isCaissonTunnel = true;
+              caissonSizeVal = caissonSize;
+              if (caissonSize === 300 || caissonSize === 0) isCaissonTunnel = true;
               
               const kitName = data.shutterComponents?.kits?.find(k => k.id === kit)?.name || kit || '';
               const lameName = lameObj?.name || lameId || '';
+              
+              const glissiereObj = data.shutterComponents?.glissieres?.find(g => g.id === glissiereId);
+              const glissiereName = glissiereObj?.name || glissiereId || '';
+              glissiereNameVal = glissiereName;
               
               shutterInfo = `${caissonName} ${lameName} ${kitName}`.trim() || 'AVEC VOLET';
             }
@@ -373,9 +387,12 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
               statusVitrage: dualStatus.vitrage,
               statusVolet: dualStatus.volet || 'En production',
               statusCaissonTunnel: dualStatus.caisson_tunnel || 'En production',
+              statusGlissiere: dualStatus.glissiere || 'En production',
               hasShutter: hasShutter,
               isExtrudedLame: isExtrudedLame,
               isCaissonTunnel: isCaissonTunnel,
+              caissonSize: caissonSizeVal,
+              glissiereName: glissiereNameVal,
               shutterInfo: shutterInfo,
               storageZoneId: storageZoneId,
               storageZone: zone?.name || '',
@@ -407,6 +424,8 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
         return remainingPanes.length > 0;
       } else if (blModalType === 'VOLET') {
         return u.isExtrudedLame && u.statusVolet !== 'Livré' && u.statusVolet !== 'Fini' && u.statusVolet !== 'Posé';
+      } else if (blModalType === 'GLISSIERE') {
+        return u.hasShutter && u.caissonSize === 0 && u.statusGlissiere !== 'Livré' && u.statusGlissiere !== 'Fini' && u.statusGlissiere !== 'Posé';
       } else if (blModalType === 'CAISSON_TUNNEL') {
         return u.isCaissonTunnel && u.statusCaissonTunnel !== 'Livré' && u.statusCaissonTunnel !== 'Fini' && u.statusCaissonTunnel !== 'Posé';
       }
@@ -470,7 +489,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
       if (oIdx === -1) return prev;
       const order = { ...orders[oIdx] };
       const dualStatuses = { ...(order.unitStatusesDual || {}) };
-      const current = dualStatuses[unitId] || { alu: 'En production', vitrage: 'En production', volet: 'En production', caisson_tunnel: 'En production' };
+      const current = dualStatuses[unitId] || { alu: 'En production', vitrage: 'En production', volet: 'En production', caisson_tunnel: 'En production', glissiere: 'En production' };
       
       const event = {
         date: new Date().toISOString(),
@@ -487,6 +506,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
           current.vitrage = newStatus;
           current.volet = newStatus;
           current.caisson_tunnel = newStatus;
+          current.glissiere = newStatus;
         } else {
           current[component] = newStatus;
         }
@@ -516,12 +536,13 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
       const userName = 'ADMIN';
 
       selectedUnitIds.forEach(unitId => {
-        const current = { ...(dualStatuses[unitId] || { alu: 'En production', vitrage: 'En production', volet: 'En production', caisson_tunnel: 'En production' }) };
+        const current = { ...(dualStatuses[unitId] || { alu: 'En production', vitrage: 'En production', volet: 'En production', caisson_tunnel: 'En production', glissiere: 'En production' }) };
         if (component === 'both') {
           current.alu = newStatus;
           current.vitrage = newStatus;
           current.volet = newStatus;
           current.caisson_tunnel = newStatus;
+          current.glissiere = newStatus;
         } else {
           current[component] = newStatus;
         }
@@ -574,11 +595,12 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
       const userName = 'ADMIN';
 
       batchUnitIds.forEach(unitId => {
-        const current = { ...(dualStatuses[unitId] || { alu: 'En production', vitrage: 'En production', volet: 'En production', caisson_tunnel: 'En production' }) };
+        const current = { ...(dualStatuses[unitId] || { alu: 'En production', vitrage: 'En production', volet: 'En production', caisson_tunnel: 'En production', glissiere: 'En production' }) };
         current.alu = newStatus;
         current.vitrage = newStatus;
         current.volet = newStatus;
         current.caisson_tunnel = newStatus;
+        current.glissiere = newStatus;
         
         dualStatuses[unitId] = { ...current };
 
@@ -1875,7 +1897,10 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
           y += (Math.max(splitLabel.length, splitRepere.length) * 4) + 4;
         } else {
           checkPageOverflow(10);
-          const labelText = u.hasShutter ? `${u.label} (${u.shutterInfo})` : u.label;
+          let labelText = u.hasShutter ? `${u.label} (${u.shutterInfo})` : u.label;
+          if (type === 'GLISSIERE') {
+            labelText = u.hasShutter ? `${u.label} (Glissière: ${u.glissiereName || '—'})` : u.label;
+          }
           const splitLabel = doc.splitTextToSize(labelText, 60);
           
           doc.text('1', 15, y); 
@@ -1972,7 +1997,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
         const dualStatuses = { ...(order.unitStatusesDual || {}) };
         const timeline = { ...(order.unitTimeline || {}) };
         const deliveredGlass = { ...(order.deliveredGlassPanes || {}) };
-        const component = type.startsWith('VITRAGE') ? 'vitrage' : (type === 'ALU' ? 'alu' : (type === 'VOLET' ? 'volet' : 'caisson_tunnel'));
+        const component = type.startsWith('VITRAGE') ? 'vitrage' : (type === 'ALU' ? 'alu' : (type === 'VOLET' ? 'volet' : (type === 'GLISSIERE' ? 'glissiere' : 'caisson_tunnel')));
         const userName = 'ADMIN';
 
         unitsToDeliver.forEach(u => {
@@ -2097,6 +2122,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
                   <button onClick={() => { setBlModalType('ALU'); setBlSelectedUnitIds(new Set()); }} className="btn btn-primary" style={{ background: '#1e293b' }} disabled={allUnits.length === 0}>BL Alu</button>
                   <button onClick={() => { setBlModalType('VITRAGE'); setBlSelectedUnitIds(new Set()); }} className="btn btn-primary" style={{ background: '#3b82f6' }} disabled={allUnits.length === 0}>BL Vitrage</button>
                   <button onClick={() => { setBlModalType('VOLET'); setBlSelectedUnitIds(new Set()); }} className="btn btn-primary" style={{ background: '#b45309' }} disabled={allUnits.length === 0}>BL Volet</button>
+                  <button onClick={() => { setBlModalType('GLISSIERE'); setBlSelectedUnitIds(new Set()); }} className="btn btn-primary" style={{ background: '#7c2d12' }} disabled={allUnits.length === 0}>BL Glissière</button>
                   <button onClick={() => { setBlModalType('CAISSON_TUNNEL'); setBlSelectedUnitIds(new Set()); }} className="btn btn-primary" style={{ background: '#059669' }} disabled={allUnits.length === 0}>BL Caisson Tunnel</button>
                 </div>
           </div>
@@ -2296,7 +2322,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
                     {/* Badge type */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: '160px' }}>
                       <span style={{ fontWeight: 700, fontSize: '0.85rem', color: '#1e40af' }}>
-                        📦 BL {blType === 'CAISSON_TUNNEL' ? 'Caisson Tunnel' : (blType === 'VITRAGE_OUVRANT_FIX' ? 'Vitrage Ouvrant & Fixe' : (blType === 'VITRAGE_COULISSANT' ? 'Vitrage Coulissant' : blType))}
+                        📦 BL {blType === 'CAISSON_TUNNEL' ? 'Caisson Tunnel' : (blType === 'VITRAGE_OUVRANT_FIX' ? 'Vitrage Ouvrant & Fixe' : (blType === 'VITRAGE_COULISSANT' ? 'Vitrage Coulissant' : (blType === 'GLISSIERE' ? 'Glissière' : blType)))}
                       </span>
                     </div>
 
@@ -2320,6 +2346,8 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
                             deliveredUnits = allUnits.filter(u => u.openingType === 'Coulissant' && (u.statusVitrage === 'Livré' || u.statusVitrage === 'Fini' || Object.values(selectedOrder.deliveredGlassPanes?.[u.id] || {}).some(qty => qty > 0)));
                           } else if (blType === 'VOLET') {
                             deliveredUnits = allUnits.filter(u => u.isExtrudedLame && (u.statusVolet === 'Livré' || u.statusVolet === 'Fini' || u.statusVolet === 'Posé'));
+                          } else if (blType === 'GLISSIERE') {
+                            deliveredUnits = allUnits.filter(u => u.hasShutter && u.caissonSize === 0 && (u.statusGlissiere === 'Livré' || u.statusGlissiere === 'Fini' || u.statusGlissiere === 'Posé'));
                           } else if (blType === 'CAISSON_TUNNEL') {
                             deliveredUnits = allUnits.filter(u => u.isCaissonTunnel && (u.statusCaissonTunnel === 'Livré' || u.statusCaissonTunnel === 'Fini' || u.statusCaissonTunnel === 'Posé'));
                           }
@@ -2545,9 +2573,10 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
                               OUI
                             </button>
                             {unit.isExtrudedLame && (
-                              <span style={{ fontSize: '0.65rem', color: '#8b5cf6', fontWeight: 'bold' }}>
-                                  {unit.statusVolet}
-                              </span>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem', fontSize: '0.65rem', fontWeight: 'bold' }}>
+                                <span style={{ color: '#8b5cf6' }}>Volet: {unit.statusVolet}</span>
+                                {unit.caissonSize === 0 && <span style={{ color: '#0369a1' }}>Glissière: {unit.statusGlissiere}</span>}
+                              </div>
                             )}
                           </div>
                         ) : (
@@ -2921,7 +2950,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
                 <div style={{ width: '60px', height: '60px', background: '#eff6ff', borderRadius: '50%', display: 'grid', placeItems: 'center', margin: '0 auto 1rem' }}>
                   <Truck size={32} color="#2563eb" />
                 </div>
-                <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 900, color: '#0f172a' }}>Livraison : Produits restants ({blModalType === 'CAISSON_TUNNEL' ? 'CAISSON TUNNEL' : blModalType})</h2>
+                <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 900, color: '#0f172a' }}>Livraison : Produits restants ({blModalType === 'CAISSON_TUNNEL' ? 'CAISSON TUNNEL' : (blModalType === 'GLISSIERE' ? 'GLISSIÈRE' : blModalType)})</h2>
                 <p style={{ color: '#64748b', fontSize: '0.9rem', marginTop: '0.5rem' }}>Sélectionnez les châssis à livrer pour ce bon de livraison.</p>
                 {selectedOrder.blDates?.[blModalType] && (
                   <button 
@@ -2933,6 +2962,8 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
                         deliveredUnits = allUnits.filter(u => u.statusVitrage === 'Livré' || u.statusVitrage === 'Fini');
                       } else if (blModalType === 'VOLET') {
                         deliveredUnits = allUnits.filter(u => u.isExtrudedLame && (u.statusVolet === 'Livré' || u.statusVolet === 'Fini' || u.statusVolet === 'Posé'));
+                      } else if (blModalType === 'GLISSIERE') {
+                        deliveredUnits = allUnits.filter(u => u.hasShutter && u.caissonSize === 0 && (u.statusGlissiere === 'Livré' || u.statusGlissiere === 'Fini' || u.statusGlissiere === 'Posé'));
                       } else if (blModalType === 'CAISSON_TUNNEL') {
                         deliveredUnits = allUnits.filter(u => u.isCaissonTunnel && (u.statusCaissonTunnel === 'Livré' || u.statusCaissonTunnel === 'Fini' || u.statusCaissonTunnel === 'Posé'));
                       }

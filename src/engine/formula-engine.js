@@ -1528,8 +1528,9 @@ export class FormulaEngine {
     let shutterHeight = 0;
     if (config.hasShutter) {
       const shutterConfig = config.shutterConfig || {};
-      if (config.shutterOverrides?.customHC) {
-        shutterHeight = config.shutterOverrides.customHC;
+      const customHC = config.shutterOverrides?.customHC;
+      if (customHC !== undefined && customHC !== null && customHC !== '') {
+        shutterHeight = parseFloat(customHC) || 0;
       } else {
         // FIX: Use overridden caissonId if present
         const effectiveCaissonId = config.shutterOverrides?.caissonId || shutterConfig.caissonId;
