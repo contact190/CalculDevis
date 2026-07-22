@@ -3477,6 +3477,25 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
     return d.toLocaleDateString('fr-FR');
   })();
 
+  if (localView === 'configure') {
+    return (
+      <ProductConfigurator
+        config={draftConfig}
+        setConfig={setDraftConfig}
+        database={database}
+        onSave={handleSaveProduct}
+        onCancel={() => setLocalView('list')}
+        label={draftLabel}
+        setLabel={setDraftLabel}
+        itemRef={draftRef}
+        setItemRef={setDraftRef}
+        qty={draftQty}
+        setQty={setDraftQty}
+        globalMargin={quote.globalMargin ?? quoteSettings?.globalMargin ?? 2.2}
+      />
+    );
+  }
+
   return (
     <div className="animate-fade-in">
       {showSettings && (
