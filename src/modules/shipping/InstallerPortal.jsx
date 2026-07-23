@@ -21,27 +21,116 @@ const InstallerPortal = ({ data, setData, orderId, refetchData, isOnline, isSync
   const units = useMemo(() => {
     if (!order) return [];
     const list = [];
+
+    // Find active site plan matching order or client
+    const client = data?.clients?.find(c => c.id === order.clientId);
+    const plans = client?.sitePlans || [];
+    let activeSitePlan = null;
+    if (order.sitePlanId) {
+      activeSitePlan = plans.find(p => p.id === order.sitePlanId);
+    }
+    if (!activeSitePlan) {
+      for (const plan of plans) {
+         for (const floor of (plan.floors || [])) {
+            for (const apt of (floor.apartments || [])) {
+               for (const voidItem of (apt.voids || [])) {
+                  if (order.items?.some(i => i.id === voidItem.itemId)) {
+                     activeSitePlan = plan;
+                     break;
+                  }
+               }
+               if (activeSitePlan) break;
+            }
+            if (activeSitePlan) break;
+         }
+         if (activeSitePlan) break;
+      }
+    }
+    if (!activeSitePlan && plans.length > 0) {
+      activeSitePlan = plans[0];
+    }
+
     (order.batches || []).forEach(batch => {
       (batch.items || []).forEach(item => {
         (item.measurements || []).forEach(m => {
           for (let i = 0; i < m.qty; i++) {
             const unitId = `${order.id}-${batch.id}-${item.id}-${m.id}-${i}`;
+            
+            let activeFloor = null;
+            let activeApt = null;
+            let voidIndex = -1;
+            if (activeSitePlan?.floors) {
+              for (const f of activeSitePlan.floors) {
+                for (const a of (f.apartments || [])) {
+                  const idx = (a.voids || []).findIndex(v => v.id === m.id);
+                  if (idx !== -1) {
+                    activeFloor = f;
+                    activeApt = a;
+                    voidIndex = idx;
+                    break;
+                  }
+                }
+                if (activeFloor) break;
+              }
+              if (!activeFloor && m.label && m.label.includes(' - ')) {
+                const parts = m.label.split(' - ');
+                if (parts.length >= 3) {
+                  const fName = parts[0].trim();
+                  const aName = parts[1].trim();
+                  const vName = parts[2].trim();
+                  
+                  const f = activeSitePlan.floors.find(fl => fl.name === fName);
+                  if (f) {
+                    const a = (f.apartments || []).find(ap => ap.name === aName);
+                    if (a) {
+                      const idx = (a.voids || []).findIndex(v => v.name === vName);
+                      if (idx !== -1) {
+                        activeFloor = f;
+                        activeApt = a;
+                        voidIndex = idx;
+                      }
+                    }
+                  }
+                }
+              }
+            }
+
+            let name = m.instanceNames?.[i] || `${item.label} #${i + 1}`;
+            let floor = m.instanceFloors?.[i] || '';
+
+            if (activeFloor && activeApt && voidIndex !== -1) {
+              name = `${activeFloor.name}${activeApt.name}${voidIndex + 1}`;
+              floor = activeFloor.name;
+            } else if (m.label && m.label.includes(' - ')) {
+              const parts = m.label.split(' - ');
+              if (parts.length >= 3) {
+                const fName = parts[0].trim();
+                const aName = parts[1].trim();
+                const vName = parts[2].trim();
+                const voidNumMatch = vName.match(/\d+/);
+                const voidNum = voidNumMatch ? voidNumMatch[0] : '1';
+                name = `${fName}${aName}${voidNum}`;
+                floor = fName;
+              }
+            }
+
             const dual = order.unitStatusesDual?.[unitId] || { alu: 'En production', vitrage: 'En production' };
             list.push({
               id: unitId,
-              name: m.instanceNames?.[i] || `${item.label} #${i + 1}`,
+              name: name,
               label: item.label,
               dimensions: `${m.L} x ${m.H}`,
               statusAlu: dual.alu,
               statusVitrage: dual.vitrage,
-              floor: m.instanceFloors?.[i] || '',
+              floor: floor,
             });
           }
         });
       });
     });
     return list;
-  }, [order]);
+  }, [order, data.clients]);
+
 
   const handleUpdateStatusDual = (unitIds, component, newStatus, actionType = 'finish', issueType = null) => {
     const nowIso = new Date().toISOString();
@@ -326,7 +415,7 @@ const InstallerPortal = ({ data, setData, orderId, refetchData, isOnline, isSync
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {unitsToDeliver.filter(u => !scannedId || u.id === scannedId).map(unit => (
+          {unitsToDeliver.filter(u => !scannedId || u.id.toLowerCase() === scannedId.trim().toLowerCase() || u.name.toLowerCase() === scannedId.trim().toLowerCase() || u.label.toLowerCase().includes(scannedId.trim().toLowerCase())).map(unit => (
             <div key={unit.id} style={{ padding: '1rem', background: 'white', borderRadius: '1rem', border: '2px solid #e2e8f0' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
                 <div>
@@ -383,7 +472,7 @@ const InstallerPortal = ({ data, setData, orderId, refetchData, isOnline, isSync
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {unitsToManut.filter(u => !scannedId || u.id === scannedId).map(unit => (
+          {unitsToManut.filter(u => !scannedId || u.id.toLowerCase() === scannedId.trim().toLowerCase() || u.name.toLowerCase() === scannedId.trim().toLowerCase() || u.label.toLowerCase().includes(scannedId.trim().toLowerCase())).map(unit => (
             <div key={unit.id} style={{ padding: '1rem', background: 'white', borderRadius: '1rem', border: '2px solid #e2e8f0' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
                 <div>
@@ -429,7 +518,8 @@ const InstallerPortal = ({ data, setData, orderId, refetchData, isOnline, isSync
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-        {installableUnits.filter(u => !scannedId || u.id === scannedId).map(unit => (
+        {installableUnits.filter(u => !scannedId || u.id.toLowerCase() === scannedId.trim().toLowerCase() || u.name.toLowerCase() === scannedId.trim().toLowerCase() || u.label.toLowerCase().includes(scannedId.trim().toLowerCase())).map(unit => (
+
           <div key={unit.id} className="glass shadow-sm" style={{ padding: '1.25rem', background: 'white' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
                <div>
