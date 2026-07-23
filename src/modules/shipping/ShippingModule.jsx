@@ -748,10 +748,11 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings, setQuoteSet
       let titleX = 50;
       let titleAlign = 'center';
 
-      // Affichage du Logo d'Entreprise si présent (Conserve les proportions)
-      if (quoteSettings?.logoBase64) {
+      // Affichage du Logo Spécifique Bordereau si présent (Conserve les proportions)
+      const bordereauLogo = quoteSettings?.bordereauLogoBase64 || quoteSettings?.logoBase64;
+      if (bordereauLogo) {
         try {
-          const imgProps = doc.getImageProperties(quoteSettings.logoBase64);
+          const imgProps = doc.getImageProperties(bordereauLogo);
           const maxLogoW = 32; // Largeur max 32mm
           const maxLogoH = 12; // Hauteur max 12mm
           const ratio = Math.min(maxLogoW / imgProps.width, maxLogoH / imgProps.height);
@@ -759,8 +760,8 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings, setQuoteSet
           const logoH = imgProps.height * ratio;
           const logoY = 2 + (16 - logoH) / 2; // Centré verticalement dans le header
 
-          const fmt = quoteSettings.logoBase64.startsWith('data:image/png') ? 'PNG' : 'JPEG';
-          doc.addImage(quoteSettings.logoBase64, fmt, 4, logoY, logoW, logoH, '', 'FAST');
+          const fmt = bordereauLogo.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+          doc.addImage(bordereauLogo, fmt, 4, logoY, logoW, logoH, '', 'FAST');
 
           titleX = 4 + logoW + 2 + (96 - (4 + logoW + 2)) / 2;
         } catch (e) {
@@ -2150,10 +2151,10 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings, setQuoteSet
               <button onClick={generatePackingLabels} className="btn btn-secondary" disabled={allUnits.length === 0}><QrCode size={16} /> Étiquettes</button>
               <label 
                 className="btn btn-secondary" 
-                style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', color: '#0f172a', borderColor: '#cbd5e1', background: quoteSettings?.logoBase64 ? '#f0fdf4' : 'white' }}
-                title="Téléverser le logo d'entreprise (appliqué à tous les bordereaux)"
+                style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', color: '#0f172a', borderColor: '#cbd5e1', background: quoteSettings?.bordereauLogoBase64 ? '#f0fdf4' : 'white' }}
+                title="Téléverser le logo spécifique aux bordereaux d'expédition"
               >
-                <Camera size={16} /> {quoteSettings?.logoBase64 ? 'Logo ✓' : 'Logo'}
+                <Camera size={16} /> {quoteSettings?.bordereauLogoBase64 ? 'Logo Bordereau ✓' : 'Logo Bordereau'}
                 <input 
                   type="file" 
                   accept="image/*" 
@@ -2179,8 +2180,8 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings, setQuoteSet
                           ctx.drawImage(img, 0, 0, w, h);
                           const base64 = canvas.toDataURL('image/png');
                           if (setQuoteSettings) {
-                            setQuoteSettings(prev => ({ ...prev, logoBase64: base64 }));
-                            alert('✅ Logo d\'entreprise enregistré pour tous les bordereaux !');
+                            setQuoteSettings(prev => ({ ...prev, bordereauLogoBase64: base64 }));
+                            alert('✅ Logo spécifique aux bordereaux enregistré !');
                           }
                         };
                         img.src = ev.target.result;
