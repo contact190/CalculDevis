@@ -7,7 +7,7 @@ import { FormulaEngine } from '../../engine/formula-engine';
 import { drawDocumentHeader } from '../../utils/pdfDocumentUtils';
 
 // Module version: 1.0.1 - Logistic & Installation Tracking
-const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
+const ShippingModule = ({ data, setData, refetchData, quoteSettings, setQuoteSettings }) => {
   const [selectedOrderId, setSelectedOrderId] = useState(null);
   const [selectedBatchIds, setSelectedBatchIds] = useState(new Set());
   const [activeView, setActiveView] = useState('list'); // 'list' | 'details' | 'scanner' | 'zones'
@@ -738,75 +738,119 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
       
       // Bordure extérieure
       doc.setLineWidth(0.8);
+      doc.setDrawColor(15, 23, 42);
       doc.rect(2, 2, 96, 146);
       
-      // Header - Titre Bordereau
-      doc.setFillColor(0, 0, 0);
-      doc.rect(2, 2, 96, 12, 'F');
+      // Header - Fond sombre (Hauteur 16mm)
+      doc.setFillColor(15, 23, 42);
+      doc.rect(2, 2, 96, 16, 'F');
+      
+      let titleX = 50;
+      let titleAlign = 'center';
+
+      // Affichage du Logo d'Entreprise si présent (Conserve les proportions)
+      if (quoteSettings?.logoBase64) {
+        try {
+          const imgProps = doc.getImageProperties(quoteSettings.logoBase64);
+          const maxLogoW = 32; // Largeur max 32mm
+          const maxLogoH = 12; // Hauteur max 12mm
+          const ratio = Math.min(maxLogoW / imgProps.width, maxLogoH / imgProps.height);
+          const logoW = imgProps.width * ratio;
+          const logoH = imgProps.height * ratio;
+          const logoY = 2 + (16 - logoH) / 2; // Centré verticalement dans le header
+
+          const fmt = quoteSettings.logoBase64.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+          doc.addImage(quoteSettings.logoBase64, fmt, 4, logoY, logoW, logoH, '', 'FAST');
+
+          titleX = 4 + logoW + 2 + (96 - (4 + logoW + 2)) / 2;
+        } catch (e) {
+          console.warn("Logo draw error on bordereau:", e);
+        }
+      }
+
       doc.setTextColor(255, 255, 255);
-      doc.setFontSize(14); doc.setFont('helvetica', 'bold');
-      doc.text('BORDEREAU D\'EXPÉDITION', 50, 10, { align: 'center' });
-      
-      doc.setTextColor(0, 0, 0);
-      
-      // Section 1 : Info Commande
-      doc.setFontSize(10); doc.setFont('helvetica', 'bold');
-      doc.text('CLIENT :', 5, 22);
-      const cName = (selectedOrder.clientName).toUpperCase();
-      doc.setFontSize(16); doc.text(cName, 5, 29);
-      
-      doc.setFontSize(9); doc.setFont('helvetica', 'normal');
-      doc.text(`CMD N° : ${selectedOrder.id}`, 5, 38);
-      doc.text(`LOT : ${unit.batchId}`, 40, 38);
-      doc.setTextColor(37, 99, 235); doc.setFont('helvetica', 'bold');
-      doc.text(`ÉTAGE : ${unit.floor || '---'}`, 72, 38);
-      doc.setTextColor(0, 0, 0);
-      
-      doc.setLineWidth(0.3);
-      doc.line(5, 42, 95, 42);
-      
-      // Section 2 : REPERE (Très Gros)
       doc.setFontSize(11); doc.setFont('helvetica', 'bold');
-      doc.text('REPÈRE / EMPLACEMENT :', 5, 50);
-      doc.setFontSize(26);
-      doc.text(unit.name, 50, 64, { align: 'center' });
+      doc.text('BORDEREAU D\'EXPÉDITION', titleX, 11.5, { align: titleAlign });
       
-      // Nouvelle Section : ZONE DE STOCKAGE
+      doc.setTextColor(0, 0, 0);
+      
+      // Section 1 : Info Commande (y = 20 à 41)
+      doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 116, 139);
+      doc.text('CLIENT :', 5, 22);
+      
+      doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 23, 42);
+      const cName = (selectedOrder.clientName || 'CLIENT').toUpperCase();
+      const splitClientName = doc.splitTextToSize(cName, 88);
+      doc.text(splitClientName[0], 5, 27.5); // Limité à 1 ligne sans chevauchement
+      
+      // Ligne : CMD, LOT, ÉTAGE (Espacements fixes et calculés)
+      doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(71, 85, 105);
+      doc.text(`CMD : ${selectedOrder.id}`, 5, 36);
+      doc.text(`LOT : ${unit.batchId}`, 42, 36);
+      doc.setTextColor(37, 99, 235); doc.setFont('helvetica', 'bold');
+      doc.text(`ÉTAGE : ${unit.floor || '---'}`, 72, 36);
+      doc.setTextColor(0, 0, 0);
+      
+      doc.setLineWidth(0.3); doc.setDrawColor(226, 232, 240);
+      doc.line(5, 40, 95, 40);
+      
+      // Section 2 : REPÈRE / EMPLACEMENT (y = 42 à 65)
+      doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 116, 139);
+      doc.text('REPÈRE / EMPLACEMENT :', 5, 46);
+      
+      // Taille de police dynamique pour éviter tout débordement sur les noms longs (ex: 8A1 vs Noms à rallonge)
+      const uName = String(unit.name || '');
+      let repereFontSize = 24;
+      if (uName.length > 14) repereFontSize = 14;
+      else if (uName.length > 9) repereFontSize = 18;
+      else if (uName.length > 6) repereFontSize = 21;
+
+      doc.setFontSize(repereFontSize); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 23, 42);
+      doc.text(uName, 50, 59, { align: 'center' });
+      
+      // Section 3 : ZONE DE STOCKAGE (y = 66 à 75)
       doc.setFillColor(241, 245, 249);
-      doc.rect(5, 69, 90, 8, 'F');
-      doc.setFontSize(10);
+      doc.rect(5, 65, 90, 8, 'F');
+      doc.setFontSize(9); doc.setFont('helvetica', 'bold');
       doc.setTextColor(30, 41, 59);
-      doc.text(`ZONE DE STOCKAGE : ${unit.storageZone || 'À ASSIGNER'}`, 50, 75, { align: 'center' });
+      doc.text(`ZONE DE STOCKAGE : ${unit.storageZone || 'À ASSIGNER'}`, 50, 70.5, { align: 'center' });
       
-      doc.setLineWidth(0.3);
-      doc.line(5, 80, 95, 80);
+      doc.setLineWidth(0.3); doc.setDrawColor(226, 232, 240);
+      doc.line(5, 76, 95, 76);
       
-      // Section 3 : Détails Techniques
-      doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(0,0,0);
-      doc.text(`Type : ${unit.label}`, 5, 87);
-      doc.text(`Cotes : ${unit.dimensions} mm`, 5, 93);
+      // Section 4 : Détails Techniques (y = 77 à 101)
+      doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 41, 59);
+      
+      const labelText = doc.splitTextToSize(`Type : ${unit.label}`, 88);
+      doc.text(labelText[0], 5, 82);
+      
+      doc.text(`Cotes : ${unit.dimensions} mm`, 5, 87.5);
+      
       if (unit.hasShutter) {
-        doc.text(`Volet : ${unit.shutterInfo}`, 5, 99);
+        doc.setFontSize(8);
+        const shutterText = doc.splitTextToSize(`Volet : ${unit.shutterInfo}`, 88);
+        doc.text(shutterText[0], 5, 93);
       }
       
-      // Section 4 : QR CODE (VRAI CODE SCANNABLE)
-      doc.setLineWidth(0.4);
-      doc.rect(25, 108, 50, 34); // Cadre pour le scan
-      doc.setFontSize(7.5); doc.setFont('helvetica', 'bold');
-      doc.text('SCANNEZ POUR VALIDER (CHARGEMENT/LIVRAISON)', 50, 106, { align: 'center' });
+      // Section 5 : QR CODE (VRAI CODE SCANNABLE) (y = 100 à 144)
+      doc.setLineWidth(0.4); doc.setDrawColor(51, 65, 85);
+      doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(51, 65, 85);
+      doc.text('SCANNEZ POUR VALIDER (LIVRAISON / POSE)', 50, 101, { align: 'center' });
       
+      doc.rect(34, 103, 32, 32); // Cadre propre 32x32mm
       const qrDataUrl = qrDataUrls[idx];
       if (qrDataUrl) {
-        doc.addImage(qrDataUrl, 'PNG', 35, 110, 30, 30);
+        doc.addImage(qrDataUrl, 'PNG', 35, 104, 30, 30);
       }
       
       doc.setTextColor(0, 0, 0);
-      doc.setFontSize(7); doc.setFont('helvetica', 'bold');
-      doc.text(unit.id, 50, 146, { align: 'center', charSpace: 0.5 });
+      doc.setFontSize(6.5); doc.setFont('helvetica', 'bold');
+      doc.text(unit.id, 50, 143, { align: 'center' });
     }
     
     doc.save(`Bordereaux_Logistique_${selectedOrder.id}.pdf`);
   };
+
 
   const generateStatusReport = () => {
     const doc = new jsPDF();
@@ -2104,6 +2148,48 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings }) => {
                 <RefreshCw size={18} />
               </button>
               <button onClick={generatePackingLabels} className="btn btn-secondary" disabled={allUnits.length === 0}><QrCode size={16} /> Étiquettes</button>
+              <label 
+                className="btn btn-secondary" 
+                style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', color: '#0f172a', borderColor: '#cbd5e1', background: quoteSettings?.logoBase64 ? '#f0fdf4' : 'white' }}
+                title="Téléverser le logo d'entreprise (appliqué à tous les bordereaux)"
+              >
+                <Camera size={16} /> {quoteSettings?.logoBase64 ? 'Logo ✓' : 'Logo'}
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  style={{ display: 'none' }} 
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onload = (ev) => {
+                        const img = new Image();
+                        img.onload = () => {
+                          const canvas = document.createElement('canvas');
+                          let w = img.width;
+                          let h = img.height;
+                          const max = 400;
+                          if (w > max || h > max) {
+                            if (w > h) { h = Math.round((h * max) / w); w = max; }
+                            else { w = Math.round((w * max) / h); h = max; }
+                          }
+                          canvas.width = w;
+                          canvas.height = h;
+                          const ctx = canvas.getContext('2d');
+                          ctx.drawImage(img, 0, 0, w, h);
+                          const base64 = canvas.toDataURL('image/png');
+                          if (setQuoteSettings) {
+                            setQuoteSettings(prev => ({ ...prev, logoBase64: base64 }));
+                            alert('✅ Logo d\'entreprise enregistré pour tous les bordereaux !');
+                          }
+                        };
+                        img.src = ev.target.result;
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }} 
+                />
+              </label>
               <button onClick={generateProductionReport} className="btn btn-secondary" style={{ color: '#d97706', borderColor: '#fde68a' }} disabled={allUnits.length === 0}><Clock size={16} /> Rapport Production</button>
               <button onClick={generateStatusReport} className="btn btn-secondary" style={{ color: '#10b981', borderColor: '#a7f3d0' }} disabled={allUnits.length === 0}><Camera size={16} /> Rapport d'État</button>
               <button onClick={generatePerformanceReport} className="btn btn-secondary" style={{ color: '#f59e0b', borderColor: '#fef3c7' }} disabled={allUnits.length === 0}><FileText size={16} /> Rapport Performance</button>

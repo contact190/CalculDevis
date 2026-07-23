@@ -1210,6 +1210,7 @@ function App() {
               data={filteredDatabase}
               setData={setDatabase}
               quoteSettings={quoteSettings}
+              setQuoteSettings={updateQuoteSettings}
               refetchData={() => {}}
             />
           )}
