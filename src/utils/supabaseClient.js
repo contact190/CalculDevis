@@ -601,11 +601,28 @@ export const cloudSync = {
       let needsForceRefresh = false;
 
       for (const op of ops) {
+        let opData = op.data;
+        // Optimisation majeure pour les commandes : isoler uniquement les champs d'états et de terrain (1.5 Ko au lieu de 600 Ko)
+        if (op.collection === 'orders' && opData && typeof opData === 'object' && op.op === 'update') {
+          opData = {
+            id: opData.id,
+            unitStatusesDual: opData.unitStatusesDual,
+            unitTimeline: opData.unitTimeline,
+            unitInstallationPhotos: opData.unitInstallationPhotos,
+            fieldNotes: opData.fieldNotes,
+            unitPVs: opData.unitPVs,
+            unitRemarks: opData.unitRemarks,
+            unitStorageZones: opData.unitStorageZones,
+            _lastModified: opData._lastModified,
+            _modifiedBy: opData._modifiedBy
+          };
+        }
+
         const row = {
           op: op.op,
           collection: op.collection,
           doc_id: op.id,
-          data: op.data,
+          data: opData,
           timestamp: op.timestamp,
           device_id: op.deviceId
         };
