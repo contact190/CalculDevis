@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Truck, Wrench, CheckCircle, ArrowLeft, QrCode, Camera, Package, UserCheck, ShieldCheck, ClipboardList, MessageSquare, Send, X, RefreshCw, AlertTriangle } from 'lucide-react';
 import QRScanner from './QRScanner';
+import { uploadInstallerPhoto } from '../../utils/supabaseClient';
 
 const InstallerPortal = ({ data, setData, orderId, refetchData, isOnline, isSyncing }) => {
   const [view, setView] = useState('menu'); // 'menu', 'delivery', 'manutention', 'installation'
@@ -11,6 +12,7 @@ const InstallerPortal = ({ data, setData, orderId, refetchData, isOnline, isSync
   const [currentInstaller, setCurrentInstaller] = useState(sessionStorage.getItem('installer_name') || '');
   const [noteText, setNoteText] = useState('');
   const [noteImage, setNoteImage] = useState(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
   const order = useMemo(() => {
     return (data.orders || []).find(o => o.id === orderId);
@@ -42,6 +44,7 @@ const InstallerPortal = ({ data, setData, orderId, refetchData, isOnline, isSync
   }, [order]);
 
   const handleUpdateStatusDual = (unitIds, component, newStatus, actionType = 'finish', issueType = null) => {
+    const nowIso = new Date().toISOString();
     setData(prev => {
       const orders = [...(prev.orders || [])];
       const oIdx = orders.findIndex(o => o.id === orderId);
@@ -51,7 +54,7 @@ const InstallerPortal = ({ data, setData, orderId, refetchData, isOnline, isSync
       const timeline = { ...(o.unitTimeline || {}) };
       
       const event = {
-        date: new Date().toISOString(),
+        date: nowIso,
         user: currentInstaller || 'EXTERNE',
         component: component,
         status: newStatus,
@@ -80,6 +83,7 @@ const InstallerPortal = ({ data, setData, orderId, refetchData, isOnline, isSync
       
       o.unitStatusesDual = dualStatuses;
       o.unitTimeline = timeline;
+      o._lastModified = nowIso;
       orders[oIdx] = o;
       return { ...prev, orders };
     });
@@ -106,8 +110,22 @@ const InstallerPortal = ({ data, setData, orderId, refetchData, isOnline, isSync
     });
   };
 
-  const handleSendFieldNote = () => {
+  const handleSendFieldNote = async () => {
     if (!noteText.trim() && !noteImage) return;
+
+    let imageUrl = noteImage;
+    if (noteImage && noteImage.startsWith('data:image/')) {
+      setIsUploadingPhoto(true);
+      try {
+        imageUrl = await uploadInstallerPhoto(noteImage, orderId);
+      } catch (e) {
+        console.warn("Could not upload note photo to Cloud Storage:", e);
+      } finally {
+        setIsUploadingPhoto(false);
+      }
+    }
+
+    const nowIso = new Date().toISOString();
     setData(prev => {
       const orders = [...(prev.orders || [])];
       const oIdx = orders.findIndex(o => o.id === orderId);
@@ -116,12 +134,13 @@ const InstallerPortal = ({ data, setData, orderId, refetchData, isOnline, isSync
       const notes = [...(o.fieldNotes || [])];
       notes.push({
         id: `note-${Date.now()}`,
-        date: new Date().toISOString(),
+        date: nowIso,
         author: currentInstaller || 'Externe',
         text: noteText.trim(),
-        image: noteImage || null
+        image: imageUrl || null
       });
       o.fieldNotes = notes;
+      o._lastModified = nowIso;
       orders[oIdx] = o;
       return { ...prev, orders };
     });
@@ -129,15 +148,29 @@ const InstallerPortal = ({ data, setData, orderId, refetchData, isOnline, isSync
     setNoteImage(null);
   };
 
-  const handleSavePhoto = (unitId, photoData) => {
+  const handleSavePhoto = async (unitId, photoData) => {
+    let photoUrl = photoData;
+    if (photoData && photoData.startsWith('data:image/')) {
+      setIsUploadingPhoto(true);
+      try {
+        photoUrl = await uploadInstallerPhoto(photoData, orderId);
+      } catch (e) {
+        console.warn("Could not upload installation photo to Cloud Storage:", e);
+      } finally {
+        setIsUploadingPhoto(false);
+      }
+    }
+
+    const nowIso = new Date().toISOString();
     setData(prev => {
       const orders = [...(prev.orders || [])];
       const oIdx = orders.findIndex(o => o.id === orderId);
       if (oIdx === -1) return prev;
       const o = { ...orders[oIdx] };
       const photos = { ...(o.unitInstallationPhotos || {}) };
-      photos[unitId] = photoData;
+      photos[unitId] = photoUrl;
       o.unitInstallationPhotos = photos;
+      o._lastModified = nowIso;
       orders[oIdx] = o;
       return { ...prev, orders };
     });
@@ -179,14 +212,18 @@ const InstallerPortal = ({ data, setData, orderId, refetchData, isOnline, isSync
   const renderMenu = () => (
     <div className="animate-fade-in" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       <header style={{ textAlign: 'center', marginBottom: '1rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
           <div style={{ padding: '0.3rem 0.6rem', borderRadius: '20px', fontSize: '0.65rem', fontWeight: 800, background: isOnline ? '#dcfce7' : '#fee2e2', color: isOnline ? '#166534' : '#991b1b', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
             <div style={{ width: 6, height: 6, borderRadius: '50%', background: isOnline ? '#22c55e' : '#ef4444' }} />
             {isOnline ? 'CONNECTÉ' : 'MODE HORS-LIGNE'}
           </div>
-          {isSyncing && (
+          {(isSyncing || isUploadingPhoto) ? (
             <div style={{ padding: '0.3rem 0.6rem', borderRadius: '20px', fontSize: '0.65rem', fontWeight: 800, background: '#eff6ff', color: '#1e40af', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-              <RefreshCw size={10} className="animate-spin" /> SYNCHRONISATION...
+              <RefreshCw size={10} className="animate-spin" /> {isUploadingPhoto ? 'ENVOI PHOTO CLOUD...' : 'SYNCHRONISATION...'}
+            </div>
+          ) : (
+            <div style={{ padding: '0.3rem 0.6rem', borderRadius: '20px', fontSize: '0.65rem', fontWeight: 800, background: '#f0fdf4', color: '#15803d', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+              <CheckCircle size={10} /> ÉTATS SYNCHRONISÉS
             </div>
           )}
         </div>
@@ -194,6 +231,7 @@ const InstallerPortal = ({ data, setData, orderId, refetchData, isOnline, isSync
         <p style={{ color: '#64748b', margin: '0.2rem 0' }}>Commande: <strong>{order.id}</strong></p>
         <p style={{ color: '#64748b', fontSize: '0.9rem' }}>Poseur: {currentInstaller || 'Externe'}</p>
       </header>
+
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
         <button 

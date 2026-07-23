@@ -544,6 +544,50 @@ export const syncDatabase = {
   }
 };
 
+/**
+ * Upload a Base64 image to Supabase Storage bucket 'app-state' under 'photos/{orderId}/{filename}'
+ * Returns the public URL string if successful, or the original base64 as fallback.
+ */
+export async function uploadInstallerPhoto(base64DataUrl, orderId = 'general') {
+  if (!base64DataUrl || typeof base64DataUrl !== 'string' || !base64DataUrl.startsWith('data:image/')) {
+    return base64DataUrl; // Already a URL or empty
+  }
+  
+  try {
+    const parts = base64DataUrl.split(';base64,');
+    const contentType = parts[0].replace('data:', '') || 'image/jpeg';
+    const raw = window.atob(parts[1]);
+    const rawLength = raw.length;
+    const uInt8Array = new Uint8Array(rawLength);
+    for (let i = 0; i < rawLength; ++i) {
+      uInt8Array[i] = raw.charCodeAt(i);
+    }
+    const blob = new Blob([uInt8Array], { type: contentType });
+
+    const ext = contentType.includes('png') ? 'png' : 'jpg';
+    const filename = `photos/${orderId}/${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${ext}`;
+
+    const bucket = supabase.storage.from('app-state');
+    const { error } = await bucket.upload(filename, blob, {
+      upsert: true,
+      contentType: contentType
+    });
+
+    if (error) {
+      console.warn("Failed to upload photo to Supabase Storage, keeping fallback:", error);
+      return base64DataUrl;
+    }
+
+    const { data: urlData } = bucket.getPublicUrl(filename);
+    console.log(`📸 Photo téléversée sur Supabase Storage : ${urlData.publicUrl}`);
+    return urlData.publicUrl;
+  } catch (e) {
+    console.warn("Error uploading installer photo, returning base64 fallback:", e);
+    return base64DataUrl;
+  }
+}
+
+
 export const cloudSync = {
   /**
    * Push a batch of operations to the Supabase operations_log table
