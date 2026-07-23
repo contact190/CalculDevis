@@ -57,7 +57,11 @@ export const smartMerge = (dbA, dbB) => {
               // l'id n'y est pas une clé primaire unique (c'est une clé étrangère). On prend le tableau de l'objet le plus récent.
               mergedItem[key] = incomingTime >= existingTime ? valB : valA;
             } else if (typeof valA === 'object' && valA !== null && typeof valB === 'object' && valB !== null) {
-              mergedItem[key] = { ...valA, ...valB };
+              if (incomingTime >= existingTime) {
+                mergedItem[key] = { ...valA, ...valB };
+              } else {
+                mergedItem[key] = { ...valB, ...valA };
+              }
             } else {
               mergedItem[key] = incomingTime >= existingTime ? valB : valA;
             }

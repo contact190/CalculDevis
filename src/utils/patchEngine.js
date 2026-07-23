@@ -322,7 +322,12 @@ export function applyOp(db, op) {
           // l'id n'y est pas une clé primaire unique. On prend le tableau de l'objet le plus récent.
           mergedItem[key] = incomingTime >= existingTime ? valB : valA;
         } else if (typeof valA === 'object' && valA !== null && typeof valB === 'object' && valB !== null) {
-          mergedItem[key] = { ...valA, ...valB };
+          // Respecter l'horodatage : si incoming est plus récent, valB écrase valA. Sinon valA écrase valB.
+          if (incomingTime >= existingTime) {
+            mergedItem[key] = { ...valA, ...valB };
+          } else {
+            mergedItem[key] = { ...valB, ...valA };
+          }
         } else {
           mergedItem[key] = incomingTime >= existingTime ? valB : valA;
         }

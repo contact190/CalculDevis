@@ -690,7 +690,24 @@ function App() {
       setLastSupabaseSync(new Date());
     }, getDeviceId());
 
-    // Periodic Supabase cloud backup (every 10 minutes - Snapshot)
+    // ─── Fast Cloud Operations Polling (every 10s as a fallback for mobile network flickers) ───
+    const opsPollInterval = setInterval(async () => {
+      if (isApplyingRemoteOps.current) return;
+      const lastTs = lastLocalModifiedRef.current;
+      if (!lastTs) return;
+      try {
+        const missedOps = await cloudSync.fetchOpsSince(lastTs, getDeviceId());
+        if (missedOps && missedOps.length > 0) {
+          console.log(`☁️ Polling 10s: ${missedOps.length} ops distantes récupérées.`);
+          await handleIncomingOps(missedOps);
+          lastLocalModifiedRef.current = new Date().toISOString();
+        }
+      } catch (e) {
+        // Silent catch for poll
+      }
+    }, 10000); // 10s polling
+
+    // Periodic Supabase cloud backup (every 2 minutes - Snapshot)
     cloudSyncIntervalRef.current = setInterval(async () => {
       const db = databaseRef.current;
       if (!db) return;
@@ -710,6 +727,7 @@ function App() {
       localSync.disconnect();
       if (unsubscribeCloud) unsubscribeCloud();
       if (cloudSyncIntervalRef.current) clearInterval(cloudSyncIntervalRef.current);
+      if (opsPollInterval) clearInterval(opsPollInterval);
     };
   }, [isLoading, repairDatabase]);
 
