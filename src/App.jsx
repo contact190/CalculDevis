@@ -454,25 +454,27 @@ function App() {
 
     // Pré-calcul unique des opérations pour détection critique ET sauvegarde
     let cachedOps = null;
-    let isCriticalChange = false;
+    let isInstantOpsSave = false;
+    let isCriticalFullSnapshotSave = false;
+
     if (previousDbRef.current && !isApplyingRemoteOps.current) {
       cachedOps = generateOps(previousDbRef.current, database);
       if (cachedOps.length === 0) {
         previousDbRef.current = database;
         return;
       }
-      // Only additions, deletions, orders/quotes status updates, and production launches/validations are instant.
-      // Normal typing updates (like typing dimensions) are debounced by 1500ms to avoid performance lag.
-      isCriticalChange = cachedOps.some(op => 
+      // Sauvegarde instantanée (0ms debounce) pour toute modification d'états, commandes, devis ou notes poseur
+      isInstantOpsSave = cachedOps.some(op => 
         op.op === 'add' || 
         op.op === 'delete' ||
         op.collection === 'orders' ||
-        op.collection === 'quotes' ||
-        (op.op === 'update' && (
-          JSON.stringify(op.data).includes('Validated') || 
-          JSON.stringify(op.data).includes('Launched') ||
-          JSON.stringify(op.data).includes('batches')
-        ))
+        op.collection === 'quotes'
+      );
+
+      // Snapshot cloud complet lourd (upload DB 2Mo) réservé uniquement aux ajouts/suppressions structurels
+      isCriticalFullSnapshotSave = cachedOps.some(op => 
+        op.op === 'add' || 
+        op.op === 'delete'
       );
     }
 
@@ -531,7 +533,7 @@ function App() {
             setCloudSyncStatus('offline');
           }
 
-          // ─── Push Delta Ops to Cloud (Event Sourcing) ─────
+          // ─── Push Delta Ops to Cloud (Event Sourcing ultra rapide) ─────
           if (generatedOps.length > 0) {
              setSupabaseSyncStatus('syncing');
              const cloudResult = await cloudSync.pushOps(generatedOps);
@@ -544,10 +546,10 @@ function App() {
              }
           }
 
-          // ─── If this was a critical change, force an immediate Cloud snapshot save! ───
-          if (isCriticalChange) {
+          // ─── Uniquement si changement structurel lourd, envoi du snapshot Cloud complet ───
+          if (isCriticalFullSnapshotSave) {
             try {
-              console.log('☁️ Lancement du snapshot Supabase pour modification critique...');
+              console.log('☁️ Lancement du snapshot Supabase pour modification structurelle...');
               setSupabaseSyncStatus('syncing');
               await syncDatabase.save({ mainDb: stampedDb, quotes: stampedDb.quotes || [] });
               setSupabaseSyncStatus('ok');
@@ -565,8 +567,7 @@ function App() {
       }
     };
 
-    if (isCriticalChange) {
-      console.log("⚡ Action critique détectée ! Sauvegarde instantanée forcée.");
+    if (isInstantOpsSave) {
       saveAction();
     } else {
       // Dans l'onglet administration, on réduit le délai à 200ms car la saisie est déjà bufferisée par onBlur
