@@ -678,14 +678,17 @@ export const cloudSync = {
 
   /**
    * Fetch missed operations since a given timestamp
-   * Uses a fast 2-second timeout so the app doesn't hang on startup
+   * Uses a fast query with limit to prevent timeouts on mobile startup
    */
   async fetchOpsSince(timestampIso, currentDeviceId) {
-    if (!timestampIso) return [];
+    if (!timestampIso) {
+      // Fallback: fetch ops from last 24 hours
+      timestampIso = new Date(Date.now() - 86400000).toISOString();
+    }
     
-    // Add a 2000ms timeout since this query can hang on large tables without index
+    // Add a 5000ms timeout for network resilience
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
 
     try {
       const { data, error } = await supabase
@@ -693,12 +696,13 @@ export const cloudSync = {
         .select('*')
         .gt('timestamp', timestampIso)
         .order('timestamp', { ascending: true })
+        .limit(200)
         .abortSignal(controller.signal);
         
       clearTimeout(timeoutId);
       if (error) throw error;
       
-      return data.map(row => ({
+      return (data || []).map(row => ({
         op: row.op,
         collection: row.collection,
         id: row.doc_id,
@@ -709,7 +713,7 @@ export const cloudSync = {
     } catch (e) {
       clearTimeout(timeoutId);
       if (e.name === 'AbortError') {
-        console.warn("fetchOpsSince timed out after 2000ms (skipping to prevent hang)");
+        console.warn("fetchOpsSince timed out (skipping to prevent hang)");
       } else {
         console.error("Failed to fetch ops since timestamp:", e);
       }

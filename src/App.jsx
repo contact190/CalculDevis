@@ -122,6 +122,7 @@ function App() {
   const isApplyingRemoteOps = useRef(false); // Flag to prevent sync loops
   const previousDbRef = useRef(null); // Previous db state for diffing
   const lastBackupTimeRef = useRef(0); // Timestamp of last BACKUP_KEY save
+  const bgSnapshotTimerRef = useRef(null); // Timer for background snapshot saves
 
   const [quoteSettings, setQuoteSettings] = useState(DEFAULT_QUOTE_SETTINGS);
 
@@ -544,9 +545,23 @@ function App() {
              } else {
                setSupabaseSyncStatus('error');
              }
+
+             // Sauvegarde snapshot d'arrière-plan différée (3s) pour maintenir mainDb.json à jour sans bloquer l'écran
+             if (bgSnapshotTimerRef.current) clearTimeout(bgSnapshotTimerRef.current);
+             bgSnapshotTimerRef.current = setTimeout(async () => {
+               try {
+                 const currentDb = databaseRef.current;
+                 if (currentDb) {
+                   await syncDatabase.save({ mainDb: currentDb, quotes: currentDb.quotes || [] });
+                   console.log('☁️ Snapshot Supabase d\'arrière-plan mis à jour.');
+                 }
+               } catch (e) {
+                 console.warn('Background snapshot save error:', e);
+               }
+             }, 3000);
           }
 
-          // ─── Uniquement si changement structurel lourd, envoi du snapshot Cloud complet ───
+          // ─── Uniquement si changement structurel lourd, envoi du snapshot Cloud complet instantané ───
           if (isCriticalFullSnapshotSave) {
             try {
               console.log('☁️ Lancement du snapshot Supabase pour modification structurelle...');
