@@ -3489,6 +3489,84 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
             });
           });
           doc.save(`Etiquettes_DEBIT_PRIORISE_${activeQuote?.number || 'Export'}.pdf`);
+        const generateThermalLabelsPDF = () => {
+          const labelW = 89;
+          const labelH = 36;
+          const doc = new jsPDF({ 
+            orientation: 'landscape', 
+            unit: 'mm', 
+            format: [labelW, labelH] 
+          });
+          
+          let isFirst = true;
+
+          allBarsFlat.forEach((bar) => {
+            const nameLower = (bar.profileName || '').toLowerCase();
+            const profIdLower = (bar.profId || '').toLowerCase();
+            if (nameLower.includes('parclose') || nameLower.includes('couvre') || 
+                nameLower.includes('cj') || profIdLower.includes('cj') ||
+                nameLower.includes('volet') || nameLower.includes('lame') || 
+                nameLower.includes('caisson') || nameLower.includes('coulisse') ||
+                profIdLower.includes('vol') || profIdLower.includes('lam') || profIdLower.includes('coul')) return;
+
+            bar.pieces.forEach((piece) => {
+              const pieceLabelLower = (piece.label || '').toLowerCase();
+              const pieceUsageLower = (piece.usage || '').toLowerCase();
+              if (pieceLabelLower.includes('volet') || pieceLabelLower.includes('lame') || 
+                  pieceLabelLower.includes('coulisse') || pieceUsageLower.includes('volet')) return;
+
+              if (!isFirst) {
+                doc.addPage([labelW, labelH], 'landscape');
+              }
+              isFirst = false;
+
+              // Top Line: Window Ref (Left) & Case Address (Right)
+              doc.setTextColor(0, 0, 0); 
+              doc.setFont('helvetica', 'bold'); 
+              doc.setFontSize(11);
+              const labelText = piece.instanceLabel && piece.instanceLabel !== piece.windowLabel 
+                ? (piece.instanceLabel.includes(piece.windowLabel) ? piece.instanceLabel : `${piece.windowLabel} - ${piece.instanceLabel}`) 
+                : piece.windowLabel;
+              doc.text(labelText, 4, 7);
+
+              // Box for the case address
+              doc.setFillColor(240, 240, 240);
+              doc.rect(labelW - 22, 2, 18, 6, 'F');
+              doc.setFontSize(9);
+              doc.text(bar.address, labelW - 13, 6.2, { align: 'center' });
+
+              // Thin separator line
+              doc.setDrawColor(180, 180, 180);
+              doc.setLineWidth(0.15);
+              doc.line(4, 9, labelW - 4, 9);
+
+              // Usage text
+              doc.setFont('helvetica', 'normal');
+              doc.setFontSize(7.5);
+              doc.setTextColor(100, 100, 100);
+              doc.text(piece.usage || 'PROFILÉ', 4, 13);
+
+              // Profile description
+              doc.setFont('helvetica', 'bold');
+              doc.setFontSize(8.5);
+              doc.setTextColor(0, 0, 0);
+              const splitName = doc.splitTextToSize(piece.label || bar.profileName, labelW - 8);
+              doc.text(splitName, 4, 17);
+
+              // Length (Large on bottom left)
+              doc.setFontSize(18);
+              doc.text(`${piece.length} mm`, 4, 31);
+
+              // Dossier & Client on bottom right
+              doc.setFont('helvetica', 'normal');
+              doc.setFontSize(6.5);
+              doc.setTextColor(120, 120, 120);
+              doc.text(`Doc: ${activeQuote?.number || '—'}`, labelW - 4, 25, { align: 'right' });
+              doc.text(`Client: ${activeQuote?.clientNom || '—'}`, labelW - 4, 30, { align: 'right' });
+            });
+          });
+
+          doc.save(`Etiquettes_THERMIQUE_${activeQuote?.number || 'Export'}.pdf`);
         };
 
         const generateCuttingOptimizationPDF = () => {
@@ -3774,13 +3852,16 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                     </span>
                   )}
                 </h2>
-                 <button onClick={generateLabelsPDF} className="btn btn-primary" style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem' }}>
-                    🏷️ Générer Étiquettes
-                 </button>
-                 <button onClick={generateCuttingOptimizationPDF} className="btn btn-primary" style={{ background: '#10b981', borderColor: '#10b981', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', padding: '0.4rem 0.8rem' }}>
-                    <RefreshCw size={16} />
-                    Plan de Coupe Optimisé (Nesting)
-                 </button>
+                <button onClick={generateLabelsPDF} className="btn btn-primary" style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem' }}>
+                   🏷️ Planche Étiquettes (A4)
+                </button>
+                <button onClick={generateThermalLabelsPDF} className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem', background: '#3b82f6', borderColor: '#3b82f6', color: '#fff' }}>
+                   🖨️ Étiquettes Thermiques (89x36)
+                </button>
+                <button onClick={generateCuttingOptimizationPDF} className="btn btn-primary" style={{ background: '#10b981', borderColor: '#10b981', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', padding: '0.4rem 0.8rem' }}>
+                   <RefreshCw size={16} />
+                   Plan de Coupe Optimisé (Nesting)
+                </button>
               </div>
               <div style={{ marginTop: '1rem', background: '#f8fafc', padding: '0.75rem 1rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0', fontSize: '0.8rem', color: '#64748b' }}>
                  <Info size={14} style={{ marginRight: '0.5rem', verticalAlign: 'middle' }} />
