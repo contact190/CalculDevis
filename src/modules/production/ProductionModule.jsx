@@ -2928,6 +2928,102 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
         const totalSlots = kitConfig.trolleys * kitConfig.slotsPerTrolley;
         
         // --- 1. INITIALIZATION ---
+        const activeSitePlan = (() => {
+          if (!activeQuote) return null;
+          const client = database?.clients?.find(c => c.id === activeQuote.clientId);
+          if (!client) return null;
+          const plans = client.sitePlans || [];
+          return plans.find(p => p.id === activeQuote.sitePlanId) || plans[0] || null;
+        })();
+
+        const resolveInstanceLabel = (item, m, idx, globalIdx = 0) => {
+          if (m.instanceNames?.[idx]) return m.instanceNames[idx];
+
+          // 1. Try to find the plan containing this void ID in the entire database (exhaustive search)
+          let plan = activeSitePlan;
+          if (database?.clients) {
+            for (const c of database.clients) {
+              for (const p of (c.sitePlans || [])) {
+                if (p.floors?.some(f => (f.apartments || []).some(a => (a.voids || []).some(v => v.id === m.id)))) {
+                  plan = p;
+                  break;
+                }
+              }
+              if (plan) break;
+            }
+          }
+
+          // 2. If matching void ID is found in the plan
+          if (plan?.floors) {
+            for (const f of plan.floors) {
+              for (const a of (f.apartments || [])) {
+                const voidIdx = (a.voids || []).findIndex(v => v.id === m.id);
+                if (voidIdx !== -1) {
+                  return `${f.name}${a.name}${voidIdx + 1}`;
+                }
+              }
+            }
+          }
+
+          // 3. Fallback: if plan is still null, try finding first plan with same itemId in the database
+          if (!plan && database?.clients) {
+            for (const c of database.clients) {
+              for (const p of (c.sitePlans || [])) {
+                if (p.floors?.some(f => (f.apartments || []).some(a => (a.voids || []).some(v => v.itemId === item.id)))) {
+                  plan = p;
+                  break;
+                }
+              }
+              if (plan) break;
+            }
+          }
+
+          // 4. Index-based fallback matching in the resolved plan
+          if (plan?.floors) {
+            const sameTypeVoids = [];
+            plan.floors.forEach(f => {
+              (f.apartments || []).forEach(a => {
+                (a.voids || []).forEach((v, vIdx) => {
+                  if (v.itemId === item.id) {
+                    sameTypeVoids.push({
+                      floorName: f.name,
+                      aptName: a.name,
+                      voidNum: vIdx + 1
+                    });
+                  }
+                });
+              });
+            });
+            if (sameTypeVoids[globalIdx]) {
+              return `${sameTypeVoids[globalIdx].floorName}${sameTypeVoids[globalIdx].aptName}${sameTypeVoids[globalIdx].voidNum}`;
+            }
+          }
+
+          // 5. Dimension-based fallback matching (L and H)
+          if (plan?.floors && item?.config) {
+            for (const f of plan.floors) {
+              for (const a of (f.apartments || [])) {
+                const matchedVoid = (a.voids || []).find(v => Number(v.L) === Number(item.config.L) && Number(v.H) === Number(item.config.H));
+                if (matchedVoid) {
+                  const voidIdx = a.voids.indexOf(matchedVoid);
+                  return `${f.name}${a.name}${voidIdx + 1}`;
+                }
+              }
+            }
+          }
+
+          // 6. Original item siteMeasurements fallback
+          const originalItem = item?.siteMeasurements ? item : (activeQuote?.items || []).find(i => i.id === item.id);
+          if (originalItem?.siteMeasurements) {
+            const sm = originalItem.siteMeasurements.find(x => x.id === m.id);
+            if (sm?.instanceNames?.[idx]) return sm.instanceNames[idx];
+            if (sm?.instanceNames?.[0]) return sm.instanceNames[0];
+          }
+          const mQty = Math.max(1, Number(m.qty) || 1);
+          const originalLabel = item.label || item.config?.label || 'Produit';
+          return `${originalLabel} (${idx + 1}/${mQty})`;
+        };
+
         const globalCuts = []; 
         let itemsWithConfig = 0;
         let bomsCalculated = 0;
@@ -2943,11 +3039,12 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
           const batch = batches.find(b => b.id === selectedBatchId);
           if (batch) {
             batch.items.forEach(bi => {
-              (bi.measurements || []).forEach(m => {
+              const measurements = bi.siteMeasurements || bi.measurements || [];
+              let globalIdx = 0;
+              measurements.forEach(m => {
                 const qty = Math.max(1, Number(m.qty) || 1);
                 for (let i = 0; i < qty; i++) {
-                  const originalLabel = bi.label || bi.config?.label || 'Produit';
-                  const instanceName = m.instanceNames?.[i] || `${originalLabel} (${i + 1}/${qty})`;
+                  const instanceName = resolveInstanceLabel(bi, m, i, globalIdx);
                   targetItems.push({ 
                     ...bi, 
                     config: { ...bi.config, L: m.L, H: m.H, wallDepth: m.wallDepth }, 
@@ -2955,30 +3052,34 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                     isFromBatch: true,
                     instanceLabel: instanceName
                   });
+                  globalIdx++;
                 }
               });
             });
           }
         } else {
-          const baseSource = isOrder ? batches.flatMap(b => b.items) : quoteItems;
+           const baseSource = isOrder ? batches.flatMap(b => b.items) : quoteItems;
           baseSource.forEach(item => {
-            const originalLabel = item.label || item.config?.label || 'Produit';
-            if (item.measurements && item.measurements.length > 0) {
-              item.measurements.forEach(m => {
+            const measurements = item.siteMeasurements || item.measurements || [];
+            if (measurements.length > 0) {
+              let globalIdx = 0;
+              measurements.forEach(m => {
                 const mQty = Math.max(1, Number(m.qty) || 1);
                 for (let i = 0; i < mQty; i++) {
-                  const instanceName = m.instanceNames?.[i] || `${originalLabel} (${i + 1}/${mQty})`;
+                  const instanceName = resolveInstanceLabel(item, m, i, globalIdx);
                   targetItems.push({ 
                     ...item, 
                     config: { ...item.config, L: m.L, H: m.H, wallDepth: m.wallDepth }, 
                     qty: 1, 
                     instanceLabel: instanceName
                   });
+                  globalIdx++;
                 }
               });
             } else {
               const qty = Math.max(1, Number(item.qty) || 1);
               for (let i = 0; i < qty; i++) {
+                const originalLabel = item.label || item.config?.label || 'Produit';
                 targetItems.push({ ...item, qty: 1, instanceLabel: qty > 1 ? `${originalLabel} (${i + 1}/${qty})` : originalLabel });
               }
             }
@@ -3027,6 +3128,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                       usage: p.usage || 'FINITION',
                       windowIdx,
                       windowLabel: item.label || item.instanceLabel || `Fenêtre #${windowIdx + 1}`,
+                      instanceLabel: item.instanceLabel || '',
                       windowItemId: item.id,
                       isBatch: !!item.isFromBatch,
                       colorName,
@@ -3059,6 +3161,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                       usage: 'VOLET',
                       windowIdx,
                       windowLabel: item.label || item.instanceLabel || `Fenêtre #${windowIdx + 1}`,
+                      instanceLabel: item.instanceLabel || '',
                       windowItemId: item.id,
                       isShutter: true,
                       rangeName,
@@ -3363,7 +3466,16 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
               const x = marginX + (col * labelW); const y = marginY + (row * labelH);
               doc.setDrawColor(230, 230, 230); doc.setLineWidth(0.1); doc.rect(x, y, labelW, labelH);
               doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
-              doc.text(`${piece.windowLabel}`, x + 3, y + 6);
+              const labelText = piece.instanceLabel && piece.instanceLabel !== piece.windowLabel 
+                ? (piece.instanceLabel.includes(piece.windowLabel) ? piece.instanceLabel : `${piece.windowLabel} - ${piece.instanceLabel}`) 
+                : piece.windowLabel;
+              console.log('Piece label print debug:', {
+                windowLabel: piece.windowLabel,
+                instanceLabel: piece.instanceLabel,
+                labelText,
+                activeSitePlanName: activeSitePlan?.name || 'none'
+              });
+              doc.text(labelText, x + 3, y + 6);
               doc.setFontSize(9); doc.setFillColor(245, 245, 245); doc.rect(x + labelW - 18, y + 2, 16, 6, 'F');
               doc.text(bar.address, x + labelW - 17, y + 6.5);
               doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(100, 100, 100);
@@ -3435,7 +3547,10 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                 const w = piece.length * scale;
                 doc.setDrawColor(30, 41, 59); doc.setFillColor(255, 255, 255); doc.rect(currentXPos, currentY, w, barHeight, 'FD');
                 doc.setFontSize(5); doc.setTextColor(0,0,0);
-                doc.text(`${piece.windowLabel}`, currentXPos + 1, currentY + barHeight / 2 + 1, { maxWidth: w - 2 });
+                const labelText = piece.instanceLabel && piece.instanceLabel !== piece.windowLabel 
+                  ? (piece.instanceLabel.includes(piece.windowLabel) ? piece.instanceLabel : `${piece.windowLabel} - ${piece.instanceLabel}`) 
+                  : piece.windowLabel;
+                doc.text(labelText, currentXPos + 1, currentY + barHeight / 2 + 1, { maxWidth: w - 2 });
                 doc.text(`${piece.length}`, currentXPos + 1, currentY + barHeight + 3);
                 currentXPos += w + (4 * scale); // 4mm blade
               });
@@ -3651,7 +3766,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.5rem' }}>
                 <Layers size={20} color="#8b5cf6" />
                 <h2 style={{ fontSize: '1.125rem', fontWeight: 600, flex: 1 }}>
-                  Plan des Chariots — {totalBars} barres
+                  Plan des Chariots — {totalBars} barres {activeSitePlan ? `(Plan: ${activeSitePlan.name})` : '(Aucun plan chantier)'}
                   {totalStockBarsUsed > 0 && (
                     <span style={{ marginLeft: '1rem', fontSize: '0.75rem', background: '#d1fae5', color: '#065f46', padding: '0.2rem 0.6rem', borderRadius: '699px', fontWeight: 700 }}>
                       ♻️ {totalStockBarsUsed} chute(s) de stock utilisée(s)
