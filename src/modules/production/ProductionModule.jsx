@@ -2937,7 +2937,8 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
         })();
 
         const resolveInstanceLabel = (item, m, idx, globalIdx = 0) => {
-          if (m.instanceNames?.[idx]) return m.instanceNames[idx];
+          const name = m.instanceNames?.[idx];
+          if (name && !/^Vide\s+\d+$/i.test(name.trim())) return name;
 
           // 1. Try to find the plan containing this void ID in the entire database (exhaustive search)
           let plan = activeSitePlan;
