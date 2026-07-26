@@ -3494,7 +3494,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
           const labelW = 39;
           const labelH = 19;
           const doc = new jsPDF({ 
-            orientation: 'portrait', 
+            orientation: 'landscape', 
             unit: 'mm', 
             format: [labelW, labelH] 
           });
@@ -3517,7 +3517,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                   pieceLabelLower.includes('coulisse') || pieceUsageLower.includes('volet')) return;
 
               if (!isFirst) {
-                doc.addPage([labelW, labelH], 'portrait');
+                doc.addPage([labelW, labelH], 'landscape');
               }
               isFirst = false;
 
