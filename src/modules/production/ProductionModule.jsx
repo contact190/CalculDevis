@@ -3491,8 +3491,8 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
           doc.save(`Etiquettes_DEBIT_PRIORISE_${activeQuote?.number || 'Export'}.pdf`);
         };
         const generateThermalLabelsPDF = () => {
-          const labelW = 36;
-          const labelH = 89;
+          const labelW = 89;
+          const labelH = 36;
           const doc = new jsPDF({ 
             orientation: 'portrait', 
             unit: 'mm', 
@@ -3521,57 +3521,49 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
               }
               isFirst = false;
 
-              // Top Line: Window Ref (Left)
+              // Top Line: Window Ref (Left) & Case Address (Right)
               doc.setTextColor(0, 0, 0); 
               doc.setFont('helvetica', 'bold'); 
-              doc.setFontSize(10);
+              doc.setFontSize(11);
               const labelText = piece.instanceLabel && piece.instanceLabel !== piece.windowLabel 
                 ? (piece.instanceLabel.includes(piece.windowLabel) ? piece.instanceLabel : `${piece.windowLabel} - ${piece.instanceLabel}`) 
                 : piece.windowLabel;
-              doc.text(labelText, 3, 7);
+              doc.text(labelText, 4, 7);
 
-              // Case Address (Right) in a gray box
+              // Box for the case address
               doc.setFillColor(240, 240, 240);
-              doc.rect(labelW - 16, 2, 13, 6, 'F');
-              doc.setFontSize(8);
-              doc.text(bar.address, labelW - 9.5, 6.2, { align: 'center' });
+              doc.rect(labelW - 22, 2, 18, 6, 'F');
+              doc.setFontSize(9);
+              doc.text(bar.address, labelW - 13, 6.2, { align: 'center' });
 
               // Thin separator line
               doc.setDrawColor(180, 180, 180);
               doc.setLineWidth(0.15);
-              doc.line(3, 10, labelW - 3, 10);
+              doc.line(4, 9, labelW - 4, 9);
 
               // Usage text
               doc.setFont('helvetica', 'normal');
-              doc.setFontSize(7);
+              doc.setFontSize(7.5);
               doc.setTextColor(100, 100, 100);
-              doc.text(piece.usage || 'PROFILÉ', 3, 14);
+              doc.text(piece.usage || 'PROFILÉ', 4, 13);
 
               // Profile description
               doc.setFont('helvetica', 'bold');
-              doc.setFontSize(8);
+              doc.setFontSize(8.5);
               doc.setTextColor(0, 0, 0);
-              const splitName = doc.splitTextToSize(piece.label || bar.profileName, labelW - 6);
-              doc.text(splitName, 3, 18);
+              const splitName = doc.splitTextToSize(piece.label || bar.profileName, labelW - 8);
+              doc.text(splitName, 4, 17);
 
-              // Divider before length
-              doc.line(3, 30, labelW - 3, 30);
+              // Length (Large on bottom left)
+              doc.setFontSize(18);
+              doc.text(`${piece.length} mm`, 4, 31);
 
-              // Length (Large and bold in the middle)
-              doc.setFontSize(22);
-              doc.text(`${piece.length} mm`, labelW / 2, 45, { align: 'center' });
-
-              // Divider before footer
-              doc.line(3, 65, labelW - 3, 65);
-
-              // Dossier & Client at the very bottom
+              // Dossier & Client on bottom right
               doc.setFont('helvetica', 'normal');
-              doc.setFontSize(7);
+              doc.setFontSize(6.5);
               doc.setTextColor(120, 120, 120);
-              
-              const clientText = doc.splitTextToSize(`Client: ${activeQuote?.clientNom || '—'}`, labelW - 6);
-              doc.text(clientText, 3, 71);
-              doc.text(`Doc: ${activeQuote?.number || '—'}`, 3, 84);
+              doc.text(`Doc: ${activeQuote?.number || '—'}`, labelW - 4, 25, { align: 'right' });
+              doc.text(`Client: ${activeQuote?.clientNom || '—'}`, labelW - 4, 30, { align: 'right' });
             });
           });
 
