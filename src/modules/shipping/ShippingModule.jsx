@@ -2057,8 +2057,9 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings, setQuoteSet
       qtyByDesign[key].qty += 1;
     });
 
-    // Calculate total glazing gasket if type starts with VITRAGE
+    // Calculate total glazing gasket and silicones if type starts with VITRAGE
     let totalGasketQty = 0;
+    const siliconeTotals = {};
     if (type.startsWith('VITRAGE')) {
       const engine = new FormulaEngine(data || {});
       unitsToDeliver.forEach(u => {
@@ -2100,13 +2101,18 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings, setQuoteSet
               const bomResult = engine.calculateBOM(instanceConfig);
               if (bomResult && bomResult.accessories) {
                 bomResult.accessories.forEach(acc => {
-                  if (acc.isGlassGasket || (acc.label && acc.label.toLowerCase().includes('joint de vitrage'))) {
+                  const labelLower = (acc.label || acc.name || '').toLowerCase();
+                  if (acc.isGlassGasket || labelLower.includes('joint de vitrage')) {
                     totalGasketQty += acc.qty || 0;
+                  }
+                  if (labelLower.includes('silicone')) {
+                    const siliconeName = acc.label || acc.name || 'Silicone';
+                    siliconeTotals[siliconeName] = (siliconeTotals[siliconeName] || 0) + (acc.qty || 0);
                   }
                 });
               }
             } catch (e) {
-              console.warn("Gasket calculation failed for unit in recap", e);
+              console.warn("Gasket or Silicone calculation failed for unit in recap", e);
             }
           }
         }
@@ -2137,6 +2143,18 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings, setQuoteSet
       doc.text('—', 120, y);
       doc.text(`${totalGasketQty.toFixed(2)} ml`, 165, y);
       y += 8;
+    }
+
+    if (type.startsWith('VITRAGE')) {
+      Object.entries(siliconeTotals).forEach(([name, qty]) => {
+        if (qty > 0) {
+          checkPageOverflow(10);
+          doc.text(name, 15, y);
+          doc.text('—', 120, y);
+          doc.text(`${Math.round(qty)} pcs`, 165, y);
+          y += 8;
+        }
+      });
     }
 
     if (!isRedownload) {
