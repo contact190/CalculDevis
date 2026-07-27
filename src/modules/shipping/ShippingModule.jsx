@@ -451,7 +451,15 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings, setQuoteSet
       } else if (blModalType === 'GLISSIERE') {
         return u.hasShutter && u.caissonSize === 0 && u.statusGlissiere !== 'Livré' && u.statusGlissiere !== 'Fini' && u.statusGlissiere !== 'Posé';
       } else if (blModalType === 'CAISSON_TUNNEL') {
-        return u.isCaissonTunnel && u.statusCaissonTunnel !== 'Livré' && u.statusCaissonTunnel !== 'Fini' && u.statusCaissonTunnel !== 'Posé';
+        if (u.statusCaissonTunnel === 'Livré' || u.statusCaissonTunnel === 'Fini' || u.statusCaissonTunnel === 'Posé') return false;
+        if (!u.isCaissonTunnel) return false;
+        const hasComponents = !!u.shutterAxe || !!u.shutterMoteur || !!u.shutterKit;
+        if (!hasComponents) return true;
+        const delivered = selectedOrder.deliveredCaissonTunnel?.[u.id] || { axe: false, moteur: false, kit: false };
+        const needsAxe = !!u.shutterAxe && !delivered.axe;
+        const needsMoteur = !!u.shutterMoteur && !delivered.moteur;
+        const needsKit = !!u.shutterKit && !delivered.kit;
+        return needsAxe || needsMoteur || needsKit;
       }
       return false;
     });
@@ -1953,10 +1961,22 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings, setQuoteSet
           });
         } else if (type === 'CAISSON_TUNNEL') {
           checkPageOverflow(10);
+          const delivered = selectedOrder.deliveredCaissonTunnel?.[u.id] || { axe: false, moteur: false, kit: false };
           const detailsParts = [];
-          if (caissonTunnelComponents.axe && u.shutterAxe) detailsParts.push(`Axe: ${u.shutterAxe}`);
-          if (caissonTunnelComponents.moteur && u.shutterMoteur) detailsParts.push(`Moteur: ${u.shutterMoteur}`);
-          if (caissonTunnelComponents.kit && u.shutterKit) detailsParts.push(`Kit: ${u.shutterKit}`);
+          if (isRedownload) {
+            if (u.shutterAxe && delivered.axe) detailsParts.push(`Axe: ${u.shutterAxe}`);
+            if (u.shutterMoteur && delivered.moteur) detailsParts.push(`Moteur: ${u.shutterMoteur}`);
+            if (u.shutterKit && delivered.kit) detailsParts.push(`Kit: ${u.shutterKit}`);
+            if (detailsParts.length === 0) {
+              if (u.shutterAxe) detailsParts.push(`Axe: ${u.shutterAxe}`);
+              if (u.shutterMoteur) detailsParts.push(`Moteur: ${u.shutterMoteur}`);
+              if (u.shutterKit) detailsParts.push(`Kit: ${u.shutterKit}`);
+            }
+          } else {
+            if (caissonTunnelComponents.axe && u.shutterAxe && !delivered.axe) detailsParts.push(`Axe: ${u.shutterAxe}`);
+            if (caissonTunnelComponents.moteur && u.shutterMoteur && !delivered.moteur) detailsParts.push(`Moteur: ${u.shutterMoteur}`);
+            if (caissonTunnelComponents.kit && u.shutterKit && !delivered.kit) detailsParts.push(`Kit: ${u.shutterKit}`);
+          }
           const detailsText = detailsParts.length > 0 ? ` (${detailsParts.join(', ')})` : '';
           const labelText = `${u.label}${detailsText}`;
           const splitLabel = doc.splitTextToSize(labelText, 60);
@@ -2074,6 +2094,8 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings, setQuoteSet
         const component = type.startsWith('VITRAGE') ? 'vitrage' : (type === 'ALU' ? 'alu' : (type === 'VOLET' ? 'volet' : (type === 'GLISSIERE' ? 'glissiere' : 'caisson_tunnel')));
         const userName = 'ADMIN';
 
+        const deliveredCaisson = { ...(order.deliveredCaissonTunnel || {}) };
+
         unitsToDeliver.forEach(u => {
           const current = { ...(dualStatuses[u.id] || { alu: 'Produit', vitrage: 'Produit', volet: 'Produit', caisson_tunnel: 'Produit' }) };
           
@@ -2099,6 +2121,22 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings, setQuoteSet
             } else {
               current.vitrage = 'Produit';
             }
+          } else if (type === 'CAISSON_TUNNEL') {
+            const uDelivered = { ...(deliveredCaisson[u.id] || { axe: false, moteur: false, kit: false }) };
+            if (caissonTunnelComponents.axe && u.shutterAxe) uDelivered.axe = true;
+            if (caissonTunnelComponents.moteur && u.shutterMoteur) uDelivered.moteur = true;
+            if (caissonTunnelComponents.kit && u.shutterKit) uDelivered.kit = true;
+            deliveredCaisson[u.id] = uDelivered;
+
+            const needsAxe = !!u.shutterAxe && !uDelivered.axe;
+            const needsMoteur = !!u.shutterMoteur && !uDelivered.moteur;
+            const needsKit = !!u.shutterKit && !uDelivered.kit;
+            
+            if (!needsAxe && !needsMoteur && !needsKit) {
+              current.caisson_tunnel = 'Livré';
+            } else {
+              current.caisson_tunnel = 'Produit';
+            }
           } else {
             current[component] = 'Livré';
           }
@@ -2108,7 +2146,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings, setQuoteSet
             date: new Date().toISOString(),
             user: userName,
             component: component,
-            status: current[component] === 'Livré' ? 'Livré' : 'Livraison Partielle Vitrage',
+            status: current[component] === 'Livré' ? 'Livré' : (type === 'CAISSON_TUNNEL' ? 'Livraison Partielle Caisson' : 'Livraison Partielle Vitrage'),
             action: 'finish',
             issue: null
           };
@@ -2119,6 +2157,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings, setQuoteSet
         order.unitStatusesDual = dualStatuses;
         order.unitTimeline = timeline;
         order.deliveredGlassPanes = deliveredGlass;
+        order.deliveredCaissonTunnel = deliveredCaisson;
         orders[oIdx] = order;
         return { ...prev, orders };
       });
@@ -2465,7 +2504,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings, setQuoteSet
                           } else if (blType === 'GLISSIERE') {
                             deliveredUnits = allUnits.filter(u => u.hasShutter && u.caissonSize === 0 && (u.statusGlissiere === 'Livré' || u.statusGlissiere === 'Fini' || u.statusGlissiere === 'Posé'));
                           } else if (blType === 'CAISSON_TUNNEL') {
-                            deliveredUnits = allUnits.filter(u => u.isCaissonTunnel && (u.statusCaissonTunnel === 'Livré' || u.statusCaissonTunnel === 'Fini' || u.statusCaissonTunnel === 'Posé'));
+                            deliveredUnits = allUnits.filter(u => u.isCaissonTunnel && (u.statusCaissonTunnel === 'Livré' || u.statusCaissonTunnel === 'Fini' || u.statusCaissonTunnel === 'Posé' || Object.values(selectedOrder.deliveredCaissonTunnel?.[u.id] || {}).some(val => val === true)));
                           }
 
                           if (deliveredUnits.length === 0) {
@@ -3077,11 +3116,11 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings, setQuoteSet
                       } else if (blModalType === 'VITRAGE') {
                         deliveredUnits = allUnits.filter(u => u.statusVitrage === 'Livré' || u.statusVitrage === 'Fini');
                       } else if (blModalType === 'VOLET') {
-                        deliveredUnits = allUnits.filter(u => u.isExtrudedLame && (u.statusVolet === 'Livré' || u.statusVolet === 'Fini' || u.statusVolet === 'Posé'));
+                        deliveredUnits = allUnits.filter(u => (u.isExtrudedLame || u.isCaissonTunnel) && (u.statusVolet === 'Livré' || u.statusVolet === 'Fini' || u.statusVolet === 'Posé'));
                       } else if (blModalType === 'GLISSIERE') {
                         deliveredUnits = allUnits.filter(u => u.hasShutter && u.caissonSize === 0 && (u.statusGlissiere === 'Livré' || u.statusGlissiere === 'Fini' || u.statusGlissiere === 'Posé'));
                       } else if (blModalType === 'CAISSON_TUNNEL') {
-                        deliveredUnits = allUnits.filter(u => u.isCaissonTunnel && (u.statusCaissonTunnel === 'Livré' || u.statusCaissonTunnel === 'Fini' || u.statusCaissonTunnel === 'Posé'));
+                        deliveredUnits = allUnits.filter(u => u.isCaissonTunnel && (u.statusCaissonTunnel === 'Livré' || u.statusCaissonTunnel === 'Fini' || u.statusCaissonTunnel === 'Posé' || Object.values(selectedOrder.deliveredCaissonTunnel?.[u.id] || {}).some(val => val === true)));
                       }
 
                       if (deliveredUnits.length === 0) {
