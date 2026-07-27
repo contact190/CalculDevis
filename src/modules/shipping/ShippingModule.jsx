@@ -37,6 +37,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings, setQuoteSet
   const [blSelectedGlassPanes, setBlSelectedGlassPanes] = useState({}); // { [unitId]: { [paneKey]: boolean } }
   const [expandedUnits, setExpandedUnits] = useState(new Set()); // Set of unitIds
   const [listTab, setListTab] = useState('ongoing'); // 'ongoing' | 'history'
+  const [caissonTunnelComponents, setCaissonTunnelComponents] = useState({ axe: true, moteur: true, kit: true });
 
 
   React.useEffect(() => {
@@ -273,6 +274,10 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings, setQuoteSet
               partOverrides: m.partOverrides
             };
 
+            let shutterAxe = '';
+            let shutterMoteur = '';
+            let shutterKit = '';
+
             if (shutterOverridden) {
               (m.shutterList || []).forEach(sh => {
                 const sQty = Number(sh.qty) || 0;
@@ -300,6 +305,14 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings, setQuoteSet
                   glissiereNameVal = glissiereName;
                   
                   shutterInfo = `${caissonName} ${lameName} ${kitName}`.trim() || 'AVEC VOLET';
+
+                  const axeId = sh.overrides?.axeId || item.config.shutterConfig?.axeId;
+                  shutterAxe = data.shutterComponents?.axes?.find(a => a.id === axeId)?.name || axeId || '';
+                  
+                  const moteurId = sh.overrides?.moteurId || item.config.shutterConfig?.moteurId;
+                  shutterMoteur = data.shutterComponents?.moteurs?.find(m => m.id === moteurId)?.name || moteurId || '';
+                  
+                  shutterKit = kitName;
 
                   instanceConfig.hasShutter = true;
                   instanceConfig.shutterConfig = {
@@ -334,6 +347,14 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings, setQuoteSet
               glissiereNameVal = glissiereName;
               
               shutterInfo = `${caissonName} ${lameName} ${kitName}`.trim() || 'AVEC VOLET';
+
+              const axeId = item.config.shutterConfig?.axeId;
+              shutterAxe = data.shutterComponents?.axes?.find(a => a.id === axeId)?.name || axeId || '';
+              
+              const moteurId = item.config.shutterConfig?.moteurId;
+              shutterMoteur = data.shutterComponents?.moteurs?.find(m => m.id === moteurId)?.name || moteurId || '';
+              
+              shutterKit = kitName;
             }
 
             let glassPanes = [];
@@ -394,6 +415,9 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings, setQuoteSet
               caissonSize: caissonSizeVal,
               glissiereName: glissiereNameVal,
               shutterInfo: shutterInfo,
+              shutterAxe: shutterAxe,
+              shutterMoteur: shutterMoteur,
+              shutterKit: shutterKit,
               storageZoneId: storageZoneId,
               storageZone: zone?.name || '',
               glassPanes: glassPanes,
@@ -1929,7 +1953,12 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings, setQuoteSet
           });
         } else if (type === 'CAISSON_TUNNEL') {
           checkPageOverflow(10);
-          const labelText = u.hasShutter ? `${u.label} (${u.shutterInfo})` : u.label;
+          const detailsParts = [];
+          if (caissonTunnelComponents.axe && u.shutterAxe) detailsParts.push(`Axe: ${u.shutterAxe}`);
+          if (caissonTunnelComponents.moteur && u.shutterMoteur) detailsParts.push(`Moteur: ${u.shutterMoteur}`);
+          if (caissonTunnelComponents.kit && u.shutterKit) detailsParts.push(`Kit: ${u.shutterKit}`);
+          const detailsText = detailsParts.length > 0 ? ` (${detailsParts.join(', ')})` : '';
+          const labelText = `${u.label}${detailsText}`;
           const splitLabel = doc.splitTextToSize(labelText, 60);
           const repereText = u.name;
           const splitRepere = doc.splitTextToSize(repereText, 40);
@@ -3076,6 +3105,23 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings, setQuoteSet
                 </div>
               ) : (
                 <div style={{ flex: 1, overflowY: 'auto', paddingRight: '0.5rem', marginBottom: '1.5rem' }}>
+                  {blModalType === 'CAISSON_TUNNEL' && (
+                    <div style={{ display: 'flex', gap: '1.5rem', justifyContent: 'center', marginBottom: '1.5rem', background: '#f0fdf4', padding: '0.75rem 1rem', borderRadius: '1rem', border: '1px solid #bbf7d0', flexWrap: 'wrap', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#166534' }}>Inclure dans le BL :</span>
+                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, color: '#14532d' }}>
+                        <input type="checkbox" checked={caissonTunnelComponents.axe} onChange={e => setCaissonTunnelComponents(prev => ({ ...prev, axe: e.target.checked }))} />
+                        Axe
+                      </label>
+                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, color: '#14532d' }}>
+                        <input type="checkbox" checked={caissonTunnelComponents.moteur} onChange={e => setCaissonTunnelComponents(prev => ({ ...prev, moteur: e.target.checked }))} />
+                        Moteur
+                      </label>
+                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, color: '#14532d' }}>
+                        <input type="checkbox" checked={caissonTunnelComponents.kit} onChange={e => setCaissonTunnelComponents(prev => ({ ...prev, kit: e.target.checked }))} />
+                        Kit
+                      </label>
+                    </div>
+                  )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', background: '#f8fafc', padding: '0.75rem', borderRadius: '0.75rem' }}>
                     <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#475569' }}>
                       {blSelectedUnitIds.size} / {remainingBLUnits.length} sélectionné(s)
