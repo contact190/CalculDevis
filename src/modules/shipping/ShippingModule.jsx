@@ -423,7 +423,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings, setQuoteSet
         });
         return remainingPanes.length > 0;
       } else if (blModalType === 'VOLET') {
-        return u.isExtrudedLame && u.statusVolet !== 'Livré' && u.statusVolet !== 'Fini' && u.statusVolet !== 'Posé';
+        return (u.isExtrudedLame || u.isCaissonTunnel) && u.statusVolet !== 'Livré' && u.statusVolet !== 'Fini' && u.statusVolet !== 'Posé';
       } else if (blModalType === 'GLISSIERE') {
         return u.hasShutter && u.caissonSize === 0 && u.statusGlissiere !== 'Livré' && u.statusGlissiere !== 'Fini' && u.statusGlissiere !== 'Posé';
       } else if (blModalType === 'CAISSON_TUNNEL') {
@@ -2432,7 +2432,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings, setQuoteSet
                           } else if (blType === 'VITRAGE_COULISSANT') {
                             deliveredUnits = allUnits.filter(u => u.openingType === 'Coulissant' && (u.statusVitrage === 'Livré' || u.statusVitrage === 'Fini' || Object.values(selectedOrder.deliveredGlassPanes?.[u.id] || {}).some(qty => qty > 0)));
                           } else if (blType === 'VOLET') {
-                            deliveredUnits = allUnits.filter(u => u.isExtrudedLame && (u.statusVolet === 'Livré' || u.statusVolet === 'Fini' || u.statusVolet === 'Posé'));
+                            deliveredUnits = allUnits.filter(u => (u.isExtrudedLame || u.isCaissonTunnel) && (u.statusVolet === 'Livré' || u.statusVolet === 'Fini' || u.statusVolet === 'Posé'));
                           } else if (blType === 'GLISSIERE') {
                             deliveredUnits = allUnits.filter(u => u.hasShutter && u.caissonSize === 0 && (u.statusGlissiere === 'Livré' || u.statusGlissiere === 'Fini' || u.statusGlissiere === 'Posé'));
                           } else if (blType === 'CAISSON_TUNNEL') {
