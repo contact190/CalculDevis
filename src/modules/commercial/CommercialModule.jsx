@@ -203,11 +203,37 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
     return prof?.thickness || 3;
   };
 
+  const getShutterHeight = (cfg = config) => {
+    if (!cfg.hasShutter) return 0;
+    const shutterConfig = cfg.shutterConfig || {};
+    const customHC = cfg.shutterOverrides?.customHC;
+    if (customHC !== undefined && customHC !== null && customHC !== '') {
+      return parseFloat(customHC) || 0;
+    }
+    const effectiveCaissonId = cfg.shutterOverrides?.caissonId || shutterConfig.caissonId;
+    const caisson = (database.shutterComponents?.caissons || []).find(c => c.id === effectiveCaissonId);
+    return parseFloat(caisson?.height) || 0;
+  };
+
+  const getAvailableDimension = (cfg = config) => {
+    const isH = cfg.compoundConfig?.orientation === 'horizontal';
+    if (isH) {
+      return cfg.L;
+    } else {
+      const shutterHeight = getShutterHeight(cfg);
+      return Math.max(0, cfg.H - shutterHeight);
+    }
+  };
+
   const syncCompoundParts = (prev, name, newVal) => {
     const next = { ...prev, [name]: newVal };
     if (!next.compoundConfig || !next.compoundConfig.parts) return next;
     const isH = next.compoundConfig.orientation === 'horizontal';
-    const totalDim = isH ? next.L : next.H;
+    
+    const shutterHeight = getShutterHeight(next);
+    const effectiveH = Math.max(0, next.H - shutterHeight);
+    const totalDim = isH ? next.L : effectiveH;
+    
     const divThick = getDividerThickness(next);
     const parts = next.compoundConfig.parts;
     const divQty = parts.length - 1;
@@ -221,7 +247,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
       if (p.type === 'opening') {
         if (isH) p.width = autoOpenDim; else p.height = autoOpenDim;
       } else {
-        if (isH) p.height = next.H; else p.width = next.L;
+        if (isH) p.height = effectiveH; else p.width = next.L;
       }
     });
     next.compoundConfig = { ...next.compoundConfig, parts: newList };
@@ -469,8 +495,10 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                       <select className="input" value={config.compoundConfig?.orientation} onChange={e => {
                          const newOri = e.target.value;
                          const isH = newOri === 'horizontal';
-                         const totalDim = isH ? config.L : config.H;
-                         const otherDim = isH ? config.H : config.L;
+                         const shutterHeight = getShutterHeight();
+                         const effectiveH = Math.max(0, config.H - shutterHeight);
+                         const totalDim = isH ? config.L : effectiveH;
+                         const otherDim = isH ? effectiveH : config.L;
                          const newList = config.compoundConfig.parts.map(p => ({
                            ...p,
                            ...(isH ? { height: otherDim } : { width: otherDim })
@@ -567,7 +595,9 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                                     <input type="number" className="input" style={{ width: '70px', fontSize: '0.8rem', padding: '0.3rem' }} value={config.compoundConfig.orientation === 'horizontal' ? part.width : part.height} onChange={e => {
                                        const val = parseInt(e.target.value) || 0;
                                        const isH = config.compoundConfig.orientation === 'horizontal';
-                                       const totalDim = isH ? config.L : config.H;
+                                       const shutterHeight = getShutterHeight();
+                          const effectiveH = Math.max(0, config.H - shutterHeight);
+                          const totalDim = isH ? config.L : effectiveH;
                                        const newList = config.compoundConfig.parts.map((p, i) => {
                                           if (i === idx) return { ...p, ...(isH ? { width: val } : { height: val }) };
                                           return p;
@@ -1017,8 +1047,10 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                          <select className="input" value={config.compoundConfig?.orientation || 'horizontal'} onChange={e => {
                             const newOri = e.target.value;
                             const isH = newOri === 'horizontal';
-                            const totalDim = isH ? config.L : config.H;
-                            const otherDim = isH ? config.H : config.L;
+                            const shutterHeight = getShutterHeight();
+                            const effectiveH = Math.max(0, config.H - shutterHeight);
+                            const totalDim = isH ? config.L : effectiveH;
+                            const otherDim = isH ? effectiveH : config.L;
                             const newList = (config.compoundConfig?.parts || []).map(p => ({
                               ...p,
                               ...(isH ? { height: otherDim } : { width: otherDim })
@@ -1552,7 +1584,13 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
             <input type="checkbox" 
               checked={config.hasShutter || config.isOnlyShutter || false} 
               disabled={config.isOnlyShutter}
-              onChange={e => setConfig(prev => ({ ...prev, hasShutter: e.target.checked }))} 
+              onChange={e => setConfig(prev => {
+                const next = { ...prev, hasShutter: e.target.checked };
+                if (next.compoundType && next.compoundType !== 'none') {
+                  return syncCompoundParts(next, 'L', next.L);
+                }
+                return next;
+              })} 
               style={{ width: '1.2rem', height: '1.2rem' }} />
             {config.isOnlyShutter ? 'Produit : Volet Rénovation Selectionné' : 'Ajouter un Volet Roulant'}
           </label>
@@ -1783,15 +1821,21 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                   }
 
                   const handleShutterChange = (val) => {
-                    setConfig(prev => ({ 
-                      ...prev, 
-                      shutterConfig: { 
-                        ...(prev.shutterConfig || {}), 
-                        [key]: val,
-                        // Reset params if glissiere changes
-                        ...(key === 'glissiereId' ? { glissiereParams: {} } : {})
-                      } 
-                    }));
+                    setConfig(prev => {
+                      const next = { 
+                        ...prev, 
+                        shutterConfig: { 
+                          ...(prev.shutterConfig || {}), 
+                          [key]: val,
+                          // Reset params if glissiere changes
+                          ...(key === 'glissiereId' ? { glissiereParams: {} } : {})
+                        } 
+                      };
+                      if (next.compoundType && next.compoundType !== 'none') {
+                        return syncCompoundParts(next, 'L', next.L);
+                      }
+                      return next;
+                    });
                   };
 
                   const toggleCouvreJoint = (checked) => {
