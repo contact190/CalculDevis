@@ -2057,6 +2057,62 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings, setQuoteSet
       qtyByDesign[key].qty += 1;
     });
 
+    // Calculate total glazing gasket if type starts with VITRAGE
+    let totalGasketQty = 0;
+    if (type.startsWith('VITRAGE')) {
+      const engine = new FormulaEngine(data || {});
+      unitsToDeliver.forEach(u => {
+        const batch = selectedOrder.batches?.find(b => b.id === u.batchId);
+        let origItem = batch?.items?.find(item => item.id === u.itemId);
+        if (!origItem) {
+          origItem = selectedOrder.items?.find(item => item.id === u.itemId);
+        }
+        if (origItem) {
+          const m = origItem.measurements?.find(meas => meas.id === u.mId);
+          if (m) {
+            const instanceConfig = {
+              ...origItem.config,
+              L: m.L,
+              H: m.H,
+              wallDepth: m.wallDepth,
+              handleHeight: m.handleHeight,
+              partOverrides: m.partOverrides
+            };
+            const shutterOverridden = (m.shutterList || []).length > 0;
+            if (shutterOverridden) {
+              let offset = 0;
+              (m.shutterList || []).forEach(sh => {
+                const sQty = Number(sh.qty) || 0;
+                if (u.index >= offset && u.index < offset + sQty) {
+                  instanceConfig.hasShutter = true;
+                  instanceConfig.shutterConfig = {
+                    ...(origItem.config?.shutterConfig || {}),
+                    ...(sh.overrides || {})
+                  };
+                  instanceConfig.shutterOverrides = { ...(sh.overrides || {}), customLV: sh.customLV };
+                }
+                offset += sQty;
+              });
+            } else if (origItem.config?.hasShutter) {
+              instanceConfig.hasShutter = true;
+            }
+            try {
+              const bomResult = engine.calculateBOM(instanceConfig);
+              if (bomResult && bomResult.accessories) {
+                bomResult.accessories.forEach(acc => {
+                  if (acc.isGlassGasket || (acc.label && acc.label.toLowerCase().includes('joint de vitrage'))) {
+                    totalGasketQty += acc.qty || 0;
+                  }
+                });
+              }
+            } catch (e) {
+              console.warn("Gasket calculation failed for unit in recap", e);
+            }
+          }
+        }
+      });
+    }
+
     // Table Header
     doc.setFontSize(10);
     doc.text('Désignation', 15, y);
@@ -2074,6 +2130,14 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings, setQuoteSet
       doc.text(String(info.qty), 165, y);
       y += 8;
     });
+
+    if (type.startsWith('VITRAGE') && totalGasketQty > 0) {
+      checkPageOverflow(10);
+      doc.text('Joint de Vitrage', 15, y);
+      doc.text('—', 120, y);
+      doc.text(`${totalGasketQty.toFixed(2)} ml`, 165, y);
+      y += 8;
+    }
 
     if (!isRedownload) {
       setData(prev => {
