@@ -2395,9 +2395,12 @@ const AdminDashboard = ({ data, setData }) => {
                               onChange={(e) => {
                                 const newType = e.target.value;
                                 const newEls = [...editingComposition.elements];
-                                newEls[i].type = newType;
-                                newEls[i].id = newType === 'profile' ? data.profiles[0].id : data.accessories[0].id;
-                                newEls[i].formula = newType === 'profile' ? 'L' : '1';
+                                newEls[i] = {
+                                  ...newEls[i],
+                                  type: newType,
+                                  id: newType === 'profile' ? data.profiles[0].id : data.accessories[0].id,
+                                  formula: newType === 'profile' ? 'L' : '1'
+                                };
                                 const updated = { ...editingComposition, elements: newEls };
                                 setEditingComposition(updated);
                                 handleUpdateComposition(updated);
@@ -2426,7 +2429,7 @@ const AdminDashboard = ({ data, setData }) => {
                                         value={el.id}
                                         onChange={(e) => {
                                           const newEls = [...editingComposition.elements];
-                                          newEls[i].id = e.target.value;
+                                          newEls[i] = { ...newEls[i], id: e.target.value };
                                           const updated = { ...editingComposition, elements: newEls };
                                           setEditingComposition(updated);
                                           handleUpdateComposition(updated);
@@ -2466,7 +2469,7 @@ const AdminDashboard = ({ data, setData }) => {
                                         value={el.id}
                                         onChange={(e) => {
                                           const newEls = [...editingComposition.elements];
-                                          newEls[i].id = e.target.value;
+                                          newEls[i] = { ...newEls[i], id: e.target.value };
                                           const updated = { ...editingComposition, elements: newEls };
                                           setEditingComposition(updated);
                                           handleUpdateComposition(updated);
@@ -2501,7 +2504,7 @@ const AdminDashboard = ({ data, setData }) => {
                               value={el.label} 
                               onChange={val => {
                                 const newEls = [...editingComposition.elements];
-                                newEls[i].label = val;
+                                newEls[i] = { ...newEls[i], label: val };
                                 const updated = { ...editingComposition, elements: newEls };
                                 setEditingComposition(updated);
                                 handleUpdateComposition(updated);
@@ -2515,7 +2518,7 @@ const AdminDashboard = ({ data, setData }) => {
                               value={el.qty} 
                               onChange={val => {
                                 const newEls = [...editingComposition.elements];
-                                newEls[i].qty = parseFloat(val) || 0;
+                                newEls[i] = { ...newEls[i], qty: parseFloat(val) || 0 };
                                 const updated = { ...editingComposition, elements: newEls };
                                 setEditingComposition(updated);
                                 handleUpdateComposition(updated);
@@ -2527,7 +2530,7 @@ const AdminDashboard = ({ data, setData }) => {
                               value={el.formula} 
                               onChange={(val) => {
                                 const newEls = [...editingComposition.elements];
-                                newEls[i].formula = val;
+                                newEls[i] = { ...newEls[i], formula: val };
                                 const updated = { ...editingComposition, elements: newEls };
                                 setEditingComposition(updated);
                                 handleUpdateComposition(updated);
