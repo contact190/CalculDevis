@@ -604,8 +604,18 @@ const AdminDashboard = ({ data, setData }) => {
       if (id) {
         targetIdx = updatedCategoryList.findIndex(item => item && item.id === id);
       }
-      if (targetIdx === -1) {
-        targetIdx = index;
+      if (targetIdx === -1 && index !== -1) {
+        // Correct index offset: map the visible index to the corresponding index in the raw list
+        let activeCount = 0;
+        for (let i = 0; i < updatedCategoryList.length; i++) {
+          if (!updatedCategoryList[i]._deleted) {
+            if (activeCount === index) {
+              targetIdx = i;
+              break;
+            }
+            activeCount++;
+          }
+        }
       }
 
       if (targetIdx !== -1 && targetIdx < updatedCategoryList.length) {
@@ -648,21 +658,27 @@ const AdminDashboard = ({ data, setData }) => {
   const handleDuplicateItem = (category, originalItem) => {
     const newItem = { ...originalItem };
     
-    // Only handle ID duplication if the item has an ID
-    if (newItem.id) {
+    // Set _isNew to true for duplicates so they stay in the "new items" section visible to the user
+    newItem._isNew = true;
+    delete newItem._lastModified;
+    delete newItem._modifiedBy;
+    delete newItem._deleted;
+    
+    setData(prev => {
+      const list = prev[category] || [];
       let newId = `${originalItem.id}-copie`;
       let counter = 1;
-      while (data[category].some(x => x.id === newId)) {
+      // Check the raw list including deleted items to prevent ID conflicts
+      while (list.some(x => x.id === newId)) {
         newId = `${originalItem.id}-copie-${counter}`;
         counter++;
       }
       newItem.id = newId;
-    }
-    
-    setData(prev => ({
-      ...prev,
-      [category]: [...prev[category], newItem]
-    }));
+      return {
+        ...prev,
+        [category]: [...list, newItem]
+      };
+    });
   };
 
   const handleDeleteGlassProfileCompatibility = (id, index = -1) => {

@@ -670,7 +670,9 @@ function App() {
         const serverData = await localSync.fetchData();
         if (serverData) {
           isApplyingRemoteOps.current = true;
-          const repaired = repairDatabase(serverData);
+          // Merge local changes with server data instead of completely overwriting
+          const merged = smartMerge(databaseRef.current, serverData);
+          const repaired = repairDatabase(merged);
           setDatabase(repaired);
           localSync.updateSnapshot(repaired);
           previousDbRef.current = repaired;
