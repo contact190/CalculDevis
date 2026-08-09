@@ -435,7 +435,10 @@ function App() {
     if (database && database.quotes && currentQuote && currentQuote.id) {
       const dbQuote = database.quotes.find(q => q.id === currentQuote.id);
       if (dbQuote && JSON.stringify(dbQuote) !== JSON.stringify(currentQuote)) {
-        setCurrentQuote(dbQuote);
+        // Only overwrite if we are applying remote changes, to avoid reverting local unsaved edits
+        if (isApplyingRemoteOps.current) {
+          setCurrentQuote(dbQuote);
+        }
       }
     }
   }, [database?.quotes, currentQuote?.id]);
