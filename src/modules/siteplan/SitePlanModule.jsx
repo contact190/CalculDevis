@@ -342,7 +342,7 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
         const newPlans = planExists 
           ? plans.map(p => p.id === updatedPlan.id ? updatedPlan : p)
           : [...plans, updatedPlan];
-        return { ...c, sitePlans: newPlans };
+        return { ...c, sitePlans: newPlans, _lastModified: new Date().toISOString() };
       });
 
       // 2. Sync this plan to ALL quotes and orders that are assigned to it
@@ -352,7 +352,7 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
       quotesToSync.forEach(quoteToSync => {
         const syncedItems = syncSitePlanToMeasurements(updatedPlan, quoteToSync.items);
         updatedQuotes = updatedQuotes.map(o => 
-          o.id === quoteToSync.id ? { ...o, items: syncedItems } : o
+          o.id === quoteToSync.id ? { ...o, items: syncedItems, _lastModified: new Date().toISOString() } : o
         );
       });
 
@@ -362,7 +362,7 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
       ordersToSync.forEach(orderToSync => {
         const syncedItems = syncSitePlanToMeasurements(updatedPlan, orderToSync.items);
         updatedOrders = updatedOrders.map(o => 
-          o.id === orderToSync.id ? { ...o, items: syncedItems } : o
+          o.id === orderToSync.id ? { ...o, items: syncedItems, _lastModified: new Date().toISOString() } : o
         );
       });
 
@@ -394,7 +394,11 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
     setData(prev => {
       const updatedClients = (prev.clients || []).map(c => {
         if (c.id !== selectedClientId) return c;
-        return { ...c, sitePlans: (c.sitePlans || []).filter(p => p.id !== planId) };
+        return { 
+          ...c, 
+          sitePlans: (c.sitePlans || []).filter(p => p.id !== planId),
+          _lastModified: new Date().toISOString()
+        };
       });
       return { ...prev, clients: updatedClients };
     });
@@ -449,7 +453,7 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
       const quoteToSync = updatedQuotes.find(q => q.id === selectedQuoteId);
       const syncedItems = syncSitePlanToMeasurements(activeSitePlan, quoteToSync.items);
       updatedQuotes = updatedQuotes.map(q => 
-        q.id === selectedQuoteId ? { ...q, items: syncedItems } : q
+        q.id === selectedQuoteId ? { ...q, items: syncedItems, _lastModified: new Date().toISOString() } : q
       );
 
       return { ...prev, quotes: updatedQuotes };

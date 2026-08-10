@@ -342,10 +342,10 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
         const newPlans = planExists 
           ? plans.map(p => p.id === updatedPlan.id ? updatedPlan : p)
           : [...plans, updatedPlan];
-        return { ...c, sitePlans: newPlans };
+        return { ...c, sitePlans: newPlans, _lastModified: new Date().toISOString() };
       });
       const updatedOrders = (prev.orders || []).map(o => 
-        o.id === order.id ? { ...o, items: updatedItems } : o
+        o.id === order.id ? { ...o, items: updatedItems, _lastModified: new Date().toISOString() } : o
       );
       return {
         ...prev,
@@ -393,10 +393,10 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
         const newPlans = planExists 
           ? plans.map(p => p.id === updatedPlan.id ? updatedPlan : p)
           : [...plans, updatedPlan];
-        return { ...c, sitePlans: newPlans };
+        return { ...c, sitePlans: newPlans, _lastModified: new Date().toISOString() };
       });
       const updatedOrders = (prev.orders || []).map(o => 
-        o.id === order.id ? { ...o, items: updatedItems } : o
+        o.id === order.id ? { ...o, items: updatedItems, _lastModified: new Date().toISOString() } : o
       );
       return {
         ...prev,
@@ -449,10 +449,10 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
         const newPlans = planExists 
           ? plans.map(p => p.id === updatedPlan.id ? updatedPlan : p)
           : [...plans, updatedPlan];
-        return { ...c, sitePlans: newPlans };
+        return { ...c, sitePlans: newPlans, _lastModified: new Date().toISOString() };
       });
       const updatedOrders = (prev.orders || []).map(o => 
-        o.id === order.id ? { ...o, items: updatedItems } : o
+        o.id === order.id ? { ...o, items: updatedItems, _lastModified: new Date().toISOString() } : o
       );
       return {
         ...prev,
@@ -653,14 +653,15 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
           const newPlans = planExists 
             ? plans.map(p => p.id === updatedPlan.id ? updatedPlan : p)
             : [...plans, updatedPlan];
-          return { ...c, sitePlans: newPlans };
+          return { ...c, sitePlans: newPlans, _lastModified: new Date().toISOString() };
         });
         const updatedOrders = (prev.orders || []).map(o => 
           o.id === order.id ? { 
             ...o, 
             items: updatedItems, 
             status: 'PARTIEL_PRODUCTION',
-            batches: [...(o.batches || []), newBatch]
+            batches: [...(o.batches || []), newBatch],
+            _lastModified: new Date().toISOString()
           } : o
         );
         return { ...prev, clients: updatedClients, orders: updatedOrders };
