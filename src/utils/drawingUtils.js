@@ -315,7 +315,7 @@ export const drawTechnicalDrawing = (canvas, cfg, database) => {
 
         const itemThick = (part.traverseThickness ?? 25) * scale;
         if (part.type === 'group' && part.subParts) {
-          drawPartList(part.subParts, cx, cy, pW, pH, isH ? 'vertical' : 'horizontal');
+          drawPartList(part.subParts, cx, cy, pW, pH, part.orientation || (isH ? 'vertical' : 'horizontal'));
         } else if (part.type === 'extra') {
           ctx.fillStyle = '#475569';
           ctx.strokeStyle = '#1e293b';

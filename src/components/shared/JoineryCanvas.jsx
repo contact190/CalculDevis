@@ -423,7 +423,7 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
           const itemThickPx = (part.traverseThickness ?? 25) * scale;
 
           if (part.type === 'group' && part.subParts) {
-             drawPartList(part.subParts, cx, cy, pW, pH, isH ? 'vertical' : 'horizontal', depth + 1, part);
+             drawPartList(part.subParts, cx, cy, pW, pH, part.orientation || (isH ? 'vertical' : 'horizontal'), depth + 1, part);
           } else if (part.type === 'extra') {
              ctx.fillStyle = '#475569';
              ctx.strokeStyle = '#1e293b';
