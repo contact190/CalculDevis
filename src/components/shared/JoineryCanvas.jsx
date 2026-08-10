@@ -403,9 +403,23 @@ const JoineryCanvas = ({ config, width = 400, height = 400, database, onDrawComp
           }
         }
 
+        let totalTraverseThickness = 0;
+        for (let i = 0; i < list.length - 1; i++) {
+          totalTraverseThickness += ((list[i].traverseThickness ?? 25) * scale);
+        }
+
+        const availSpace = Math.max(0, (isH ? bw : bh) - totalTraverseThickness);
+        const sumValues = list.reduce((sum, p) => sum + (isH ? (p.width || 0) : (p.height || 0)), 0);
+
         list.forEach((part, idx) => {
-          const pW = isH ? (part.width ? part.width * scale : (bw / list.length)) : bw;
-          const pH = isH ? bh : (part.height ? part.height * scale : (bh / list.length));
+          let pW, pH;
+          if (isH) {
+            pW = sumValues > 0 ? ((part.width || 0) / sumValues) * availSpace : availSpace / list.length;
+            pH = bh;
+          } else {
+            pW = bw;
+            pH = sumValues > 0 ? ((part.height || 0) / sumValues) * availSpace : availSpace / list.length;
+          }
           const itemThickPx = (part.traverseThickness ?? 25) * scale;
 
           if (part.type === 'group' && part.subParts) {
