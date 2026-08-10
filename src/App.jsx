@@ -190,11 +190,18 @@ function App() {
       });
     }
     if (repaired.quotes) {
-      repaired.quotes = repaired.quotes.map(q => {
-        let updated = { ...q };
-        if (q.products && !q.items) updated.items = q.products;
-        return updated;
-      });
+      repaired.quotes = repaired.quotes
+        .map(q => {
+          let updated = { ...q };
+          if (q.products && !q.items) updated.items = q.products;
+          return updated;
+        })
+        // Prune empty quotes (0 items, no client) created by sync loops
+        .filter(q => {
+          if (!q) return false;
+          const isEmpty = (!q.items || q.items.length === 0) && !q.clientId;
+          return !isEmpty;
+        });
     }
     if (repaired.glassProfileCompatibility) {
       let counter = 1;
@@ -254,17 +261,22 @@ function App() {
       let finalRepairedDb = null;
       try {
         setLoadingMessage('Chargement des paramètres...');
-        const settingsData = await persistentStorage.load('quoteSettings');
+        let settingsData = null;
+        try {
+          const savedSettings = localStorage.getItem('quoteSettings');
+          if (savedSettings) {
+            settingsData = JSON.parse(savedSettings);
+          }
+        } catch(e) {}
+
+        if (!settingsData) {
+          settingsData = await persistentStorage.load('quoteSettings');
+        }
+
         if (settingsData) {
           setQuoteSettings({ ...DEFAULT_QUOTE_SETTINGS, ...settingsData });
-        } else {
           try {
-            const savedSettings = localStorage.getItem('quoteSettings');
-            if (savedSettings) {
-              const parsedSettings = JSON.parse(savedSettings);
-              setQuoteSettings({ ...DEFAULT_QUOTE_SETTINGS, ...parsedSettings });
-              await persistentStorage.save('quoteSettings', parsedSettings);
-            }
+            localStorage.setItem('quoteSettings', JSON.stringify(settingsData));
           } catch(e) {}
         }
 
@@ -420,6 +432,9 @@ function App() {
   const updateQuoteSettings = useCallback((newSettings) => {
     setQuoteSettings(prev => {
       const next = typeof newSettings === 'function' ? newSettings(prev) : newSettings;
+      try {
+        localStorage.setItem('quoteSettings', JSON.stringify(next));
+      } catch(e) {}
       persistentStorage.save('quoteSettings', next).catch(e => console.error(e));
       setDatabase(db => db ? { ...db, quoteSettings: next } : db);
       return next;

@@ -6,7 +6,10 @@ const DB_NAME = 'CalculDevisDB';
 const STORE_NAME = 'app_state';
 const DB_VERSION = 1;
 
+let dbInstance = null;
+
 const openDB = () => {
+  if (dbInstance) return Promise.resolve(dbInstance);
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = (e) => {
@@ -15,7 +18,10 @@ const openDB = () => {
         db.createObjectStore(STORE_NAME);
       }
     };
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => {
+      dbInstance = request.result;
+      resolve(dbInstance);
+    };
     request.onerror = () => reject(request.error);
   });
 };
