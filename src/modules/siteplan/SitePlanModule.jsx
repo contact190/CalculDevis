@@ -215,8 +215,12 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
             const displayRef = matchedItem.pairedGroupId ? matchedItem.pairedGroupRef : matchedItem.label;
             descLines.push(`Désignation: ${displayRef}`);
             
-            const comp = data.compositions?.find(c => c.id === matchedItem.config?.compositionId);
-            descLines.push(`Système: ${comp?.name || '—'}`);
+            if (matchedItem.config?.compoundType === 'structure') {
+              descLines.push(`Système: Structure`);
+            } else {
+              const comp = data.compositions?.find(c => c.id === matchedItem.config?.compositionId);
+              descLines.push(`Système: ${comp?.name || '—'}`);
+            }
             descLines.push(`Dimensions Devis: ${matchedItem.config?.L} × ${matchedItem.config?.H} mm`);
             
             const color = data.colors?.find(c => c.id === matchedItem.config?.colorId);

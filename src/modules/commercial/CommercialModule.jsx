@@ -2983,24 +2983,28 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
         
           // Système / Modèle
           const isCompound = cfg.compoundType && cfg.compoundType !== 'none' && cfg.compoundConfig?.parts?.length > 0;
-        if (isCompound) {
-          const openingPart = cfg.compoundConfig.parts.find(p => p.type === 'opening');
-          const fixParts = cfg.compoundConfig.parts.filter(p => p.type === 'fixe');
-          openingComp = database.compositions?.find(c => c.id === openingPart?.compositionId);
-          
-          let fixLabel = '';
-          if (fixParts.length > 0) {
-            const fixComps = [...new Set(fixParts.map(p => {
-              const c = database.compositions?.find(comp => comp.id === p.compositionId);
-              return c ? c.name : 'Fixe';
-            }))];
-            fixLabel = ` + Fix ${fixComps.length > 0 ? '(' + fixComps.join(', ') + ')' : ''} (×${fixParts.length})`;
+          if (cfg.compoundType === 'structure') {
+            descLines.push(`Système : Structure`);
+          } else {
+            if (isCompound) {
+              const openingPart = cfg.compoundConfig.parts.find(p => p.type === 'opening');
+              const fixParts = cfg.compoundConfig.parts.filter(p => p.type === 'fixe');
+              openingComp = database.compositions?.find(c => c.id === openingPart?.compositionId);
+              
+              let fixLabel = '';
+              if (fixParts.length > 0) {
+                const fixComps = [...new Set(fixParts.map(p => {
+                  const c = database.compositions?.find(comp => comp.id === p.compositionId);
+                  return c ? c.name : 'Fixe';
+                }))];
+                fixLabel = ` + Fix ${fixComps.length > 0 ? '(' + fixComps.join(', ') + ')' : ''} (×${fixParts.length})`;
+              }
+              
+              descLines.push(`Système : ${openingComp?.name || comp?.name || '—'}${fixLabel}`);
+            } else {
+              descLines.push(`Système : ${comp?.name || '—'}`);
+            }
           }
-          
-          descLines.push(`Système : ${openingComp?.name || comp?.name || '—'}${fixLabel}`);
-        } else {
-          descLines.push(`Système : ${comp?.name || '—'}`);
-        }
 
         const color = database.colors?.find(c => c.id === cfg.colorId);
         const glass = database.glass?.find(g => g.id === cfg.glassId);
