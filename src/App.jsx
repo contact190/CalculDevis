@@ -251,6 +251,7 @@ function App() {
     sessionStorage.removeItem('chunk-load-retry');
     const loadAndSync = async () => {
       setIsLoading(true);
+      let finalRepairedDb = null;
       try {
         setLoadingMessage('Chargement des paramètres...');
         const settingsData = await persistentStorage.load('quoteSettings');
@@ -322,6 +323,7 @@ function App() {
             const merged = smartMerge(localData, serverData);
             const repaired = repairDatabase(merged);
             setDatabase(repaired);
+            finalRepairedDb = repaired;
             await persistentStorage.save(LOCAL_KEY, repaired);
             lastLocalModifiedRef.current = new Date().toISOString();
             setCloudSyncStatus('ok');
@@ -329,6 +331,7 @@ function App() {
             console.log('📥 Chargement direct depuis le Serveur Local (cache écrasé)...');
             const repaired = repairDatabase(serverData);
             setDatabase(repaired);
+            finalRepairedDb = repaired;
             await persistentStorage.save(LOCAL_KEY, repaired);
             lastLocalModifiedRef.current = new Date().toISOString();
             setCloudSyncStatus('ok');
@@ -376,6 +379,7 @@ function App() {
              
              const repaired = repairDatabase(finalData);
              setDatabase(repaired);
+             finalRepairedDb = repaired;
              await persistentStorage.save(LOCAL_KEY, repaired);
              lastLocalModifiedRef.current = new Date().toISOString();
              setCloudSyncStatus('ok');
@@ -385,6 +389,7 @@ function App() {
              console.error("Erreur Supabase load:", err);
              const repaired = repairDatabase(localData || DEFAULT_DATA);
              setDatabase(repaired);
+             finalRepairedDb = repaired;
              lastLocalModifiedRef.current = localTimestamp || null;
              setCloudSyncStatus('offline');
              setSupabaseSyncStatus('error');
@@ -393,7 +398,19 @@ function App() {
       } catch (e) {
         console.error('Erreur chargement:', e);
         setDatabase(DEFAULT_DATA);
+        finalRepairedDb = DEFAULT_DATA;
       } finally {
+        if (finalRepairedDb && finalRepairedDb.quotes) {
+          try {
+            const savedActiveQuote = await persistentStorage.load('calculDevis_activeQuote');
+            if (savedActiveQuote && savedActiveQuote.id) {
+              const dbQuote = finalRepairedDb.quotes.find(q => q.id === savedActiveQuote.id);
+              if (dbQuote) {
+                setCurrentQuote(dbQuote);
+              }
+            }
+          } catch(e) {}
+        }
         setIsLoading(false);
       }
     };
@@ -431,17 +448,22 @@ function App() {
     }
   }, [currentQuote]);
 
+  // ─── Auto-sync currentQuote updates into database.quotes ────────────────
   useEffect(() => {
-    if (database && database.quotes && currentQuote && currentQuote.id) {
-      const dbQuote = database.quotes.find(q => q.id === currentQuote.id);
-      if (dbQuote && JSON.stringify(dbQuote) !== JSON.stringify(currentQuote)) {
-        // Only overwrite if we are applying remote changes, to avoid reverting local unsaved edits
-        if (isApplyingRemoteOps.current) {
-          setCurrentQuote(dbQuote);
-        }
+    if (database && currentQuote && currentQuote.id) {
+      const dbQuote = database.quotes?.find(q => q.id === currentQuote.id);
+      if (!dbQuote || JSON.stringify(dbQuote) !== JSON.stringify(currentQuote)) {
+        setDatabase(prev => {
+          if (!prev) return prev;
+          const exists = (prev.quotes || []).some(q => q.id === currentQuote.id);
+          const quotes = exists
+            ? prev.quotes.map(q => q.id === currentQuote.id ? currentQuote : q)
+            : [...(prev.quotes || []), currentQuote];
+          return { ...prev, quotes };
+        });
       }
     }
-  }, [database?.quotes, currentQuote?.id]);
+  }, [currentQuote]);
 
   // ─── Keep databaseRef in sync ───────────────────────────────────────────
   useEffect(() => {
@@ -628,6 +650,13 @@ function App() {
 
             const repaired = repairDatabase(finalData);
             setDatabase(repaired);
+            // Sync active currentQuote from incoming database
+            if (currentQuote && currentQuote.id) {
+              const remoteQuote = repaired.quotes?.find(q => q.id === currentQuote.id);
+              if (remoteQuote && JSON.stringify(remoteQuote) !== JSON.stringify(currentQuote)) {
+                setCurrentQuote(remoteQuote);
+              }
+            }
             previousDbRef.current = repaired;
             setCloudSyncStatus('ok');
             setLastCloudSync(new Date());
@@ -650,6 +679,13 @@ function App() {
       if (appliedCount > 0) {
         const repaired = repairDatabase(newDb);
         setDatabase(repaired);
+        // Sync active currentQuote from incoming operations
+        if (currentQuote && currentQuote.id) {
+          const remoteQuote = repaired.quotes?.find(q => q.id === currentQuote.id);
+          if (remoteQuote && JSON.stringify(remoteQuote) !== JSON.stringify(currentQuote)) {
+            setCurrentQuote(remoteQuote);
+          }
+        }
         // Update the snapshot so we don't re-send these ops back
         localSync.updateSnapshot(repaired);
         previousDbRef.current = repaired;
@@ -677,6 +713,13 @@ function App() {
           const merged = smartMerge(databaseRef.current, serverData);
           const repaired = repairDatabase(merged);
           setDatabase(repaired);
+          // Sync active currentQuote from server data
+          if (currentQuote && currentQuote.id) {
+            const remoteQuote = repaired.quotes?.find(q => q.id === currentQuote.id);
+            if (remoteQuote && JSON.stringify(remoteQuote) !== JSON.stringify(currentQuote)) {
+              setCurrentQuote(remoteQuote);
+            }
+          }
           localSync.updateSnapshot(repaired);
           previousDbRef.current = repaired;
           setCloudSyncStatus('ok');
