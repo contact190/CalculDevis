@@ -451,16 +451,23 @@ function App() {
   // ─── Auto-sync currentQuote updates into database.quotes ────────────────
   useEffect(() => {
     if (database && currentQuote && currentQuote.id) {
-      const dbQuote = database.quotes?.find(q => q.id === currentQuote.id);
-      if (!dbQuote || JSON.stringify(dbQuote) !== JSON.stringify(currentQuote)) {
-        setDatabase(prev => {
-          if (!prev) return prev;
-          const exists = (prev.quotes || []).some(q => q.id === currentQuote.id);
-          const quotes = exists
-            ? prev.quotes.map(q => q.id === currentQuote.id ? currentQuote : q)
-            : [...(prev.quotes || []), currentQuote];
-          return { ...prev, quotes };
-        });
+      // Avoid syncing a brand new empty quote to prevent infinite number-generation loops
+      const shouldSync = (currentQuote.items && currentQuote.items.length > 0) || 
+                         currentQuote.clientId || 
+                         (database.quotes && database.quotes.some(q => q.id === currentQuote.id));
+      
+      if (shouldSync) {
+        const dbQuote = database.quotes?.find(q => q.id === currentQuote.id);
+        if (!dbQuote || JSON.stringify(dbQuote) !== JSON.stringify(currentQuote)) {
+          setDatabase(prev => {
+            if (!prev) return prev;
+            const exists = (prev.quotes || []).some(q => q.id === currentQuote.id);
+            const quotes = exists
+              ? prev.quotes.map(q => q.id === currentQuote.id ? currentQuote : q)
+              : [...(prev.quotes || []), currentQuote];
+            return { ...prev, quotes };
+          });
+        }
       }
     }
   }, [currentQuote]);
