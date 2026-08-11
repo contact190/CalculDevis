@@ -251,7 +251,7 @@ function App() {
         setCurrentQuote(prev => ({ ...prev, number: newQuote.number }));
       }
     }
-  }, [database, quoteSettings.quotePrefix]);
+  }, [database, quoteSettings.quotePrefix, currentQuote]);
 
   // ─── STEP 1: Load local + Network comparison on mount ──────────────────────
   useEffect(() => {
@@ -485,7 +485,7 @@ function App() {
         }
       }
     }
-  }, [currentQuote]);
+  }, [currentQuote, database]);
 
   // ─── Keep databaseRef in sync ───────────────────────────────────────────
   useEffect(() => {
