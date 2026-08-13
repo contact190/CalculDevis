@@ -708,10 +708,16 @@ export const cloudSync = {
     const timeoutId = setTimeout(() => controller.abort(), 5000);
 
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('operations_log')
         .select('*')
-        .gt('timestamp', timestampIso)
+        .gt('timestamp', timestampIso);
+        
+      if (currentDeviceId) {
+        query = query.neq('device_id', currentDeviceId);
+      }
+
+      const { data, error } = await query
         .order('timestamp', { ascending: true })
         .limit(200)
         .abortSignal(controller.signal);
