@@ -128,6 +128,7 @@ function App() {
 
   const [currentQuote, setCurrentQuote] = useState(() => makeNewQuote(DEFAULT_QUOTE_SETTINGS));
   const currentQuoteRef = useRef(currentQuote);
+  const lastLocalQuoteEditRef = useRef(0);
   useEffect(() => {
     currentQuoteRef.current = currentQuote;
   }, [currentQuote]);
@@ -464,6 +465,9 @@ function App() {
   useEffect(() => {
     if (currentQuote && currentQuote.id) {
       persistentStorage.save('calculDevis_activeQuote', currentQuote).catch(() => {});
+      if (!isApplyingRemoteOps.current) {
+        lastLocalQuoteEditRef.current = Date.now();
+      }
     }
   }, [currentQuote]);
 
@@ -684,7 +688,10 @@ function App() {
             const activeQuote = currentQuoteRef.current;
             if (activeQuote && activeQuote.id) {
               const remoteQuote = repaired.quotes?.find(q => q.id === activeQuote.id);
-              if (remoteQuote && JSON.stringify(remoteQuote) !== JSON.stringify(activeQuote)) {
+              const timeSinceLastLocalEdit = Date.now() - lastLocalQuoteEditRef.current;
+              if (remoteQuote && 
+                  JSON.stringify(remoteQuote) !== JSON.stringify(activeQuote) && 
+                  timeSinceLastLocalEdit > 3000) {
                 setCurrentQuote(remoteQuote);
               }
             }
@@ -714,7 +721,10 @@ function App() {
         const activeQuote = currentQuoteRef.current;
         if (activeQuote && activeQuote.id) {
           const remoteQuote = repaired.quotes?.find(q => q.id === activeQuote.id);
-          if (remoteQuote && JSON.stringify(remoteQuote) !== JSON.stringify(activeQuote)) {
+          const timeSinceLastLocalEdit = Date.now() - lastLocalQuoteEditRef.current;
+          if (remoteQuote && 
+              JSON.stringify(remoteQuote) !== JSON.stringify(activeQuote) && 
+              timeSinceLastLocalEdit > 3000) {
             setCurrentQuote(remoteQuote);
           }
         }
@@ -749,7 +759,10 @@ function App() {
           const activeQuote = currentQuoteRef.current;
           if (activeQuote && activeQuote.id) {
             const remoteQuote = repaired.quotes?.find(q => q.id === activeQuote.id);
-            if (remoteQuote && JSON.stringify(remoteQuote) !== JSON.stringify(activeQuote)) {
+            const timeSinceLastLocalEdit = Date.now() - lastLocalQuoteEditRef.current;
+            if (remoteQuote && 
+                JSON.stringify(remoteQuote) !== JSON.stringify(activeQuote) && 
+                timeSinceLastLocalEdit > 3000) {
               setCurrentQuote(remoteQuote);
             }
           }
