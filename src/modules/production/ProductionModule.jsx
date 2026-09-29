@@ -1004,6 +1004,24 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
               const perAuto = rem / autoParts.length;
               autoParts.forEach(p => { p[splitKey] = perAuto; });
            }
+        } else {
+           // No mixed overrides: scale all parts proportionally if total differs from available
+           const totalRequested = cParts.reduce((sum, item) => sum + item[splitKey], 0);
+           if (Math.abs(totalRequested - available) > 0.1) {
+             const excess = totalRequested - available;
+             const flexibleItems = cParts.filter(it => it.type !== 'fixe');
+             
+             if (flexibleItems.length > 0) {
+               const totalFlex = flexibleItems.reduce((sum, it) => sum + it[splitKey], 0);
+               flexibleItems.forEach(it => {
+                 const weight = totalFlex > 0 ? it[splitKey] / totalFlex : (1 / flexibleItems.length);
+                 it[splitKey] -= excess * weight;
+               });
+             } else {
+               const scale = available / totalRequested;
+               cParts.forEach(it => { it[splitKey] *= scale; });
+             }
+           }
         }
 
         const openingP = cParts.find(p => p.type === 'opening');

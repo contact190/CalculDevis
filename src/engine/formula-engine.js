@@ -1341,7 +1341,7 @@ export class FormulaEngine {
       } else {
         // No mixed overrides: use original overflow adjustment
         const totalRequested = items.reduce((sum, item) => sum + item[splitKey], 0);
-        if (totalRequested > available + 0.1) {
+        if (Math.abs(totalRequested - available) > 0.1) {
           const excess = totalRequested - available;
           const flexibleItems = items.filter(it => it.type !== 'fixe');
           
