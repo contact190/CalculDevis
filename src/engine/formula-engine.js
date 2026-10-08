@@ -1371,9 +1371,15 @@ export class FormulaEngine {
 
         if (compoundType === 'fix_ouvrant' && part.type === 'opening') {
           if (direction === 'horizontal') {
-            calcL += 25;
+            const hasLeftPart = !isFirst;
+            const hasRightPart = !isLast;
+            if (hasLeftPart) calcL += 25;
+            if (hasRightPart) calcL += 25;
           } else if (direction === 'vertical') {
-            calcH += 25;
+            const hasTopPart = !isFirst;
+            const hasBottomPart = !isLast;
+            if (hasTopPart) calcH += 25;
+            if (hasBottomPart) calcH += 25;
           }
         }
 
