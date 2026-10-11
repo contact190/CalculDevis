@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Package, Scissors, Download, CheckCircle, Barcode, ShoppingCart, Layers, Edit2, Link2, Link2Off, Plus, QrCode, Trash2, ArrowLeft, FileText, FileSpreadsheet, RefreshCw, Info, ChevronDown, ChevronUp } from 'lucide-react';
+import { Package, Scissors, Download, CheckCircle, Barcode, ShoppingCart, Layers, Edit2, Link2, Link2Off, Plus, QrCode, Trash2, ArrowLeft, FileText, FileSpreadsheet, RefreshCw, Info, ChevronDown, ChevronUp, Calculator, Receipt, X, Printer, Search, DollarSign } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { FormulaEngine } from '../../engine/formula-engine';
 import { DEFAULT_DATA } from '../../data/default-data';
@@ -119,6 +119,10 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
   const [offcutInputs, setOffcutInputs] = useState({}); // { [barKey]: "" }
   const [supplierName, setSupplierName] = useState('');
   const [docHeader, setDocHeader] = useState('DEMANDE DE PROFORMA');
+  const [showPricedProformaModal, setShowPricedProformaModal] = useState(false);
+  const [pricedModalFilter, setPricedModalFilter] = useState('all'); // 'all' | 'selected'
+  const [pricedSearchQuery, setPricedSearchQuery] = useState('');
+  const [customPricedItems, setCustomPricedItems] = useState({});
   
   // Auto-switch from Quote ID to its confirmed Order ID if it exists, so batches are immediately visible
   useEffect(() => {
@@ -657,6 +661,583 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
 
   const accessoriesAlu = useMemo(() => purchasingAccessories.filter(a => !['M', 'ML', 'JOINT'].includes((a.unit || a.priceUnit || '').toUpperCase().trim()) && !a.isShutter), [purchasingAccessories]);
   const accessoriesVolet = useMemo(() => purchasingAccessories.filter(a => !['M', 'ML', 'JOINT'].includes((a.unit || a.priceUnit || '').toUpperCase().trim()) && a.isShutter), [purchasingAccessories]);
+
+  // ─── PRIX UNITAIRES & PROFORMA CHIFFRÉE ─────────────────────────────────
+  const getItemUnitPrice = useCallback((item, type, bLength = 6400) => {
+    const cleanId = String(item.baseId || item.id).split('|')[0];
+    
+    if (type === 'profileAlu') {
+      const pRef = (database?.profiles || []).find(x => x.id === cleanId || x.name === cleanId);
+      if (pRef) {
+        if (pRef.pricePerBar && parseFloat(pRef.pricePerBar) > 0) {
+          return parseFloat(pRef.pricePerBar);
+        }
+        const weightPerM = parseFloat(pRef.weightPerM) || 1;
+        const pricePerKg = parseFloat(pRef.pricePerKg) || 0;
+        const barLenM = (bLength || parseFloat(pRef.barLength) || 6400) / 1000;
+        return barLenM * weightPerM * pricePerKg;
+      }
+      return parseFloat(item.unitPrice || 0);
+    }
+
+    if (type === 'profileVolet') {
+      const sc = database?.shutterComponents || {};
+      const shutterLists = [
+        sc.caissons || [],
+        sc.glissieres || [],
+        sc.lames || [],
+        sc.lameFinales || [],
+        sc.axes || []
+      ];
+      for (const list of shutterLists) {
+        const dbSC = list.find(x => x.id === cleanId);
+        if (dbSC && dbSC.price !== undefined && dbSC.price !== null) {
+          return parseFloat(dbSC.price) || 0;
+        }
+      }
+      const pRef = (database?.profiles || []).find(x => x.id === cleanId || x.name === cleanId);
+      if (pRef) {
+        if (pRef.pricePerBar && parseFloat(pRef.pricePerBar) > 0) return parseFloat(pRef.pricePerBar);
+        const weightPerM = parseFloat(pRef.weightPerM) || 1;
+        const pricePerKg = parseFloat(pRef.pricePerKg) || 0;
+        const barLenM = (bLength || parseFloat(pRef.barLength) || 6400) / 1000;
+        return barLenM * weightPerM * pricePerKg;
+      }
+      return parseFloat(item.unitPrice || item.price || 0);
+    }
+
+    if (type === 'joint' || type === 'accessory') {
+      const aRef = (database?.accessories || []).find(x => x.id === cleanId);
+      if (aRef && aRef.price !== undefined && aRef.price !== null) {
+        return parseFloat(aRef.price) || 0;
+      }
+      const sc = database?.shutterComponents || {};
+      const shutterLists = [
+        sc.extras || [],
+        sc.kits || [],
+        sc.moteurs || [],
+        sc.lameFinales || [],
+        sc.glissieres || [],
+        sc.lames || [],
+        sc.axes || [],
+        sc.caissons || []
+      ];
+      for (const list of shutterLists) {
+        const dbSC = list.find(x => x.id === cleanId);
+        if (dbSC && dbSC.price !== undefined && dbSC.price !== null) {
+          return parseFloat(dbSC.price) || 0;
+        }
+      }
+      return parseFloat(item.unitPrice || item.price || 0);
+    }
+
+    if (type === 'glass') {
+      const gRef = (database?.glass || []).find(x => x.id === cleanId);
+      return parseFloat(gRef?.pricePerM2 || item.unitPrice || item.pricePerM2 || 0);
+    }
+
+    return parseFloat(item.unitPrice || item.price || 0);
+  }, [database]);
+
+  const getColorFactor = useCallback((colorId, colorName) => {
+    const colorInfo = database?.colors?.find(c => c.id === colorId || c.name === colorName);
+    return colorInfo?.factor ? parseFloat(colorInfo.factor) : 1.0;
+  }, [database?.colors]);
+
+  const pricedGroups = useMemo(() => {
+    // 1. Profilés Alu
+    const itemsAlu = profilesAlu.map(p => {
+      const barKey = p.id;
+      const adminBarLength = parseFloat(p.barLength) || 6400;
+      const bLength = barLengths[barKey] !== undefined ? barLengths[barKey] : adminBarLength;
+      const ml = p.totalMeasure || 0;
+      const pieces = p.pieces ? [...p.pieces].sort((a,b) => b - a) : [];
+      const unitClean = (p.priceUnit || '').toUpperCase().trim();
+      let bars = 0;
+      if ((unitClean === 'BARRE' || !unitClean) && pieces.length > 0) {
+        bars = calculateBarsNeeded(pieces, bLength, manualStockOffcuts[barKey] || []);
+      } else {
+        bars = Math.ceil(ml / bLength);
+      }
+      const factor = getColorFactor(p.colorId, p.colorName);
+      const basePrice = getItemUnitPrice(p, 'profileAlu', bLength);
+      const defaultUnitPrice = basePrice * factor;
+      const unitPrice = customPricedItems[p.id] !== undefined ? customPricedItems[p.id] : defaultUnitPrice;
+      const lineTotal = bars * unitPrice;
+      const ref = p._isGroup ? p.id.split(' + ').map(x => resolveRef(x)).join(' + ') : resolveRef(p.baseId || p.id);
+      return {
+        id: p.id,
+        ref,
+        name: p.combinedName || p.name || 'Profilé Alu',
+        color: p._isGroup ? 'Varié' : (p.colorName || 'Standard'),
+        ral: p._isGroup ? '—' : (p.colorId || 'Std'),
+        dim: `${bLength} mm`,
+        qty: bars,
+        qtyDisplay: `${bars} Barres`,
+        unit: 'Barres',
+        detail: `${(ml / 1000).toFixed(2)} ML au total`,
+        unitPrice,
+        defaultUnitPrice,
+        lineTotal,
+        image: p.image,
+        isSelected: proformaSelection.has(p.id)
+      };
+    });
+
+    // 2. Barres de Volet
+    const itemsVolet = profilesVolet.map(p => {
+      const barKey = p.id;
+      const adminBarLength = parseFloat(p.barLength) || 6400;
+      const bLength = barLengths[barKey] !== undefined ? barLengths[barKey] : adminBarLength;
+      const ml = p.totalMeasure || 0;
+      const pieces = p.pieces ? [...p.pieces].sort((a,b) => b - a) : [];
+      const unitClean = (p.priceUnit || '').toUpperCase().trim();
+      let bars = 0;
+      if ((unitClean === 'BARRE' || !unitClean) && pieces.length > 0) {
+        bars = calculateBarsNeeded(pieces, bLength, manualStockOffcuts[barKey] || []);
+      } else {
+        bars = Math.ceil(ml / bLength);
+      }
+      const factor = getColorFactor(p.colorId, p.colorName);
+      const basePrice = getItemUnitPrice(p, 'profileVolet', bLength);
+      const defaultUnitPrice = basePrice * factor;
+      const unitPrice = customPricedItems[p.id] !== undefined ? customPricedItems[p.id] : defaultUnitPrice;
+      const lineTotal = bars * unitPrice;
+      const ref = p._isGroup ? p.id.split(' + ').map(x => resolveRef(x)).join(' + ') : resolveRef(p.baseId || p.id);
+      return {
+        id: p.id,
+        ref,
+        name: p.combinedName || p.name || 'Barre de Volet',
+        color: p._isGroup ? 'Varié' : (p.colorName || 'Standard'),
+        ral: p._isGroup ? '—' : (p.colorId || 'Std'),
+        dim: `${bLength} mm`,
+        qty: bars,
+        qtyDisplay: `${bars} Barres`,
+        unit: 'Barres',
+        detail: `${(ml / 1000).toFixed(2)} ML au total`,
+        unitPrice,
+        defaultUnitPrice,
+        lineTotal,
+        image: p.image,
+        isSelected: proformaSelection.has(p.id)
+      };
+    });
+
+    // 3. Joints & Éléments Linéaires Alu
+    const itemsJointsAlu = jointsAlu.map(a => {
+      const qtyMeters = (a.totalMeasure || 0) / 1000;
+      const defaultUnitPrice = getItemUnitPrice(a, 'joint');
+      const unitPrice = customPricedItems[a.id] !== undefined ? customPricedItems[a.id] : defaultUnitPrice;
+      const lineTotal = qtyMeters * unitPrice;
+      return {
+        id: a.id,
+        ref: resolveRef(a.baseId || a.id),
+        name: a.combinedName || a.name || 'Joint Alu',
+        color: a.colorName || 'Standard',
+        ral: a.colorId || 'Std',
+        dim: 'Au mètre (ML)',
+        qty: qtyMeters,
+        qtyDisplay: `${qtyMeters.toFixed(2)} ML`,
+        unit: 'ML',
+        detail: `Linéaire fenêtre`,
+        unitPrice,
+        defaultUnitPrice,
+        lineTotal,
+        isSelected: proformaSelection.has(a.id)
+      };
+    });
+
+    // 4. Joints & Éléments Linéaires Volet
+    const itemsJointsVolet = jointsVolet.map(a => {
+      const qtyMeters = (a.totalMeasure || 0) / 1000;
+      const defaultUnitPrice = getItemUnitPrice(a, 'joint');
+      const unitPrice = customPricedItems[a.id] !== undefined ? customPricedItems[a.id] : defaultUnitPrice;
+      const lineTotal = qtyMeters * unitPrice;
+      return {
+        id: a.id,
+        ref: resolveRef(a.baseId || a.id),
+        name: a.combinedName || a.name || 'Joint Volet',
+        color: a.colorName || 'Standard',
+        ral: a.colorId || 'Std',
+        dim: 'Au mètre (ML)',
+        qty: qtyMeters,
+        qtyDisplay: `${qtyMeters.toFixed(2)} ML`,
+        unit: 'ML',
+        detail: `Linéaire volet`,
+        unitPrice,
+        defaultUnitPrice,
+        lineTotal,
+        isSelected: proformaSelection.has(a.id)
+      };
+    });
+
+    // 5. Accessoires Alu
+    const itemsAccAlu = accessoriesAlu.map(a => {
+      const qty = a.totalQty || 0;
+      const unitLabel = a.unit || a.priceUnit || 'U';
+      const defaultUnitPrice = getItemUnitPrice(a, 'accessory');
+      const unitPrice = customPricedItems[a.id] !== undefined ? customPricedItems[a.id] : defaultUnitPrice;
+      const lineTotal = qty * unitPrice;
+      return {
+        id: a.id,
+        ref: resolveRef(a.baseId || a.id),
+        name: a.combinedName || a.name || 'Accessoire Alu',
+        color: a.colorName || 'Standard',
+        ral: a.colorId || 'Std',
+        dim: unitLabel,
+        qty: qty,
+        qtyDisplay: `${Number.isInteger(qty) ? qty : qty.toFixed(2)} ${unitLabel}`,
+        unit: unitLabel,
+        detail: a.label ? `[${a.label}]` : '',
+        unitPrice,
+        defaultUnitPrice,
+        lineTotal,
+        isSelected: proformaSelection.has(a.id)
+      };
+    });
+
+    // 6. Accessoires Volet
+    const itemsAccVolet = accessoriesVolet.map(a => {
+      const qty = a.totalQty || 0;
+      const unitLabel = a.unit || a.priceUnit || 'U';
+      const defaultUnitPrice = getItemUnitPrice(a, 'accessory');
+      const unitPrice = customPricedItems[a.id] !== undefined ? customPricedItems[a.id] : defaultUnitPrice;
+      const lineTotal = qty * unitPrice;
+      return {
+        id: a.id,
+        ref: resolveRef(a.baseId || a.id),
+        name: a.combinedName || a.name || 'Accessoire Volet',
+        color: a.colorName || 'Standard',
+        ral: a.colorId || 'Std',
+        dim: unitLabel,
+        qty: qty,
+        qtyDisplay: `${Number.isInteger(qty) ? qty : qty.toFixed(2)} ${unitLabel}`,
+        unit: unitLabel,
+        detail: a.label ? `[${a.label}]` : '',
+        unitPrice,
+        defaultUnitPrice,
+        lineTotal,
+        isSelected: proformaSelection.has(a.id)
+      };
+    });
+
+    // 7. Vitrages Détaillés
+    const itemsGlass = purchasingGlass.map(g => {
+      const count = g.count || 0;
+      const w = g.width || 0;
+      const h = g.height || 0;
+      const areaOne = (w / 1000) * (h / 1000);
+      const totalArea = areaOne * count;
+      const pricePerM2 = getItemUnitPrice(g, 'glass');
+      const unitPrice = customPricedItems[g.id] !== undefined ? customPricedItems[g.id] : pricePerM2;
+      const lineTotal = totalArea * unitPrice;
+      return {
+        id: g.id,
+        ref: resolveRef(g.baseId || g.id),
+        name: g.name || 'Vitrage',
+        color: g.colorName || 'Standard',
+        ral: '—',
+        dim: `${w} × ${h} mm`,
+        qty: count,
+        qtyDisplay: `${count} U (${totalArea.toFixed(3)} m²)`,
+        unit: 'm²',
+        detail: g.combinedRefs ? `Réf: ${g.combinedRefs}` : '',
+        unitPrice,
+        defaultUnitPrice: pricePerM2,
+        lineTotal,
+        isSelected: proformaSelection.has(g.id)
+      };
+    });
+
+    return [
+      { id: 'profilesAlu', title: 'Profilés Alu (Fenêtre)', color: '#7c3aed', colorBg: '#faf5ff', colorBorder: '#ddd6fe', colorR: 124, colorG: 58, colorB: 237, items: itemsAlu },
+      { id: 'profilesVolet', title: 'Barres de Volet (Profilés)', color: '#4f46e5', colorBg: '#eef2ff', colorBorder: '#c7d2fe', colorR: 79, colorG: 70, colorB: 229, items: itemsVolet },
+      { id: 'jointsAlu', title: 'Joints & Éléments Linéaires Alu', color: '#0891b2', colorBg: '#ecfeff', colorBorder: '#a5f3fc', colorR: 8, colorG: 145, colorB: 178, items: itemsJointsAlu },
+      { id: 'jointsVolet', title: 'Joints & Éléments Linéaires Volet', color: '#0284c7', colorBg: '#f0f9ff', colorBorder: '#bae6fd', colorR: 2, colorG: 132, colorB: 199, items: itemsJointsVolet },
+      { id: 'accessoriesAlu', title: 'Accessoires Alu', color: '#d97706', colorBg: '#fffbeb', colorBorder: '#fde68a', colorR: 217, colorG: 119, colorB: 6, items: itemsAccAlu },
+      { id: 'accessoriesVolet', title: 'Accessoires Volet', color: '#ea580c', colorBg: '#fff7ed', colorBorder: '#fed7aa', colorR: 234, colorG: 88, colorB: 12, items: itemsAccVolet },
+      { id: 'glass', title: 'Vitrages Détaillés', color: '#059669', colorBg: '#ecfdf5', colorBorder: '#a7f3d0', colorR: 5, colorG: 150, colorB: 105, items: itemsGlass }
+    ];
+  }, [profilesAlu, profilesVolet, jointsAlu, jointsVolet, accessoriesAlu, accessoriesVolet, purchasingGlass, barLengths, manualStockOffcuts, customPricedItems, proformaSelection, getItemUnitPrice, getColorFactor, resolveRef]);
+
+  const filteredPricedGroups = useMemo(() => {
+    const q = pricedSearchQuery.toLowerCase().trim();
+    return pricedGroups.map(group => {
+      let items = group.items;
+      if (pricedModalFilter === 'selected') {
+        items = items.filter(it => it.isSelected);
+      }
+      if (q) {
+        items = items.filter(it => 
+          (it.ref && String(it.ref).toLowerCase().includes(q)) ||
+          (it.name && String(it.name).toLowerCase().includes(q)) ||
+          (it.color && String(it.color).toLowerCase().includes(q)) ||
+          (it.dim && String(it.dim).toLowerCase().includes(q)) ||
+          (it.detail && String(it.detail).toLowerCase().includes(q))
+        );
+      }
+      const subtotal = items.reduce((sum, it) => sum + (it.lineTotal || 0), 0);
+      return {
+        ...group,
+        items,
+        subtotal
+      };
+    });
+  }, [pricedGroups, pricedModalFilter, pricedSearchQuery]);
+
+  const pricedTotals = useMemo(() => {
+    let grandTotal = 0;
+    let totalItems = 0;
+    let selectedCount = 0;
+
+    pricedGroups.forEach(g => {
+      g.items.forEach(it => {
+        totalItems++;
+        if (it.isSelected) selectedCount++;
+      });
+    });
+
+    filteredPricedGroups.forEach(g => {
+      grandTotal += g.subtotal;
+    });
+
+    return {
+      grandTotal,
+      grandTotalHT: grandTotal,
+      totalItems,
+      selectedCount
+    };
+  }, [pricedGroups, filteredPricedGroups]);
+
+  const formatMoney = (val, decimals = 2) => {
+    const num = Number(val) || 0;
+    const parts = num.toFixed(decimals).split('.');
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    return decimals > 0 ? `${parts[0]},${parts[1]}` : parts[0];
+  };
+
+  const generatePricedProformaPDF = (groupsToExport) => {
+    const doc = new jsPDF();
+    const pw = doc.internal.pageSize.getWidth();
+    let y = 15;
+
+    // Header branding
+    if (quoteSettings?.logoBase64) {
+      try {
+        const imgProps = doc.getImageProperties(quoteSettings.logoBase64);
+        const maxW = 55;
+        const maxH = 22;
+        const ratio = Math.min(maxW / imgProps.width, maxH / imgProps.height);
+        doc.addImage(quoteSettings.logoBase64, 'PNG', 15, y, imgProps.width * ratio, imgProps.height * ratio, '', 'FAST');
+      } catch(e) {
+        try { doc.addImage(quoteSettings.logoBase64, 'PNG', 15, y, 55, 22, '', 'FAST'); } catch(e2) {}
+      }
+    }
+
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(30, 41, 59);
+    doc.text('PROFORMA CHIFFRÉE', pw - 15, y + 10, { align: 'right' });
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 116, 139);
+    doc.text("DEVIS D'APPROVISIONNEMENT & BESOINS ATELIER", pw - 15, y + 16, { align: 'right' });
+
+    y += 28;
+    const boxY = y;
+    const boxWidth = (pw - 35) / 2;
+
+    // Company Box
+    doc.setDrawColor(203, 213, 225);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(14, boxY, boxWidth, 38, 2, 2);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(30, 41, 59);
+    doc.text(quoteSettings?.companyName || 'Mon Entreprise', 17, boxY + 6);
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(71, 85, 105);
+    let cy = boxY + 11;
+    if (quoteSettings?.companyAddress) {
+      const addressLines = doc.splitTextToSize(quoteSettings.companyAddress, boxWidth - 6);
+      doc.text(addressLines, 17, cy);
+      cy += addressLines.length * 3.5;
+    }
+    const phone = quoteSettings?.companyPhone || '';
+    const email = quoteSettings?.companyEmail || '';
+    if (phone || email) {
+      doc.text(`${phone} ${email ? ' - ' + email : ''}`, 17, cy);
+      cy += 4;
+    }
+    doc.setTextColor(100, 116, 139);
+    if (quoteSettings?.companyRC) { doc.text(`RC: ${quoteSettings.companyRC} | NIF: ${quoteSettings.companyMF || '—'}`, 17, cy); cy += 3.5; }
+
+    // Supplier / Project Box
+    const rightBoxX = 14 + boxWidth + 7;
+    doc.roundedRect(rightBoxX, boxY, boxWidth, 38, 2, 2);
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(30, 41, 59);
+    doc.text('Destinataire / Fournisseur :', rightBoxX + 3, boxY + 6);
+    doc.setFontSize(9);
+    doc.setTextColor(71, 85, 105);
+    doc.text(supplierName || 'Tous fournisseurs / Atelier', rightBoxX + 3, boxY + 11);
+
+    const clientName = database.clients?.find(c => c.id === activeQuote?.clientId)?.nom || '—';
+    const refName = activeQuote?.id?.startsWith('CMD') ? activeQuote.id : (activeQuote?.number || 'Non spécifié');
+    doc.setFontSize(8);
+    doc.text(`Chantier: ${refName}`, rightBoxX + 3, boxY + 19);
+    doc.text(`Client Final: ${clientName}`, rightBoxX + 3, boxY + 24);
+    doc.text(`Date: ${new Date().toLocaleDateString('fr-FR')}`, rightBoxX + 3, boxY + 29);
+
+    y = boxY + 44;
+
+    let grandTotal = 0;
+
+    groupsToExport.forEach(group => {
+      if (!group.items || group.items.length === 0) return;
+
+      if (y > 230) { doc.addPage(); y = 20; }
+
+      // Group Header Banner
+      doc.setFillColor(group.colorR || 30, group.colorG || 41, group.colorB || 59);
+      doc.roundedRect(14, y, pw - 28, 7.5, 1, 1, 'F');
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(255, 255, 255);
+      doc.text(group.title.toUpperCase(), 17, y + 5.2);
+      doc.text(`Sous-total: ${formatMoney(group.subtotal)} DZD`, pw - 17, y + 5.2, { align: 'right' });
+
+      y += 9.5;
+
+      // Table Column Header
+      doc.setFillColor(241, 245, 249);
+      doc.rect(14, y, pw - 28, 6.5, 'F');
+      doc.setFontSize(7.5);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(71, 85, 105);
+      doc.text('Réf.', 16, y + 4.5);
+      doc.text('Désignation', 44, y + 4.5);
+      doc.text('Finition', 102, y + 4.5);
+      doc.text('Qté', 134, y + 4.5, { align: 'right' });
+      doc.text('Unité', 140, y + 4.5);
+      doc.text('P.U. HT (DZD)', 168, y + 4.5, { align: 'right' });
+      doc.text('Total HT (DZD)', pw - 16, y + 4.5, { align: 'right' });
+
+      y += 7.5;
+
+      group.items.forEach(item => {
+        const refLines = doc.splitTextToSize(String(item.ref || '—'), 26);
+        const nameLines = doc.splitTextToSize(String(item.name || '—'), 54);
+        const rowHeight = Math.max(refLines.length, nameLines.length) * 4 + 2;
+
+        if (y + rowHeight > 275) {
+          doc.addPage();
+          y = 20;
+        }
+
+        doc.setFontSize(7.5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(30, 41, 59);
+
+        doc.text(refLines, 16, y + 3);
+        doc.text(nameLines, 44, y + 3);
+        doc.text(String(item.color || 'Std').substring(0, 14), 102, y + 3);
+
+        const qtyNum = typeof item.qty === 'number'
+          ? (Number.isInteger(item.qty) ? String(item.qty) : item.qty.toFixed(2).replace('.', ','))
+          : String(item.qty || 1);
+        doc.setFont('helvetica', 'bold');
+        doc.text(qtyNum, 134, y + 3, { align: 'right' });
+
+        doc.setFont('helvetica', 'normal');
+        doc.text(String(item.unit || ''), 140, y + 3);
+        doc.text(formatMoney(item.unitPrice), 168, y + 3, { align: 'right' });
+        doc.setFont('helvetica', 'bold');
+        doc.text(formatMoney(item.lineTotal), pw - 16, y + 3, { align: 'right' });
+
+        doc.setDrawColor(241, 245, 249);
+        doc.setLineWidth(0.2);
+        doc.line(14, y + rowHeight, pw - 14, y + rowHeight);
+
+        y += rowHeight;
+      });
+
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(30, 41, 59);
+      doc.text(`Total ${group.title} : ${formatMoney(group.subtotal)} DZD`, pw - 16, y + 5, { align: 'right' });
+      y += 9;
+
+      grandTotal += group.subtotal;
+    });
+
+    if (y > 240) { doc.addPage(); y = 20; }
+    y += 4;
+
+    // Recap box (NO TVA, clear total)
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(203, 213, 225);
+    doc.roundedRect(14, y, pw - 28, 22, 2, 2, 'FD');
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(71, 85, 105);
+    doc.text('RÉCAPITULATIF DES COÛTS (ATELIER)', 18, y + 7);
+
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 116, 139);
+    const totalArticles = groupsToExport.reduce((acc, g) => acc + (g.items?.length || 0), 0);
+    doc.text(`Total articles : ${totalArticles}`, 18, y + 14);
+    doc.text(`Date : ${new Date().toLocaleDateString('fr-FR')}`, 18, y + 18);
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(30, 41, 59);
+    doc.text('TOTAL GLOBAL :', pw - 78, y + 14);
+
+    doc.setFontSize(13);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(16, 185, 129);
+    doc.text(`${formatMoney(grandTotal)} DZD`, pw - 18, y + 14, { align: 'right' });
+
+    // Page numbers
+    const totalPages = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i);
+      doc.setFontSize(7.5);
+      doc.setTextColor(148, 163, 184);
+      doc.text(`Page ${i} sur ${totalPages} • CalculDevis PRO`, pw / 2, 290, { align: 'center' });
+    }
+
+    doc.save(`Proforma_Chiffree_${activeQuote?.number || 'Chantier'}.pdf`);
+  };
+
+  const exportPricedProformaCSV = (groupsToExport) => {
+    const q = (v) => `"${String(v || "").replace(/"/g, '""').replace(/;/g, ',')}"`;
+    let csv = "\uFEFFGroupe;Reference;Designation;Finition;Dimensions;Quantite;Unite;Prix_Unitaire_HT;Total_HT\n";
+    let grandTotal = 0;
+
+    groupsToExport.forEach(g => {
+      if (!g.items || g.items.length === 0) return;
+      g.items.forEach(it => {
+        csv += `${q(g.title)};${q(it.ref)};${q(it.name)};${q(it.color)};${q(it.dim || '')};${it.qty};${q(it.unit)};${(it.unitPrice || 0).toFixed(2)};${(it.lineTotal || 0).toFixed(2)}\n`;
+      });
+      csv += `${q('SOUS-TOTAL ' + g.title)};;;;;;;;${g.subtotal.toFixed(2)}\n`;
+      csv += ";;;;;;;;\n";
+      grandTotal += g.subtotal;
+    });
+
+    csv += `${q('TOTAL GLOBAL')};;;;;;;;${grandTotal.toFixed(2)}\n`;
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute("download", `Proforma_Chiffree_${activeQuote?.number || 'Chantier'}.csv`);
+    link.click();
+  };
 
   const chutesData = useMemo(() => {
     const scraps = [];
@@ -1521,8 +2102,31 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                 </select>
               </div>
             )}
-            <button onClick={generateOpeningPDF} className="btn" style={{ background: 'white', color: '#1e293b', fontWeight: 700, padding: '0.6rem 1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem', border: 'none', borderRadius: '0.75rem' }}>
+            <button onClick={generateOpeningPDF} className="btn" style={{ background: 'white', color: '#1e293b', fontWeight: 700, padding: '0.6rem 1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem', border: 'none', borderRadius: '0.75rem', cursor: 'pointer' }}>
               <Download size={18} /> Exporter OF
+            </button>
+            <button 
+              onClick={() => {
+                setPricedModalFilter(proformaSelection.size > 0 ? 'selected' : 'all');
+                setShowPricedProformaModal(true);
+              }} 
+              className="btn" 
+              style={{ 
+                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', 
+                color: 'white', 
+                fontWeight: 700, 
+                padding: '0.6rem 1.25rem', 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '0.5rem', 
+                border: 'none', 
+                borderRadius: '0.75rem',
+                cursor: 'pointer',
+                boxShadow: '0 4px 6px -1px rgba(16, 185, 129, 0.25)'
+              }}
+              title="Afficher la proforma chiffrée avec prix unitaires et totaux par groupe d'éléments"
+            >
+              <Calculator size={18} /> Proforma Chiffrée
             </button>
           </div>
         </div>
@@ -1971,6 +2575,29 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                   style={{ background: '#8b5cf6', color: 'white', fontWeight: 700, fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
                 >
                   <FileText size={15} /> {docHeader} ({displayProfiles.filter(p=>proformaSelection.has(p.id)).length + purchasingAccessories.filter(a=>proformaSelection.has(a.id)).length})
+                </button>
+
+                <button 
+                  onClick={() => {
+                    setPricedModalFilter(proformaSelection.size > 0 ? 'selected' : 'all');
+                    setShowPricedProformaModal(true);
+                  }}
+                  className="btn"
+                  style={{ 
+                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', 
+                    color: 'white', 
+                    fontWeight: 700, 
+                    fontSize: '0.8rem', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '0.4rem',
+                    border: 'none',
+                    boxShadow: '0 2px 6px rgba(16, 185, 129, 0.3)',
+                    cursor: 'pointer'
+                  }}
+                  title="Afficher la liste détaillée avec prix unitaires et totaux par groupe d'éléments"
+                >
+                  <Calculator size={15} /> Proforma Chiffrée (Détails & Totaux)
                 </button>
 
                 <button 
@@ -4002,6 +4629,494 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
       })()}
 
 
+
+      {/* ─── MODAL PROFORMA CHIFFRÉE (DÉTAILS DES COÛTS & TOTAUX) ─────────── */}
+      {showPricedProformaModal && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(15, 23, 42, 0.75)',
+            backdropFilter: 'blur(8px)',
+            zIndex: 99999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+            animation: 'fadeIn 0.2s ease-out'
+          }}
+          onClick={() => setShowPricedProformaModal(false)}
+        >
+          <div 
+            style={{
+              background: '#ffffff',
+              borderRadius: '1.25rem',
+              width: '100%',
+              maxWidth: '1400px',
+              maxHeight: '94vh',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4)',
+              overflow: 'hidden',
+              border: '1px solid #cbd5e1'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div style={{
+              padding: '1.25rem 1.75rem',
+              background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+              color: 'white',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '1rem',
+              borderBottom: '1px solid rgba(255,255,255,0.1)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                <div style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '12px',
+                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                  display: 'grid',
+                  placeItems: 'center',
+                  boxShadow: '0 4px 10px rgba(16, 185, 129, 0.35)'
+                }}>
+                  <Calculator size={22} color="white" />
+                </div>
+                <div>
+                  <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, letterSpacing: '-0.3px', color: 'white' }}>
+                    Proforma Chiffrée — Détail des Coûts & Totaux
+                  </h2>
+                  <p style={{ margin: '0.2rem 0 0', fontSize: '0.78rem', color: '#94a3b8' }}>
+                    Chantier : <strong style={{ color: '#f8fafc' }}>{activeQuote?.id?.startsWith('CMD') ? activeQuote.id : (activeQuote?.number || 'Non spécifié')}</strong>
+                    {' • '}Client : <strong style={{ color: '#f8fafc' }}>{database.clients?.find(c => c.id === activeQuote?.clientId)?.nom || '—'}</strong>
+                    {supplierName ? ` • Destinataire : ${supplierName}` : ''}
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <button
+                  onClick={() => generatePricedProformaPDF(filteredPricedGroups)}
+                  className="btn"
+                  style={{
+                    background: '#10b981',
+                    color: 'white',
+                    fontWeight: 700,
+                    fontSize: '0.82rem',
+                    padding: '0.5rem 0.9rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    border: 'none',
+                    borderRadius: '0.6rem',
+                    cursor: 'pointer'
+                  }}
+                  title="Télécharger le document PDF avec prix unitaires et totaux par groupe"
+                >
+                  <Download size={15} /> PDF Chiffré
+                </button>
+                <button
+                  onClick={() => exportPricedProformaCSV(filteredPricedGroups)}
+                  className="btn"
+                  style={{
+                    background: '#0284c7',
+                    color: 'white',
+                    fontWeight: 700,
+                    fontSize: '0.82rem',
+                    padding: '0.5rem 0.9rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    border: 'none',
+                    borderRadius: '0.6rem',
+                    cursor: 'pointer'
+                  }}
+                  title="Exporter les données au format Excel (CSV)"
+                >
+                  <FileSpreadsheet size={15} /> Excel (CSV)
+                </button>
+                <button
+                  onClick={() => setShowPricedProformaModal(false)}
+                  style={{
+                    background: 'rgba(255,255,255,0.1)',
+                    border: 'none',
+                    color: '#cbd5e1',
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '10px',
+                    display: 'grid',
+                    placeItems: 'center',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                  title="Fermer la fenêtre"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* KPI Summary Cards */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+              gap: '0.75rem',
+              padding: '0.9rem 1.75rem',
+              background: '#f8fafc',
+              borderBottom: '1px solid #e2e8f0'
+            }}>
+              {pricedGroups.map(g => {
+                const sub = g.items.reduce((s, it) => s + (it.lineTotal || 0), 0);
+                return (
+                  <div key={g.id} style={{
+                    background: 'white',
+                    padding: '0.6rem 0.85rem',
+                    borderRadius: '0.75rem',
+                    border: `1px solid ${g.colorBorder}`,
+                    borderLeft: `4px solid ${g.color}`,
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
+                  }}>
+                    <span style={{ display: 'block', fontSize: '0.66rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      {g.title.replace(' (Fenêtre)', '').replace(' (Profilés)', '')}
+                    </span>
+                    <span style={{ fontSize: '1rem', fontWeight: 800, color: g.color }}>
+                      {formatMoney(sub)} <span style={{ fontSize: '0.68rem', fontWeight: 500, color: '#94a3b8' }}>DZD</span>
+                    </span>
+                  </div>
+                );
+              })}
+              {/* GRAND TOTAL CARD */}
+              <div style={{
+                background: 'linear-gradient(135deg, #10b981 0%, #047857 100%)',
+                padding: '0.6rem 1rem',
+                borderRadius: '0.75rem',
+                color: 'white',
+                boxShadow: '0 4px 10px rgba(16, 185, 129, 0.3)',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center'
+              }}>
+                <span style={{ display: 'block', fontSize: '0.68rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.9 }}>
+                  TOTAL GLOBAL
+                </span>
+                <span style={{ fontSize: '1.25rem', fontWeight: 900 }}>
+                  {formatMoney(pricedTotals.grandTotal)} <span style={{ fontSize: '0.75rem', fontWeight: 600, opacity: 0.9 }}>DZD</span>
+                </span>
+              </div>
+            </div>
+
+            {/* Filter & Search Toolbar */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '0.75rem 1.75rem',
+              background: '#ffffff',
+              borderBottom: '1px solid #e2e8f0',
+              gap: '1rem',
+              flexWrap: 'wrap'
+            }}>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#64748b' }}>Affichage :</span>
+                <button
+                  onClick={() => setPricedModalFilter('all')}
+                  style={{
+                    padding: '0.35rem 0.85rem',
+                    borderRadius: '0.5rem',
+                    fontSize: '0.78rem',
+                    fontWeight: pricedModalFilter === 'all' ? 800 : 600,
+                    background: pricedModalFilter === 'all' ? '#1e293b' : '#f1f5f9',
+                    color: pricedModalFilter === 'all' ? 'white' : '#475569',
+                    border: 'none',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  Tous les articles ({pricedTotals.totalItems})
+                </button>
+                <button
+                  onClick={() => setPricedModalFilter('selected')}
+                  style={{
+                    padding: '0.35rem 0.85rem',
+                    borderRadius: '0.5rem',
+                    fontSize: '0.78rem',
+                    fontWeight: pricedModalFilter === 'selected' ? 800 : 600,
+                    background: pricedModalFilter === 'selected' ? '#8b5cf6' : '#f1f5f9',
+                    color: pricedModalFilter === 'selected' ? 'white' : '#475569',
+                    border: 'none',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  Sélection Proforma uniquement ({pricedTotals.selectedCount})
+                </button>
+                {Object.keys(customPricedItems).length > 0 && (
+                  <button
+                    onClick={() => setCustomPricedItems({})}
+                    style={{
+                      padding: '0.35rem 0.7rem',
+                      borderRadius: '0.5rem',
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      background: '#fef2f2',
+                      color: '#ef4444',
+                      border: '1px solid #fecaca',
+                      cursor: 'pointer'
+                    }}
+                    title="Rétablir tous les prix aux valeurs par défaut du catalogue"
+                  >
+                    ↺ Rétablir prix catalogue ({Object.keys(customPricedItems).length})
+                  </button>
+                )}
+              </div>
+
+              <div style={{ position: 'relative', width: '280px' }}>
+                <Search size={15} color="#94a3b8" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
+                <input
+                  type="text"
+                  className="input"
+                  placeholder="Rechercher référence, nom..."
+                  value={pricedSearchQuery}
+                  onChange={e => setPricedSearchQuery(e.target.value)}
+                  style={{ width: '100%', paddingLeft: '2.1rem', fontSize: '0.8rem', height: '34px' }}
+                />
+              </div>
+            </div>
+
+            {/* Scrollable Body: Group Tables */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem 1.75rem', display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
+              {filteredPricedGroups.map((group, gIdx) => {
+                if (group.items.length === 0) return null;
+
+                return (
+                  <div key={group.id} style={{
+                    background: '#ffffff',
+                    borderRadius: '1rem',
+                    border: `1.5px solid ${group.colorBorder}`,
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
+                    overflow: 'hidden'
+                  }}>
+                    {/* Group Header Banner */}
+                    <div style={{
+                      padding: '0.75rem 1.25rem',
+                      background: group.colorBg,
+                      borderBottom: `1.5px solid ${group.colorBorder}`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '1rem',
+                      flexWrap: 'wrap'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                        <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: group.color }}></div>
+                        <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: group.color }}>
+                          {gIdx + 1}. {group.title}
+                        </h3>
+                        <span style={{ fontSize: '0.72rem', background: 'white', color: group.color, border: `1px solid ${group.colorBorder}`, padding: '0.1rem 0.5rem', borderRadius: '999px', fontWeight: 700 }}>
+                          {group.items.length} {group.items.length > 1 ? 'articles' : 'article'}
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>Sous-total :</span>
+                        <span style={{ fontSize: '1.05rem', fontWeight: 900, color: group.color }}>
+                          {formatMoney(group.subtotal)} DZD
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Table */}
+                    <div className="table-responsive">
+                      <table className="data-table" style={{ margin: 0 }}>
+                        <thead>
+                          <tr style={{ background: '#f8fafc' }}>
+                            <th style={{ width: '40px' }}>Photo</th>
+                            <th style={{ width: '130px' }}>Référence</th>
+                            <th>Désignation</th>
+                            <th style={{ width: '130px' }}>Finition</th>
+                            <th style={{ width: '130px' }}>Spécif. / Cotes</th>
+                            <th style={{ width: '110px' }}>Quantité</th>
+                            <th style={{ width: '80px' }}>Unité</th>
+                            <th style={{ width: '150px', textAlign: 'right' }}>Prix U. HT (DZD)</th>
+                            <th style={{ width: '150px', textAlign: 'right' }}>Total Ligne HT</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {group.items.map((it, iIdx) => {
+                            const isCustom = customPricedItems[it.id] !== undefined;
+                            return (
+                              <tr key={`${group.id}-${it.id}-${iIdx}`} style={{ background: iIdx % 2 === 0 ? 'white' : '#fafafa' }}>
+                                <td style={{ textAlign: 'center', padding: '0.4rem' }}>
+                                  {it.image ? (
+                                    <img src={it.image} alt="" style={{ width: '32px', height: '32px', objectFit: 'contain', borderRadius: '4px', border: '1px solid #e2e8f0' }} />
+                                  ) : (
+                                    <div style={{ width: '32px', height: '32px', background: '#f1f5f9', borderRadius: '4px', display: 'grid', placeItems: 'center', margin: '0 auto' }}>
+                                      <Package size={14} color="#94a3b8" />
+                                    </div>
+                                  )}
+                                </td>
+                                <td style={{ fontFamily: 'monospace', fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>
+                                  {it.ref || '—'}
+                                </td>
+                                <td>
+                                  <div style={{ fontWeight: 700, color: '#1e293b' }}>{it.name}</div>
+                                  {it.detail && <div style={{ fontSize: '0.72rem', color: '#64748b' }}>{it.detail}</div>}
+                                </td>
+                                <td style={{ fontSize: '0.8rem' }}>
+                                  <span style={{ fontWeight: 600 }}>{it.color}</span>
+                                  {it.ral && it.ral !== 'Std' && it.ral !== '—' && (
+                                    <span style={{ display: 'block', fontSize: '0.68rem', color: '#94a3b8' }}>RAL: {it.ral}</span>
+                                  )}
+                                </td>
+                                <td style={{ fontSize: '0.8rem', color: '#475569' }}>
+                                  {it.dim || '—'}
+                                </td>
+                                <td style={{ fontSize: '0.88rem', fontWeight: 800, color: '#1e293b' }}>
+                                  {it.qtyDisplay || it.qty}
+                                </td>
+                                <td style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>
+                                  {it.unit}
+                                </td>
+                                <td style={{ textAlign: 'right' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.3rem' }}>
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      value={it.unitPrice}
+                                      onChange={e => {
+                                        const val = parseFloat(e.target.value) || 0;
+                                        setCustomPricedItems(prev => ({ ...prev, [it.id]: val }));
+                                      }}
+                                      onFocus={e => e.target.select()}
+                                      style={{
+                                        width: '95px',
+                                        padding: '0.25rem 0.45rem',
+                                        textAlign: 'right',
+                                        fontSize: '0.82rem',
+                                        fontWeight: 700,
+                                        borderRadius: '0.375rem',
+                                        border: isCustom ? '1.5px solid #8b5cf6' : '1px solid #cbd5e1',
+                                        background: isCustom ? '#faf5ff' : '#ffffff',
+                                        color: '#1e293b'
+                                      }}
+                                      title="Prix unitaire HT (modifiable)"
+                                    />
+                                    {isCustom && (
+                                      <button
+                                        onClick={() => {
+                                          setCustomPricedItems(prev => {
+                                            const next = { ...prev };
+                                            delete next[it.id];
+                                            return next;
+                                          });
+                                        }}
+                                        style={{
+                                          background: 'none',
+                                          border: 'none',
+                                          color: '#8b5cf6',
+                                          cursor: 'pointer',
+                                          fontSize: '0.75rem',
+                                          padding: '0 0.2rem',
+                                          fontWeight: 'bold'
+                                        }}
+                                        title="Rétablir le prix catalogue"
+                                      >
+                                        ↺
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                                <td style={{ textAlign: 'right', fontWeight: 800, color: group.color, fontSize: '0.95rem' }}>
+                                  {formatMoney(it.lineTotal || 0)} <span style={{ fontSize: '0.72rem', fontWeight: 500, color: '#94a3b8' }}>DZD</span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                        <tfoot>
+                          <tr style={{ background: group.colorBg, borderTop: `2px solid ${group.colorBorder}` }}>
+                            <td colSpan="8" style={{ textAlign: 'right', fontWeight: 800, color: group.color, fontSize: '0.88rem' }}>
+                              SOUS-TOTAL {group.title.toUpperCase()} :
+                            </td>
+                            <td style={{ textAlign: 'right', fontWeight: 900, color: group.color, fontSize: '1.05rem' }}>
+                              {formatMoney(group.subtotal)} DZD
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {filteredPricedGroups.every(g => g.items.length === 0) && (
+                <div style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>
+                  <Calculator size={40} color="#cbd5e1" style={{ margin: '0 auto 1rem' }} />
+                  <h4 style={{ color: '#475569', margin: '0 0 0.5rem' }}>Aucun élément ne correspond aux critères</h4>
+                  <p style={{ fontSize: '0.85rem', margin: 0 }}>Modifiez votre filtre ou effacez la recherche pour voir tous les éléments.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{
+              padding: '1rem 1.75rem',
+              background: '#f8fafc',
+              borderTop: '1px solid #e2e8f0',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '1rem',
+              flexWrap: 'wrap'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
+                <div>
+                  <span style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', fontWeight: 700, textTransform: 'uppercase' }}>ARTICLES AFFICHÉS</span>
+                  <span style={{ fontSize: '1.05rem', fontWeight: 800, color: '#475569' }}>
+                    {filteredPricedGroups.reduce((acc, g) => acc + g.items.length, 0)} articles
+                  </span>
+                </div>
+                <div style={{ borderLeft: '2px solid #cbd5e1', paddingLeft: '1.5rem' }}>
+                  <span style={{ fontSize: '0.68rem', color: '#059669', display: 'block', fontWeight: 800, textTransform: 'uppercase' }}>TOTAL GLOBAL</span>
+                  <span style={{ fontSize: '1.45rem', fontWeight: 900, color: '#059669' }}>
+                    {formatMoney(pricedTotals.grandTotal)} <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#64748b' }}>DZD</span>
+                  </span>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.6rem' }}>
+                <button
+                  onClick={() => generatePricedProformaPDF(filteredPricedGroups)}
+                  className="btn"
+                  style={{ background: '#10b981', color: 'white', fontWeight: 700, fontSize: '0.85rem', padding: '0.55rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.4rem', border: 'none', borderRadius: '0.6rem', cursor: 'pointer' }}
+                >
+                  <Download size={16} /> Exporter PDF Chiffré
+                </button>
+                <button
+                  onClick={() => exportPricedProformaCSV(filteredPricedGroups)}
+                  className="btn"
+                  style={{ background: '#0284c7', color: 'white', fontWeight: 700, fontSize: '0.85rem', padding: '0.55rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.4rem', border: 'none', borderRadius: '0.6rem', cursor: 'pointer' }}
+                >
+                  <FileSpreadsheet size={16} /> Exporter Excel
+                </button>
+                <button
+                  onClick={() => setShowPricedProformaModal(false)}
+                  className="btn"
+                  style={{ background: '#e2e8f0', color: '#475569', fontWeight: 700, fontSize: '0.85rem', padding: '0.55rem 1.1rem', border: 'none', borderRadius: '0.6rem', cursor: 'pointer' }}
+                >
+                  Fermer
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
