@@ -614,26 +614,67 @@ const QuotesModule = ({ data, setData, quoteSettings, onOpenQuote, onNewQuote })
 
                     {/* Statut */}
                     <td data-label="Statut" style={{ padding: '0.85rem 1rem' }}>
-                      <span style={{ 
-                        padding: '0.25rem 0.65rem', 
-                        borderRadius: '999px', 
-                        fontSize: '0.75rem', 
-                        fontWeight: 700,
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '0.3rem',
-                        background: q.status === 'Confirmé' 
-                          ? '#dbeafe' 
-                          : (q.status === 'Validé' ? '#dcfce7' : '#fef3c7'),
-                        color: q.status === 'Confirmé' 
-                          ? '#1d4ed8' 
-                          : (q.status === 'Validé' ? '#15803d' : '#b45309')
-                      }}>
-                        {q.status === 'Confirmé' && <CheckCircle size={12} />}
-                        {q.status === 'Validé' && <CheckCircle size={12} />}
-                        {(!q.status || q.status === 'Brouillon') && <Clock size={12} />}
-                        {q.status || 'Brouillon'}
-                      </span>
+                      {isShop ? (
+                        <select
+                          value={q.status || 'Brouillon'}
+                          onChange={(e) => {
+                            const newStatus = e.target.value;
+                            const updated = { 
+                              ...q, 
+                              status: newStatus, 
+                              validatedAt: newStatus === 'Validé' ? (q.validatedAt || new Date().toISOString()) : q.validatedAt,
+                              _lastModified: new Date().toISOString()
+                            };
+                            setData(prev => ({ 
+                              ...prev, 
+                              quotes: (prev.quotes || []).map(quote => quote.id === q.id ? updated : quote) 
+                            }));
+                          }}
+                          style={{
+                            padding: '0.25rem 0.6rem',
+                            borderRadius: '999px',
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            outline: 'none',
+                            border: q.status === 'Confirmé' 
+                              ? '1.5px solid #93c5fd' 
+                              : (q.status === 'Validé' ? '1.5px solid #86efac' : '1.5px solid #fde68a'),
+                            background: q.status === 'Confirmé' 
+                              ? '#eff6ff' 
+                              : (q.status === 'Validé' ? '#f0fdf4' : '#fffbeb'),
+                            color: q.status === 'Confirmé' 
+                              ? '#1d4ed8' 
+                              : (q.status === 'Validé' ? '#15803d' : '#b45309')
+                          }}
+                          title="Modifier le statut du devis Shop"
+                        >
+                          <option value="Brouillon">⏳ Brouillon</option>
+                          <option value="Validé">✅ Validé</option>
+                          <option value="Confirmé">📦 Confirmé</option>
+                        </select>
+                      ) : (
+                        <span style={{ 
+                          padding: '0.25rem 0.65rem', 
+                          borderRadius: '999px', 
+                          fontSize: '0.75rem', 
+                          fontWeight: 700,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.3rem',
+                          background: q.status === 'Confirmé' 
+                            ? '#dbeafe' 
+                            : (q.status === 'Validé' ? '#dcfce7' : '#fef3c7'),
+                          color: q.status === 'Confirmé' 
+                            ? '#1d4ed8' 
+                            : (q.status === 'Validé' ? '#15803d' : '#b45309')
+                        }}>
+                          {q.status === 'Confirmé' && <CheckCircle size={12} />}
+                          {q.status === 'Validé' && <CheckCircle size={12} />}
+                          {(!q.status || q.status === 'Brouillon') && <Clock size={12} />}
+                          {q.status || 'Brouillon'}
+                        </span>
+                      )}
                     </td>
 
                     {/* Type / Articles */}
