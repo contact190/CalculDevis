@@ -9,6 +9,22 @@ const formatMoney = (amount) => {
   return (Number(amount) || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
+const generateNextQuoteNumber = (settings, db) => {
+  let counter = settings?.quoteCounter || 1;
+  const prefix = settings?.quotePrefix || 'DEV-';
+  const quotes = db?.quotes || [];
+  for (const q of quotes) {
+    if (q && q.number && q.number.startsWith(prefix)) {
+      const numPart = q.number.substring(prefix.length).split('-')[0].split(' ')[0];
+      const parsed = parseInt(numPart, 10);
+      if (!isNaN(parsed) && parsed >= counter) {
+        counter = parsed + 1;
+      }
+    }
+  }
+  return `${prefix}${String(counter).padStart(3, '0')}`;
+};
+
 const QuotesModule = ({ data, setData, quoteSettings, onOpenQuote, onNewQuote }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedClientId, setSelectedClientId] = useState('ALL');
@@ -220,11 +236,12 @@ const QuotesModule = ({ data, setData, quoteSettings, onOpenQuote, onNewQuote })
 
   const handleDuplicateQuote = (quote) => {
     const newId = `QUOTE-${Date.now()}`;
+    const nextNumber = generateNextQuoteNumber(quoteSettings, data);
     const deepClone = JSON.parse(JSON.stringify(quote));
     const newQuote = {
       ...deepClone,
       id: newId,
-      number: `${quote.number.split('-Copie')[0]}-Copie`,
+      number: nextNumber,
       status: 'Brouillon',
       createdAt: new Date().toISOString(),
       validatedAt: null,
@@ -238,7 +255,7 @@ const QuotesModule = ({ data, setData, quoteSettings, onOpenQuote, onNewQuote })
       ...prev,
       quotes: [...(prev.quotes || []), newQuote]
     }));
-    alert(`Devis ${quote.number} dupliqué en tant que Brouillon (${newQuote.number}).`);
+    alert(`Devis ${quote.number} dupliqué avec succès sous le nouveau numéro ${nextNumber}.`);
   };
 
   const handleDeleteQuote = (quote) => {

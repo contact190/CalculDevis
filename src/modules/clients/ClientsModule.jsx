@@ -1,7 +1,23 @@
 import React, { useState } from 'react';
 import { Users, Plus, Edit2, Trash2, FileText, ChevronDown, ChevronUp, CheckCircle, Copy, Link, ExternalLink } from 'lucide-react';
 
-const ClientsModule = ({ data, setData, onOpenQuote }) => {
+const generateNextQuoteNumber = (settings, db) => {
+  let counter = settings?.quoteCounter || 1;
+  const prefix = settings?.quotePrefix || 'DEV-';
+  const quotes = db?.quotes || [];
+  for (const q of quotes) {
+    if (q && q.number && q.number.startsWith(prefix)) {
+      const numPart = q.number.substring(prefix.length).split('-')[0].split(' ')[0];
+      const parsed = parseInt(numPart, 10);
+      if (!isNaN(parsed) && parsed >= counter) {
+        counter = parsed + 1;
+      }
+    }
+  }
+  return `${prefix}${String(counter).padStart(3, '0')}`;
+};
+
+const ClientsModule = ({ data, setData, onOpenQuote, quoteSettings }) => {
   const [editingClient, setEditingClient] = useState(null);
   const [expandedClient, setExpandedClient] = useState(null);
 
@@ -113,12 +129,13 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
 
   const handleDuplicateQuote = (quote) => {
     const newId = `QUOTE-${Date.now()}`;
+    const nextNumber = generateNextQuoteNumber(quoteSettings, data);
     // Deep clone to fully decouple from the original quote (items, config, priceData, totals, etc.)
     const deepClone = JSON.parse(JSON.stringify(quote));
     const newQuote = {
       ...deepClone,
       id: newId,
-      number: `${quote.number.split('-Copie')[0]}-Copie`,
+      number: nextNumber,
       status: 'Brouillon',
       createdAt: new Date().toISOString(),
       validatedAt: null,
@@ -133,7 +150,7 @@ const ClientsModule = ({ data, setData, onOpenQuote }) => {
       ...prev,
       quotes: [...(prev.quotes || []), newQuote]
     }));
-    alert(`Devis ${quote.number} dupliqué en tant que Brouillon.`);
+    alert(`Devis ${quote.number} dupliqué avec succès sous le nouveau numéro ${nextNumber}.`);
   };
 
   const handleDeleteClient = (id) => {
