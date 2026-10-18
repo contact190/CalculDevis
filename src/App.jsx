@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo, Suspense } from 'react';
-import { Home, Package, Settings, ChevronRight, LayoutDashboard, Users, RefreshCw, ShoppingBag, Truck, CheckCircle, Building, Wifi, WifiOff, TrendingUp, Store } from 'lucide-react';
+import { Home, Package, Settings, ChevronRight, LayoutDashboard, Users, RefreshCw, ShoppingBag, Truck, CheckCircle, Building, Wifi, WifiOff, TrendingUp, Store, FileText } from 'lucide-react';
 
 // Helper to handle ChunkLoadError (e.g. after a new deployment, old chunks are missing on server)
 const lazyWithRetry = (importFn) => {
@@ -22,6 +22,7 @@ const lazyWithRetry = (importFn) => {
 // ─── LAZY LOADING: Each module is loaded on-demand (code splitting) ──────────
 // This reduces initial bundle from ~5.3MB to ~500KB and saves 60-70% RAM
 const CommercialModule = lazyWithRetry(() => import('./modules/commercial/CommercialModule'));
+const QuotesModule = lazyWithRetry(() => import('./modules/quotes/QuotesModule'));
 const ShopModule = lazyWithRetry(() => import('./modules/shop/ShopModule'));
 const ProductionModule = lazyWithRetry(() => import('./modules/production/ProductionModule'));
 const AdminDashboard = lazyWithRetry(() => import('./modules/admin/AdminDashboard'));
@@ -1038,6 +1039,7 @@ function App() {
 
   const menuItems = [
     { id: 'commercial', label: 'Commercial', icon: LayoutDashboard },
+    { id: 'quotes', label: 'Devis', icon: FileText },
     { id: 'shop', label: 'Shop', icon: Store },
     { id: 'siteplan', label: 'Plan de Chantier', icon: Building },
     { id: 'orders', label: 'Commandes', icon: ShoppingBag },
@@ -1281,6 +1283,26 @@ function App() {
               quoteSettings={quoteSettings}
               setQuoteSettings={updateQuoteSettings}
               onNewQuote={() => setCurrentQuote(makeNewQuote(quoteSettings, database))}
+            />
+          )}
+          {activeTab === 'quotes' && (
+            <QuotesModule 
+              data={filteredDatabase}
+              setData={setDatabase}
+              quoteSettings={quoteSettings}
+              onOpenQuote={(quote) => {
+                if (quote.type === 'shop') {
+                  setSelectedShopQuote(quote);
+                  setActiveTab('shop');
+                } else {
+                  setCurrentQuote(quote);
+                  setActiveTab('commercial');
+                }
+              }}
+              onNewQuote={() => {
+                setCurrentQuote(makeNewQuote(quoteSettings, database));
+                setActiveTab('commercial');
+              }}
             />
           )}
           {activeTab === 'shop' && (
