@@ -4809,12 +4809,13 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
             style={{
               background: '#ffffff',
               borderRadius: '1.25rem',
-              width: '100%',
-              maxWidth: '1400px',
-              maxHeight: '94vh',
+              width: '96vw',
+              maxWidth: '1440px',
+              height: '92vh',
+              maxHeight: '92vh',
               display: 'flex',
               flexDirection: 'column',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4)',
+              boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.45)',
               overflow: 'hidden',
               border: '1px solid #cbd5e1'
             }}
@@ -4822,40 +4823,48 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
           >
             {/* Modal Header */}
             <div style={{
-              padding: '1.25rem 1.75rem',
+              padding: '1rem 1.5rem',
               background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
               color: 'white',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               gap: '1rem',
+              flexShrink: 0,
               borderBottom: '1px solid rgba(255,255,255,0.1)'
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', minWidth: 0 }}>
                 <div style={{
-                  width: '42px',
-                  height: '42px',
-                  borderRadius: '12px',
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '10px',
                   background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
                   display: 'grid',
                   placeItems: 'center',
-                  boxShadow: '0 4px 10px rgba(16, 185, 129, 0.35)'
+                  boxShadow: '0 4px 10px rgba(16, 185, 129, 0.35)',
+                  flexShrink: 0
                 }}>
-                  <Calculator size={22} color="white" />
+                  <Calculator size={20} color="white" />
                 </div>
-                <div>
-                  <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, letterSpacing: '-0.3px', color: 'white' }}>
+                <div style={{ minWidth: 0 }}>
+                  <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, letterSpacing: '-0.3px', color: 'white', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     Proforma Chiffrée — Détail des Coûts & Totaux
                   </h2>
-                  <p style={{ margin: '0.2rem 0 0', fontSize: '0.78rem', color: '#94a3b8' }}>
-                    Chantier : <strong style={{ color: '#f8fafc' }}>{activeQuote?.id?.startsWith('CMD') ? activeQuote.id : (activeQuote?.number || 'Non spécifié')}</strong>
-                    {' • '}Client : <strong style={{ color: '#f8fafc' }}>{database.clients?.find(c => c.id === activeQuote?.clientId)?.nom || '—'}</strong>
-                    {supplierName ? ` • Destinataire : ${supplierName}` : ''}
-                  </p>
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap', marginTop: '0.2rem', fontSize: '0.75rem', color: '#94a3b8' }}>
+                    <span>Chantier : <strong style={{ color: '#f8fafc' }}>{activeQuote?.id?.startsWith('CMD') ? activeQuote.id : (activeQuote?.number || 'Non spécifié')}</strong></span>
+                    <span>•</span>
+                    <span>Client : <strong style={{ color: '#f8fafc' }}>{database.clients?.find(c => c.id === activeQuote?.clientId)?.nom || '—'}</strong></span>
+                    {supplierName && (
+                      <>
+                        <span>•</span>
+                        <span>Destinataire : <strong style={{ color: '#f8fafc' }}>{supplierName}</strong></span>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
                 <button
                   onClick={() => generatePricedProformaPDF(filteredPricedGroups)}
                   className="btn"
@@ -4863,18 +4872,19 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                     background: '#10b981',
                     color: 'white',
                     fontWeight: 700,
-                    fontSize: '0.82rem',
-                    padding: '0.5rem 0.9rem',
+                    fontSize: '0.8rem',
+                    padding: '0.45rem 0.85rem',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '0.4rem',
+                    gap: '0.35rem',
                     border: 'none',
-                    borderRadius: '0.6rem',
-                    cursor: 'pointer'
+                    borderRadius: '0.5rem',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap'
                   }}
                   title="Télécharger le document PDF avec prix unitaires et totaux par groupe"
                 >
-                  <Download size={15} /> PDF Chiffré
+                  <Download size={14} /> PDF Chiffré
                 </button>
                 <button
                   onClick={() => exportPricedProformaCSV(filteredPricedGroups)}
@@ -4883,18 +4893,19 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                     background: '#0284c7',
                     color: 'white',
                     fontWeight: 700,
-                    fontSize: '0.82rem',
-                    padding: '0.5rem 0.9rem',
+                    fontSize: '0.8rem',
+                    padding: '0.45rem 0.85rem',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '0.4rem',
+                    gap: '0.35rem',
                     border: 'none',
-                    borderRadius: '0.6rem',
-                    cursor: 'pointer'
+                    borderRadius: '0.5rem',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap'
                   }}
                   title="Exporter les données au format Excel (CSV)"
                 >
-                  <FileSpreadsheet size={15} /> Excel (CSV)
+                  <FileSpreadsheet size={14} /> Excel (CSV)
                 </button>
                 <button
                   onClick={() => setShowPricedProformaModal(false)}
@@ -4902,46 +4913,51 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                     background: 'rgba(255,255,255,0.1)',
                     border: 'none',
                     color: '#cbd5e1',
-                    width: '36px',
-                    height: '36px',
-                    borderRadius: '10px',
+                    width: '34px',
+                    height: '34px',
+                    borderRadius: '8px',
                     display: 'grid',
                     placeItems: 'center',
                     cursor: 'pointer',
-                    transition: 'all 0.2s'
+                    transition: 'all 0.2s',
+                    flexShrink: 0
                   }}
                   title="Fermer la fenêtre"
                 >
-                  <X size={20} />
+                  <X size={18} />
                 </button>
               </div>
             </div>
 
-            {/* KPI Summary Cards */}
+            {/* KPI Summary Cards - Sleek Horizontal Bar */}
             <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-              gap: '0.75rem',
-              padding: '0.9rem 1.75rem',
+              display: 'flex',
+              gap: '0.6rem',
+              padding: '0.65rem 1.5rem',
               background: '#f8fafc',
-              borderBottom: '1px solid #e2e8f0'
+              borderBottom: '1px solid #e2e8f0',
+              overflowX: 'auto',
+              flexShrink: 0,
+              alignItems: 'center'
             }}>
               {pricedGroups.map(g => {
                 const sub = g.items.reduce((s, it) => s + (it.lineTotal || 0), 0);
                 return (
                   <div key={g.id} style={{
                     background: 'white',
-                    padding: '0.6rem 0.85rem',
-                    borderRadius: '0.75rem',
+                    padding: '0.45rem 0.75rem',
+                    borderRadius: '0.6rem',
                     border: `1px solid ${g.colorBorder}`,
                     borderLeft: `4px solid ${g.color}`,
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                    flexShrink: 0,
+                    minWidth: '140px'
                   }}>
-                    <span style={{ display: 'block', fontSize: '0.66rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    <span style={{ display: 'block', fontSize: '0.65rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.03em', whiteSpace: 'nowrap' }}>
                       {g.title.replace(' (Fenêtre)', '').replace(' (Profilés)', '')}
                     </span>
-                    <span style={{ fontSize: '1rem', fontWeight: 800, color: g.color }}>
-                      {formatMoney(sub)} <span style={{ fontSize: '0.68rem', fontWeight: 500, color: '#94a3b8' }}>DZD</span>
+                    <span style={{ fontSize: '0.92rem', fontWeight: 800, color: g.color, whiteSpace: 'nowrap' }}>
+                      {formatMoney(sub)} <span style={{ fontSize: '0.65rem', fontWeight: 500, color: '#94a3b8' }}>DZD</span>
                     </span>
                   </div>
                 );
@@ -4949,19 +4965,21 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
               {/* GRAND TOTAL CARD */}
               <div style={{
                 background: 'linear-gradient(135deg, #10b981 0%, #047857 100%)',
-                padding: '0.6rem 1rem',
-                borderRadius: '0.75rem',
+                padding: '0.45rem 0.9rem',
+                borderRadius: '0.6rem',
                 color: 'white',
-                boxShadow: '0 4px 10px rgba(16, 185, 129, 0.3)',
+                boxShadow: '0 3px 8px rgba(16, 185, 129, 0.25)',
                 display: 'flex',
                 flexDirection: 'column',
-                justifyContent: 'center'
+                justifyContent: 'center',
+                flexShrink: 0,
+                minWidth: '175px'
               }}>
-                <span style={{ display: 'block', fontSize: '0.68rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.9 }}>
-                  TOTAL GLOBAL
+                <span style={{ display: 'block', fontSize: '0.65rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', opacity: 0.9, whiteSpace: 'nowrap' }}>
+                  TOTAL GLOBAL ACHATS
                 </span>
-                <span style={{ fontSize: '1.25rem', fontWeight: 900 }}>
-                  {formatMoney(pricedTotals.grandTotal)} <span style={{ fontSize: '0.75rem', fontWeight: 600, opacity: 0.9 }}>DZD</span>
+                <span style={{ fontSize: '1.05rem', fontWeight: 900, whiteSpace: 'nowrap' }}>
+                  {formatMoney(pricedTotals.grandTotal)} <span style={{ fontSize: '0.7rem', fontWeight: 600, opacity: 0.9 }}>DZD</span>
                 </span>
               </div>
             </div>
@@ -4971,20 +4989,21 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              padding: '0.75rem 1.75rem',
+              padding: '0.6rem 1.5rem',
               background: '#ffffff',
               borderBottom: '1px solid #e2e8f0',
-              gap: '1rem',
-              flexWrap: 'wrap'
+              gap: '0.75rem',
+              flexWrap: 'wrap',
+              flexShrink: 0
             }}>
-              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#64748b' }}>Affichage :</span>
+              <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b' }}>Filtre :</span>
                 <button
                   onClick={() => setPricedModalFilter('all')}
                   style={{
-                    padding: '0.35rem 0.85rem',
+                    padding: '0.3rem 0.75rem',
                     borderRadius: '0.5rem',
-                    fontSize: '0.78rem',
+                    fontSize: '0.75rem',
                     fontWeight: pricedModalFilter === 'all' ? 800 : 600,
                     background: pricedModalFilter === 'all' ? '#1e293b' : '#f1f5f9',
                     color: pricedModalFilter === 'all' ? 'white' : '#475569',
@@ -4993,14 +5012,14 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                     transition: 'all 0.2s'
                   }}
                 >
-                  Tous les articles ({pricedTotals.totalItems})
+                  Tous ({pricedTotals.totalItems})
                 </button>
                 <button
                   onClick={() => setPricedModalFilter('selected')}
                   style={{
-                    padding: '0.35rem 0.85rem',
+                    padding: '0.3rem 0.75rem',
                     borderRadius: '0.5rem',
-                    fontSize: '0.78rem',
+                    fontSize: '0.75rem',
                     fontWeight: pricedModalFilter === 'selected' ? 800 : 600,
                     background: pricedModalFilter === 'selected' ? '#8b5cf6' : '#f1f5f9',
                     color: pricedModalFilter === 'selected' ? 'white' : '#475569',
@@ -5009,13 +5028,13 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                     transition: 'all 0.2s'
                   }}
                 >
-                  Sélection Proforma uniquement ({pricedTotals.selectedCount})
+                  Sélection Proforma ({pricedTotals.selectedCount})
                 </button>
                 {Object.keys(customPricedItems).length > 0 && (
                   <button
                     onClick={() => setCustomPricedItems({})}
                     style={{
-                      padding: '0.35rem 0.7rem',
+                      padding: '0.3rem 0.65rem',
                       borderRadius: '0.5rem',
                       fontSize: '0.72rem',
                       fontWeight: 700,
@@ -5026,26 +5045,56 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                     }}
                     title="Rétablir tous les prix aux valeurs par défaut du catalogue"
                   >
-                    ↺ Rétablir prix catalogue ({Object.keys(customPricedItems).length})
+                    ↺ Rétablir catalogue ({Object.keys(customPricedItems).length})
                   </button>
                 )}
+
+                {/* Quick Toggle for Simulateur */}
+                <button
+                  onClick={() => setIsRentabiliteOpen(prev => !prev)}
+                  style={{
+                    padding: '0.3rem 0.75rem',
+                    borderRadius: '0.5rem',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    background: isRentabiliteOpen ? '#ecfdf5' : '#f8fafc',
+                    color: isRentabiliteOpen ? '#047857' : '#64748b',
+                    border: `1px solid ${isRentabiliteOpen ? '#a7f3d0' : '#e2e8f0'}`,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.35rem'
+                  }}
+                >
+                  <TrendingUp size={13} />
+                  Simulateur Rentabilité {isRentabiliteOpen ? '▲' : '▼'}
+                </button>
               </div>
 
-              <div style={{ position: 'relative', width: '280px' }}>
-                <Search size={15} color="#94a3b8" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
+              <div style={{ position: 'relative', width: '260px', minWidth: '180px' }}>
+                <Search size={14} color="#94a3b8" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
                 <input
                   type="text"
                   className="input"
                   placeholder="Rechercher référence, nom..."
                   value={pricedSearchQuery}
                   onChange={e => setPricedSearchQuery(e.target.value)}
-                  style={{ width: '100%', paddingLeft: '2.1rem', fontSize: '0.8rem', height: '34px' }}
+                  style={{ width: '100%', paddingLeft: '2rem', fontSize: '0.78rem', height: '32px' }}
                 />
               </div>
             </div>
 
-            {/* Scrollable Body: Group Tables */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem 1.75rem', display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
+            {/* Scrollable Body: Rentabilité & Group Tables */}
+            <div style={{
+              flex: '1 1 auto',
+              minHeight: 0,
+              overflowY: 'auto',
+              padding: '1.25rem 1.5rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1.5rem',
+              background: '#f8fafc'
+            }}>
               {/* --- SIMULATEUR DE RENTABILITÉ & RATIO ACHATS --- */}
               <div style={{
                 background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
@@ -5244,7 +5293,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                       <>
                         <div style={{
                           display: 'grid',
-                          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
                           gap: '1rem',
                           marginBottom: '1rem'
                         }}>
@@ -5258,14 +5307,14 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                             position: 'relative',
                             overflow: 'hidden'
                           }}>
-                            <div style={{ position: 'absolute', right: '-10px', bottom: '-10px', opacity: 0.1 }}>
+                            <div style={{ position: 'absolute', right: '-10px', bottom: '-10px', opacity: 0.1, pointerEvents: 'none' }}>
                               <Percent size={80} />
                             </div>
                             <span style={{ display: 'block', fontSize: '0.68rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#c7d2fe', marginBottom: '0.3rem' }}>
                               ⚡ PART DU TOTAL ACHAT
                             </span>
-                            <div style={{ fontSize: '2rem', fontWeight: 900, lineHeight: 1.1, color: '#38bdf8' }}>
-                              {rentabiliteData.achatPercent.toFixed(2)} <span style={{ fontSize: '1.1rem', fontWeight: 700, color: '#e0e7ff' }}>%</span>
+                            <div style={{ fontSize: '1.85rem', fontWeight: 900, lineHeight: 1.1, color: '#38bdf8' }}>
+                              {rentabiliteData.achatPercent.toFixed(2)} <span style={{ fontSize: '1rem', fontWeight: 700, color: '#e0e7ff' }}>%</span>
                             </div>
                             <span style={{ display: 'block', fontSize: '0.72rem', color: '#c7d2fe', marginTop: '0.4rem' }}>
                               Les achats représentent <strong>{rentabiliteData.achatPercent.toFixed(1)}%</strong> du prix de vente TTC
@@ -5282,7 +5331,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                             position: 'relative',
                             overflow: 'hidden'
                           }}>
-                            <div style={{ position: 'absolute', right: '-10px', bottom: '-10px', opacity: 0.1 }}>
+                            <div style={{ position: 'absolute', right: '-10px', bottom: '-10px', opacity: 0.1, pointerEvents: 'none' }}>
                               <TrendingUp size={80} />
                             </div>
                             <span style={{ display: 'block', fontSize: '0.68rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: rentabiliteData.isTargetMet ? '#a7f3d0' : '#fde68a', marginBottom: '0.3rem' }}>
@@ -5387,6 +5436,8 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                   </div>
                 )}
               </div>
+
+              {/* Group Tables */}
               {filteredPricedGroups.map((group, gIdx) => {
                 if (group.items.length === 0) return null;
 
@@ -5395,7 +5446,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                     background: '#ffffff',
                     borderRadius: '1rem',
                     border: `1.5px solid ${group.colorBorder}`,
-                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
+                    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.04)',
                     overflow: 'hidden'
                   }}>
                     {/* Group Header Banner */}
@@ -5427,20 +5478,20 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                       </div>
                     </div>
 
-                    {/* Table */}
-                    <div className="table-responsive">
-                      <table className="data-table" style={{ margin: 0 }}>
+                    {/* Table Container with Horizontal Scroll Protection */}
+                    <div style={{ overflowX: 'auto', width: '100%' }}>
+                      <table className="data-table" style={{ margin: 0, width: '100%', minWidth: '960px', borderCollapse: 'collapse' }}>
                         <thead>
                           <tr style={{ background: '#f8fafc' }}>
-                            <th style={{ width: '40px' }}>Photo</th>
-                            <th style={{ width: '130px' }}>Référence</th>
-                            <th>Désignation</th>
-                            <th style={{ width: '130px' }}>Finition</th>
-                            <th style={{ width: '130px' }}>Spécif. / Cotes</th>
-                            <th style={{ width: '110px' }}>Quantité</th>
-                            <th style={{ width: '80px' }}>Unité</th>
-                            <th style={{ width: '150px', textAlign: 'right' }}>Prix U. HT (DZD)</th>
-                            <th style={{ width: '150px', textAlign: 'right' }}>Total Ligne HT</th>
+                            <th style={{ width: '45px', textAlign: 'center', whiteSpace: 'nowrap' }}>Photo</th>
+                            <th style={{ width: '125px', whiteSpace: 'nowrap' }}>Référence</th>
+                            <th style={{ minWidth: '180px' }}>Désignation</th>
+                            <th style={{ width: '125px', whiteSpace: 'nowrap' }}>Finition</th>
+                            <th style={{ width: '120px', whiteSpace: 'nowrap' }}>Spécif. / Cotes</th>
+                            <th style={{ width: '90px', whiteSpace: 'nowrap' }}>Quantité</th>
+                            <th style={{ width: '70px', whiteSpace: 'nowrap' }}>Unité</th>
+                            <th style={{ width: '145px', textAlign: 'right', whiteSpace: 'nowrap' }}>Prix U. HT (DZD)</th>
+                            <th style={{ width: '145px', textAlign: 'right', whiteSpace: 'nowrap' }}>Total Ligne HT</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -5448,38 +5499,38 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                             const isCustom = customPricedItems[it.id] !== undefined;
                             return (
                               <tr key={`${group.id}-${it.id}-${iIdx}`} style={{ background: iIdx % 2 === 0 ? 'white' : '#fafafa' }}>
-                                <td style={{ textAlign: 'center', padding: '0.4rem' }}>
+                                <td style={{ textAlign: 'center', padding: '0.5rem 0.4rem' }}>
                                   {it.image ? (
-                                    <img src={it.image} alt="" style={{ width: '32px', height: '32px', objectFit: 'contain', borderRadius: '4px', border: '1px solid #e2e8f0' }} />
+                                    <img src={it.image} alt="" style={{ width: '32px', height: '32px', objectFit: 'contain', borderRadius: '4px', border: '1px solid #e2e8f0', margin: '0 auto' }} />
                                   ) : (
                                     <div style={{ width: '32px', height: '32px', background: '#f1f5f9', borderRadius: '4px', display: 'grid', placeItems: 'center', margin: '0 auto' }}>
                                       <Package size={14} color="#94a3b8" />
                                     </div>
                                   )}
                                 </td>
-                                <td style={{ fontFamily: 'monospace', fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>
+                                <td style={{ fontFamily: 'monospace', fontSize: '0.78rem', fontWeight: 600, color: '#475569', whiteSpace: 'nowrap' }}>
                                   {it.ref || '—'}
                                 </td>
                                 <td>
                                   <div style={{ fontWeight: 700, color: '#1e293b' }}>{it.name}</div>
                                   {it.detail && <div style={{ fontSize: '0.72rem', color: '#64748b' }}>{it.detail}</div>}
                                 </td>
-                                <td style={{ fontSize: '0.8rem' }}>
+                                <td style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
                                   <span style={{ fontWeight: 600 }}>{it.color}</span>
                                   {it.ral && it.ral !== 'Std' && it.ral !== '—' && (
                                     <span style={{ display: 'block', fontSize: '0.68rem', color: '#94a3b8' }}>RAL: {it.ral}</span>
                                   )}
                                 </td>
-                                <td style={{ fontSize: '0.8rem', color: '#475569' }}>
+                                <td style={{ fontSize: '0.8rem', color: '#475569', whiteSpace: 'nowrap' }}>
                                   {it.dim || '—'}
                                 </td>
-                                <td style={{ fontSize: '0.88rem', fontWeight: 800, color: '#1e293b' }}>
+                                <td style={{ fontSize: '0.88rem', fontWeight: 800, color: '#1e293b', whiteSpace: 'nowrap' }}>
                                   {it.qtyDisplay || it.qty}
                                 </td>
-                                <td style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>
+                                <td style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600, whiteSpace: 'nowrap' }}>
                                   {it.unit}
                                 </td>
-                                <td style={{ textAlign: 'right' }}>
+                                <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.3rem' }}>
                                     <input
                                       type="number"
@@ -5491,7 +5542,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                                       }}
                                       onFocus={e => e.target.select()}
                                       style={{
-                                        width: '95px',
+                                        width: '90px',
                                         padding: '0.25rem 0.45rem',
                                         textAlign: 'right',
                                         fontSize: '0.82rem',
@@ -5528,7 +5579,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                                     )}
                                   </div>
                                 </td>
-                                <td style={{ textAlign: 'right', fontWeight: 800, color: group.color, fontSize: '0.95rem' }}>
+                                <td style={{ textAlign: 'right', fontWeight: 800, color: group.color, fontSize: '0.92rem', whiteSpace: 'nowrap' }}>
                                   {formatMoney(it.lineTotal || 0)} <span style={{ fontSize: '0.72rem', fontWeight: 500, color: '#94a3b8' }}>DZD</span>
                                 </td>
                               </tr>
@@ -5540,7 +5591,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                             <td colSpan="8" style={{ textAlign: 'right', fontWeight: 800, color: group.color, fontSize: '0.88rem' }}>
                               SOUS-TOTAL {group.title.toUpperCase()} :
                             </td>
-                            <td style={{ textAlign: 'right', fontWeight: 900, color: group.color, fontSize: '1.05rem' }}>
+                            <td style={{ textAlign: 'right', fontWeight: 900, color: group.color, fontSize: '1.05rem', whiteSpace: 'nowrap' }}>
                               {formatMoney(group.subtotal)} DZD
                             </td>
                           </tr>
@@ -5562,65 +5613,66 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
 
             {/* Modal Footer */}
             <div style={{
-              padding: '1rem 1.75rem',
-              background: '#f8fafc',
+              padding: '0.85rem 1.5rem',
+              background: '#ffffff',
               borderTop: '1px solid #e2e8f0',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               gap: '1rem',
-              flexWrap: 'wrap'
+              flexWrap: 'wrap',
+              flexShrink: 0
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap' }}>
                 <div>
-                  <span style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', fontWeight: 700, textTransform: 'uppercase' }}>ARTICLES AFFICHÉS</span>
-                  <span style={{ fontSize: '1.05rem', fontWeight: 800, color: '#475569' }}>
+                  <span style={{ fontSize: '0.65rem', color: '#64748b', display: 'block', fontWeight: 700, textTransform: 'uppercase' }}>ARTICLES AFFICHÉS</span>
+                  <span style={{ fontSize: '0.95rem', fontWeight: 800, color: '#334155' }}>
                     {filteredPricedGroups.reduce((acc, g) => acc + g.items.length, 0)} articles
                   </span>
                 </div>
-                <div style={{ borderLeft: '2px solid #cbd5e1', paddingLeft: '1.5rem' }}>
-                  <span style={{ fontSize: '0.68rem', color: '#059669', display: 'block', fontWeight: 800, textTransform: 'uppercase' }}>TOTAL ACHATS</span>
-                  <span style={{ fontSize: '1.45rem', fontWeight: 900, color: '#059669' }}>
-                    {formatMoney(pricedTotals.grandTotal)} <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#64748b' }}>DZD</span>
+                <div style={{ borderLeft: '1.5px solid #e2e8f0', paddingLeft: '1.25rem' }}>
+                  <span style={{ fontSize: '0.65rem', color: '#059669', display: 'block', fontWeight: 800, textTransform: 'uppercase' }}>TOTAL ACHATS</span>
+                  <span style={{ fontSize: '1.25rem', fontWeight: 900, color: '#059669' }}>
+                    {formatMoney(pricedTotals.grandTotal)} <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b' }}>DZD</span>
                   </span>
                 </div>
                 {rentabiliteData.devisTTC > 0 && (
-                  <div style={{ borderLeft: '2px solid #cbd5e1', paddingLeft: '1.5rem' }}>
-                    <span style={{ fontSize: '0.68rem', color: '#4338ca', display: 'block', fontWeight: 800, textTransform: 'uppercase' }}>PART DU TOTAL ACHAT</span>
-                    <span style={{ fontSize: '1.45rem', fontWeight: 900, color: '#4338ca' }}>
-                      {rentabiliteData.achatPercent.toFixed(2)} <span style={{ fontSize: '0.9rem', fontWeight: 700 }}>%</span>
+                  <div style={{ borderLeft: '1.5px solid #e2e8f0', paddingLeft: '1.25rem' }}>
+                    <span style={{ fontSize: '0.65rem', color: '#4338ca', display: 'block', fontWeight: 800, textTransform: 'uppercase' }}>PART ACHATS</span>
+                    <span style={{ fontSize: '1.25rem', fontWeight: 900, color: '#4338ca' }}>
+                      {rentabiliteData.achatPercent.toFixed(2)} <span style={{ fontSize: '0.8rem', fontWeight: 700 }}>%</span>
                     </span>
                   </div>
                 )}
                 {rentabiliteData.devisTTC > 0 && (
-                  <div style={{ borderLeft: '2px solid #cbd5e1', paddingLeft: '1.5rem' }}>
-                    <span style={{ fontSize: '0.68rem', color: '#047857', display: 'block', fontWeight: 800, textTransform: 'uppercase' }}>MARGE BRUTE RÉELLE</span>
-                    <span style={{ fontSize: '1.45rem', fontWeight: 900, color: '#047857' }}>
-                      {formatMoney(rentabiliteData.margeReelleDZD)} <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#64748b' }}>DZD ({rentabiliteData.margeReellePercent.toFixed(1)}%)</span>
+                  <div style={{ borderLeft: '1.5px solid #e2e8f0', paddingLeft: '1.25rem' }}>
+                    <span style={{ fontSize: '0.65rem', color: '#047857', display: 'block', fontWeight: 800, textTransform: 'uppercase' }}>MARGE BRUTE</span>
+                    <span style={{ fontSize: '1.25rem', fontWeight: 900, color: '#047857' }}>
+                      {formatMoney(rentabiliteData.margeReelleDZD)} <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b' }}>DZD ({rentabiliteData.margeReellePercent.toFixed(1)}%)</span>
                     </span>
                   </div>
                 )}
               </div>
 
-              <div style={{ display: 'flex', gap: '0.6rem' }}>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexShrink: 0 }}>
                 <button
                   onClick={() => generatePricedProformaPDF(filteredPricedGroups)}
                   className="btn"
-                  style={{ background: '#10b981', color: 'white', fontWeight: 700, fontSize: '0.85rem', padding: '0.55rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.4rem', border: 'none', borderRadius: '0.6rem', cursor: 'pointer' }}
+                  style={{ background: '#10b981', color: 'white', fontWeight: 700, fontSize: '0.82rem', padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.4rem', border: 'none', borderRadius: '0.5rem', cursor: 'pointer' }}
                 >
-                  <Download size={16} /> Exporter PDF Chiffré
+                  <Download size={15} /> Exporter PDF
                 </button>
                 <button
                   onClick={() => exportPricedProformaCSV(filteredPricedGroups)}
                   className="btn"
-                  style={{ background: '#0284c7', color: 'white', fontWeight: 700, fontSize: '0.85rem', padding: '0.55rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.4rem', border: 'none', borderRadius: '0.6rem', cursor: 'pointer' }}
+                  style={{ background: '#0284c7', color: 'white', fontWeight: 700, fontSize: '0.82rem', padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.4rem', border: 'none', borderRadius: '0.5rem', cursor: 'pointer' }}
                 >
-                  <FileSpreadsheet size={16} /> Exporter Excel
+                  <FileSpreadsheet size={15} /> Exporter Excel
                 </button>
                 <button
                   onClick={() => setShowPricedProformaModal(false)}
                   className="btn"
-                  style={{ background: '#e2e8f0', color: '#475569', fontWeight: 700, fontSize: '0.85rem', padding: '0.55rem 1.1rem', border: 'none', borderRadius: '0.6rem', cursor: 'pointer' }}
+                  style={{ background: '#f1f5f9', color: '#475569', fontWeight: 700, fontSize: '0.82rem', padding: '0.5rem 1rem', border: '1px solid #cbd5e1', borderRadius: '0.5rem', cursor: 'pointer' }}
                 >
                   Fermer
                 </button>
