@@ -68,6 +68,8 @@ const ItemPreview = ({ config, database }) => {
           H: v.H !== undefined && v.H !== '' ? parseFloat(v.H) : item.config.H,
           wallDepth: v.wallDepth !== undefined && v.wallDepth !== '' ? parseFloat(v.wallDepth) : '',
           handleHeight: v.handleHeight !== undefined && v.handleHeight !== '' ? parseFloat(v.handleHeight) : '',
+          openingDirection: v.openingDirection || undefined,
+          optionalSides: v.optionalSides !== undefined ? v.optionalSides : undefined,
           qty: 1,
           label: label,
           shutterList: shutterList,

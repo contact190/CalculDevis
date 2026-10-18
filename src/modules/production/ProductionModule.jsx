@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Package, Scissors, Download, CheckCircle, Barcode, ShoppingCart, Layers, Edit2, Link2, Link2Off, Plus, QrCode, Trash2, ArrowLeft, FileText, FileSpreadsheet, RefreshCw, Info, ChevronDown, ChevronUp, Calculator, Receipt, X, Printer, Search, DollarSign } from 'lucide-react';
+import { Package, Scissors, Download, CheckCircle, Barcode, ShoppingCart, Layers, Edit2, Link2, Link2Off, Plus, QrCode, Trash2, ArrowLeft, FileText, FileSpreadsheet, RefreshCw, Info, ChevronDown, ChevronUp, Calculator, Receipt, X, Printer, Search, DollarSign, TrendingUp, Percent, AlertTriangle } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { FormulaEngine } from '../../engine/formula-engine';
 import { DEFAULT_DATA } from '../../data/default-data';
@@ -123,6 +123,9 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
   const [pricedModalFilter, setPricedModalFilter] = useState('all'); // 'all' | 'selected'
   const [pricedSearchQuery, setPricedSearchQuery] = useState('');
   const [customPricedItems, setCustomPricedItems] = useState({});
+  const [quoteTTCInput, setQuoteTTCInput] = useState('');
+  const [targetMarginPercent, setTargetMarginPercent] = useState('30');
+  const [isRentabiliteOpen, setIsRentabiliteOpen] = useState(true);
   
   // Auto-switch from Quote ID to its confirmed Order ID if it exists, so batches are immediately visible
   useEffect(() => {
@@ -179,6 +182,22 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
   }, [database, selectedGlobalQuoteId, currentQuote]);
 
   const quoteItems = activeQuote?.items || [];
+
+  // Synchroniser la valeur TTC du devis actif pour le calcul de rentabilité
+  useEffect(() => {
+    if (activeQuote) {
+      const defaultTTC = activeQuote.totals?.ttc || activeQuote.totalTTC || activeQuote.totals?.ht || '';
+      if (defaultTTC && !quoteTTCInput) {
+        setQuoteTTCInput(String(Math.round(defaultTTC)));
+      }
+      if (activeQuote.globalMargin && activeQuote.globalMargin > 1 && (!targetMarginPercent || targetMarginPercent === '30')) {
+        const derivedMargin = Math.round((1 - (1 / activeQuote.globalMargin)) * 100);
+        if (derivedMargin > 0 && derivedMargin < 100) {
+          setTargetMarginPercent(String(derivedMargin));
+        }
+      }
+    }
+  }, [activeQuote]);
 
   // Determine which config(s) to aggregate
   const activeConfigs = useMemo(() => {
@@ -262,6 +281,8 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                     partOverrides: (m.partOverrides && Object.keys(m.partOverrides).length > 0) ? m.partOverrides : getVoidOverrides(m.id),
                     // Use technician optionalSides override if set, else keep item config
                     ...(m.optionalSides !== undefined ? { optionalSides: m.optionalSides } : {}),
+                    // Use technician openingDirection override if set, else keep item config
+                    ...(m.openingDirection ? { openingDirection: m.openingDirection } : {}),
                     hasShutter: true,
                     shutterConfig: {
                       ...(item.config?.shutterConfig || {}),
@@ -293,7 +314,9 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                   handleHeight: m.handleHeight, 
                   partOverrides: (m.partOverrides && Object.keys(m.partOverrides).length > 0) ? m.partOverrides : getVoidOverrides(m.id),
                   // Use technician optionalSides override if set, else keep item config
-                  ...(m.optionalSides !== undefined ? { optionalSides: m.optionalSides } : {})
+                  ...(m.optionalSides !== undefined ? { optionalSides: m.optionalSides } : {}),
+                  // Use technician openingDirection override if set, else keep item config
+                  ...(m.openingDirection ? { openingDirection: m.openingDirection } : {})
                 },
                 qty: 1,
                 label: item.label,
@@ -321,7 +344,16 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
             const totalQty = m.qty || 1;
             for (let i = 0; i < totalQty; i++) {
               configs.push({
-                config: { ...item.config, L: m.L, H: m.H, wallDepth: m.wallDepth, handleHeight: m.handleHeight, partOverrides: (m.partOverrides && Object.keys(m.partOverrides).length > 0) ? m.partOverrides : getVoidOverrides(m.id) },
+                config: { 
+                  ...item.config, 
+                  L: m.L, 
+                  H: m.H, 
+                  wallDepth: m.wallDepth, 
+                  handleHeight: m.handleHeight, 
+                  ...(m.openingDirection ? { openingDirection: m.openingDirection } : {}),
+                  ...(m.optionalSides !== undefined ? { optionalSides: m.optionalSides } : {}),
+                  partOverrides: (m.partOverrides && Object.keys(m.partOverrides).length > 0) ? m.partOverrides : getVoidOverrides(m.id) 
+                },
                 qty: 1,
                 label: item.label,
                 allLabels: [getPositionLabel(item, m, i)],
@@ -1016,6 +1048,32 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
     return decimals > 0 ? `${parts[0]},${parts[1]}` : parts[0];
   };
 
+  const rentabiliteData = useMemo(() => {
+    const totalAchat = pricedTotals.grandTotal || 0;
+    const devisTTC = parseFloat(quoteTTCInput) || 0;
+    const margeCible = parseFloat(targetMarginPercent) || 0;
+
+    const achatPercent = devisTTC > 0 ? (totalAchat / devisTTC) * 100 : 0;
+    const margeReelleDZD = devisTTC > 0 ? devisTTC - totalAchat : 0;
+    const margeReellePercent = devisTTC > 0 ? (margeReelleDZD / devisTTC) * 100 : 0;
+    const coeffMultiplicateur = totalAchat > 0 && devisTTC > 0 ? (devisTTC / totalAchat) : 0;
+    const budgetAchatMaxCible = devisTTC > 0 ? devisTTC * (1 - margeCible / 100) : 0;
+    const prixConseilleVente = margeCible < 100 && totalAchat > 0 ? totalAchat / (1 - margeCible / 100) : 0;
+
+    return {
+      totalAchat,
+      devisTTC,
+      margeCible,
+      achatPercent,
+      margeReelleDZD,
+      margeReellePercent,
+      coeffMultiplicateur,
+      budgetAchatMaxCible,
+      prixConseilleVente,
+      isTargetMet: devisTTC > 0 ? margeReellePercent >= margeCible : false
+    };
+  }, [pricedTotals.grandTotal, quoteTTCInput, targetMarginPercent]);
+
   const generatePricedProformaPDF = (groupsToExport) => {
     const doc = new jsPDF();
     const pw = doc.internal.pageSize.getWidth();
@@ -1173,13 +1231,16 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
       grandTotal += group.subtotal;
     });
 
-    if (y > 240) { doc.addPage(); y = 20; }
+    const hasQuoteTTC = rentabiliteData.devisTTC > 0;
+    const boxHeight = hasQuoteTTC ? 33 : 22;
+
+    if (y + boxHeight > 275) { doc.addPage(); y = 20; }
     y += 4;
 
-    // Recap box (NO TVA, clear total)
+    // Recap box (NO TVA, clear total + Optional Rentabilité)
     doc.setFillColor(248, 250, 252);
     doc.setDrawColor(203, 213, 225);
-    doc.roundedRect(14, y, pw - 28, 22, 2, 2, 'FD');
+    doc.roundedRect(14, y, pw - 28, boxHeight, 2, 2, 'FD');
 
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
@@ -1190,18 +1251,34 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(100, 116, 139);
     const totalArticles = groupsToExport.reduce((acc, g) => acc + (g.items?.length || 0), 0);
-    doc.text(`Total articles : ${totalArticles}`, 18, y + 14);
-    doc.text(`Date : ${new Date().toLocaleDateString('fr-FR')}`, 18, y + 18);
+    doc.text(`Total articles : ${totalArticles}  |  Date : ${new Date().toLocaleDateString('fr-FR')}`, 18, y + 14);
 
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(30, 41, 59);
-    doc.text('TOTAL GLOBAL :', pw - 78, y + 14);
+    doc.text('TOTAL ACHATS :', pw - 78, y + 14);
 
     doc.setFontSize(13);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(16, 185, 129);
     doc.text(`${formatMoney(grandTotal)} DZD`, pw - 18, y + 14, { align: 'right' });
+
+    if (hasQuoteTTC) {
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.2);
+      doc.line(18, y + 18, pw - 18, y + 18);
+
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(71, 85, 105);
+      doc.text(`Devis client : ${formatMoney(rentabiliteData.devisTTC)} DZD TTC`, 18, y + 25);
+
+      doc.setTextColor(99, 102, 241);
+      doc.text(`Part des achats : ${rentabiliteData.achatPercent.toFixed(2)} %`, 105, y + 25);
+
+      doc.setTextColor(5, 150, 105);
+      doc.text(`Marge brute : ${formatMoney(rentabiliteData.margeReelleDZD)} DZD (${rentabiliteData.margeReellePercent.toFixed(1)} %)`, pw - 18, y + 25, { align: 'right' });
+    }
 
     // Page numbers
     const totalPages = doc.internal.getNumberOfPages();
@@ -1230,7 +1307,15 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
       grandTotal += g.subtotal;
     });
 
-    csv += `${q('TOTAL GLOBAL')};;;;;;;;${grandTotal.toFixed(2)}\n`;
+    csv += `${q('TOTAL ACHATS GLOBAL')};;;;;;;;${grandTotal.toFixed(2)}\n`;
+
+    if (rentabiliteData.devisTTC > 0) {
+      csv += ";;;;;;;;\n";
+      csv += `${q('VALEUR DEVIS TTC')};;;;;;;;${rentabiliteData.devisTTC.toFixed(2)}\n`;
+      csv += `${q('POURCENTAGE TOTAL ACHAT')};;;;;;;;${rentabiliteData.achatPercent.toFixed(2)}%\n`;
+      csv += `${q('MARGE BRUTE REELLE')};;;;;;;;${rentabiliteData.margeReelleDZD.toFixed(2)}\n`;
+      csv += `${q('TAUX DE MARGE REEL')};;;;;;;;${rentabiliteData.margeReellePercent.toFixed(2)}%\n`;
+    }
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
@@ -2128,6 +2213,32 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
             >
               <Calculator size={18} /> Proforma Chiffrée
             </button>
+            {rentabiliteData.devisTTC > 0 && (
+              <button
+                onClick={() => {
+                  setPricedModalFilter(proformaSelection.size > 0 ? 'selected' : 'all');
+                  setShowPricedProformaModal(true);
+                }}
+                className="btn"
+                style={{
+                  background: 'rgba(255,255,255,0.08)',
+                  color: '#a7f3d0',
+                  border: '1.5px solid rgba(167, 243, 208, 0.3)',
+                  fontWeight: 700,
+                  padding: '0.6rem 1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.45rem',
+                  borderRadius: '0.75rem',
+                  cursor: 'pointer',
+                  backdropFilter: 'blur(8px)'
+                }}
+                title="Part des achats par rapport au devis TTC. Cliquez pour ouvrir le simulateur de rentabilité."
+              >
+                <TrendingUp size={16} color="#34d399" />
+                <span>Part Achats : <strong style={{ color: 'white', fontSize: '0.95rem' }}>{rentabiliteData.achatPercent.toFixed(1)}%</strong></span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -2599,6 +2710,36 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                 >
                   <Calculator size={15} /> Proforma Chiffrée (Détails & Totaux)
                 </button>
+
+                {rentabiliteData.devisTTC > 0 && (
+                  <div
+                    onClick={() => {
+                      setPricedModalFilter(proformaSelection.size > 0 ? 'selected' : 'all');
+                      setShowPricedProformaModal(true);
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.45rem',
+                      padding: '0.4rem 0.85rem',
+                      background: '#ecfdf5',
+                      border: '1.5px solid #a7f3d0',
+                      borderRadius: '0.5rem',
+                      cursor: 'pointer',
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      color: '#065f46',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                    }}
+                    title="Part des achats par rapport au devis TTC. Cliquez pour ouvrir le simulateur de rentabilité."
+                  >
+                    <TrendingUp size={15} color="#059669" />
+                    <span>Part Achats :</span>
+                    <span style={{ fontWeight: 900, color: '#047857', fontSize: '0.88rem' }}>
+                      {rentabiliteData.achatPercent.toFixed(1)}%
+                    </span>
+                  </div>
+                )}
 
                 <button 
                   onClick={() => {
@@ -3693,7 +3834,14 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                   const instanceName = resolveInstanceLabel(bi, m, i, globalIdx);
                   targetItems.push({ 
                     ...bi, 
-                    config: { ...bi.config, L: m.L, H: m.H, wallDepth: m.wallDepth }, 
+                    config: { 
+                      ...bi.config, 
+                      L: m.L, 
+                      H: m.H, 
+                      wallDepth: m.wallDepth,
+                      ...(m.openingDirection ? { openingDirection: m.openingDirection } : {}),
+                      ...(m.optionalSides !== undefined ? { optionalSides: m.optionalSides } : {})
+                    }, 
                     qty: 1, 
                     isFromBatch: true,
                     instanceLabel: instanceName
@@ -3715,7 +3863,14 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                   const instanceName = resolveInstanceLabel(item, m, i, globalIdx);
                   targetItems.push({ 
                     ...item, 
-                    config: { ...item.config, L: m.L, H: m.H, wallDepth: m.wallDepth }, 
+                    config: { 
+                      ...item.config, 
+                      L: m.L, 
+                      H: m.H, 
+                      wallDepth: m.wallDepth,
+                      ...(m.openingDirection ? { openingDirection: m.openingDirection } : {}),
+                      ...(m.optionalSides !== undefined ? { optionalSides: m.optionalSides } : {})
+                    }, 
                     qty: 1, 
                     instanceLabel: instanceName
                   });
@@ -4891,6 +5046,347 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
 
             {/* Scrollable Body: Group Tables */}
             <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem 1.75rem', display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
+              {/* --- SIMULATEUR DE RENTABILITÉ & RATIO ACHATS --- */}
+              <div style={{
+                background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+                borderRadius: '1rem',
+                border: '1.5px solid #cbd5e1',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.04)',
+                overflow: 'hidden'
+              }}>
+                {/* Header with toggle */}
+                <div 
+                  onClick={() => setIsRentabiliteOpen(prev => !prev)}
+                  style={{
+                    padding: '0.85rem 1.25rem',
+                    background: 'linear-gradient(90deg, #f8fafc 0%, #f1f5f9 100%)',
+                    borderBottom: isRentabiliteOpen ? '1px solid #e2e8f0' : 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    cursor: 'pointer',
+                    userSelect: 'none'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <div style={{
+                      background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
+                      color: 'white',
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '8px',
+                      display: 'grid',
+                      placeItems: 'center',
+                      boxShadow: '0 2px 5px rgba(16, 185, 129, 0.3)'
+                    }}>
+                      <TrendingUp size={18} />
+                    </div>
+                    <div>
+                      <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        Simulateur de Rentabilité & Ratio Achats
+                        {rentabiliteData.devisTTC > 0 && (
+                          <span style={{
+                            fontSize: '0.75rem',
+                            fontWeight: 900,
+                            padding: '0.15rem 0.6rem',
+                            borderRadius: '999px',
+                            background: rentabiliteData.isTargetMet ? '#ecfdf5' : '#fffbeb',
+                            color: rentabiliteData.isTargetMet ? '#047857' : '#b45309',
+                            border: `1px solid ${rentabiliteData.isTargetMet ? '#a7f3d0' : '#fde68a'}`
+                          }}>
+                            Part Achats : {rentabiliteData.achatPercent.toFixed(2)} %
+                          </span>
+                        )}
+                      </h4>
+                      <p style={{ margin: 0, fontSize: '0.74rem', color: '#64748b' }}>
+                        Entrez la valeur TTC du devis et la marge en % pour calculer immédiatement combien vaut le total d'achat
+                      </p>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b' }}>
+                      {isRentabiliteOpen ? 'Masquer' : 'Afficher'}
+                    </span>
+                    <button
+                      type="button"
+                      style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: '0.2rem' }}
+                    >
+                      {isRentabiliteOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Collapsible Content */}
+                {isRentabiliteOpen && (
+                  <div style={{ padding: '1.25rem' }}>
+                    {/* Inputs & Quick Fill */}
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                      gap: '1rem',
+                      alignItems: 'end',
+                      marginBottom: '1.25rem'
+                    }}>
+                      {/* Input 1: Valeur TTC du Devis */}
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                          <label style={{ fontSize: '0.72rem', fontWeight: 800, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                            Valeur TTC du Devis
+                          </label>
+                          {activeQuote?.totals?.ttc && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setQuoteTTCInput(String(Math.round(activeQuote.totals.ttc)));
+                              }}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: '#2563eb',
+                                fontSize: '0.7rem',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                textDecoration: 'underline',
+                                padding: 0
+                              }}
+                              title="Charger automatiquement la valeur TTC du devis sélectionné"
+                            >
+                              Charger devis ({formatMoney(activeQuote.totals.ttc)} DZD)
+                            </button>
+                          )}
+                        </div>
+                        <div style={{ position: 'relative' }}>
+                          <input
+                            type="number"
+                            step="100"
+                            placeholder="Entrez montant TTC..."
+                            value={quoteTTCInput}
+                            onChange={e => setQuoteTTCInput(e.target.value)}
+                            className="input"
+                            style={{
+                              width: '100%',
+                              padding: '0.55rem 3.5rem 0.55rem 0.85rem',
+                              fontSize: '1rem',
+                              fontWeight: 800,
+                              color: '#1e293b',
+                              background: '#ffffff',
+                              border: '1.5px solid #94a3b8',
+                              borderRadius: '0.5rem'
+                            }}
+                          />
+                          <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '0.75rem', fontWeight: 800, color: '#64748b' }}>
+                            DZD TTC
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Input 2: Marge Cible (%) */}
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                          <label style={{ fontSize: '0.72rem', fontWeight: 800, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                            Marge Souhaitée (%)
+                          </label>
+                          <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Marge cible</span>
+                        </div>
+                        <div style={{ position: 'relative' }}>
+                          <input
+                            type="number"
+                            step="0.5"
+                            min="0"
+                            max="99"
+                            placeholder="Ex: 30"
+                            value={targetMarginPercent}
+                            onChange={e => setTargetMarginPercent(e.target.value)}
+                            className="input"
+                            style={{
+                              width: '100%',
+                              padding: '0.55rem 2.5rem 0.55rem 0.85rem',
+                              fontSize: '1rem',
+                              fontWeight: 800,
+                              color: '#1e293b',
+                              background: '#ffffff',
+                              border: '1.5px solid #94a3b8',
+                              borderRadius: '0.5rem'
+                            }}
+                          />
+                          <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '0.85rem', fontWeight: 900, color: '#64748b' }}>
+                            %
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Total Achats (Fixe/Calculé) */}
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                          <label style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                            Total Achats (Matière)
+                          </label>
+                          <span style={{ fontSize: '0.7rem', color: '#8b5cf6', fontWeight: 700 }}>Proforma chiffrée</span>
+                        </div>
+                        <div style={{
+                          padding: '0.55rem 0.85rem',
+                          background: '#faf5ff',
+                          border: '1.5px solid #ddd6fe',
+                          borderRadius: '0.5rem',
+                          fontSize: '1rem',
+                          fontWeight: 900,
+                          color: '#7c3aed'
+                        }}>
+                          {formatMoney(rentabiliteData.totalAchat)} DZD
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Calculated KPIs Cards */}
+                    {rentabiliteData.devisTTC > 0 ? (
+                      <>
+                        <div style={{
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                          gap: '1rem',
+                          marginBottom: '1rem'
+                        }}>
+                          {/* KEY RESULT: POURCENTAGE DU TOTAL ACHAT */}
+                          <div style={{
+                            background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 100%)',
+                            color: 'white',
+                            padding: '1rem 1.25rem',
+                            borderRadius: '0.75rem',
+                            boxShadow: '0 4px 10px rgba(49, 46, 129, 0.25)',
+                            position: 'relative',
+                            overflow: 'hidden'
+                          }}>
+                            <div style={{ position: 'absolute', right: '-10px', bottom: '-10px', opacity: 0.1 }}>
+                              <Percent size={80} />
+                            </div>
+                            <span style={{ display: 'block', fontSize: '0.68rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#c7d2fe', marginBottom: '0.3rem' }}>
+                              ⚡ PART DU TOTAL ACHAT
+                            </span>
+                            <div style={{ fontSize: '2rem', fontWeight: 900, lineHeight: 1.1, color: '#38bdf8' }}>
+                              {rentabiliteData.achatPercent.toFixed(2)} <span style={{ fontSize: '1.1rem', fontWeight: 700, color: '#e0e7ff' }}>%</span>
+                            </div>
+                            <span style={{ display: 'block', fontSize: '0.72rem', color: '#c7d2fe', marginTop: '0.4rem' }}>
+                              Les achats représentent <strong>{rentabiliteData.achatPercent.toFixed(1)}%</strong> du prix de vente TTC
+                            </span>
+                          </div>
+
+                          {/* MARGE BRUTE RÉELLE */}
+                          <div style={{
+                            background: rentabiliteData.isTargetMet ? 'linear-gradient(135deg, #064e3b 0%, #065f46 100%)' : 'linear-gradient(135deg, #78350f 0%, #92400e 100%)',
+                            color: 'white',
+                            padding: '1rem 1.25rem',
+                            borderRadius: '0.75rem',
+                            boxShadow: '0 4px 10px rgba(0, 0, 0, 0.15)',
+                            position: 'relative',
+                            overflow: 'hidden'
+                          }}>
+                            <div style={{ position: 'absolute', right: '-10px', bottom: '-10px', opacity: 0.1 }}>
+                              <TrendingUp size={80} />
+                            </div>
+                            <span style={{ display: 'block', fontSize: '0.68rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: rentabiliteData.isTargetMet ? '#a7f3d0' : '#fde68a', marginBottom: '0.3rem' }}>
+                              📈 MARGE BRUTE RÉELLE
+                            </span>
+                            <div style={{ fontSize: '1.65rem', fontWeight: 900, lineHeight: 1.1, color: '#ffffff' }}>
+                              {formatMoney(rentabiliteData.margeReelleDZD)} <span style={{ fontSize: '0.85rem', fontWeight: 600, opacity: 0.9 }}>DZD</span>
+                            </div>
+                            <span style={{ display: 'block', fontSize: '0.75rem', color: rentabiliteData.isTargetMet ? '#a7f3d0' : '#fde68a', marginTop: '0.4rem', fontWeight: 700 }}>
+                              Soit {rentabiliteData.margeReellePercent.toFixed(1)}% du devis (Coeff: x{rentabiliteData.coeffMultiplicateur.toFixed(2)})
+                            </span>
+                          </div>
+
+                          {/* ANALYSE CIBLE */}
+                          <div style={{
+                            background: rentabiliteData.isTargetMet ? '#f0fdf4' : '#fffbeb',
+                            border: `1.5px solid ${rentabiliteData.isTargetMet ? '#86efac' : '#fcd34d'}`,
+                            padding: '1rem 1.25rem',
+                            borderRadius: '0.75rem',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'center'
+                          }}>
+                            <span style={{ display: 'block', fontSize: '0.68rem', fontWeight: 800, textTransform: 'uppercase', color: rentabiliteData.isTargetMet ? '#15803d' : '#b45309', marginBottom: '0.3rem' }}>
+                              🎯 COMPARAISON MARGE CIBLE ({rentabiliteData.margeCible}%)
+                            </span>
+                            {rentabiliteData.isTargetMet ? (
+                              <div>
+                                <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#166534', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                  <CheckCircle size={18} color="#16a34a" /> Objectif respecté !
+                                </div>
+                                <span style={{ fontSize: '0.74rem', color: '#15803d', display: 'block', marginTop: '0.25rem' }}>
+                                  Marge supérieure de <strong>+{(rentabiliteData.margeReellePercent - rentabiliteData.margeCible).toFixed(1)}%</strong> à la cible
+                                </span>
+                              </div>
+                            ) : (
+                              <div>
+                                <div style={{ fontSize: '0.92rem', fontWeight: 800, color: '#9a3412', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                  <AlertTriangle size={17} color="#d97706" /> Marge sous l'objectif
+                                </div>
+                                <span style={{ fontSize: '0.74rem', color: '#b45309', display: 'block', marginTop: '0.25rem' }}>
+                                  Budget achat max conseillé : <strong>{formatMoney(rentabiliteData.budgetAchatMaxCible)} DZD</strong>
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Jauge visuelle dual-color */}
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', fontWeight: 700, marginBottom: '0.3rem' }}>
+                            <span style={{ color: '#4338ca' }}>
+                              🔹 Achats Matière : {rentabiliteData.achatPercent.toFixed(1)}% ({formatMoney(rentabiliteData.totalAchat)} DZD)
+                            </span>
+                            <span style={{ color: '#047857' }}>
+                              🔸 Marge Brute : {rentabiliteData.margeReellePercent.toFixed(1)}% ({formatMoney(rentabiliteData.margeReelleDZD)} DZD)
+                            </span>
+                          </div>
+                          <div style={{
+                            height: '14px',
+                            background: '#e2e8f0',
+                            borderRadius: '999px',
+                            overflow: 'hidden',
+                            display: 'flex',
+                            boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.1)'
+                          }}>
+                            <div 
+                              style={{
+                                width: `${Math.min(100, Math.max(0, rentabiliteData.achatPercent))}%`,
+                                background: 'linear-gradient(90deg, #3b82f6 0%, #6366f1 100%)',
+                                transition: 'width 0.4s ease'
+                              }}
+                              title={`Achats : ${rentabiliteData.achatPercent.toFixed(1)}%`}
+                            />
+                            <div 
+                              style={{
+                                width: `${Math.min(100, Math.max(0, rentabiliteData.margeReellePercent))}%`,
+                                background: 'linear-gradient(90deg, #10b981 0%, #059669 100%)',
+                                transition: 'width 0.4s ease'
+                              }}
+                              title={`Marge : ${rentabiliteData.margeReellePercent.toFixed(1)}%`}
+                            />
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <div style={{
+                        padding: '0.85rem 1rem',
+                        background: '#f8fafc',
+                        border: '1px dashed #cbd5e1',
+                        borderRadius: '0.6rem',
+                        color: '#64748b',
+                        fontSize: '0.8rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem'
+                      }}>
+                        <Info size={16} color="#94a3b8" />
+                        <span>Saisissez la <strong>valeur TTC du devis</strong> ci-dessus pour calculer instantanément le pourcentage des achats et la marge brute.</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
               {filteredPricedGroups.map((group, gIdx) => {
                 if (group.items.length === 0) return null;
 
@@ -5083,11 +5579,27 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                   </span>
                 </div>
                 <div style={{ borderLeft: '2px solid #cbd5e1', paddingLeft: '1.5rem' }}>
-                  <span style={{ fontSize: '0.68rem', color: '#059669', display: 'block', fontWeight: 800, textTransform: 'uppercase' }}>TOTAL GLOBAL</span>
+                  <span style={{ fontSize: '0.68rem', color: '#059669', display: 'block', fontWeight: 800, textTransform: 'uppercase' }}>TOTAL ACHATS</span>
                   <span style={{ fontSize: '1.45rem', fontWeight: 900, color: '#059669' }}>
                     {formatMoney(pricedTotals.grandTotal)} <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#64748b' }}>DZD</span>
                   </span>
                 </div>
+                {rentabiliteData.devisTTC > 0 && (
+                  <div style={{ borderLeft: '2px solid #cbd5e1', paddingLeft: '1.5rem' }}>
+                    <span style={{ fontSize: '0.68rem', color: '#4338ca', display: 'block', fontWeight: 800, textTransform: 'uppercase' }}>PART DU TOTAL ACHAT</span>
+                    <span style={{ fontSize: '1.45rem', fontWeight: 900, color: '#4338ca' }}>
+                      {rentabiliteData.achatPercent.toFixed(2)} <span style={{ fontSize: '0.9rem', fontWeight: 700 }}>%</span>
+                    </span>
+                  </div>
+                )}
+                {rentabiliteData.devisTTC > 0 && (
+                  <div style={{ borderLeft: '2px solid #cbd5e1', paddingLeft: '1.5rem' }}>
+                    <span style={{ fontSize: '0.68rem', color: '#047857', display: 'block', fontWeight: 800, textTransform: 'uppercase' }}>MARGE BRUTE RÉELLE</span>
+                    <span style={{ fontSize: '1.45rem', fontWeight: 900, color: '#047857' }}>
+                      {formatMoney(rentabiliteData.margeReelleDZD)} <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#64748b' }}>DZD ({rentabiliteData.margeReellePercent.toFixed(1)}%)</span>
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div style={{ display: 'flex', gap: '0.6rem' }}>

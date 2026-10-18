@@ -87,6 +87,8 @@ const syncSitePlanToMeasurements = (sitePlan, items) => {
           H: v.H !== undefined && v.H !== '' ? parseFloat(v.H) : item.config.H,
           wallDepth: v.wallDepth !== undefined && v.wallDepth !== '' ? parseFloat(v.wallDepth) : '',
           handleHeight: v.handleHeight !== undefined && v.handleHeight !== '' ? parseFloat(v.handleHeight) : '',
+          openingDirection: v.openingDirection || undefined,
+          optionalSides: v.optionalSides !== undefined ? v.optionalSides : undefined,
           qty: 1,
           label: label,
           shutterList: shutterList,
@@ -107,6 +109,21 @@ const DebouncedInput = ({ value, onChange, placeholder, type = "number", classNa
   const [localValue, setLocalValue] = useState(value);
   const timerRef = useRef(null);
   const [isFocused, setIsFocused] = useState(false);
+  const localValueRef = useRef(localValue);
+  const valueRef = useRef(value);
+  const onChangeRef = useRef(onChange);
+
+  useEffect(() => {
+    localValueRef.current = localValue;
+  }, [localValue]);
+
+  useEffect(() => {
+    valueRef.current = value;
+  }, [value]);
+
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
 
   // Sync local value with prop changes when not focused
   useEffect(() => {
@@ -139,10 +156,13 @@ const DebouncedInput = ({ value, onChange, placeholder, type = "number", classNa
     }
   };
 
-  // Clean up timer on unmount
+  // Clean up timer on unmount and ensure pending value is saved
   useEffect(() => {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
+      if (localValueRef.current !== valueRef.current && localValueRef.current !== undefined && onChangeRef.current) {
+        onChangeRef.current(localValueRef.current);
+      }
     };
   }, []);
 
@@ -426,6 +446,8 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                     H: sourceVoid.H !== undefined ? sourceVoid.H : v.H,
                     wallDepth: sourceVoid.wallDepth,
                     handleHeight: sourceVoid.handleHeight,
+                    openingDirection: sourceVoid.openingDirection,
+                    optionalSides: sourceVoid.optionalSides !== undefined ? JSON.parse(JSON.stringify(sourceVoid.optionalSides)) : undefined,
                     shutter: sourceVoid.shutter ? JSON.parse(JSON.stringify(sourceVoid.shutter)) : null,
                     partOverrides: sourceVoid.partOverrides ? JSON.parse(JSON.stringify(sourceVoid.partOverrides)) : {},
                     measurementsValidated: true
@@ -619,6 +641,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                     handleHeight: v.handleHeight !== undefined && v.handleHeight !== '' ? parseFloat(v.handleHeight) : '',
                     // optionalSides: undefined = Auto (keep quote config), object = technician override
                     optionalSides: v.optionalSides !== undefined ? v.optionalSides : undefined,
+                    openingDirection: v.openingDirection || undefined,
                     qty: 1,
                     label: `${f.name} - ${a.name} - ${v.name}`,
                     shutterList: shutterList,
@@ -1192,14 +1215,23 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                       <span style={{ fontSize: '0.65rem', fontWeight: 800, background: '#dcfce7', color: '#166534', padding: '0.15rem 0.5rem', borderRadius: '9999px' }}>🚀 LANCÉE</span>
                                     )}
                                     {v.measurementsValidated && !v.productionLaunched && (
-                                      <span style={{ fontSize: '0.65rem', fontWeight: 800, background: '#dbeafe', color: '#1d4ed8', padding: '0.15rem 0.5rem', borderRadius: '9999px' }}>✓ VALIDÉE</span>
+                                      <span style={{ fontSize: '0.65rem', fontWeight: 800, background: '#dbeafe', color: '#1d4ed8', padding: '0.15rem 0.5rem', borderRadius: '9999px' }}>🔒 VALIDÉE (FIGÉE)</span>
                                     )}
                                     <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>Devis: {item.config.L} x {item.config.H} mm</span>
                                   </div>
                                 </div>
 
                                 {/* Preview and Inputs Content */}
-                                <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem', opacity: v.productionLaunched ? 0.75 : 1, pointerEvents: v.productionLaunched ? 'none' : 'auto' }}>
+                                <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                  
+                                  {/* Form Inputs Container - Locked if validated or launched */}
+                                  <div style={{ 
+                                    display: 'flex', 
+                                    flexDirection: 'column', 
+                                    gap: '1rem', 
+                                    opacity: v.productionLaunched ? 0.75 : v.measurementsValidated ? 0.85 : 1, 
+                                    pointerEvents: (v.productionLaunched || v.measurementsValidated) ? 'none' : 'auto' 
+                                  }}>
                                   
                                   {/* Drawing Preview */}
                                   <div style={{ flex: 1, background: '#f8fafc', border: '1px solid #f1f5f9', borderRadius: '0.5rem' }}>
@@ -1569,6 +1601,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                          })()}
                                        </div>
                                     )}
+                                  </div>
                                   </div>
 
                                   {/* Assign Button */}

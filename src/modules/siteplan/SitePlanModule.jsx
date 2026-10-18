@@ -33,6 +33,8 @@ function syncSitePlanToMeasurements(sitePlan, orderItems) {
           H: v.H !== undefined ? v.H : 0,
           wallDepth: v.wallDepth !== undefined ? v.wallDepth : 0,
           handleHeight: v.handleHeight !== undefined ? v.handleHeight : undefined,
+          openingDirection: v.openingDirection || undefined,
+          optionalSides: v.optionalSides !== undefined ? v.optionalSides : undefined,
           qty: 1,
           instanceFloors: [floor.name],
           instanceNames: [autoName],
