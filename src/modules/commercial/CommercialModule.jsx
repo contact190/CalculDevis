@@ -2701,6 +2701,10 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
 
   const saveQuoteToDatabase = (quoteToSave, showAlert = false) => {
     if (setDatabase && quoteToSave) {
+      if (!quoteToSave.items || quoteToSave.items.length === 0) {
+        if (showAlert) alert("Veuillez ajouter au moins un produit avant d'enregistrer le devis.");
+        return;
+      }
       const finalQuote = { ...quoteToSave, totals };
       const isNewQuote = !(database?.quotes || []).some(q => q.id === finalQuote.id);
 

@@ -475,17 +475,23 @@ function App() {
   // ─── Auto-sync currentQuote updates into database.quotes ────────────────
   useEffect(() => {
     if (database && currentQuote && currentQuote.id) {
-      // Avoid syncing a brand new empty quote to prevent infinite number-generation loops
-      const shouldSync = (currentQuote.items && currentQuote.items.length > 0) || 
-                         currentQuote.clientId || 
-                         (database.quotes && database.quotes.some(q => q.id === currentQuote.id));
+      // Require at least 1 item for auto-saving a new quote into database.quotes
+      const hasItems = Array.isArray(currentQuote.items) && currentQuote.items.length > 0;
+      const isExistingInDb = (database.quotes || []).some(q => q.id === currentQuote.id);
+      
+      const shouldSync = hasItems || isExistingInDb;
       
       if (shouldSync) {
+        // If it does not exist in db yet, do not create it with 0 items
+        if (!isExistingInDb && !hasItems) return;
+
         const dbQuote = database.quotes?.find(q => q.id === currentQuote.id);
         if (!dbQuote || JSON.stringify(dbQuote) !== JSON.stringify(currentQuote)) {
           setDatabase(prev => {
             if (!prev) return prev;
             const exists = (prev.quotes || []).some(q => q.id === currentQuote.id);
+            if (!exists && !hasItems) return prev; // Do not insert empty quotes into database
+
             const quotes = exists
               ? prev.quotes.map(q => q.id === currentQuote.id ? currentQuote : q)
               : [...(prev.quotes || []), currentQuote];
