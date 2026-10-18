@@ -2533,6 +2533,25 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
     return { rawHT, discountAmount, ht: netHT, tva, ttc: netHT + tva, profiles, accessories, glass, shutters };
   }, [quote.items, quote.discountType, quote.discountValue, quote.globalMargin, isQuoteFrozen, engine]);
 
+  // Synchronize computed totals into currentQuote so it is auto-saved and never stale
+  useEffect(() => {
+    if (!setCurrentQuote || !totals) return;
+    setCurrentQuote(prev => {
+      if (!prev) return prev;
+      if (
+        prev.totals &&
+        prev.totals.ht === totals.ht &&
+        prev.totals.ttc === totals.ttc &&
+        prev.totals.rawHT === totals.rawHT &&
+        prev.totals.discountAmount === totals.discountAmount &&
+        prev.totals.tva === totals.tva
+      ) {
+        return prev;
+      }
+      return { ...prev, totals };
+    });
+  }, [totals, setCurrentQuote]);
+
   // Consolidated BOM for consumables
   const allBoms = useMemo(() => {
     if (!quote.items?.length) return [];

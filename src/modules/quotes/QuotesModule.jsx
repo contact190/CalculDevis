@@ -4,6 +4,7 @@ import {
   Users, CheckCircle, Clock, ShoppingBag, Copy, Trash2, ExternalLink, 
   Layers, Store, ChevronRight, RefreshCw, AlertCircle
 } from 'lucide-react';
+import { getQuoteTotals } from '../../utils/quoteUtils';
 
 const formatMoney = (amount) => {
   return (Number(amount) || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -108,8 +109,10 @@ const QuotesModule = ({ data, setData, quoteSettings, onOpenQuote, onNewQuote })
     return list.sort((a, b) => {
       const dateA = new Date(a.createdAt || 0).getTime();
       const dateB = new Date(b.createdAt || 0).getTime();
-      const amountA = Number(a.totals?.ttc || 0);
-      const amountB = Number(b.totals?.ttc || 0);
+      const totalsA = getQuoteTotals(a, quoteSettings);
+      const totalsB = getQuoteTotals(b, quoteSettings);
+      const amountA = totalsA.ttc;
+      const amountB = totalsB.ttc;
 
       switch (sortOrder) {
         case 'date_asc':
@@ -123,7 +126,7 @@ const QuotesModule = ({ data, setData, quoteSettings, onOpenQuote, onNewQuote })
           return dateB - dateA;
       }
     });
-  }, [data.quotes, selectedClientId, statusFilter, typeFilter, searchTerm, sortOrder, clientsMap]);
+  }, [data.quotes, selectedClientId, statusFilter, typeFilter, searchTerm, sortOrder, clientsMap, quoteSettings]);
 
   // Overall Statistics
   const stats = useMemo(() => {
@@ -135,10 +138,9 @@ const QuotesModule = ({ data, setData, quoteSettings, onOpenQuote, onNewQuote })
     let countBrouillon = 0;
 
     all.forEach(q => {
-      const ttc = Number(q.totals?.ttc || 0);
-      const ht = Number(q.totals?.ht || 0);
-      totalTTC += ttc;
-      totalHT += ht;
+      const qTotals = getQuoteTotals(q, quoteSettings);
+      totalTTC += qTotals.ttc;
+      totalHT += qTotals.ht;
 
       if (q.status === 'Confirmé') countConfirme++;
       else if (q.status === 'Validé') countValide++;
@@ -154,7 +156,7 @@ const QuotesModule = ({ data, setData, quoteSettings, onOpenQuote, onNewQuote })
       countBrouillon,
       averageTTC: all.length > 0 ? totalTTC / all.length : 0
     };
-  }, [data.quotes]);
+  }, [data.quotes, quoteSettings]);
 
   // Actions
   const handleConvertToOrder = (quote) => {
@@ -238,6 +240,7 @@ const QuotesModule = ({ data, setData, quoteSettings, onOpenQuote, onNewQuote })
     const newId = `QUOTE-${Date.now()}`;
     const nextNumber = generateNextQuoteNumber(quoteSettings, data);
     const deepClone = JSON.parse(JSON.stringify(quote));
+    const calculatedTotals = getQuoteTotals(deepClone, quoteSettings);
     const newQuote = {
       ...deepClone,
       id: newId,
@@ -245,6 +248,7 @@ const QuotesModule = ({ data, setData, quoteSettings, onOpenQuote, onNewQuote })
       status: 'Brouillon',
       createdAt: new Date().toISOString(),
       validatedAt: null,
+      totals: calculatedTotals,
       items: (deepClone.items || []).map(item => ({
         ...item,
         id: `ITEM-${Date.now()}-${Math.floor(Math.random() * 10000)}`
@@ -551,8 +555,9 @@ const QuotesModule = ({ data, setData, quoteSettings, onOpenQuote, onNewQuote })
                 const clientName = client?.nom || q.clientName || 'Sans Client';
                 const createdDate = q.createdAt ? new Date(q.createdAt) : null;
                 const isShop = q.type === 'shop';
-                const totalHT = q.totals?.ht || 0;
-                const totalTTC = q.totals?.ttc || 0;
+                const quoteTotals = getQuoteTotals(q, quoteSettings);
+                const totalHT = quoteTotals.ht;
+                const totalTTC = quoteTotals.ttc;
                 const itemsCount = (q.items || []).length;
 
                 return (

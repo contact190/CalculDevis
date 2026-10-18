@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Users, Plus, Edit2, Trash2, FileText, ChevronDown, ChevronUp, CheckCircle, Copy, Link, ExternalLink } from 'lucide-react';
+import { getQuoteTotals } from '../../utils/quoteUtils';
 
 const generateNextQuoteNumber = (settings, db) => {
   let counter = settings?.quoteCounter || 1;
@@ -132,6 +133,7 @@ const ClientsModule = ({ data, setData, onOpenQuote, quoteSettings }) => {
     const nextNumber = generateNextQuoteNumber(quoteSettings, data);
     // Deep clone to fully decouple from the original quote (items, config, priceData, totals, etc.)
     const deepClone = JSON.parse(JSON.stringify(quote));
+    const calculatedTotals = getQuoteTotals(deepClone, quoteSettings);
     const newQuote = {
       ...deepClone,
       id: newId,
@@ -139,6 +141,7 @@ const ClientsModule = ({ data, setData, onOpenQuote, quoteSettings }) => {
       status: 'Brouillon',
       createdAt: new Date().toISOString(),
       validatedAt: null,
+      totals: calculatedTotals,
       // Give each item a new unique ID so they are fully independent from the original
       items: (deepClone.items || []).map(item => ({
         ...item,
@@ -291,7 +294,9 @@ const ClientsModule = ({ data, setData, onOpenQuote, quoteSettings }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {(data.quotes || []).filter(q => q.clientId === editingClient.id).map(q => (
+                  {(data.quotes || []).filter(q => q.clientId === editingClient.id).map(q => {
+                    const quoteTotals = getQuoteTotals(q, quoteSettings);
+                    return (
                     <tr key={q.id}>
                       <td data-label="N°" style={{ fontWeight: 700, color: '#2563eb' }}>{q.number}</td>
                       <td data-label="Type">
@@ -331,8 +336,8 @@ const ClientsModule = ({ data, setData, onOpenQuote, quoteSettings }) => {
                         {editingClient.sitePlans?.find(p => p.id === q.sitePlanId)?.name || '-'}
                       </td>
                       <td data-label="Produits">{q.items?.length || 0}</td>
-                      <td data-label="HT" style={{ fontWeight: 600 }}>{q.totals?.ht?.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
-                      <td data-label="TTC" style={{ fontWeight: 700 }}>{q.totals?.ttc?.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
+                      <td data-label="HT" style={{ fontWeight: 600 }}>{quoteTotals.ht.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
+                      <td data-label="TTC" style={{ fontWeight: 700 }}>{quoteTotals.ttc.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
 
                       <td data-label="Actions" style={{ textAlign: 'center' }}>
                         <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
@@ -353,7 +358,8 @@ const ClientsModule = ({ data, setData, onOpenQuote, quoteSettings }) => {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                   {(data.quotes || []).filter(q => q.clientId === editingClient.id).length === 0 && (
                     <tr>
                       <td colSpan="6" style={{ textAlign: 'center', padding: '1rem', color: '#94a3b8' }}>
@@ -441,7 +447,9 @@ const ClientsModule = ({ data, setData, onOpenQuote, quoteSettings }) => {
                                 </tr>
                               </thead>
                               <tbody>
-                                {clientQuotes.map(q => (
+                                {clientQuotes.map(q => {
+                                  const quoteTotals = getQuoteTotals(q, quoteSettings);
+                                  return (
                                   <tr key={q.id}>
                                     <td data-label="N°" style={{ fontWeight: 700, color: '#3b82f6' }}>{q.number}</td>
                                     <td data-label="Type">
@@ -481,8 +489,8 @@ const ClientsModule = ({ data, setData, onOpenQuote, quoteSettings }) => {
                                       {c.sitePlans?.find(p => p.id === q.sitePlanId)?.name || '-'}
                                     </td>
                                     <td data-label="Prd.">{q.items?.length || 0}</td>
-                                    <td data-label="HT" style={{ fontWeight: 600 }}>{q.totals?.ht?.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
-                                    <td data-label="TTC" style={{ fontWeight: 700 }}>{q.totals?.ttc?.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
+                                    <td data-label="HT" style={{ fontWeight: 600 }}>{quoteTotals.ht.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
+                                    <td data-label="TTC" style={{ fontWeight: 700 }}>{quoteTotals.ttc.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</td>
                                     <td data-label="Actions" style={{ textAlign: 'center' }}>
 
                                       <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'center' }}>
@@ -503,7 +511,8 @@ const ClientsModule = ({ data, setData, onOpenQuote, quoteSettings }) => {
                                       </div>
                                     </td>
                                   </tr>
-                                ))}
+                                  );
+                                })}
                               </tbody>
                             </table>
                           </div>
