@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo, Suspense } from 'react';
-import { Home, Package, Settings, ChevronRight, LayoutDashboard, Users, RefreshCw, ShoppingBag, Truck, CheckCircle, Building, Wifi, WifiOff, TrendingUp, Store, FileText } from 'lucide-react';
+import { Home, Package, Settings, ChevronRight, LayoutDashboard, Users, RefreshCw, ShoppingBag, Truck, CheckCircle, Building, Wifi, WifiOff, TrendingUp, Store, FileText, CheckSquare } from 'lucide-react';
 
 // Helper to handle ChunkLoadError (e.g. after a new deployment, old chunks are missing on server)
 const lazyWithRetry = (importFn) => {
@@ -33,6 +33,8 @@ const InstallerPortal = lazyWithRetry(() => import('./modules/shipping/Installer
 const TechnicianPortal = lazyWithRetry(() => import('./modules/orders/TechnicianPortal'));
 const SitePlanModule = lazyWithRetry(() => import('./modules/siteplan/SitePlanModule'));
 const FinanceModule = lazyWithRetry(() => import('./modules/finance/FinanceModule'));
+const TrackingModule = lazyWithRetry(() => import('./modules/tracking/TrackingModule'));
+const SubLotMobilePortal = lazyWithRetry(() => import('./modules/tracking/SubLotMobilePortal'));
 
 import { DEFAULT_DATA } from './data/default-data';
 import { syncDatabase, cloudSync } from './utils/supabaseClient';
@@ -1053,6 +1055,7 @@ function App() {
     { id: 'siteplan', label: 'Plan de Chantier', icon: Building },
     { id: 'orders', label: 'Commandes', icon: ShoppingBag },
     { id: 'production', label: 'Atelier / Production', icon: Package },
+    { id: 'tracking', label: 'Gestion & Suivi', icon: CheckSquare },
     { id: 'shipping', label: 'Expédition & Colisage', icon: Truck },
     { id: 'clients', label: 'Clients', icon: Users },
     { id: 'finance', label: 'Finance', icon: TrendingUp },
@@ -1063,6 +1066,20 @@ function App() {
   const installerOrderId = urlParams.get('orderId');
   const isTechnicianMode = urlParams.get('mode') === 'technician';
   const technicianOrderId = urlParams.get('orderId');
+  const isTrackingMode = urlParams.get('mode') === 'tracking' || urlParams.get('mode') === 'sublot';
+
+  if (isTrackingMode) {
+    return (
+      <Suspense fallback={<ModuleLoader />}>
+        <SubLotMobilePortal 
+          data={database} 
+          setData={setDatabase} 
+          isOnline={isOnline}
+          isSyncing={supabaseSyncStatus === 'syncing' || cloudSyncStatus === 'syncing'}
+        />
+      </Suspense>
+    );
+  }
 
   if (isInstallerMode && installerOrderId) {
     return (
@@ -1329,6 +1346,13 @@ function App() {
               currentConfig={currentConfig} 
               currentQuote={currentQuote}
               database={filteredDatabase}
+              setData={setDatabase}
+              quoteSettings={quoteSettings}
+            />
+          )}
+          {activeTab === 'tracking' && (
+            <TrackingModule 
+              data={filteredDatabase}
               setData={setDatabase}
               quoteSettings={quoteSettings}
             />

@@ -1,0 +1,1370 @@
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { 
+  CheckSquare, 
+  Layers, 
+  Package, 
+  QrCode, 
+  Printer, 
+  FileText, 
+  Copy, 
+  ExternalLink, 
+  Play, 
+  CheckCircle, 
+  Clock, 
+  AlertCircle, 
+  Building, 
+  ShoppingBag, 
+  RefreshCw, 
+  Sliders, 
+  Search,
+  Plus,
+  Trash2,
+  ChevronDown,
+  ChevronUp,
+  Lock,
+  Archive,
+  X,
+  Smartphone,
+  Eye
+} from 'lucide-react';
+import { QRCodeSVG, QRCodeCanvas } from 'qrcode.react';
+import jsPDF from 'jspdf';
+
+// Helper to classify joinery type according to strict workshop rules
+export const classifyOpeningFamily = (item, database) => {
+  const comp = database?.compositions?.find(c => c.id === item?.config?.compositionId);
+  const openingType = (comp?.openingType || '').toLowerCase();
+  const compoundType = (item?.config?.compoundType || '').toLowerCase();
+  const label = (item?.label || '').toLowerCase();
+  const name = (comp?.name || '').toLowerCase();
+
+  // 1. Structure combinée Fixe + Coulissant => COULISSANT
+  if (compoundType === 'fix_coulissant') {
+    return 'coulissant';
+  }
+
+  // 2. Structure combinée Fixe + Ouvrant => OUVRANT
+  if (compoundType === 'fix_ouvrant') {
+    return 'ouvrant';
+  }
+
+  // 3. Coulissant seul
+  if (openingType.includes('coulissant') || label.includes('coulissant') || name.includes('coulissant')) {
+    return 'coulissant';
+  }
+
+  // 4. Fixe seul
+  if (openingType.includes('fixe') || label.includes('fixe') || name.includes('fixe')) {
+    return 'fixe';
+  }
+
+  // 5. Ouvrant seul (par défaut pour battant, oscillo, porte-fenêtre)
+  return 'ouvrant';
+};
+
+// Helper to estimate sliding panel count (vantaux)
+export const getSlidingPanelsCount = (item, database) => {
+  const comp = database?.compositions?.find(c => c.id === item?.config?.compositionId);
+  const text = `${comp?.name || ''} ${item?.label || ''}`.toLowerCase();
+  if (text.includes('4 vantaux') || text.includes('4v')) return 4;
+  if (text.includes('3 vantaux') || text.includes('3v')) return 3;
+  if (text.includes('1 vantail') || text.includes('1v') || text.includes('galandage 1')) return 1;
+  return 2; // Par défaut 2 vantaux pour coulissant standard
+};
+
+// Helper to calculate typology statistics for sub-lot products
+export const getSubLotTypologyStats = (items) => {
+  let coulissantSeul = 0;
+  let ouvrantSeul = 0;
+  let assemble = 0;
+  let avecVolet = 0;
+
+  (items || []).forEach(it => {
+    const item = it.item || it;
+    const compoundType = (item?.config?.compoundType || '').toLowerCase();
+    const isCompound = compoundType === 'fix_coulissant' || compoundType === 'fix_ouvrant';
+
+    if (isCompound) {
+      assemble++;
+    } else if (it.family === 'coulissant') {
+      coulissantSeul++;
+    } else if (it.family === 'ouvrant' || it.family === 'fixe') {
+      ouvrantSeul++;
+    }
+
+    const hasShutter = !!(item?.config?.hasShutter || (it.shutter && it.shutter.qty > 0));
+    if (hasShutter) {
+      avecVolet++;
+    }
+  });
+
+  return { coulissantSeul, ouvrantSeul, assemble, avecVolet };
+};
+
+export default function TrackingModule({ data, setData, quoteSettings }) {
+  const [selectedOrderId, setSelectedOrderId] = useState('');
+  const [selectedBatchId, setSelectedBatchId] = useState('');
+  const [groupSize, setGroupSize] = useState(3);
+  const [showCompletedBatchesModal, setShowCompletedBatchesModal] = useState(false);
+  const [selectedCompletedBatchDetails, setSelectedCompletedBatchDetails] = useState(null);
+
+  // Helper to check if a batch is completed
+  const isBatchCompleted = useCallback((batch) => {
+    if (!batch) return false;
+    if (batch.status === 'Terminé') return true;
+    if (batch.subLots && batch.subLots.length > 0) {
+      return batch.subLots.every(s => s.status === 'Terminé');
+    }
+    return false;
+  }, []);
+
+  // Filter 1: COMMANDES EN COURS UNIQUEMENT (pas les finies)
+  const activeOrders = useMemo(() => {
+    return (data?.orders || []).filter(o => {
+      if (o.status === 'Terminé' || o.status === 'Livré') return false;
+      
+      // Si la commande a des lots et qu'ils sont TOUS terminés, elle est considérée finie
+      if (o.batches && o.batches.length > 0) {
+        const allBatchesDone = o.batches.every(b => isBatchCompleted(b));
+        if (allBatchesDone) return false;
+      }
+      return o.items && o.items.length > 0;
+    });
+  }, [data?.orders, isBatchCompleted]);
+
+  // Set default selected order if none or if current becomes invalid
+  useEffect(() => {
+    if (activeOrders.length > 0) {
+      if (!selectedOrderId || !activeOrders.some(o => o.id === selectedOrderId)) {
+        setSelectedOrderId(activeOrders[0].id);
+      }
+    } else {
+      setSelectedOrderId('');
+    }
+  }, [activeOrders, selectedOrderId]);
+
+  const selectedOrder = useMemo(() => {
+    return (data?.orders || []).find(o => o.id === selectedOrderId) || null;
+  }, [data?.orders, selectedOrderId]);
+
+  const client = useMemo(() => {
+    if (!selectedOrder) return null;
+    return (data?.clients || []).find(c => c.id === selectedOrder.clientId) || null;
+  }, [data?.clients, selectedOrder]);
+
+  const clientPlans = client?.sitePlans || [];
+  const activeSitePlan = useMemo(() => {
+    if (!selectedOrder) return null;
+    return clientPlans.find(p => p.id === selectedOrder.sitePlanId || p.quoteId === selectedOrder.quoteId) || null;
+  }, [clientPlans, selectedOrder]);
+
+  // Filter 2: LOTS NON FINIS UNIQUEMENT (pour la sélection de travail)
+  const activeBatches = useMemo(() => {
+    return (selectedOrder?.batches || []).filter(b => !isBatchCompleted(b));
+  }, [selectedOrder, isBatchCompleted]);
+
+  // LOTS TERMINÉS DE CETTE COMMANDE (pour le popup)
+  const completedBatchesForOrder = useMemo(() => {
+    return (selectedOrder?.batches || []).filter(b => isBatchCompleted(b));
+  }, [selectedOrder, isBatchCompleted]);
+
+  // LOTS TERMINÉS GLOBAUX (toutes commandes)
+  const allCompletedBatches = useMemo(() => {
+    const list = [];
+    (data?.orders || []).forEach(o => {
+      const cl = (data?.clients || []).find(c => c.id === o.clientId);
+      (o.batches || []).forEach(b => {
+        if (isBatchCompleted(b)) {
+          list.push({ order: o, batch: b, client: cl });
+        }
+      });
+    });
+    return list;
+  }, [data?.orders, data?.clients, isBatchCompleted]);
+
+  // Set default batch from activeBatches
+  useEffect(() => {
+    if (activeBatches.length > 0) {
+      if (!selectedBatchId || !activeBatches.some(b => b.id === selectedBatchId)) {
+        setSelectedBatchId(activeBatches[0].id);
+      }
+    } else {
+      setSelectedBatchId('');
+    }
+  }, [activeBatches, selectedBatchId]);
+
+  const selectedBatch = useMemo(() => {
+    if (!selectedOrder) return null;
+    return (selectedOrder.batches || []).find(b => b.id === selectedBatchId) || null;
+  }, [selectedOrder, selectedBatchId]);
+
+  // Current sub-lots
+  const currentSubLots = useMemo(() => {
+    if (selectedBatch && selectedBatch.subLots) {
+      return selectedBatch.subLots;
+    }
+    if (selectedOrder && selectedOrder.subLots) {
+      return selectedOrder.subLots;
+    }
+    return [];
+  }, [selectedBatch, selectedOrder]);
+
+  // Is sub-lot division approved & frozen?
+  const isSubLotsFrozen = useMemo(() => {
+    if (selectedBatch) {
+      return !!selectedBatch.subLotsApproved;
+    }
+    if (selectedOrder) {
+      return !!selectedOrder.subLotsApproved;
+    }
+    return false;
+  }, [selectedBatch, selectedOrder]);
+
+  // Helper to collect all openings from either the selected batch or the site plan
+  const collectBatchOpenings = useCallback(() => {
+    if (!selectedOrder) return [];
+
+    const openings = [];
+
+    if (activeSitePlan) {
+      (activeSitePlan.floors || []).forEach(f => {
+        (f.apartments || []).forEach(a => {
+          (a.voids || []).forEach((v, vIndex) => {
+            const item = selectedOrder.items.find(i => i.id === v.itemId);
+            if (!item) return;
+
+            if (selectedBatch) {
+              const batchItem = (selectedBatch.items || []).find(bi => bi.id === v.itemId);
+              const isIncludedInBatch = batchItem && (batchItem.measurements || []).some(m => m.id === v.id || m.label?.includes(v.name));
+              if (!isIncludedInBatch && v.productionLaunched !== true) {
+                return;
+              }
+            }
+
+            const repere = v.name?.trim() || `${f.name}${a.name}${vIndex + 1}`;
+            const family = classifyOpeningFamily(item, data);
+            const realL = v.L !== undefined && v.L !== '' ? parseFloat(v.L) : item.config.L;
+            const realH = v.H !== undefined && v.H !== '' ? parseFloat(v.H) : item.config.H;
+
+            openings.push({
+              voidId: v.id,
+              itemId: item.id,
+              repere: repere,
+              label: item.label,
+              item: item,
+              family: family,
+              L: realL,
+              H: realH,
+              floorName: f.name,
+              aptName: a.name,
+              shutter: v.shutter
+            });
+          });
+        });
+      });
+    }
+
+    if (openings.length === 0 && selectedBatch) {
+      (selectedBatch.items || []).forEach(bi => {
+        const item = selectedOrder.items.find(i => i.id === bi.id) || bi;
+        const family = classifyOpeningFamily(item, data);
+        (bi.measurements || []).forEach((m, mIdx) => {
+          openings.push({
+            voidId: m.id || `M-${mIdx}`,
+            itemId: item.id,
+            repere: m.label || `Ouverture ${mIdx + 1}`,
+            label: item.label,
+            item: item,
+            family: family,
+            L: m.L || item.config?.L || 1200,
+            H: m.H || item.config?.H || 1200,
+            floorName: m.floorName || '',
+            aptName: m.aptName || '',
+            shutter: null
+          });
+        });
+      });
+    }
+
+    return openings;
+  }, [selectedOrder, selectedBatch, activeSitePlan, data]);
+
+  // Update a sub-lot field
+  const handleUpdateSubLot = (subLotId, field, value) => {
+    if (!selectedOrder) return;
+    setData(prev => {
+      const updatedOrders = (prev.orders || []).map(o => {
+        if (o.id !== selectedOrder.id) return o;
+        
+        let newBatches = o.batches || [];
+        if (selectedBatch) {
+          newBatches = newBatches.map(b => {
+            if (b.id !== selectedBatch.id) return b;
+            const updated = (b.subLots || []).map(s => s.id === subLotId ? { ...s, [field]: value } : s);
+            return { ...b, subLots: updated };
+          });
+        }
+
+        let newOrderSubLots = o.subLots || [];
+        if (!selectedBatch && o.subLots) {
+          newOrderSubLots = newOrderSubLots.map(s => s.id === subLotId ? { ...s, [field]: value } : s);
+        }
+
+        return {
+          ...o,
+          batches: newBatches,
+          subLots: newOrderSubLots,
+          _lastModified: new Date().toISOString()
+        };
+      });
+
+      return {
+        ...prev,
+        orders: updatedOrders
+      };
+    });
+  };
+
+  // Automatic sub-lot division
+  const handleAutoDivideSubLots = () => {
+    if (isSubLotsFrozen) {
+      alert("Ce découpage est validé et figé. Il ne peut plus être modifié.");
+      return;
+    }
+    if (!selectedOrder) return;
+    const allOpenings = collectBatchOpenings();
+
+    if (allOpenings.length === 0) {
+      alert("Aucune ouverture trouvée pour ce lot ou cette commande. Veuillez d'abord valider les cotes et lancer le lot de fabrication.");
+      return;
+    }
+
+    const size = Math.max(1, parseInt(groupSize) || 3);
+
+    // Group openings by family according to user rules:
+    const groups = {
+      coulissant: allOpenings.filter(o => o.family === 'coulissant'),
+      ouvrant: allOpenings.filter(o => o.family === 'ouvrant'),
+      fixe: allOpenings.filter(o => o.family === 'fixe')
+    };
+
+    const newSubLots = [];
+    let subLotCounter = 1;
+
+    const chunkArray = (arr, chunkSize) => {
+      const chunks = [];
+      for (let i = 0; i < arr.length; i += chunkSize) {
+        chunks.push(arr.slice(i, i + chunkSize));
+      }
+      return chunks;
+    };
+
+    // Coulissant
+    const coulissantChunks = chunkArray(groups.coulissant, size);
+    coulissantChunks.forEach(chunk => {
+      const cadres = [];
+      const panneaux = [];
+
+      chunk.forEach(op => {
+        const panelCount = getSlidingPanelsCount(op.item, data);
+        cadres.push({
+          id: `cadre_${op.voidId}`,
+          repere: op.repere,
+          label: `Cadre Dormant ${op.label}`,
+          dim: `${op.L} x ${op.H} mm`,
+          location: `${op.floorName} - ${op.aptName}`
+        });
+
+        for (let p = 1; p <= panelCount; p++) {
+          panneaux.push({
+            id: `panneau_${op.voidId}_${p}`,
+            repere: op.repere,
+            label: `${op.label}`,
+            panelName: panelCount === 2 ? (p === 1 ? 'Vantail Gauche (V1)' : 'Vantail Droit (V2)') : `Vantail ${p}`,
+            dim: `${Math.round(op.L / panelCount)} x ${op.H} mm approx.`
+          });
+        }
+      });
+
+      newSubLots.push({
+        id: `SL-${Date.now()}-${subLotCounter}`,
+        code: `SL-${String(subLotCounter).padStart(2, '0')}`,
+        name: `Sous-Lot SL-${String(subLotCounter).padStart(2, '0')} (Coulissant - ${chunk.length} ouv.)`,
+        family: 'coulissant',
+        items: chunk,
+        cadres: cadres,
+        panneaux: panneaux,
+        ouvertures: [],
+        remarks: '',
+        status: 'En attente',
+        checklist: {},
+        startedAt: null,
+        completedAt: null
+      });
+      subLotCounter++;
+    });
+
+    // Ouvrant
+    const ouvrantChunks = chunkArray(groups.ouvrant, size);
+    ouvrantChunks.forEach(chunk => {
+      const ouvertures = chunk.map(op => ({
+        id: `ouv_${op.voidId}`,
+        repere: op.repere,
+        label: op.label,
+        dim: `${op.L} x ${op.H} mm`,
+        location: `${op.floorName} - ${op.aptName}`
+      }));
+
+      newSubLots.push({
+        id: `SL-${Date.now()}-${subLotCounter}`,
+        code: `SL-${String(subLotCounter).padStart(2, '0')}`,
+        name: `Sous-Lot SL-${String(subLotCounter).padStart(2, '0')} (Ouvrant - ${chunk.length} ouv.)`,
+        family: 'ouvrant',
+        items: chunk,
+        cadres: [],
+        panneaux: [],
+        ouvertures: ouvertures,
+        remarks: '',
+        status: 'En attente',
+        checklist: {},
+        startedAt: null,
+        completedAt: null
+      });
+      subLotCounter++;
+    });
+
+    // Fixe
+    const fixeChunks = chunkArray(groups.fixe, size);
+    fixeChunks.forEach(chunk => {
+      const ouvertures = chunk.map(op => ({
+        id: `fixe_${op.voidId}`,
+        repere: op.repere,
+        label: op.label,
+        dim: `${op.L} x ${op.H} mm`,
+        location: `${op.floorName} - ${op.aptName}`
+      }));
+
+      newSubLots.push({
+        id: `SL-${Date.now()}-${subLotCounter}`,
+        code: `SL-${String(subLotCounter).padStart(2, '0')}`,
+        name: `Sous-Lot SL-${String(subLotCounter).padStart(2, '0')} (Fixe - ${chunk.length} ouv.)`,
+        family: 'fixe',
+        items: chunk,
+        cadres: [],
+        panneaux: [],
+        ouvertures: ouvertures,
+        remarks: '',
+        status: 'En attente',
+        checklist: {},
+        startedAt: null,
+        completedAt: null
+      });
+      subLotCounter++;
+    });
+
+    // Persist new sub-lots in DB (not yet frozen)
+    setData(prev => {
+      const updatedOrders = (prev.orders || []).map(o => {
+        if (o.id !== selectedOrder.id) return o;
+        
+        let newBatches = o.batches || [];
+        if (selectedBatch) {
+          newBatches = newBatches.map(b => {
+            if (b.id !== selectedBatch.id) return b;
+            return { ...b, subLots: newSubLots, subLotsApproved: false };
+          });
+        }
+
+        return {
+          ...o,
+          batches: newBatches,
+          subLots: !selectedBatch ? newSubLots : o.subLots,
+          subLotsApproved: !selectedBatch ? false : o.subLotsApproved,
+          _lastModified: new Date().toISOString()
+        };
+      });
+
+      return {
+        ...prev,
+        orders: updatedOrders
+      };
+    });
+  };
+
+  // Approve and freeze sub-lot division
+  const handleApproveAndFreezeSubLots = () => {
+    if (!selectedOrder || currentSubLots.length === 0) return;
+
+    const confirmMsg = `🔒 CONFIRMATION DU FIGEAGE DE LA DÉCOUPE :\n\n` +
+      `Voulez-vous approuver et figer définitivement le découpage de ce lot en ${currentSubLots.length} sous-lot(s) ?\n\n` +
+      `⚠️ ATTENTION : Une fois approuvé, ce découpage sera DÉFINITIVEMENT FIGÉ et verrouillé en fabrication.\n` +
+      `Il ne pourra plus être redécoupé ni modifié.\n\n` +
+      `Confirmez-vous ?`;
+
+    if (!window.confirm(confirmMsg)) return;
+
+    setData(prev => {
+      const updatedOrders = (prev.orders || []).map(o => {
+        if (o.id !== selectedOrder.id) return o;
+        
+        let newBatches = o.batches || [];
+        if (selectedBatch) {
+          newBatches = newBatches.map(b => {
+            if (b.id !== selectedBatch.id) return b;
+            return { ...b, subLotsApproved: true };
+          });
+        }
+
+        return {
+          ...o,
+          batches: newBatches,
+          subLotsApproved: !selectedBatch ? true : o.subLotsApproved,
+          _lastModified: new Date().toISOString()
+        };
+      });
+
+      return {
+        ...prev,
+        orders: updatedOrders
+      };
+    });
+
+    alert("✅ Découpage approuvé et figé avec succès ! Les fiches de sous-lots peuvent être imprimées et lancées.");
+  };
+
+  // Helper to generate URLs for the 3 QR codes
+  const getSubLotUrls = (subLot) => {
+    const origin = window.location.origin;
+    const pathname = window.location.pathname;
+    const batchParam = selectedBatch ? `&batchId=${selectedBatch.id}` : '';
+    
+    // 1. Lancement
+    const startUrl = `${origin}${pathname}?mode=tracking&action=start&orderId=${selectedOrder?.id}${batchParam}&sublotId=${subLot.id}`;
+    // 2. Fin & Validation
+    const finishUrl = `${origin}${pathname}?mode=tracking&action=finish&orderId=${selectedOrder?.id}${batchParam}&sublotId=${subLot.id}`;
+    // 3. Accès interface mobile globale
+    const portalUrl = `${origin}${pathname}?mode=tracking&orderId=${selectedOrder?.id}${batchParam}&sublotId=${subLot.id}`;
+
+    return { startUrl, finishUrl, portalUrl };
+  };
+
+  // Export PDF "Fiche de Sous-Lot" A4 with 3 QR codes & typology stats
+  const generateSubLotPDF = (subLot) => {
+    if (!selectedOrder || !subLot) return;
+
+    const doc = new jsPDF({ format: 'a4' });
+    const pw = doc.internal.pageSize.getWidth();
+    let y = 15;
+
+    // Header Branding
+    if (quoteSettings?.logoBase64) {
+      try {
+        const imgProps = doc.getImageProperties(quoteSettings.logoBase64);
+        const maxW = 45;
+        const maxH = 18;
+        const ratio = Math.min(maxW / imgProps.width, maxH / imgProps.height);
+        doc.addImage(quoteSettings.logoBase64, 'PNG', 15, y, imgProps.width * ratio, imgProps.height * ratio, '', 'FAST');
+      } catch (e) {}
+    }
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(15);
+    doc.setTextColor(30, 41, 59);
+    doc.text('FICHE DE FABRICATION — SOUS-LOT', 68, y + 6);
+
+    doc.setFontSize(10.5);
+    doc.setTextColor(59, 130, 246);
+    doc.text(subLot.name, 68, y + 13);
+
+    y += 24;
+
+    // Header Info Box
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(226, 232, 240);
+    doc.roundedRect(15, y, pw - 30, 20, 2, 2, 'FD');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(71, 85, 105);
+    doc.text(`COMMANDE : ${selectedOrder.id}`, 20, y + 6);
+    doc.text(`CLIENT : ${client?.nom || 'Client'}`, 20, y + 12);
+    doc.text(`LOT ATELIER : ${selectedBatch?.name || 'Lot Principal'}`, 20, y + 17);
+
+    doc.text(`FAMILLE : ${subLot.family.toUpperCase()}`, 115, y + 6);
+    doc.text(`NOMBRE TOTAL : ${subLot.items?.length || 0} ouverture(s)`, 115, y + 12);
+    doc.text(`DATE ÉDITION : ${new Date().toLocaleDateString('fr-FR')}`, 115, y + 17);
+
+    y += 26;
+
+    // Table Header
+    doc.setFillColor(241, 245, 249);
+    doc.rect(15, y, pw - 30, 7.5, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(15, 23, 42);
+
+    doc.text('REPÈRE & COTES RÉELLES', 18, y + 5);
+    doc.text('LIBELLÉ DU PRODUIT', 85, y + 5);
+    doc.text('VOLET', 145, y + 5);
+    doc.text('LOCALISATION', 170, y + 5);
+
+    y += 7.5;
+
+    // Table Rows (Repères format: 1a1 : 1250 x 380 mm)
+    doc.setFont('helvetica', 'normal');
+    (subLot.items || []).forEach((item, idx) => {
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(3, 105, 161);
+      
+      // User format: "1a1 : 1250 x 380 mm"
+      const repereText = `${(item.repere || `Ouv.${idx + 1}`).toLowerCase()} : ${item.L} x ${item.H} mm`;
+      doc.text(repereText, 18, y + 5);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(30, 41, 59);
+      doc.text(doc.splitTextToSize(item.label, 55), 85, y + 5);
+
+      const hasShutter = !!(item.item?.config?.hasShutter || (item.shutter && item.shutter.qty > 0));
+      doc.setFont('helvetica', hasShutter ? 'bold' : 'normal');
+      doc.setTextColor(hasShutter ? 180 : 100, hasShutter ? 83 : 116, hasShutter ? 9 : 139);
+      doc.text(hasShutter ? 'Avec Volet' : 'Sans', 145, y + 5);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100, 116, 139);
+      doc.text(`${item.floorName || ''} ${item.aptName ? `- ${item.aptName}` : ''}`, 170, y + 5);
+
+      y += 7.5;
+      doc.setDrawColor(241, 245, 249);
+      doc.line(15, y, pw - 15, y);
+    });
+
+    y += 6;
+
+    // Typology Stats Summary Box (en bas)
+    const stats = getSubLotTypologyStats(subLot.items);
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(203, 213, 225);
+    doc.roundedRect(15, y, pw - 30, 14, 2, 2, 'FD');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(30, 41, 59);
+    doc.text("RÉCAPITULATIF SOUS-LOT :", 20, y + 6);
+
+    doc.setFont('helvetica', 'normal');
+    let statText = `• Coulissant seul : ${stats.coulissantSeul}   |   • Ouvrant seul : ${stats.ouvrantSeul}`;
+    if (stats.assemble > 0) {
+      statText += `   |   • Assemblé (composé) : ${stats.assemble}`;
+    }
+    if (stats.avecVolet > 0) {
+      statText += `   |   • Avec Volet : ${stats.avecVolet}`;
+    }
+    doc.text(statText, 20, y + 11);
+
+    y += 18;
+
+    // Remarks Section (si existantes)
+    if (subLot.remarks && subLot.remarks.trim()) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.5);
+      doc.setTextColor(180, 83, 9);
+      doc.text("REMARQUES & INSTRUCTIONS D'ATELIER :", 15, y);
+      y += 3.5;
+      doc.setFillColor(254, 252, 232);
+      doc.setDrawColor(254, 240, 138);
+      const splitRemarks = doc.splitTextToSize(subLot.remarks, pw - 40);
+      const boxH = Math.max(12, splitRemarks.length * 4.5 + 4);
+      doc.roundedRect(15, y, pw - 30, boxH, 2, 2, 'FD');
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(8);
+      doc.setTextColor(146, 64, 14);
+      doc.text(splitRemarks, 20, y + 5);
+      y += boxH + 6;
+    } else {
+      y += 2;
+    }
+
+    // THE 3 QR CODES SECTION
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text("QR CODES DE SUIVI ATELIER (À SCANNER SUR SMARTPHONE OU TABLETTE) :", 15, y);
+    y += 5;
+
+    const qrBoxW = (pw - 40) / 3;
+    const qrBoxH = 50;
+
+    // Helper to get Canvas Data URL
+    const getQRImg = (id) => {
+      const el = document.getElementById(id);
+      if (el && el.toDataURL) {
+        return el.toDataURL('image/png');
+      }
+      return null;
+    };
+
+    const startImg = getQRImg(`qr-start-${subLot.id}`);
+    const finishImg = getQRImg(`qr-finish-${subLot.id}`);
+    const portalImg = getQRImg(`qr-portal-${subLot.id}`);
+
+    // QR 1: LANCEMENT
+    doc.setFillColor(239, 246, 255);
+    doc.setDrawColor(191, 219, 254);
+    doc.roundedRect(15, y, qrBoxW, qrBoxH, 2, 2, 'FD');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(29, 78, 216);
+    doc.text("1. LANCEMENT", 15 + qrBoxW / 2, y + 6, { align: 'center' });
+    if (startImg) {
+      doc.addImage(startImg, 'PNG', 15 + (qrBoxW - 28) / 2, y + 8, 28, 28);
+    }
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.5);
+    doc.setTextColor(100, 116, 139);
+    doc.text("Démarre la fabrication", 15 + qrBoxW / 2, y + 42, { align: 'center' });
+
+    // QR 2: FIN & VALIDATION
+    doc.setFillColor(240, 253, 244);
+    doc.setDrawColor(187, 247, 208);
+    doc.roundedRect(15 + qrBoxW + 5, y, qrBoxW, qrBoxH, 2, 2, 'FD');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(22, 101, 52);
+    doc.text("2. FIN & VALIDATION", 15 + qrBoxW + 5 + qrBoxW / 2, y + 6, { align: 'center' });
+    if (finishImg) {
+      doc.addImage(finishImg, 'PNG', 15 + qrBoxW + 5 + (qrBoxW - 28) / 2, y + 8, 28, 28);
+    }
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.5);
+    doc.setTextColor(100, 116, 139);
+    doc.text("Pointeuse Cadres/Panneaux", 15 + qrBoxW + 5 + qrBoxW / 2, y + 42, { align: 'center' });
+
+    // QR 3: PORTAIL MOBILE
+    doc.setFillColor(254, 243, 199);
+    doc.setDrawColor(253, 230, 138);
+    doc.roundedRect(15 + (qrBoxW + 5) * 2, y, qrBoxW, qrBoxH, 2, 2, 'FD');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(180, 83, 9);
+    doc.text("3. PORTAIL MOBILE", 15 + (qrBoxW + 5) * 2 + qrBoxW / 2, y + 6, { align: 'center' });
+    if (portalImg) {
+      doc.addImage(portalImg, 'PNG', 15 + (qrBoxW + 5) * 2 + (qrBoxW - 28) / 2, y + 8, 28, 28);
+    }
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.5);
+    doc.setTextColor(100, 116, 139);
+    doc.text("Vue mobile globale", 15 + (qrBoxW + 5) * 2 + qrBoxW / 2, y + 42, { align: 'center' });
+
+    y += qrBoxH + 8;
+
+    // Signatures
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(15, 23, 42);
+    doc.text("Visa Chef d'Atelier :", 15, y);
+    doc.text("Visa Contrôle & Approbation Fin :", pw - 85, y);
+
+    doc.save(`Fiche_SousLot_${subLot.code || subLot.id}_${selectedOrder.id}.pdf`);
+  };
+
+  return (
+    <div className="animate-fade-in" style={{ padding: '1.5rem', maxWidth: '1400px', margin: '0 auto' }}>
+      
+      {/* Hidden Offscreen QR Canvases for jsPDF rendering */}
+      <div style={{ position: 'absolute', left: '-9999px', top: '-9999px', opacity: 0 }}>
+        {currentSubLots.map(sl => {
+          const { startUrl, finishUrl, portalUrl } = getSubLotUrls(sl);
+          return (
+            <div key={sl.id}>
+              <QRCodeCanvas id={`qr-start-${sl.id}`} value={startUrl} size={150} level="M" />
+              <QRCodeCanvas id={`qr-finish-${sl.id}`} value={finishUrl} size={150} level="M" />
+              <QRCodeCanvas id={`qr-portal-${sl.id}`} value={portalUrl} size={150} level="M" />
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Module Title & Top Toolbar */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+        <div>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#1e293b', margin: 0, display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+            <CheckSquare size={28} color="#3b82f6" />
+            Gestion & Suivi de Fabrication (Sous-Lots & QR Codes)
+          </h2>
+          <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.875rem', color: '#64748b' }}>
+            Commandes et lots en cours uniquement. Découpage verrouillé et validé, fiches A4 avec 3 QR Codes.
+          </p>
+        </div>
+
+        {/* Button to open Completed Batches Modal */}
+        <button
+          onClick={() => setShowCompletedBatchesModal(true)}
+          className="btn btn-secondary"
+          style={{ 
+            fontSize: '0.85rem', 
+            padding: '0.6rem 1rem', 
+            background: '#ecfdf5', 
+            color: '#065f46', 
+            borderColor: '#a7f3d0', 
+            fontWeight: 800,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            cursor: 'pointer'
+          }}
+        >
+          <Archive size={17} />
+          📜 Voir les Lots Terminés ({completedBatchesForOrder.length})
+        </button>
+      </div>
+
+      {/* Selectors Bar */}
+      <div className="glass shadow-sm" style={{ padding: '1.25rem', borderRadius: '1rem', background: 'white', marginBottom: '1.5rem', border: '1px solid #e2e8f0' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem', alignItems: 'flex-end' }}>
+          
+          {/* Order Selector (EN COURS SEULEMENT) */}
+          <div>
+            <label style={{ fontSize: '0.85rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '0.4rem' }}>
+              1. Commande en cours
+            </label>
+            <select
+              className="input"
+              value={selectedOrderId}
+              onChange={e => {
+                setSelectedOrderId(e.target.value);
+                setSelectedBatchId('');
+              }}
+              style={{ width: '100%', fontSize: '0.9rem', fontWeight: 600, padding: '0.6rem' }}
+            >
+              <option value="">{activeOrders.length === 0 ? '-- Aucune commande en cours --' : '-- Sélectionnez une commande --'}</option>
+              {activeOrders.map(o => {
+                const c = (data?.clients || []).find(cl => cl.id === o.clientId);
+                return (
+                  <option key={o.id} value={o.id}>
+                    Commande {o.id} — {c?.nom || 'Client'} ({o.batches?.length || 0} lot(s))
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+
+          {/* Batch Selector (NON FINIS SEULEMENT) */}
+          <div>
+            <label style={{ fontSize: '0.85rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '0.4rem' }}>
+              2. Lot de Fabrication (En cours / Non fini)
+            </label>
+            <select
+              className="input"
+              value={selectedBatchId}
+              onChange={e => setSelectedBatchId(e.target.value)}
+              disabled={!selectedOrderId || activeBatches.length === 0}
+              style={{ width: '100%', fontSize: '0.9rem', fontWeight: 600, padding: '0.6rem' }}
+            >
+              <option value="">
+                {activeBatches.length === 0 
+                  ? (selectedOrder?.batches?.length > 0 ? '-- Tous les lots de cette commande sont terminés --' : '-- Aucun lot lancé --')
+                  : '-- Sélectionnez un lot non fini --'}
+              </option>
+              {activeBatches.map(b => (
+                <option key={b.id} value={b.id}>
+                  {b.name || b.id} ({b.subLots?.length || 0} sous-lot(s)) {b.subLotsApproved ? '🔒 Figé' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Sizing & Auto-divide & Freeze */}
+          <div>
+            <label style={{ fontSize: '0.85rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '0.4rem' }}>
+              3. Découpage des Sous-Lots
+            </label>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '0.5rem', padding: '0 0.5rem' }}>
+                <span style={{ fontSize: '0.75rem', color: '#64748b', marginRight: '0.4rem' }}>Par</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="50"
+                  value={groupSize}
+                  onChange={e => setGroupSize(e.target.value)}
+                  disabled={isSubLotsFrozen}
+                  style={{ width: '40px', border: 'none', background: 'transparent', fontWeight: 800, fontSize: '0.9rem', textAlign: 'center' }}
+                />
+              </div>
+
+              {!isSubLotsFrozen ? (
+                <button
+                  onClick={handleAutoDivideSubLots}
+                  disabled={!selectedOrderId}
+                  className="btn btn-primary"
+                  style={{ 
+                    flex: 1, 
+                    background: '#3b82f6', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    gap: '0.4rem', 
+                    fontWeight: 700, 
+                    fontSize: '0.82rem'
+                  }}
+                >
+                  <Sliders size={15} /> Découper
+                </button>
+              ) : (
+                <div style={{ flex: 1, background: '#f0fdf4', border: '1.5px solid #86efac', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', color: '#166534', fontWeight: 800, fontSize: '0.82rem' }}>
+                  <Lock size={14} /> Découpe Figée
+                </div>
+              )}
+            </div>
+          </div>
+
+        </div>
+
+        {/* Freezing / Approval Banner if sub-lots exist */}
+        {currentSubLots.length > 0 && (
+          <div style={{ 
+            marginTop: '1rem', 
+            padding: '0.85rem 1.25rem', 
+            borderRadius: '0.65rem', 
+            border: isSubLotsFrozen ? '1.5px solid #86efac' : '1.5px solid #fde68a', 
+            background: isSubLotsFrozen ? '#f0fdf4' : '#fffbeb',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '1rem'
+          }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.2rem' }}>
+                {isSubLotsFrozen ? <Lock size={16} color="#16a34a" /> : <Sliders size={16} color="#d97706" />}
+                <strong style={{ fontSize: '0.9rem', color: isSubLotsFrozen ? '#166534' : '#92400e' }}>
+                  {isSubLotsFrozen ? 'Découpage Approuvé et Figé (Règle stricte respectée)' : 'Découpage Provisoire — En attente d\'approbation'}
+                </strong>
+              </div>
+              <p style={{ margin: 0, fontSize: '0.78rem', color: isSubLotsFrozen ? '#15803d' : '#b45309' }}>
+                {isSubLotsFrozen 
+                  ? 'La découpe de ce lot est définitivement verrouillée en production. Les sous-lots peuvent être imprimés et fabriqués.'
+                  : 'Vérifiez la répartition ci-dessous, puis cliquez sur « Approuver & Figer » pour verrouiller définitivement la découpe.'}
+              </p>
+            </div>
+
+            {!isSubLotsFrozen && (
+              <button
+                onClick={handleApproveAndFreezeSubLots}
+                className="btn btn-primary"
+                style={{ background: '#10b981', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 800, fontSize: '0.85rem', padding: '0.55rem 1.2rem', boxShadow: '0 4px 10px rgba(16, 185, 129, 0.25)' }}
+              >
+                <Lock size={15} /> Approuver & Figer la Découpe
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Main Content Area */}
+      {!selectedOrderId ? (
+        <div style={{ textAlign: 'center', padding: '5rem 2rem', background: '#f8fafc', borderRadius: '1.5rem', border: '2px dashed #cbd5e1' }}>
+          <ShoppingBag size={48} color="#94a3b8" style={{ marginBottom: '1rem' }} />
+          <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.25rem', fontWeight: 700, color: '#1e293b' }}>Sélectionnez une Commande en cours</h3>
+          <p style={{ color: '#64748b', fontSize: '0.9rem', maxWidth: '400px', margin: '0 auto' }}>
+            Choisissez une commande active ci-dessus pour gérer ses lots de fabrication et générer les sous-lots.
+          </p>
+        </div>
+      ) : currentSubLots.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '4rem 2rem', background: '#f8fafc', borderRadius: '1.5rem', border: '2px dashed #3b82f6' }}>
+          <Layers size={48} color="#3b82f6" style={{ marginBottom: '1rem' }} />
+          <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.25rem', fontWeight: 700, color: '#1e293b' }}>Aucun Sous-Lot pour ce lot</h3>
+          <p style={{ color: '#64748b', fontSize: '0.9rem', maxWidth: '500px', margin: '0 auto 1.5rem' }}>
+            Cliquez sur le bouton <strong>« Découper »</strong> ci-dessus pour diviser automatiquement vos ouvertures par groupe de {groupSize} (coulissant seul, ouvrant seul, fixe seul).
+          </p>
+          <button 
+            onClick={handleAutoDivideSubLots}
+            className="btn btn-primary"
+            style={{ margin: '0 auto', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700 }}
+          >
+            <Sliders size={18} /> Découper maintenant
+          </button>
+        </div>
+      ) : (
+        /* Sub-Lots View */
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          
+          {/* Sub-Lots List */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1.5rem' }}>
+            {currentSubLots.map((subLot, sIdx) => {
+              const { startUrl, finishUrl, portalUrl } = getSubLotUrls(subLot);
+              const isSliding = subLot.family === 'coulissant';
+
+              // Count completion
+              const checklist = subLot.checklist || {};
+              const totalItems = isSliding 
+                ? (subLot.cadres || []).length + (subLot.panneaux || []).length
+                : (subLot.ouvertures || []).length;
+              
+              const checkedItems = isSliding
+                ? (subLot.cadres || []).filter(c => !!checklist[c.id]).length + (subLot.panneaux || []).filter(p => !!checklist[p.id]).length
+                : (subLot.ouvertures || []).filter(o => !!checklist[o.id]).length;
+              
+              const percent = totalItems > 0 ? Math.round((checkedItems / totalItems) * 100) : 0;
+              const isDone = subLot.status === 'Terminé';
+
+              // Typology stats for this sub-lot
+              const stats = getSubLotTypologyStats(subLot.items);
+
+              return (
+                <div 
+                  key={subLot.id} 
+                  className="glass shadow-sm"
+                  style={{ 
+                    background: 'white', 
+                    borderRadius: '1rem', 
+                    border: isDone ? '2px solid #86efac' : subLot.status === 'En cours' ? '2px solid #93c5fd' : '1px solid #e2e8f0', 
+                    overflow: 'hidden' 
+                  }}
+                >
+                  {/* Card Header */}
+                  <div style={{ 
+                    padding: '1.25rem', 
+                    background: isDone ? '#f0fdf4' : subLot.status === 'En cours' ? '#eff6ff' : '#f8fafc', 
+                    borderBottom: '1px solid #e2e8f0',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '1rem'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <span style={{ 
+                        fontSize: '0.75rem', 
+                        fontWeight: 800, 
+                        background: isSliding ? '#0284c7' : subLot.family === 'fixe' ? '#d97706' : '#7c3aed', 
+                        color: 'white', 
+                        padding: '0.25rem 0.65rem', 
+                        borderRadius: '6px' 
+                      }}>
+                        {isSliding ? 'COULISSANT' : subLot.family === 'fixe' ? 'FIXE SEUL' : 'OUVRANT'}
+                      </span>
+                      <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#1e293b' }}>
+                        {subLot.name}
+                      </h3>
+                      <span style={{ 
+                        fontSize: '0.75rem', 
+                        fontWeight: 800, 
+                        background: isDone ? '#dcfce7' : subLot.status === 'En cours' ? '#dbeafe' : '#f1f5f9', 
+                        color: isDone ? '#166534' : subLot.status === 'En cours' ? '#1d4ed8' : '#64748b',
+                        padding: '0.2rem 0.6rem',
+                        borderRadius: '9999px',
+                        border: '1px solid',
+                        borderColor: isDone ? '#bbf7d0' : subLot.status === 'En cours' ? '#bfdbfe' : '#e2e8f0'
+                      }}>
+                        {subLot.status} ({percent}%)
+                      </span>
+                    </div>
+
+                    {/* Header Action Buttons */}
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <button
+                        onClick={() => generateSubLotPDF(subLot)}
+                        className="btn btn-secondary"
+                        style={{ fontSize: '0.8rem', padding: '0.45rem 0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'white' }}
+                        title="Imprimer la Fiche A4 avec les 3 QR Codes"
+                      >
+                        <Printer size={15} /> Imprimer Fiche A4 (3 QR)
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Card Body */}
+                  <div style={{ padding: '1.25rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(350px, 1fr) 420px', gap: '1.5rem' }}>
+                      
+                      {/* Left: Products Detail Table in requested repere format (1a1 : 1250x380) */}
+                      <div>
+                        <h4 style={{ fontSize: '0.9rem', fontWeight: 800, color: '#334155', margin: '0 0 0.75rem 0' }}>
+                          📦 Liste des Produits en Repères ({subLot.items?.length || 0} ouvertures)
+                        </h4>
+                        
+                        <div style={{ border: '1px solid #e2e8f0', borderRadius: '0.5rem', overflow: 'hidden' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+                            <thead>
+                              <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', textAlign: 'left', color: '#64748b' }}>
+                                <th style={{ padding: '0.5rem 0.75rem' }}>Repère : Cotes Réelles</th>
+                                <th style={{ padding: '0.5rem 0.75rem' }}>Produit / Label</th>
+                                <th style={{ padding: '0.5rem 0.75rem' }}>Volet</th>
+                                <th style={{ padding: '0.5rem 0.75rem' }}>Emplacement</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(subLot.items || []).map((it, iIdx) => {
+                                const hasShutter = !!(it.item?.config?.hasShutter || (it.shutter && it.shutter.qty > 0));
+                                return (
+                                  <tr key={it.voidId || iIdx} style={{ borderBottom: iIdx < (subLot.items || []).length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+                                    <td style={{ padding: '0.6rem 0.75rem', fontWeight: 800 }}>
+                                      <span style={{ background: '#f0fdf4', color: '#166534', border: '1px solid #86efac', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>
+                                        {it.repere?.toLowerCase()} : {it.L} x {it.H} mm
+                                      </span>
+                                    </td>
+                                    <td style={{ padding: '0.6rem 0.75rem', fontWeight: 600, color: '#1e293b' }}>
+                                      {it.label}
+                                    </td>
+                                    <td style={{ padding: '0.6rem 0.75rem' }}>
+                                      {hasShutter ? (
+                                        <span style={{ fontSize: '0.72rem', background: '#fef3c7', color: '#92400e', padding: '0.15rem 0.45rem', borderRadius: '4px', fontWeight: 700 }}>
+                                          Avec Volet
+                                        </span>
+                                      ) : (
+                                        <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Sans</span>
+                                      )}
+                                    </td>
+                                    <td style={{ padding: '0.6rem 0.75rem', color: '#64748b' }}>
+                                      {it.floorName ? `${it.floorName} - ${it.aptName}` : '---'}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Typology summary counters bar */}
+                        <div style={{ marginTop: '0.85rem', padding: '0.65rem 0.85rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '0.5rem', display: 'flex', gap: '1rem', flexWrap: 'wrap', fontSize: '0.78rem' }}>
+                          <span>🚪 Coulissant seul : <strong>{stats.coulissantSeul}</strong></span>
+                          <span>•</span>
+                          <span>🪟 Ouvrant seul : <strong>{stats.ouvrantSeul}</strong></span>
+                          {stats.assemble > 0 && (
+                            <>
+                              <span>•</span>
+                              <span style={{ color: '#4f46e5' }}>🧩 Assemblé (composé) : <strong>{stats.assemble}</strong></span>
+                            </>
+                          )}
+                          {stats.avecVolet > 0 && (
+                            <>
+                              <span>•</span>
+                              <span style={{ color: '#b45309' }}>🛡️ Avec volet : <strong>{stats.avecVolet}</strong></span>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Editable Remarks Box */}
+                        <div style={{ marginTop: '1rem' }}>
+                          <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '0.35rem' }}>
+                            📝 Remarques & Instructions d'Atelier (En bas de la fiche A4) :
+                          </label>
+                          <textarea
+                            className="input"
+                            rows="2"
+                            value={subLot.remarks || ''}
+                            onChange={e => handleUpdateSubLot(subLot.id, 'remarks', e.target.value)}
+                            placeholder="Remarques éventuelles pour ce sous-lot..."
+                            style={{ width: '100%', fontSize: '0.82rem', padding: '0.5rem', resize: 'vertical' }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Right: The 3 QR Codes Cards */}
+                      <div style={{ background: '#f8fafc', borderRadius: '0.75rem', padding: '1rem', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                        <h4 style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1e293b', margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <QrCode size={18} color="#3b82f6" />
+                          Les 3 QR Codes du Sous-Lot
+                        </h4>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
+                          
+                          {/* QR 1: Lancement */}
+                          <div style={{ background: 'white', padding: '0.6rem 0.4rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#1d4ed8', marginBottom: '0.3rem' }}>
+                              🚀 LANCEMENT
+                            </span>
+                            <div style={{ padding: '0.3rem', background: 'white', border: '1px solid #e2e8f0', borderRadius: '0.3rem' }}>
+                              <QRCodeSVG value={startUrl} size={75} level="M" />
+                            </div>
+                            <button
+                              onClick={() => window.open(startUrl, '_blank')}
+                              className="btn"
+                              style={{ marginTop: '0.4rem', fontSize: '0.65rem', padding: '0.2rem', background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', width: '100%' }}
+                            >
+                              Lancer
+                            </button>
+                          </div>
+
+                          {/* QR 2: Fin & Contrôle */}
+                          <div style={{ background: 'white', padding: '0.6rem 0.4rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#166534', marginBottom: '0.3rem' }}>
+                              🏁 FIN & VALID.
+                            </span>
+                            <div style={{ padding: '0.3rem', background: 'white', border: '1px solid #e2e8f0', borderRadius: '0.3rem' }}>
+                              <QRCodeSVG value={finishUrl} size={75} level="M" />
+                            </div>
+                            <button
+                              onClick={() => window.open(finishUrl, '_blank')}
+                              className="btn"
+                              style={{ marginTop: '0.4rem', fontSize: '0.65rem', padding: '0.2rem', background: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0', width: '100%' }}
+                            >
+                              Pointer
+                            </button>
+                          </div>
+
+                          {/* QR 3: Portail Mobile */}
+                          <div style={{ background: 'white', padding: '0.6rem 0.4rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#b45309', marginBottom: '0.3rem' }}>
+                              📱 PORTAIL
+                            </span>
+                            <div style={{ padding: '0.3rem', background: 'white', border: '1px solid #e2e8f0', borderRadius: '0.3rem' }}>
+                              <QRCodeSVG value={portalUrl} size={75} level="M" />
+                            </div>
+                            <button
+                              onClick={() => window.open(portalUrl, '_blank')}
+                              className="btn"
+                              style={{ marginTop: '0.4rem', fontSize: '0.65rem', padding: '0.2rem', background: '#fef3c7', color: '#b45309', border: '1px solid #fde68a', width: '100%' }}
+                            >
+                              Mobile
+                            </button>
+                          </div>
+
+                        </div>
+
+                        <button
+                          onClick={() => generateSubLotPDF(subLot)}
+                          className="btn btn-primary"
+                          style={{ marginTop: 'auto', background: '#3b82f6', fontSize: '0.8rem', padding: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', fontWeight: 700 }}
+                        >
+                          <Printer size={15} /> Télécharger Fiche A4 (3 QR)
+                        </button>
+                      </div>
+
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+        </div>
+      )}
+
+      {/* MODAL POPUP: LOTS TERMINÉS */}
+      {showCompletedBatchesModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}>
+          <div style={{ background: 'white', borderRadius: '1rem', maxWidth: '850px', width: '100%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', display: 'flex', flexDirection: 'column' }}>
+            
+            {/* Modal Header */}
+            <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <Archive size={22} color="#059669" />
+                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: '#1e293b' }}>
+                  Historique des Lots de Fabrication Terminés
+                </h3>
+              </div>
+              <button 
+                onClick={() => setShowCompletedBatchesModal(false)}
+                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#64748b' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ padding: '1.5rem' }}>
+              {allCompletedBatches.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '3rem 1rem', color: '#64748b' }}>
+                  <Archive size={40} color="#cbd5e1" style={{ margin: '0 auto 0.75rem' }} />
+                  <p style={{ margin: 0, fontWeight: 600 }}>Aucun lot n'a encore été marqué comme entièrement terminé.</p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  {allCompletedBatches.map(({ order, batch, client: cl }, bIdx) => (
+                    <div 
+                      key={batch.id || bIdx}
+                      style={{ 
+                        border: '1px solid #a7f3d0', 
+                        borderRadius: '0.75rem', 
+                        padding: '1.25rem', 
+                        background: '#f0fdf4' 
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <span style={{ fontSize: '0.75rem', fontWeight: 800, background: '#10b981', color: 'white', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>
+                              TERMINÉ
+                            </span>
+                            <strong style={{ fontSize: '1.05rem', color: '#065f46' }}>
+                              {batch.name || batch.id}
+                            </strong>
+                            <span style={{ fontSize: '0.82rem', color: '#047857', fontWeight: 600 }}>
+                              (Commande {order.id} — {cl?.nom || 'Client'})
+                            </span>
+                          </div>
+                          <span style={{ fontSize: '0.75rem', color: '#059669', display: 'block', marginTop: '0.25rem' }}>
+                            Lancé le : {new Date(batch.createdAt).toLocaleDateString('fr-FR')} {batch.completedAt ? `• Achevé le : ${new Date(batch.completedAt).toLocaleDateString('fr-FR')}` : ''}
+                          </span>
+                        </div>
+
+                        <div style={{ fontSize: '0.8rem', color: '#047857', fontWeight: 700 }}>
+                          {batch.subLots?.length || 0} sous-lot(s) validés à 100%
+                        </div>
+                      </div>
+
+                      {/* Sub-lots table in completed batch */}
+                      <div style={{ background: 'white', borderRadius: '0.5rem', border: '1px solid #d1fae5', overflow: 'hidden' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                          <thead>
+                            <tr style={{ background: '#ecfdf5', color: '#065f46', textAlign: 'left', borderBottom: '1px solid #d1fae5' }}>
+                              <th style={{ padding: '0.4rem 0.75rem' }}>Sous-Lot</th>
+                              <th style={{ padding: '0.4rem 0.75rem' }}>Famille</th>
+                              <th style={{ padding: '0.4rem 0.75rem' }}>Ouvertures</th>
+                              <th style={{ padding: '0.4rem 0.75rem' }}>Statut</th>
+                              <th style={{ padding: '0.4rem 0.75rem', textAlign: 'right' }}>Action</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(batch.subLots || []).map((sl, slIdx) => (
+                              <tr key={sl.id || slIdx} style={{ borderBottom: slIdx < (batch.subLots || []).length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+                                <td style={{ padding: '0.5rem 0.75rem', fontWeight: 700, color: '#1e293b' }}>{sl.name}</td>
+                                <td style={{ padding: '0.5rem 0.75rem', textTransform: 'uppercase', fontSize: '0.72rem', fontWeight: 700, color: '#0284c7' }}>{sl.family}</td>
+                                <td style={{ padding: '0.5rem 0.75rem' }}>
+                                  {(sl.items || []).map(i => i.repere).join(', ')}
+                                </td>
+                                <td style={{ padding: '0.5rem 0.75rem' }}>
+                                  <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#15803d', background: '#dcfce7', padding: '0.15rem 0.45rem', borderRadius: '4px' }}>
+                                    Terminé
+                                  </span>
+                                </td>
+                                <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>
+                                  <button
+                                    onClick={() => generateSubLotPDF(sl)}
+                                    className="btn btn-secondary"
+                                    style={{ fontSize: '0.72rem', padding: '0.25rem 0.5rem', background: 'white' }}
+                                  >
+                                    <Printer size={13} /> Fiche A4
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowCompletedBatchesModal(false)}
+                className="btn btn-primary"
+                style={{ padding: '0.5rem 1.25rem', fontWeight: 700 }}
+              >
+                Fermer
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}
