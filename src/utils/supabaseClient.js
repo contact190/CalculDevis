@@ -602,10 +602,13 @@ export const cloudSync = {
 
       for (const op of ops) {
         let opData = op.data;
-        // Optimisation majeure pour les commandes : isoler uniquement les champs d'états et de terrain (1.5 Ko au lieu de 600 Ko)
+        // Optimisation pour les commandes : isoler les champs de terrain, statuts, lots et suivi (sans les métadonnées inutiles)
         if (op.collection === 'orders' && opData && typeof opData === 'object' && op.op === 'update') {
           opData = {
             id: opData.id,
+            batches: opData.batches,
+            status: opData.status,
+            items: opData.items,
             unitStatusesDual: opData.unitStatusesDual,
             unitTimeline: opData.unitTimeline,
             unitInstallationPhotos: opData.unitInstallationPhotos,

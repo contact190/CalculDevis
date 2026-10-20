@@ -691,7 +691,9 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
       });
       setShowValidation(false);
       setSelectedVoidsForLaunch({});
-      alert('Fenêtres lancées en production avec succès !');
+      setTimeout(() => {
+        alert('Fenêtres lancées en production avec succès !');
+      }, 150);
     };
 
     return (

@@ -125,7 +125,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
   const [customPricedItems, setCustomPricedItems] = useState({});
   const [quoteTTCInput, setQuoteTTCInput] = useState('');
   const [targetMarginPercent, setTargetMarginPercent] = useState('30');
-  const [isRentabiliteOpen, setIsRentabiliteOpen] = useState(true);
+  const [isRentabiliteOpen, setIsRentabiliteOpen] = useState(false);
   
   // Auto-switch from Quote ID to its confirmed Order ID if it exists, so batches are immediately visible
   useEffect(() => {

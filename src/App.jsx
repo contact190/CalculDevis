@@ -1069,7 +1069,7 @@ function App() {
           setData={setDatabase} 
           orderId={installerOrderId}
           isOnline={isOnline}
-          isSyncing={cloudSyncStatus === 'syncing'}
+          isSyncing={supabaseSyncStatus === 'syncing' || cloudSyncStatus === 'syncing'}
         />
       </Suspense>
     );
@@ -1083,7 +1083,7 @@ function App() {
           setData={setDatabase} 
           orderId={technicianOrderId}
           isOnline={isOnline}
-          isSyncing={cloudSyncStatus === 'syncing'}
+          isSyncing={supabaseSyncStatus === 'syncing' || cloudSyncStatus === 'syncing'}
         />
       </Suspense>
     );
