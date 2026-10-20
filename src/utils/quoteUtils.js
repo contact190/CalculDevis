@@ -101,3 +101,33 @@ export const isQuoteLocked = (quote, orders = []) => {
   if ((orders || []).some(o => o.quoteId === quote.id)) return true;
   return false;
 };
+
+/**
+ * Vérifie si la cote réelle d'une ouverture s'écarte de plus de 100 mm par rapport à la cote devis.
+ * Seuil critique : > 100 mm en largeur (L) ou en hauteur (H).
+ */
+export const checkVoidCriticalDelta = (v, item) => {
+  if (!v || !item || !item.config) {
+    return { isCritical: false, isCriticalL: false, isCriticalH: false, deltaL: 0, deltaH: 0, quoteL: 0, quoteH: 0, realL: 0, realH: 0 };
+  }
+  const quoteL = parseFloat(item.config.L) || 0;
+  const quoteH = parseFloat(item.config.H) || 0;
+  const realL = v.L !== undefined && v.L !== '' ? parseFloat(v.L) : quoteL;
+  const realH = v.H !== undefined && v.H !== '' ? parseFloat(v.H) : quoteH;
+  const deltaL = Math.round(realL - quoteL);
+  const deltaH = Math.round(realH - quoteH);
+  const isCriticalL = Math.abs(deltaL) > 100;
+  const isCriticalH = Math.abs(deltaH) > 100;
+  return {
+    isCritical: isCriticalL || isCriticalH,
+    isCriticalL,
+    isCriticalH,
+    deltaL,
+    deltaH,
+    quoteL,
+    quoteH,
+    realL,
+    realH
+  };
+};
+

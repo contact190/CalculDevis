@@ -4,6 +4,7 @@ import { FormulaEngine } from '../../engine/formula-engine';
 import { QuoteSettingsPanel } from '../commercial/CommercialModule';
 import jsPDF from 'jspdf';
 import { getTechnicalDrawingDataURL } from '../../utils/drawingUtils';
+import { checkVoidCriticalDelta } from '../../utils/quoteUtils';
 
 const ItemPreview = ({ config, database }) => {
   const [dataUrl, setDataUrl] = React.useState(null);
@@ -34,7 +35,9 @@ const ItemPreview = ({ config, database }) => {
       />
     </div>
   );
-};const syncSitePlanToMeasurements = (sitePlan, items) => {
+};
+
+const syncSitePlanToMeasurements = (sitePlan, items) => {
   const newItems = items.map(item => ({
     ...item,
     siteMeasurements: []
@@ -50,6 +53,11 @@ const ItemPreview = ({ config, database }) => {
         if (itemIdx === -1) return;
 
         const item = newItems[itemIdx];
+        
+        // Strict guard: if real measurements deviate by > 100mm, it must NEVER pass to production
+        const check = checkVoidCriticalDelta(v, item);
+        if (check.isCritical) return;
+
         const label = `${floor.name} - ${appt.name} - ${v.name}`;
         
         const shutterList = [];
@@ -179,6 +187,24 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
     return plans.length > 0 ? plans[0] : { floors: [] };
   }, [data?.clients, selectedOrder]);
 
+  const criticalVoids = useMemo(() => {
+    if (!selectedOrder || !activeSitePlan?.floors) return [];
+    const list = [];
+    (activeSitePlan.floors || []).forEach(f => {
+      (f.apartments || []).forEach(a => {
+        (a.voids || []).forEach(v => {
+          const item = selectedOrder.items?.find(i => i.id === v.itemId);
+          if (!item) return;
+          const check = checkVoidCriticalDelta(v, item);
+          if (check.isCritical) {
+            list.push({ void: v, item, floor: f, apt: a, check });
+          }
+        });
+      });
+    });
+    return list;
+  }, [activeSitePlan, selectedOrder]);
+
   const handleUpdateOrder = (updatedOrder) => {
     setData(prev => ({
       ...prev,
@@ -304,6 +330,14 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
   };
 
   const handleLaunchProductionBatch = () => {
+    // Strict block: if any void has critical delta (> 100mm), refuse launch
+    if (criticalVoids.length > 0) {
+      alert(`⛔ Impossible de lancer le lot de fabrication !\n\n${criticalVoids.length} ouverture(s) ont un écart supérieur à 100 mm avec le devis :\n` +
+        criticalVoids.map(c => `• ${c.void.name || 'Ouverture'} (${c.floor.name} - ${c.apt.name}) : ${c.check.isCriticalL ? `Largeur Δ = ${c.check.deltaL > 0 ? `+` : ``}${c.check.deltaL} mm ` : ''}${c.check.isCriticalH ? `Hauteur Δ = ${c.check.deltaH > 0 ? `+` : ``}${c.check.deltaH} mm` : ''}`).join('\n') +
+        `\n\nLe devis doit impérativement être refait pour ces ouvertures avant toute mise en fabrication.`);
+      return;
+    }
+
     const totalCurrentQty = selectedOrder.items.reduce((sum, item) => 
       sum + (item.siteMeasurements || []).reduce((s, m) => s + m.qty, 0), 0
     );
@@ -1308,6 +1342,48 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                     </div>
                   </div>
 
+                  {/* Global Critical Delta Alert Banner */}
+                  {criticalVoids.length > 0 && (
+                    <div style={{
+                      background: '#fef2f2',
+                      border: '2px solid #ef4444',
+                      borderRadius: '1rem',
+                      padding: '1.25rem',
+                      boxShadow: '0 4px 15px rgba(239, 68, 68, 0.12)'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: '#991b1b', fontWeight: 900, fontSize: '1rem', marginBottom: '0.5rem' }}>
+                        <span style={{ fontSize: '1.4rem' }}>⛔</span>
+                        <span>ATTENTION : {criticalVoids.length} OUVERTURE(S) AVEC ÉCART CRITIQUE (&gt; 100 mm)</span>
+                      </div>
+                      <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', color: '#b91c1c', lineHeight: 1.4 }}>
+                        Certaines cotes réelles dépassent de plus de 100 mm les dimensions prévues au devis. Ces ouvertures <strong>ne peuvent pas être lancées en fabrication</strong>. Le devis doit impérativement être refait.
+                      </p>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                        {criticalVoids.map(({ void: cv, item: ci, floor: cf, apt: ca, check }) => (
+                          <div key={cv.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'white', padding: '0.5rem 0.75rem', borderRadius: '0.5rem', border: '1px solid #fca5a5', fontSize: '0.82rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                            <div>
+                              <strong style={{ color: '#991b1b' }}>{cv.name || 'Sans nom'}</strong>
+                              <span style={{ color: '#64748b', marginLeft: '0.4rem' }}>({cf.name} - {ca.name})</span>
+                              <span style={{ color: '#1e293b', marginLeft: '0.5rem', fontWeight: 600 }}>{ci.label}</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.75rem', fontWeight: 800 }}>
+                              {check.isCriticalL && (
+                                <span style={{ color: '#dc2626' }}>
+                                  L: {check.realL} mm vs devis {check.quoteL} mm (Δ {check.deltaL > 0 ? `+${check.deltaL}` : check.deltaL} mm)
+                                </span>
+                              )}
+                              {check.isCriticalH && (
+                                <span style={{ color: '#dc2626' }}>
+                                  H: {check.realH} mm vs devis {check.quoteH} mm (Δ {check.deltaH > 0 ? `+${check.deltaH}` : check.deltaH} mm)
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {(activeSitePlan.floors || []).map(floor => {
                   const floorHasVoids = floor.apartments?.some(a => a.voids?.length > 0);
                   if (!floorHasVoids) return null;
@@ -1337,10 +1413,10 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                 const item = selectedOrder.items.find(i => i.id === v.itemId);
                                 if (!item) return null;
 
-                                
+                                const deltaCheck = checkVoidCriticalDelta(v, item);
                                 const actualShutter = v.shutter !== undefined ? v.shutter : (item.config.hasShutter ? { qty: 1, customLV: '', overrides: {} } : null);
                                 const isShutterActive = actualShutter !== null;
-const previewConfig = {
+                                const previewConfig = {
                                   ...item.config,
                                   L: v.L !== undefined && v.L !== '' ? parseFloat(v.L) : item.config.L,
                                   H: v.H !== undefined && v.H !== '' ? parseFloat(v.H) : item.config.H,
@@ -1354,7 +1430,14 @@ const previewConfig = {
                                 };
 
                                 return (
-                                  <div key={v.id} style={{ display: 'flex', background: 'white', borderRadius: '1rem', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}>
+                                  <div key={v.id} style={{ 
+                                    display: 'flex', 
+                                    background: deltaCheck.isCritical ? '#fff8f8' : 'white', 
+                                    borderRadius: '1rem', 
+                                    border: deltaCheck.isCritical ? '2px solid #ef4444' : '1px solid #e2e8f0', 
+                                    overflow: 'hidden', 
+                                    boxShadow: deltaCheck.isCritical ? '0 4px 12px rgba(239, 68, 68, 0.15)' : '0 4px 6px -1px rgb(0 0 0 / 0.05)' 
+                                  }}>
                                     {/* Visual Preview */}
                                     <div style={{ width: '220px', background: '#f8fafc', borderRight: '1px solid #e2e8f0', flexShrink: 0 }}>
                                       <ItemPreview config={previewConfig} database={data} />
@@ -1364,9 +1447,14 @@ const previewConfig = {
                                     <div style={{ flex: 1, padding: '1.25rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                                       {/* Header Row */}
                                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem' }}>
-                                        <div>
-                                          <span style={{ fontSize: '0.75rem', background: '#eff6ff', color: '#1d4ed8', padding: '0.2rem 0.6rem', borderRadius: '9999px', fontWeight: 700, marginRight: '0.5rem' }}>{v.name}</span>
+                                        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.4rem' }}>
+                                          <span style={{ fontSize: '0.75rem', background: '#eff6ff', color: '#1d4ed8', padding: '0.2rem 0.6rem', borderRadius: '9999px', fontWeight: 700 }}>{v.name}</span>
                                           <strong style={{ fontSize: '0.95rem', color: '#1e293b' }}>{item.label}</strong>
+                                          {deltaCheck.isCritical && (
+                                            <span style={{ fontSize: '0.72rem', background: '#fee2e2', color: '#991b1b', border: '1px solid #ef4444', padding: '0.15rem 0.5rem', borderRadius: '9999px', fontWeight: 800 }}>
+                                              ⛔ ÉCART CRITIQUE (&gt; 100 mm)
+                                            </span>
+                                          )}
                                         </div>
                                         <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Cotes Devis: {item.config.L} x {item.config.H} mm</span>
                                       </div>
@@ -1374,26 +1462,50 @@ const previewConfig = {
                                       {/* Real Dimensions Grid */}
                                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.75rem', marginBottom: '1rem' }}>
                                         <div>
-                                          <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '0.25rem' }}>Largeur Réelle (L) mm</label>
+                                          <label style={{ fontSize: '0.75rem', fontWeight: 700, color: deltaCheck.isCriticalL ? '#991b1b' : '#475569', display: 'block', marginBottom: '0.25rem' }}>Largeur Réelle (L) mm</label>
                                           <input
                                             type="number"
                                             className="input"
                                             value={v.L !== undefined ? v.L : ''}
                                             onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'L', e.target.value)}
-                                            style={{ fontSize: '0.85rem', padding: '0.35rem 0.6rem' }}
+                                            style={{ 
+                                              fontSize: '0.85rem', 
+                                              padding: '0.35rem 0.6rem',
+                                              border: deltaCheck.isCriticalL ? '2px solid #ef4444' : '1.5px solid #cbd5e1',
+                                              background: deltaCheck.isCriticalL ? '#fee2e2' : '#ffffff',
+                                              color: deltaCheck.isCriticalL ? '#991b1b' : '#1e293b',
+                                              fontWeight: deltaCheck.isCriticalL ? 800 : 600
+                                            }}
                                             placeholder={item.config.L}
                                           />
+                                          {deltaCheck.isCriticalL && (
+                                            <span style={{ fontSize: '0.68rem', color: '#dc2626', fontWeight: 700, display: 'block', marginTop: '0.2rem' }}>
+                                              ⚠️ Écart: {deltaCheck.deltaL > 0 ? `+${deltaCheck.deltaL}` : deltaCheck.deltaL} mm (Devis: {deltaCheck.quoteL})
+                                            </span>
+                                          )}
                                         </div>
                                         <div>
-                                          <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '0.25rem' }}>Hauteur Réelle (H) mm</label>
+                                          <label style={{ fontSize: '0.75rem', fontWeight: 700, color: deltaCheck.isCriticalH ? '#991b1b' : '#475569', display: 'block', marginBottom: '0.25rem' }}>Hauteur Réelle (H) mm</label>
                                           <input
                                             type="number"
                                             className="input"
                                             value={v.H !== undefined ? v.H : ''}
                                             onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'H', e.target.value)}
-                                            style={{ fontSize: '0.85rem', padding: '0.35rem 0.6rem' }}
+                                            style={{ 
+                                              fontSize: '0.85rem', 
+                                              padding: '0.35rem 0.6rem',
+                                              border: deltaCheck.isCriticalH ? '2px solid #ef4444' : '1.5px solid #cbd5e1',
+                                              background: deltaCheck.isCriticalH ? '#fee2e2' : '#ffffff',
+                                              color: deltaCheck.isCriticalH ? '#991b1b' : '#1e293b',
+                                              fontWeight: deltaCheck.isCriticalH ? 800 : 600
+                                            }}
                                             placeholder={item.config.H}
                                           />
+                                          {deltaCheck.isCriticalH && (
+                                            <span style={{ fontSize: '0.68rem', color: '#dc2626', fontWeight: 700, display: 'block', marginTop: '0.2rem' }}>
+                                              ⚠️ Écart: {deltaCheck.deltaH > 0 ? `+${deltaCheck.deltaH}` : deltaCheck.deltaH} mm (Devis: {deltaCheck.quoteH})
+                                            </span>
+                                          )}
                                         </div>
                                         <div>
                                           <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '0.25rem' }}>Prof. Mur (mm)</label>
@@ -1711,11 +1823,35 @@ const previewConfig = {
             )}
 
             {/* Launch Fabrication Action Bar */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.5rem', padding: '1.25rem', background: '#f0f9ff', borderRadius: '1rem', border: '1px dashed #3b82f6' }}>
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'flex-end', 
+              alignItems: 'center', 
+              gap: '1rem', 
+              marginTop: '1.5rem', 
+              padding: '1.25rem', 
+              background: criticalVoids.length > 0 ? '#fef2f2' : '#f0f9ff', 
+              borderRadius: '1rem', 
+              border: criticalVoids.length > 0 ? '1.5px solid #ef4444' : '1px dashed #3b82f6' 
+            }}>
+              {criticalVoids.length > 0 && (
+                <span style={{ fontSize: '0.85rem', color: '#991b1b', fontWeight: 700 }}>
+                  ⛔ Lancement bloqué : {criticalVoids.length} ouverture(s) avec écart &gt; 100 mm (devis à refaire)
+                </span>
+              )}
               <button
                 onClick={handleLaunchProductionBatch}
+                disabled={criticalVoids.length > 0}
                 className="btn btn-primary"
-                style={{ background: '#10b981', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700 }}
+                style={{ 
+                  background: criticalVoids.length > 0 ? '#94a3b8' : '#10b981', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '0.5rem', 
+                  fontWeight: 700,
+                  cursor: criticalVoids.length > 0 ? 'not-allowed' : 'pointer',
+                  opacity: criticalVoids.length > 0 ? 0.6 : 1
+                }}
               >
                 <CheckCircle size={18} /> VALIDER ET LANCER LA FABRICATION (LOT EN COURS)
               </button>
