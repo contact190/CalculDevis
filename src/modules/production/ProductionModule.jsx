@@ -3719,7 +3719,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
           const client = database?.clients?.find(c => c.id === activeQuote.clientId);
           if (!client) return null;
           const plans = client.sitePlans || [];
-          return plans.find(p => p.id === activeQuote.sitePlanId) || plans[0] || null;
+          return plans.find(p => p.id === activeQuote.sitePlanId) || plans.find(p => p.quoteId === activeQuote.id) || null;
         })();
 
         const resolveInstanceLabel = (item, m, idx, globalIdx = 0) => {

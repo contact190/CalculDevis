@@ -4,7 +4,7 @@ import {
   Users, CheckCircle, Clock, ShoppingBag, Copy, Trash2, ExternalLink, 
   Layers, Store, ChevronRight, RefreshCw, AlertCircle, Lock
 } from 'lucide-react';
-import { getQuoteTotals, generateNextQuoteNumber, isQuoteLocked } from '../../utils/quoteUtils';
+import { getQuoteTotals, generateNextQuoteNumber, isQuoteLocked, cloneSitePlanForNewQuote } from '../../utils/quoteUtils';
 
 const formatMoney = (amount) => {
   return (Number(amount) || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -245,6 +245,23 @@ const QuotesModule = ({ data, setData, quoteSettings, onOpenQuote, onNewQuote })
     const nextNumber = generateNextQuoteNumber(quoteSettings, data);
     const deepClone = JSON.parse(JSON.stringify(quote));
     const calculatedTotals = getQuoteTotals(deepClone, quoteSettings);
+
+    const newItems = (deepClone.items || []).map(item => ({
+      ...item,
+      id: `ITEM-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+      siteMeasurements: [] // Cotes chantier vierges pour le nouveau devis
+    }));
+
+    // Règle 1 Plan = 1 Devis : si l'ancien devis avait un plan, on clone la structure dans un plan dédié
+    let clonedPlan = null;
+    if (quote.sitePlanId) {
+      const client = (data?.clients || []).find(c => c.id === quote.clientId);
+      const oldPlan = (client?.sitePlans || []).find(p => p.id === quote.sitePlanId);
+      if (oldPlan) {
+        clonedPlan = cloneSitePlanForNewQuote(oldPlan, deepClone.items || [], newItems, newId, nextNumber);
+      }
+    }
+
     const newQuote = {
       ...deepClone,
       id: newId,
@@ -254,12 +271,8 @@ const QuotesModule = ({ data, setData, quoteSettings, onOpenQuote, onNewQuote })
       validatedAt: null,
       lockedAt: null,
       totals: calculatedTotals,
-      sitePlanId: null, // Déconnecté du plan de l'ancien devis pour éviter tout chevauchement
-      items: (deepClone.items || []).map(item => ({
-        ...item,
-        id: `ITEM-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
-        siteMeasurements: [] // Cotes chantier vierges pour le nouveau devis
-      }))
+      sitePlanId: clonedPlan ? clonedPlan.id : null, // Plan cloné exclusif et indépendant
+      items: newItems
     };
 
     // Nettoyer toute référence à une commande existante
@@ -267,11 +280,25 @@ const QuotesModule = ({ data, setData, quoteSettings, onOpenQuote, onNewQuote })
     delete newQuote.quoteId;
     delete newQuote.batches;
     
-    setData(prev => ({
-      ...prev,
-      quotes: [...(prev.quotes || []), newQuote]
-    }));
-    alert(`Devis ${quote.number || quote.id} dupliqué avec succès sous le nouveau numéro ${nextNumber} (statut Brouillon).`);
+    setData(prev => {
+      let updatedClients = prev.clients || [];
+      if (clonedPlan) {
+        updatedClients = updatedClients.map(c => {
+          if (c.id !== quote.clientId) return c;
+          return {
+            ...c,
+            sitePlans: [...(c.sitePlans || []), clonedPlan],
+            _lastModified: new Date().toISOString()
+          };
+        });
+      }
+      return {
+        ...prev,
+        quotes: [...(prev.quotes || []), newQuote],
+        clients: updatedClients
+      };
+    });
+    alert(`Devis ${quote.number || quote.id} dupliqué avec succès sous le nouveau numéro ${nextNumber} (statut Brouillon)${clonedPlan ? ' avec son plan de chantier dédié (1:1)' : ''}.`);
   };
 
   const handleDeleteQuote = (quote) => {

@@ -5,7 +5,7 @@ import JoineryCanvas from '../../components/shared/JoineryCanvas';
 import LayoutComposer, { defaultLayout, rescaleTree } from '../../components/shared/LayoutComposer';
 import jsPDF from 'jspdf';
 import { getTechnicalDrawingDataURL } from '../../utils/drawingUtils';
-import { generateNextQuoteNumber, isQuoteLocked, getQuoteTotals } from '../../utils/quoteUtils';
+import { generateNextQuoteNumber, isQuoteLocked, getQuoteTotals, cloneSitePlanForNewQuote } from '../../utils/quoteUtils';
 
 
 const EMPTY_CONFIG = {
@@ -2768,6 +2768,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
 
         // Update orders list if status is "Confirmé" (1 Devis = 1 Commande unique et verrouillée)
         let orders = prev.orders || [];
+        let clients = prev.clients || [];
         if (finalQuote.status === 'Confirmé') {
           const existingOrder = orders.find(o => o.quoteId === finalQuote.id);
           
@@ -2787,6 +2788,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
               ...finalQuote, 
               id: orderId, 
               quoteId: finalQuote.id, 
+              sitePlanId: finalQuote.sitePlanId || null,
               batches: [], 
               createdAt: new Date().toISOString(),
               items: (finalQuote.items || []).map(item => ({
@@ -2794,6 +2796,17 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
                 siteMeasurements: []
               }))
             }];
+
+            // Règle 1 Plan = 1 Devis = 1 Commande : tagger le plan avec l'orderId
+            if (finalQuote.sitePlanId) {
+              clients = clients.map(c => {
+                if (c.id !== finalQuote.clientId) return c;
+                const updatedPlans = (c.sitePlans || []).map(p => 
+                  p.id === finalQuote.sitePlanId ? { ...p, orderId: orderId, quoteId: finalQuote.id, _lastModified: new Date().toISOString() } : p
+                );
+                return { ...c, sitePlans: updatedPlans, _lastModified: new Date().toISOString() };
+              });
+            }
           }
         }
 
@@ -2807,7 +2820,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
           nextOrderCounter++;
         }
 
-        return { ...prev, quotes, orders, orderCounter: nextOrderCounter };
+        return { ...prev, quotes, orders, clients, orderCounter: nextOrderCounter };
       });
 
       if (isNewQuote && setQuoteSettings) {
@@ -2883,6 +2896,23 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
     const nextNumber = generateNextQuoteNumber(quoteSettings, database);
     const deepClone = JSON.parse(JSON.stringify(quote));
     const calculatedTotals = getQuoteTotals(deepClone, quoteSettings);
+
+    const newItems = (deepClone.items || []).map(item => ({
+      ...item,
+      id: `ITEM-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+      siteMeasurements: [] // Cotes chantier vierges pour le nouveau devis
+    }));
+
+    // Règle 1 Plan = 1 Devis : si l'ancien devis avait un plan, on clone la structure dans un plan dédié
+    let clonedPlan = null;
+    if (quote.sitePlanId) {
+      const client = (database?.clients || []).find(c => c.id === quote.clientId);
+      const oldPlan = (client?.sitePlans || []).find(p => p.id === quote.sitePlanId);
+      if (oldPlan) {
+        clonedPlan = cloneSitePlanForNewQuote(oldPlan, deepClone.items || [], newItems, newId, nextNumber);
+      }
+    }
+
     const newQuote = {
       ...deepClone,
       id: newId,
@@ -2892,22 +2922,32 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
       validatedAt: null,
       lockedAt: null,
       totals: calculatedTotals,
-      sitePlanId: null, // Déconnecté du plan de l'ancien devis pour éviter tout chevauchement
-      items: (deepClone.items || []).map(item => ({
-        ...item,
-        id: `ITEM-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
-        siteMeasurements: [] // Cotes chantier vierges pour le nouveau devis
-      }))
+      sitePlanId: clonedPlan ? clonedPlan.id : null, // Plan cloné exclusif et indépendant
+      items: newItems
     };
 
     delete newQuote.orderId;
     delete newQuote.quoteId;
     delete newQuote.batches;
 
-    setDatabase(prev => ({
-      ...prev,
-      quotes: [...(prev.quotes || []), newQuote]
-    }));
+    setDatabase(prev => {
+      let updatedClients = prev.clients || [];
+      if (clonedPlan) {
+        updatedClients = updatedClients.map(c => {
+          if (c.id !== quote.clientId) return c;
+          return {
+            ...c,
+            sitePlans: [...(c.sitePlans || []), clonedPlan],
+            _lastModified: new Date().toISOString()
+          };
+        });
+      }
+      return {
+        ...prev,
+        quotes: [...(prev.quotes || []), newQuote],
+        clients: updatedClients
+      };
+    });
 
     if (setQuoteSettings) {
       setQuoteSettings(prevSettings => ({
@@ -2917,7 +2957,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
     }
 
     setCurrentQuote(newQuote);
-    alert(`Devis ${quote.number || quote.id} dupliqué avec succès sous le nouveau numéro ${nextNumber} (statut Brouillon).`);
+    alert(`Devis ${quote.number || quote.id} dupliqué avec succès sous le nouveau numéro ${nextNumber} (statut Brouillon)${clonedPlan ? ' avec son plan de chantier dédié (1:1)' : ''}.`);
   };
 
   const handleSaveGlobalQuote = () => {

@@ -207,6 +207,8 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
     if (order?.sitePlanId) {
       return plans.find(p => p.id === order.sitePlanId) || { floors: [] };
     }
+    const directMatch = plans.find(p => p.orderId === order?.id || (order?.quoteId && p.quoteId === order.quoteId));
+    if (directMatch) return directMatch;
     for (const plan of plans) {
        for (const floor of (plan.floors || [])) {
           for (const apt of (floor.apartments || [])) {
@@ -218,7 +220,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
           }
        }
     }
-    return plans.length > 0 ? plans[0] : { floors: [] };
+    return { floors: [] };
   }, [selectedClient, order]);
   const hasPlan = activeSitePlan.floors && activeSitePlan.floors.length > 0 && activeSitePlan.floors.some(f => f.apartments?.some(a => a.voids?.length > 0));
 
@@ -847,7 +849,9 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                               <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#334155' }}>{apt.name}</span>
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column' }}>
-                              {aptVoids.map(({ void: v, item }) => (
+                              {aptVoids.map(({ void: v, item }, vIdx) => {
+                                const voidRepere = v.name?.trim() || `${floor.name}${apt.name}${vIdx + 1}`;
+                                return (
                                 <div key={v.id} style={{ padding: '0.5rem 1rem 0.5rem 4rem', display: 'flex', gap: '1rem', alignItems: 'center', background: 'white' }}>
                                   <input 
                                     type="checkbox" 
@@ -855,16 +859,22 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                     onChange={(e) => setSelectedVoidsForLaunch(prev => ({ ...prev, [v.id]: e.target.checked }))}
                                     style={{ width: '1rem', height: '1rem', cursor: 'pointer' }}
                                   />
-                                  <div style={{ flex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#475569' }}>
-                                      {v.name}
-                                    </span>
+                                  <div style={{ flex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.4rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                      <span style={{ fontSize: '0.75rem', fontWeight: 800, background: '#0f766e', color: 'white', padding: '0.15rem 0.45rem', borderRadius: '4px' }}>
+                                        {voidRepere}
+                                      </span>
+                                      <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#334155' }}>
+                                        {item.label}
+                                      </span>
+                                    </div>
                                     <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                                      Mesuré: <strong>{v.L !== undefined ? v.L : item.config.L} x {v.H !== undefined ? v.H : item.config.H}</strong>
+                                      Mesuré: <strong>{v.L !== undefined && v.L !== '' ? v.L : item.config.L} x {v.H !== undefined && v.H !== '' ? v.H : item.config.H} mm</strong>
                                     </span>
                                   </div>
                                 </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           </div>
                         );
@@ -1035,7 +1045,9 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                               <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#7f1d1d' }}>{apt.name}</span>
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column' }}>
-                              {aptVoids.map(({ void: v, item }) => (
+                              {aptVoids.map(({ void: v, item }, vIdx) => {
+                                const voidRepere = v.name?.trim() || `${floor.name}${apt.name}${vIdx + 1}`;
+                                return (
                                 <div key={v.id} style={{ padding: '0.5rem 1rem 0.5rem 4rem', display: 'flex', gap: '1rem', alignItems: 'center', background: 'white' }}>
                                   <input 
                                     type="checkbox" 
@@ -1043,16 +1055,22 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                     onChange={(e) => setSelectedVoidsForRelaunch(prev => ({ ...prev, [v.id]: e.target.checked }))}
                                     style={{ width: '1rem', height: '1rem', cursor: 'pointer' }}
                                   />
-                                  <div style={{ flex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#475569' }}>
-                                      {v.name}
-                                    </span>
+                                  <div style={{ flex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.4rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                      <span style={{ fontSize: '0.75rem', fontWeight: 800, background: '#fee2e2', color: '#991b1b', border: '1px solid #f87171', padding: '0.15rem 0.45rem', borderRadius: '4px' }}>
+                                        {voidRepere}
+                                      </span>
+                                      <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#334155' }}>
+                                        {item?.label}
+                                      </span>
+                                    </div>
                                     <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                                      Cotes: <strong>{v.L !== undefined ? v.L : item.config.L} x {v.H !== undefined ? v.H : item.config.H}</strong>
+                                      Cotes: <strong>{v.L !== undefined && v.L !== '' ? v.L : item?.config.L} x {v.H !== undefined && v.H !== '' ? v.H : item?.config.H}</strong>
                                     </span>
                                   </div>
                                 </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           </div>
                         );
@@ -1316,10 +1334,11 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
 
                         {/* Voids */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                          {(apt.voids || []).map(v => {
+                          {(apt.voids || []).map((v, vIndex) => {
                             const item = order.items.find(i => i.id === v.itemId);
                             if (!item) return null;
 
+                            const voidRepere = v.name?.trim() || `${floor.name}${apt.name}${vIndex + 1}`;
                             const actualShutter = v.shutter !== undefined ? v.shutter : (item.config.hasShutter ? { qty: 1, customLV: '', overrides: {} } : null);
                             const isShutterActive = actualShutter !== null;
                             const deltaCheck = checkVoidCriticalDelta(v, item);
@@ -1356,7 +1375,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                   gap: '0.5rem'
                                 }}>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    <span style={{ fontSize: '0.75rem', background: deltaCheck.isCritical ? '#dc2626' : '#0f766e', color: 'white', padding: '0.2rem 0.6rem', borderRadius: '9999px', fontWeight: 800 }}>{v.name}</span>
+                                    <span style={{ fontSize: '0.75rem', background: deltaCheck.isCritical ? '#dc2626' : '#0f766e', color: 'white', padding: '0.2rem 0.6rem', borderRadius: '9999px', fontWeight: 800 }}>{voidRepere}</span>
                                     <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>{item.label}</strong>
                                   </div>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>

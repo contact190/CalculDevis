@@ -30,6 +30,9 @@ const InstallerPortal = ({ data, setData, orderId, refetchData, isOnline, isSync
       activeSitePlan = plans.find(p => p.id === order.sitePlanId);
     }
     if (!activeSitePlan) {
+      activeSitePlan = plans.find(p => p.orderId === order.id || (order.quoteId && p.quoteId === order.quoteId));
+    }
+    if (!activeSitePlan) {
       for (const plan of plans) {
          for (const floor of (plan.floors || [])) {
             for (const apt of (floor.apartments || [])) {
@@ -45,9 +48,6 @@ const InstallerPortal = ({ data, setData, orderId, refetchData, isOnline, isSync
          }
          if (activeSitePlan) break;
       }
-    }
-    if (!activeSitePlan && plans.length > 0) {
-      activeSitePlan = plans[0];
     }
 
     (order.batches || []).forEach(batch => {

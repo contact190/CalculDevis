@@ -173,6 +173,8 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
     if (selectedOrder.sitePlanId) {
       return plans.find(p => p.id === selectedOrder.sitePlanId) || { floors: [] };
     }
+    const directMatch = plans.find(p => p.orderId === selectedOrder.id || (selectedOrder.quoteId && p.quoteId === selectedOrder.quoteId));
+    if (directMatch) return directMatch;
     for (const plan of plans) {
        for (const floor of (plan.floors || [])) {
           for (const apt of (floor.apartments || [])) {
@@ -184,7 +186,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
           }
        }
     }
-    return plans.length > 0 ? plans[0] : { floors: [] };
+    return { floors: [] };
   }, [data?.clients, selectedOrder]);
 
   const criticalVoids = useMemo(() => {
@@ -1409,10 +1411,11 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
 
                             {/* Voids Cards */}
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1.25rem' }}>
-                              {(apt.voids || []).map(v => {
+                              {(apt.voids || []).map((v, vIndex) => {
                                 const item = selectedOrder.items.find(i => i.id === v.itemId);
                                 if (!item) return null;
 
+                                const voidRepere = v.name?.trim() || `${floor.name}${apt.name}${vIndex + 1}`;
                                 const deltaCheck = checkVoidCriticalDelta(v, item);
                                 const actualShutter = v.shutter !== undefined ? v.shutter : (item.config.hasShutter ? { qty: 1, customLV: '', overrides: {} } : null);
                                 const isShutterActive = actualShutter !== null;
@@ -1448,7 +1451,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                       {/* Header Row */}
                                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.4rem' }}>
-                                          <span style={{ fontSize: '0.75rem', background: '#eff6ff', color: '#1d4ed8', padding: '0.2rem 0.6rem', borderRadius: '9999px', fontWeight: 700 }}>{v.name}</span>
+                                          <span style={{ fontSize: '0.75rem', background: '#eff6ff', color: '#1d4ed8', padding: '0.2rem 0.6rem', borderRadius: '9999px', fontWeight: 700 }}>{voidRepere}</span>
                                           <strong style={{ fontSize: '0.95rem', color: '#1e293b' }}>{item.label}</strong>
                                           {deltaCheck.isCritical && (
                                             <span style={{ fontSize: '0.72rem', background: '#fee2e2', color: '#991b1b', border: '1px solid #ef4444', padding: '0.15rem 0.5rem', borderRadius: '9999px', fontWeight: 800 }}>

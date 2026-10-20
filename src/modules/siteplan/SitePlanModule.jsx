@@ -447,20 +447,76 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
 
   const assignQuoteToPlan = () => {
     if (!selectedQuoteId || !activeSitePlan) return;
+
+    // Check if another quote is already attached to this plan
+    const otherLinkedQuote = (data.quotes || []).find(q => q.sitePlanId === activeSitePlan.id && q.id !== selectedQuoteId);
+    if (otherLinkedQuote) {
+      if (!window.confirm(`Règle stricte (1 Plan = 1 Devis = 1 Commande) :\n\nCe plan est actuellement rattaché au Devis ${otherLinkedQuote.number || otherLinkedQuote.id}.\nVoulez-vous détacher ce devis pour l'associer exclusivement au Devis sélectionné ?`)) {
+        return;
+      }
+    }
+
     setData(prev => {
-      let updatedQuotes = (prev.quotes || []).map(q => 
-        q.id === selectedQuoteId ? { ...q, sitePlanId: activeSitePlan.id } : q
-      );
+      // 1. Dissocier tout autre devis qui pointait sur ce plan pour garantir l'exclusivité 1:1
+      let updatedQuotes = (prev.quotes || []).map(q => {
+        if (q.sitePlanId === activeSitePlan.id && q.id !== selectedQuoteId) {
+          return { ...q, sitePlanId: null, _lastModified: new Date().toISOString() };
+        }
+        if (q.id === selectedQuoteId) {
+          return { ...q, sitePlanId: activeSitePlan.id, _lastModified: new Date().toISOString() };
+        }
+        return q;
+      });
       
       const quoteToSync = updatedQuotes.find(q => q.id === selectedQuoteId);
-      const syncedItems = syncSitePlanToMeasurements(activeSitePlan, quoteToSync.items);
-      updatedQuotes = updatedQuotes.map(q => 
-        q.id === selectedQuoteId ? { ...q, items: syncedItems, _lastModified: new Date().toISOString() } : q
-      );
+      if (quoteToSync) {
+        const syncedItems = syncSitePlanToMeasurements(activeSitePlan, quoteToSync.items);
+        updatedQuotes = updatedQuotes.map(q => 
+          q.id === selectedQuoteId ? { ...q, items: syncedItems, _lastModified: new Date().toISOString() } : q
+        );
+      }
 
-      return { ...prev, quotes: updatedQuotes };
+      // Si le devis a déjà une commande associée, on lie aussi la commande en 1:1
+      const relatedOrder = (prev.orders || []).find(o => o.quoteId === selectedQuoteId);
+      let updatedOrders = prev.orders || [];
+      if (relatedOrder) {
+        const syncedOrderItems = syncSitePlanToMeasurements(activeSitePlan, relatedOrder.items);
+        updatedOrders = updatedOrders.map(o => {
+          if (o.sitePlanId === activeSitePlan.id && o.id !== relatedOrder.id) {
+            return { ...o, sitePlanId: null, _lastModified: new Date().toISOString() };
+          }
+          if (o.id === relatedOrder.id) {
+            return { ...o, sitePlanId: activeSitePlan.id, items: syncedOrderItems, _lastModified: new Date().toISOString() };
+          }
+          return o;
+        });
+      }
+
+      // Enregistrer le quoteId et orderId sur le plan dans clients
+      const updatedClients = (prev.clients || []).map(c => {
+        if (c.id !== selectedClientId) return c;
+        const newPlans = (c.sitePlans || []).map(p => {
+          if (p.id === activeSitePlan.id) {
+            return { 
+              ...p, 
+              quoteId: selectedQuoteId, 
+              orderId: relatedOrder ? relatedOrder.id : (p.orderId || null),
+              _lastModified: new Date().toISOString() 
+            };
+          }
+          return p;
+        });
+        return { ...c, sitePlans: newPlans, _lastModified: new Date().toISOString() };
+      });
+
+      return { 
+        ...prev, 
+        quotes: updatedQuotes, 
+        orders: updatedOrders,
+        clients: updatedClients 
+      };
     });
-    alert("Devis rattaché à ce plan !");
+    alert("Devis et Commande rattachés exclusivement à ce plan (Règle 1:1) !");
   };
 
   // Helper to initialize sitePlan
@@ -795,7 +851,9 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
         {/* Quote Selection & Assignment (only if plan is active) */}
         {activeSitePlan && (
           <div style={{ padding: '1rem', background: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
-            <label style={{ fontSize: '0.85rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '0.5rem' }}>3. Associer un Devis à ce Plan</label>
+            <label style={{ fontSize: '0.85rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '0.5rem' }}>
+              3. Associer un Devis à ce Plan (1 Plan = 1 Devis Exclusif)
+            </label>
             <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
               <select
                 className="input"
@@ -803,12 +861,16 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
                 onChange={e => setSelectedQuoteId(e.target.value)}
                 style={{ flex: 1, fontSize: '0.9rem', fontWeight: 600, padding: '0.6rem' }}
               >
-                <option value="">-- Sélectionnez un devis pour l'associer --</option>
-                {clientQuotes.map(o => (
-                  <option key={o.id} value={o.id}>
-                    Devis {o.number || o.id} - {o.items?.length || 0} produits {o.sitePlanId === activeSitePlan.id ? '(Déjà rattaché)' : ''}
-                  </option>
-                ))}
+                <option value="">-- Sélectionnez un devis pour l'associer exclusivement --</option>
+                {clientQuotes.map(o => {
+                  const isCurrent = o.sitePlanId === activeSitePlan.id;
+                  const otherPlan = !isCurrent && o.sitePlanId ? clientPlans.find(p => p.id === o.sitePlanId) : null;
+                  return (
+                    <option key={o.id} value={o.id}>
+                      Devis {o.number || o.id} - {o.items?.length || 0} produits {isCurrent ? '(Rattaché à ce plan)' : (otherPlan ? `(Lié à ${otherPlan.name})` : '')}
+                    </option>
+                  );
+                })}
               </select>
               <button 
                 onClick={assignQuoteToPlan}
@@ -816,14 +878,24 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
                 className="btn btn-secondary"
                 style={{ padding: '0.6rem 1rem', background: '#e0f2fe', color: '#0369a1', borderColor: '#bae6fd', fontWeight: 700 }}
               >
-                Associer au plan actif
+                Associer en 1:1
               </button>
             </div>
             
-            <div style={{ marginTop: '0.75rem', fontSize: '0.8rem', color: '#64748b' }}>
-              <strong>Devis associés :</strong> {
-                clientQuotes.filter(q => q.sitePlanId === activeSitePlan.id).map(q => q.number || q.id).join(', ') || 'Aucun'
-              }
+            <div style={{ marginTop: '0.75rem', fontSize: '0.82rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <strong>Rattachement exclusif :</strong> {(() => {
+                const linkedQuote = clientQuotes.find(q => q.sitePlanId === activeSitePlan.id);
+                const linkedOrder = (data.orders || []).find(o => o.sitePlanId === activeSitePlan.id || (linkedQuote && o.quoteId === linkedQuote.id));
+                if (!linkedQuote && !linkedOrder) {
+                  return <span style={{ color: '#d97706', background: '#fef3c7', padding: '0.2rem 0.6rem', borderRadius: '4px', fontWeight: 600 }}>Plan libre (aucun devis rattaché)</span>;
+                }
+                return (
+                  <span style={{ color: '#047857', background: '#ecfdf5', border: '1px solid #a7f3d0', padding: '0.25rem 0.65rem', borderRadius: '4px', fontWeight: 700 }}>
+                    🔒 Dédié au Devis {linkedQuote?.number || linkedQuote?.id}
+                    {linkedOrder ? ` ➔ Commande ${linkedOrder.id}` : ''}
+                  </span>
+                );
+              })()}
             </div>
           </div>
         )}

@@ -131,3 +131,67 @@ export const checkVoidCriticalDelta = (v, item) => {
   };
 };
 
+/**
+ * Clone un plan de chantier pour un nouveau devis afin de garantir la règle 1 Plan = 1 Devis.
+ * Préserve la structure architecturale (étages, appartements, noms des ouvertures)
+ * mais réinitialise les identifiants, les cotes réelles mesurées et les statuts de fabrication.
+ */
+export const cloneSitePlanForNewQuote = (sourcePlan, oldItems = [], newItems = [], newQuoteId, newQuoteNumber) => {
+  if (!sourcePlan) return null;
+
+  const generateId = (prefix) => `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+
+  // Correspondance des identifiants d'articles
+  const itemIdMap = {};
+  oldItems.forEach((oldItem, idx) => {
+    if (newItems[idx]) {
+      itemIdMap[oldItem.id] = newItems[idx].id;
+    }
+  });
+
+  const clonedPlanId = generateId('plan');
+  const planName = newQuoteNumber 
+    ? `${sourcePlan.name || 'Plan'} (Devis ${newQuoteNumber})`
+    : `${sourcePlan.name || 'Plan'} (Copie)`;
+
+  const clonedFloors = (sourcePlan.floors || []).map(floor => ({
+    ...floor,
+    id: generateId('floor'),
+    apartments: (floor.apartments || []).map(apt => ({
+      ...apt,
+      id: generateId('apt'),
+      voids: (apt.voids || []).map(v => {
+        const newVoidId = generateId('void');
+        const mappedItemId = itemIdMap[v.itemId] || v.itemId;
+        return {
+          ...v,
+          id: newVoidId,
+          itemId: mappedItemId,
+          // Réinitialisation stricte des cotes réelles et validation
+          L: undefined,
+          H: undefined,
+          wallDepth: undefined,
+          handleHeight: undefined,
+          measurementsValidated: false,
+          productionLaunched: false,
+          productionBatchId: undefined,
+          shutter: v.shutter ? {
+            ...v.shutter,
+            id: `shutter-${newVoidId}`,
+            customLV: undefined
+          } : null
+        };
+      })
+    }))
+  }));
+
+  return {
+    ...JSON.parse(JSON.stringify(sourcePlan)),
+    id: clonedPlanId,
+    quoteId: newQuoteId,
+    orderId: null,
+    name: planName,
+    floors: clonedFloors,
+    _lastModified: new Date().toISOString()
+  };
+};

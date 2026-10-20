@@ -124,6 +124,9 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings, setQuoteSet
       activeSitePlan = plans.find(p => p.id === selectedOrder.sitePlanId);
     }
     if (!activeSitePlan) {
+      activeSitePlan = plans.find(p => p.orderId === selectedOrder.id || (selectedOrder.quoteId && p.quoteId === selectedOrder.quoteId));
+    }
+    if (!activeSitePlan) {
       for (const plan of plans) {
          for (const floor of (plan.floors || [])) {
             for (const apt of (floor.apartments || [])) {
@@ -139,9 +142,6 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings, setQuoteSet
          }
          if (activeSitePlan) break;
       }
-    }
-    if (!activeSitePlan && plans.length > 0) {
-      activeSitePlan = plans[0];
     }
 
     (selectedOrder.batches || []).forEach(batch => {
