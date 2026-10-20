@@ -78,3 +78,26 @@ export const getQuoteTotals = (quote, quoteSettings = {}) => {
 
   return { ht: 0, ttc: 0, rawHT: 0, discountAmount: 0, tva: 0 };
 };
+
+export const generateNextQuoteNumber = (settings, db) => {
+  let counter = settings?.quoteCounter || 1;
+  const prefix = settings?.quotePrefix || 'DEV-';
+  const quotes = db?.quotes || [];
+  for (const q of quotes) {
+    if (q && q.number && q.number.startsWith(prefix)) {
+      const numPart = q.number.substring(prefix.length).split('-')[0].split(' ')[0];
+      const parsed = parseInt(numPart, 10);
+      if (!isNaN(parsed) && parsed >= counter) {
+        counter = parsed + 1;
+      }
+    }
+  }
+  return `${prefix}${String(counter).padStart(3, '0')}`;
+};
+
+export const isQuoteLocked = (quote, orders = []) => {
+  if (!quote) return false;
+  if (quote.status === 'Figé' || quote.status === 'Confirmé') return true;
+  if ((orders || []).some(o => o.quoteId === quote.id)) return true;
+  return false;
+};

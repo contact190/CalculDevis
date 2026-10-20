@@ -486,6 +486,9 @@ function App() {
         if (!isExistingInDb && !hasItems) return;
 
         const dbQuote = database.quotes?.find(q => q.id === currentQuote.id);
+        const isDbQuoteLocked = dbQuote && (dbQuote.status === 'Figé' || dbQuote.status === 'Confirmé' || (database.orders || []).some(o => o.quoteId === dbQuote.id));
+        if (isDbQuoteLocked) return; // Un devis figé ou confirmé ne peut plus être modifié par auto-sync
+
         if (!dbQuote || JSON.stringify(dbQuote) !== JSON.stringify(currentQuote)) {
           setDatabase(prev => {
             if (!prev) return prev;

@@ -1,22 +1,6 @@
 import React, { useState } from 'react';
-import { Users, Plus, Edit2, Trash2, FileText, ChevronDown, ChevronUp, CheckCircle, Copy, Link, ExternalLink } from 'lucide-react';
-import { getQuoteTotals } from '../../utils/quoteUtils';
-
-const generateNextQuoteNumber = (settings, db) => {
-  let counter = settings?.quoteCounter || 1;
-  const prefix = settings?.quotePrefix || 'DEV-';
-  const quotes = db?.quotes || [];
-  for (const q of quotes) {
-    if (q && q.number && q.number.startsWith(prefix)) {
-      const numPart = q.number.substring(prefix.length).split('-')[0].split(' ')[0];
-      const parsed = parseInt(numPart, 10);
-      if (!isNaN(parsed) && parsed >= counter) {
-        counter = parsed + 1;
-      }
-    }
-  }
-  return `${prefix}${String(counter).padStart(3, '0')}`;
-};
+import { Users, Plus, Edit2, Trash2, FileText, ChevronDown, ChevronUp, CheckCircle, Copy, Link, ExternalLink, Lock } from 'lucide-react';
+import { getQuoteTotals, generateNextQuoteNumber, isQuoteLocked } from '../../utils/quoteUtils';
 
 const ClientsModule = ({ data, setData, onOpenQuote, quoteSettings }) => {
   const [editingClient, setEditingClient] = useState(null);
@@ -128,6 +112,7 @@ const ClientsModule = ({ data, setData, onOpenQuote, quoteSettings }) => {
       status: 'Brouillon',
       createdAt: new Date().toISOString(),
       validatedAt: null,
+      lockedAt: null,
       totals: calculatedTotals,
       sitePlanId: null, // Déconnecté du plan de l'ancien devis pour éviter tout chevauchement
       // Give each item a new unique ID so they are fully independent from the original
@@ -302,27 +287,38 @@ const ClientsModule = ({ data, setData, onOpenQuote, quoteSettings }) => {
                       </td>
                       <td data-label="Date">{new Date(q.createdAt).toLocaleDateString('fr-FR')}</td>
                       <td data-label="Statut">
-                        {q.type === 'shop' && q.status !== 'Validé' ? (
+                        {q.type === 'shop' && q.status !== 'Figé' && q.status !== 'Confirmé' ? (
                           <select 
                             value={q.status || 'Brouillon'} 
                             onChange={(e) => {
                               const newStatus = e.target.value;
-                              const updated = { ...q, status: newStatus, validatedAt: newStatus === 'Validé' ? new Date().toISOString() : q.validatedAt };
+                              if (newStatus === 'Figé' || newStatus === 'Confirmé') {
+                                if (!window.confirm(`Voulez-vous passer ce devis en statut "${newStatus}" ?\n\nAttention : Cette action est IRRÉVERSIBLE.`)) return;
+                              }
+                              const updated = { 
+                                ...q, 
+                                status: newStatus, 
+                                lockedAt: (newStatus === 'Figé' || newStatus === 'Confirmé') ? (q.lockedAt || new Date().toISOString()) : q.lockedAt,
+                                validatedAt: (newStatus === 'Validé' || newStatus === 'Confirmé') ? (q.validatedAt || new Date().toISOString()) : q.validatedAt 
+                              };
                               setData(prev => ({ ...prev, quotes: prev.quotes.map(quote => quote.id === q.id ? updated : quote) }));
                             }}
                             className="input" style={{ padding: '0.1rem 0.5rem', fontSize: '0.75rem', height: 'auto', width: 'auto', display: 'inline-block' }}
                           >
-                            <option value="Brouillon">Brouillon</option>
-                            <option value="Validé">Validé</option>
+                            <option value="Brouillon">⏳ Brouillon</option>
+                            <option value="Figé">🔒 Figé</option>
+                            <option value="Confirmé">📦 Confirmé</option>
                           </select>
                         ) : (
                           <span style={{ 
                             padding: '0.2rem 0.5rem', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 600,
-                            background: (q.status === 'Validé' || q.status === 'Confirmé') ? '#dcfce3' : (q.status === 'Brouillon' || !q.status ? '#fef3c7' : '#e0f2fe'),
-                            color: (q.status === 'Validé' || q.status === 'Confirmé') ? '#16a34a' : (q.status === 'Brouillon' || !q.status ? '#d97706' : '#0369a1')
+                            background: q.status === 'Confirmé' ? '#dbeafe' : (q.status === 'Figé' ? '#f1f5f9' : (q.status === 'Validé' ? '#dcfce3' : '#fef3c7')),
+                            border: q.status === 'Confirmé' ? '1px solid #bfdbfe' : (q.status === 'Figé' ? '1px solid #cbd5e1' : (q.status === 'Validé' ? '1px solid #bbf7d0' : '1px solid #fed7aa')),
+                            color: q.status === 'Confirmé' ? '#1d4ed8' : (q.status === 'Figé' ? '#334155' : (q.status === 'Validé' ? '#16a34a' : '#d97706'))
                           }}>
+                            {q.status === 'Figé' && '🔒 '}
+                            {q.status === 'Confirmé' && '📦 '}
                             {q.status || 'Brouillon'}
-                            {(q.status === 'Validé' || q.status === 'Confirmé') && q.validatedAt && ` (${new Date(q.validatedAt).toLocaleDateString('fr-FR')})`}
                           </span>
                         )}
                       </td>
@@ -335,7 +331,7 @@ const ClientsModule = ({ data, setData, onOpenQuote, quoteSettings }) => {
 
                       <td data-label="Actions" style={{ textAlign: 'center' }}>
                         <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
-                          {(!q.status || q.status === 'Brouillon') && (
+                          {(!q.status || q.status === 'Brouillon') && !isQuoteLocked(q, data.orders) && (
                             <button onClick={() => handleDeleteQuote(q)} className="btn" style={{ padding: '0.3rem', fontSize: '0.8rem', color: '#ef4444', borderColor: '#fecaca', background: '#fef2f2' }} title="Supprimer">
                               <Trash2 size={14} />
                             </button>
@@ -470,27 +466,38 @@ const ClientsModule = ({ data, setData, onOpenQuote, quoteSettings }) => {
                                     </td>
                                     <td data-label="Date">{new Date(q.createdAt).toLocaleDateString('fr-FR')}</td>
                                     <td data-label="Statut">
-                                      {q.type === 'shop' && q.status !== 'Validé' ? (
+                                      {q.type === 'shop' && q.status !== 'Figé' && q.status !== 'Confirmé' ? (
                                         <select 
                                           value={q.status || 'Brouillon'} 
                                           onChange={(e) => {
                                             const newStatus = e.target.value;
-                                            const updated = { ...q, status: newStatus, validatedAt: newStatus === 'Validé' ? new Date().toISOString() : q.validatedAt };
+                                            if (newStatus === 'Figé' || newStatus === 'Confirmé') {
+                                              if (!window.confirm(`Voulez-vous passer ce devis en statut "${newStatus}" ?\n\nAttention : Cette action est IRRÉVERSIBLE.`)) return;
+                                            }
+                                            const updated = { 
+                                              ...q, 
+                                              status: newStatus, 
+                                              lockedAt: (newStatus === 'Figé' || newStatus === 'Confirmé') ? (q.lockedAt || new Date().toISOString()) : q.lockedAt,
+                                              validatedAt: (newStatus === 'Validé' || newStatus === 'Confirmé') ? (q.validatedAt || new Date().toISOString()) : q.validatedAt 
+                                            };
                                             setData(prev => ({ ...prev, quotes: prev.quotes.map(quote => quote.id === q.id ? updated : quote) }));
                                           }}
                                           className="input" style={{ padding: '0.1rem 0.5rem', fontSize: '0.75rem', height: 'auto', width: 'auto', display: 'inline-block' }}
                                         >
-                                          <option value="Brouillon">Brouillon</option>
-                                          <option value="Validé">Validé</option>
+                                          <option value="Brouillon">⏳ Brouillon</option>
+                                          <option value="Figé">🔒 Figé</option>
+                                          <option value="Confirmé">📦 Confirmé</option>
                                         </select>
                                       ) : (
                                         <span style={{ 
                                           padding: '0.2rem 0.5rem', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 600,
-                                          background: (q.status === 'Validé' || q.status === 'Confirmé') ? '#dcfce3' : (q.status === 'Brouillon' || !q.status ? '#fef3c7' : '#e0f2fe'),
-                                          color: (q.status === 'Validé' || q.status === 'Confirmé') ? '#16a34a' : (q.status === 'Brouillon' || !q.status ? '#d97706' : '#0369a1')
+                                          background: q.status === 'Confirmé' ? '#dbeafe' : (q.status === 'Figé' ? '#f1f5f9' : (q.status === 'Validé' ? '#dcfce3' : '#fef3c7')),
+                                          border: q.status === 'Confirmé' ? '1px solid #bfdbfe' : (q.status === 'Figé' ? '1px solid #cbd5e1' : (q.status === 'Validé' ? '1px solid #bbf7d0' : '1px solid #fed7aa')),
+                                          color: q.status === 'Confirmé' ? '#1d4ed8' : (q.status === 'Figé' ? '#334155' : (q.status === 'Validé' ? '#16a34a' : '#d97706'))
                                         }}>
+                                          {q.status === 'Figé' && '🔒 '}
+                                          {q.status === 'Confirmé' && '📦 '}
                                           {q.status || 'Brouillon'}
-                                          {(q.status === 'Validé' || q.status === 'Confirmé') && q.validatedAt && ` (${new Date(q.validatedAt).toLocaleDateString('fr-FR')})`}
                                         </span>
                                       )}
                                     </td>
@@ -503,7 +510,7 @@ const ClientsModule = ({ data, setData, onOpenQuote, quoteSettings }) => {
                                     <td data-label="Actions" style={{ textAlign: 'center' }}>
 
                                       <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'center' }}>
-                                        {(!q.status || q.status === 'Brouillon') && (
+                                        {(!q.status || q.status === 'Brouillon') && !isQuoteLocked(q, data.orders) && (
                                           <button onClick={() => handleDeleteQuote(q)} className="btn" style={{ padding: '0.3rem', fontSize: '0.8rem', color: '#ef4444', borderColor: '#fecaca', background: '#fef2f2' }} title="Supprimer">
                                             <Trash2 size={12} />
                                           </button>

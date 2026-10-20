@@ -2,28 +2,12 @@ import React, { useState, useMemo } from 'react';
 import { 
   FileText, Plus, Search, Filter, Calendar, ArrowUpDown, ArrowUp, ArrowDown, 
   Users, CheckCircle, Clock, ShoppingBag, Copy, Trash2, ExternalLink, 
-  Layers, Store, ChevronRight, RefreshCw, AlertCircle
+  Layers, Store, ChevronRight, RefreshCw, AlertCircle, Lock
 } from 'lucide-react';
-import { getQuoteTotals } from '../../utils/quoteUtils';
+import { getQuoteTotals, generateNextQuoteNumber, isQuoteLocked } from '../../utils/quoteUtils';
 
 const formatMoney = (amount) => {
   return (Number(amount) || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-};
-
-const generateNextQuoteNumber = (settings, db) => {
-  let counter = settings?.quoteCounter || 1;
-  const prefix = settings?.quotePrefix || 'DEV-';
-  const quotes = db?.quotes || [];
-  for (const q of quotes) {
-    if (q && q.number && q.number.startsWith(prefix)) {
-      const numPart = q.number.substring(prefix.length).split('-')[0].split(' ')[0];
-      const parsed = parseInt(numPart, 10);
-      if (!isNaN(parsed) && parsed >= counter) {
-        counter = parsed + 1;
-      }
-    }
-  }
-  return `${prefix}${String(counter).padStart(3, '0')}`;
 };
 
 const QuotesModule = ({ data, setData, quoteSettings, onOpenQuote, onNewQuote }) => {
@@ -135,6 +119,7 @@ const QuotesModule = ({ data, setData, quoteSettings, onOpenQuote, onNewQuote })
     let totalHT = 0;
     let countValide = 0;
     let countConfirme = 0;
+    let countFige = 0;
     let countBrouillon = 0;
 
     all.forEach(q => {
@@ -143,6 +128,7 @@ const QuotesModule = ({ data, setData, quoteSettings, onOpenQuote, onNewQuote })
       totalHT += qTotals.ht;
 
       if (q.status === 'Confirmé') countConfirme++;
+      else if (q.status === 'Figé') countFige++;
       else if (q.status === 'Validé') countValide++;
       else countBrouillon++;
     });
@@ -153,6 +139,7 @@ const QuotesModule = ({ data, setData, quoteSettings, onOpenQuote, onNewQuote })
       totalHT,
       countValide,
       countConfirme,
+      countFige,
       countBrouillon,
       averageTTC: all.length > 0 ? totalTTC / all.length : 0
     };
@@ -167,7 +154,7 @@ const QuotesModule = ({ data, setData, quoteSettings, onOpenQuote, onNewQuote })
       return;
     }
 
-    if (!window.confirm(`Voulez-vous transformer le devis ${quote.number} en commande active ?`)) return;
+    if (!window.confirm(`Voulez-vous transformer le devis ${quote.number || quote.id} en commande active ?\n\n⚠️ ATTENTION : Cette action est IRRÉVERSIBLE.\nUne commande unique sera générée et le devis sera définitivement figé.`)) return;
     
     setData(prev => {
       const currentOrders = prev.orders || [];
@@ -199,7 +186,13 @@ const QuotesModule = ({ data, setData, quoteSettings, onOpenQuote, onNewQuote })
         }))
       };
 
-      const quotes = (prev.quotes || []).map(q => q.id === quote.id ? { ...q, status: 'Confirmé', _lastModified: new Date().toISOString() } : q);
+      const quotes = (prev.quotes || []).map(q => q.id === quote.id ? { 
+        ...q, 
+        status: 'Confirmé', 
+        lockedAt: q.lockedAt || new Date().toISOString(),
+        validatedAt: q.validatedAt || new Date().toISOString(),
+        _lastModified: new Date().toISOString() 
+      } : q);
       const finalOrders = [...currentOrders, newOrder];
 
       const updatedIds = finalOrders
@@ -225,6 +218,28 @@ const QuotesModule = ({ data, setData, quoteSettings, onOpenQuote, onNewQuote })
     });
   };
 
+  const handleLockQuote = (quote) => {
+    if (isQuoteLocked(quote, data.orders)) {
+      alert("Ce devis est déjà figé (lecture seule).");
+      return;
+    }
+
+    if (!window.confirm(`Voulez-vous figer définitivement le devis ${quote.number || quote.id} ?\n\n⚠️ ATTENTION : Cette action est IRRÉVERSIBLE.\nToutes les dimensions, composants et prix seront définitivement verrouillés en lecture seule sans aucun délai.`)) {
+      return;
+    }
+
+    setData(prev => ({
+      ...prev,
+      quotes: (prev.quotes || []).map(q => q.id === quote.id ? {
+        ...q,
+        status: 'Figé',
+        lockedAt: new Date().toISOString(),
+        _lastModified: new Date().toISOString()
+      } : q)
+    }));
+    alert(`Le devis ${quote.number || quote.id} est désormais figé (lecture seule).`);
+  };
+
   const handleDuplicateQuote = (quote) => {
     const newId = `QUOTE-${Date.now()}`;
     const nextNumber = generateNextQuoteNumber(quoteSettings, data);
@@ -237,6 +252,7 @@ const QuotesModule = ({ data, setData, quoteSettings, onOpenQuote, onNewQuote })
       status: 'Brouillon',
       createdAt: new Date().toISOString(),
       validatedAt: null,
+      lockedAt: null,
       totals: calculatedTotals,
       sitePlanId: null, // Déconnecté du plan de l'ancien devis pour éviter tout chevauchement
       items: (deepClone.items || []).map(item => ({
@@ -255,10 +271,14 @@ const QuotesModule = ({ data, setData, quoteSettings, onOpenQuote, onNewQuote })
       ...prev,
       quotes: [...(prev.quotes || []), newQuote]
     }));
-    alert(`Devis ${quote.number} dupliqué avec succès sous le nouveau numéro ${nextNumber}.`);
+    alert(`Devis ${quote.number || quote.id} dupliqué avec succès sous le nouveau numéro ${nextNumber} (statut Brouillon).`);
   };
 
   const handleDeleteQuote = (quote) => {
+    if (isQuoteLocked(quote, data.orders)) {
+      alert("Impossible de supprimer un devis figé ou confirmé.");
+      return;
+    }
     if (window.confirm(`Voulez-vous vraiment supprimer le devis ${quote.number} ? Cette action est irréversible.`)) {
       setData(prev => {
         const list = (prev.quotes || []).map(q => q.id === quote.id ? { ...q, _deleted: true, _lastModified: new Date().toISOString() } : q);
@@ -423,9 +443,9 @@ const QuotesModule = ({ data, setData, quoteSettings, onOpenQuote, onNewQuote })
             <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginRight: '0.3rem' }}>Statut :</span>
             {[
               { id: 'ALL', label: 'Tous' },
-              { id: 'Brouillon', label: 'Brouillons' },
-              { id: 'Validé', label: 'Validés' },
-              { id: 'Confirmé', label: 'Confirmés' },
+              { id: 'Brouillon', label: '⏳ Brouillons' },
+              { id: 'Figé', label: '🔒 Figés' },
+              { id: 'Confirmé', label: '📦 Confirmés' },
             ].map(tab => {
               const active = statusFilter === tab.id;
               return (
@@ -569,7 +589,7 @@ const QuotesModule = ({ data, setData, quoteSettings, onOpenQuote, onNewQuote })
                           width: '8px', 
                           height: '8px', 
                           borderRadius: '50%', 
-                          background: q.status === 'Confirmé' ? '#2563eb' : (q.status === 'Validé' ? '#16a34a' : '#f59e0b') 
+                          background: q.status === 'Confirmé' ? '#2563eb' : (q.status === 'Figé' ? '#64748b' : (q.status === 'Validé' ? '#16a34a' : '#f59e0b')) 
                         }} />
                         <strong style={{ fontSize: '0.92rem', color: '#1e293b', letterSpacing: '-0.01em' }}>
                           {q.number || q.id}
@@ -615,15 +635,19 @@ const QuotesModule = ({ data, setData, quoteSettings, onOpenQuote, onNewQuote })
 
                     {/* Statut */}
                     <td data-label="Statut" style={{ padding: '0.85rem 1rem' }}>
-                      {isShop ? (
+                      {isShop && q.status !== 'Figé' && q.status !== 'Confirmé' ? (
                         <select
                           value={q.status || 'Brouillon'}
                           onChange={(e) => {
                             const newStatus = e.target.value;
+                            if (newStatus === 'Figé' || newStatus === 'Confirmé') {
+                              if (!window.confirm(`Voulez-vous passer ce devis en statut "${newStatus}" ?\n\nAttention : Cette action est IRRÉVERSIBLE.`)) return;
+                            }
                             const updated = { 
                               ...q, 
                               status: newStatus, 
-                              validatedAt: newStatus === 'Validé' ? (q.validatedAt || new Date().toISOString()) : q.validatedAt,
+                              lockedAt: (newStatus === 'Figé' || newStatus === 'Confirmé') ? (q.lockedAt || new Date().toISOString()) : q.lockedAt,
+                              validatedAt: (newStatus === 'Validé' || newStatus === 'Confirmé') ? (q.validatedAt || new Date().toISOString()) : q.validatedAt,
                               _lastModified: new Date().toISOString()
                             };
                             setData(prev => ({ 
@@ -638,20 +662,14 @@ const QuotesModule = ({ data, setData, quoteSettings, onOpenQuote, onNewQuote })
                             fontWeight: 700,
                             cursor: 'pointer',
                             outline: 'none',
-                            border: q.status === 'Confirmé' 
-                              ? '1.5px solid #93c5fd' 
-                              : (q.status === 'Validé' ? '1.5px solid #86efac' : '1.5px solid #fde68a'),
-                            background: q.status === 'Confirmé' 
-                              ? '#eff6ff' 
-                              : (q.status === 'Validé' ? '#f0fdf4' : '#fffbeb'),
-                            color: q.status === 'Confirmé' 
-                              ? '#1d4ed8' 
-                              : (q.status === 'Validé' ? '#15803d' : '#b45309')
+                            border: '1.5px solid #fde68a',
+                            background: '#fffbeb',
+                            color: '#b45309'
                           }}
                           title="Modifier le statut du devis Shop"
                         >
                           <option value="Brouillon">⏳ Brouillon</option>
-                          <option value="Validé">✅ Validé</option>
+                          <option value="Figé">🔒 Figé</option>
                           <option value="Confirmé">📦 Confirmé</option>
                         </select>
                       ) : (
@@ -665,12 +683,16 @@ const QuotesModule = ({ data, setData, quoteSettings, onOpenQuote, onNewQuote })
                           gap: '0.3rem',
                           background: q.status === 'Confirmé' 
                             ? '#dbeafe' 
-                            : (q.status === 'Validé' ? '#dcfce7' : '#fef3c7'),
+                            : (q.status === 'Figé' ? '#f1f5f9' : (q.status === 'Validé' ? '#dcfce7' : '#fef3c7')),
+                          border: q.status === 'Confirmé'
+                            ? '1px solid #bfdbfe'
+                            : (q.status === 'Figé' ? '1px solid #cbd5e1' : (q.status === 'Validé' ? '1px solid #bbf7d0' : '1px solid #fed7aa')),
                           color: q.status === 'Confirmé' 
                             ? '#1d4ed8' 
-                            : (q.status === 'Validé' ? '#15803d' : '#b45309')
+                            : (q.status === 'Figé' ? '#334155' : (q.status === 'Validé' ? '#15803d' : '#b45309'))
                         }}>
                           {q.status === 'Confirmé' && <CheckCircle size={12} />}
+                          {q.status === 'Figé' && <Lock size={12} />}
                           {q.status === 'Validé' && <CheckCircle size={12} />}
                           {(!q.status || q.status === 'Brouillon') && <Clock size={12} />}
                           {q.status || 'Brouillon'}
@@ -754,6 +776,28 @@ const QuotesModule = ({ data, setData, quoteSettings, onOpenQuote, onNewQuote })
                           <Copy size={14} />
                         </button>
 
+                        {/* Figer si Brouillon */}
+                        {(!q.status || q.status === 'Brouillon') && !isQuoteLocked(q, data.orders) && (
+                          <button
+                            onClick={() => handleLockQuote(q)}
+                            className="btn"
+                            style={{ 
+                              padding: '0.4rem 0.6rem', 
+                              fontSize: '0.78rem', 
+                              fontWeight: 700, 
+                              color: '#475569', 
+                              borderColor: '#cbd5e1', 
+                              background: '#f8fafc',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.25rem'
+                            }}
+                            title="Figer définitivement ce devis (action irréversible)"
+                          >
+                            <Lock size={13} /> Figer
+                          </button>
+                        )}
+
                         {/* Transformer en Commande ou Badge Commande existante */}
                         {(() => {
                           const existingOrder = (data.orders || []).find(o => o.quoteId === q.id);
@@ -804,7 +848,7 @@ const QuotesModule = ({ data, setData, quoteSettings, onOpenQuote, onNewQuote })
                         })()}
 
                         {/* Supprimer */}
-                        {(!q.status || q.status === 'Brouillon') && (
+                        {(!q.status || q.status === 'Brouillon') && !isQuoteLocked(q, data.orders) && (
                           <button
                             onClick={() => handleDeleteQuote(q)}
                             className="btn"

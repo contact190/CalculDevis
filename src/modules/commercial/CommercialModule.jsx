@@ -5,6 +5,7 @@ import JoineryCanvas from '../../components/shared/JoineryCanvas';
 import LayoutComposer, { defaultLayout, rescaleTree } from '../../components/shared/LayoutComposer';
 import jsPDF from 'jspdf';
 import { getTechnicalDrawingDataURL } from '../../utils/drawingUtils';
+import { generateNextQuoteNumber, isQuoteLocked, getQuoteTotals } from '../../utils/quoteUtils';
 
 
 const EMPTY_CONFIG = {
@@ -56,7 +57,7 @@ const getCanonicalConfigKey = (config) => {
 };
 
 // ─── REUSABLE COMPONENT: SearchableDropdown ────────────────────────────────
-const SearchableDropdown = ({ value, onChange, options, placeholder, style = {}, compact = false }) => {
+const SearchableDropdown = ({ value, onChange, options, placeholder, style = {}, compact = false, disabled = false }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const wrapperRef = useRef(null);
@@ -82,15 +83,15 @@ const SearchableDropdown = ({ value, onChange, options, placeholder, style = {},
   }, []);
 
   return (
-    <div ref={wrapperRef} style={{ position: 'relative', width: compact ? 'auto' : '100%', textAlign: 'left', ...style }}>
+    <div ref={wrapperRef} style={{ position: 'relative', width: compact ? 'auto' : '100%', textAlign: 'left', opacity: disabled ? 0.75 : 1, ...style }}>
       <div 
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => { if (!disabled) setIsOpen(!isOpen); }}
         style={{
           padding: compact ? '0.3rem 0.6rem' : '0.6rem 0.75rem',
           border: '1px solid #cbd5e1',
           borderRadius: compact ? '0.4rem' : '0.5rem',
-          background: 'white',
-          cursor: 'pointer',
+          background: disabled ? '#f1f5f9' : 'white',
+          cursor: disabled ? 'not-allowed' : 'pointer',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
@@ -183,7 +184,7 @@ const SearchableDropdown = ({ value, onChange, options, placeholder, style = {},
 };
 
 // ─── SUB-COMPONENT: Product Configurator (View B) ──────────────────────────
-const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, label, setLabel, itemRef, setItemRef, qty, setQty, globalMargin }) => {
+const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, label, setLabel, itemRef, setItemRef, qty, setQty, globalMargin, readOnly = false }) => {
   const engine = useMemo(() => new FormulaEngine(database), [database]);
   const [validation, setValidation] = useState({ valid: true });
   const [priceData, setPriceData] = useState(null);
@@ -377,18 +378,26 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
           <input
             value={label}
             onChange={e => setLabel(e.target.value)}
+            disabled={readOnly}
             placeholder="Désignation du produit (ex: Fenêtre salon)"
-            style={{ flex: 1, padding: '0.5rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '0.5rem', fontSize: '0.95rem', fontWeight: 600 }}
+            style={{ flex: 1, padding: '0.5rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '0.5rem', fontSize: '0.95rem', fontWeight: 600, background: readOnly ? '#f1f5f9' : 'white' }}
           />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <label style={{ fontSize: '0.8rem', color: '#64748b', whiteSpace: 'nowrap' }}>Qté:</label>
           <input type="number" min="1" value={qty} onChange={e => setQty(parseInt(e.target.value) || 1)}
-            style={{ width: '65px', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '0.5rem', textAlign: 'center', fontWeight: 700 }} />
+            disabled={readOnly}
+            style={{ width: '65px', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '0.5rem', textAlign: 'center', fontWeight: 700, background: readOnly ? '#f1f5f9' : 'white' }} />
         </div>
-        <button onClick={onSave} disabled={!priceData} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1.2rem', background: priceData ? '#10b981' : '#94a3b8', color: 'white', border: 'none', borderRadius: '0.5rem', cursor: priceData ? 'pointer' : 'not-allowed', fontWeight: 600 }}>
-          <Save size={16} /> Enregistrer
-        </button>
+        {!readOnly ? (
+          <button onClick={onSave} disabled={!priceData} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1.2rem', background: priceData ? '#10b981' : '#94a3b8', color: 'white', border: 'none', borderRadius: '0.5rem', cursor: priceData ? 'pointer' : 'not-allowed', fontWeight: 600 }}>
+            <Save size={16} /> Enregistrer
+          </button>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.6rem 1rem', background: '#f1f5f9', color: '#475569', borderRadius: '0.5rem', fontWeight: 700, fontSize: '0.85rem' }}>
+            🔒 Lecture seule
+          </div>
+        )}
       </div>
 
       <div className="configurator-grid">
@@ -2468,13 +2477,8 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
   }, [database.clients, quote.clientId, setCurrentQuote]);
 
   const isQuoteFrozen = useMemo(() => {
-    if (!quote.status || quote.status === 'Brouillon') return false;
-    if (quote.status !== 'Validé') return false; // Orders etc might be handled differently, but Validé is the target here
-    const validityDays = Number(quoteSettings?.validityDays || 30);
-    if (!quote.validatedAt) return false;
-    const diff = new Date() - new Date(quote.validatedAt);
-    return diff <= (validityDays * 24 * 60 * 60 * 1000);
-  }, [quote.status, quote.validatedAt, quoteSettings]);
+    return isQuoteLocked(quote, database?.orders);
+  }, [quote?.status, quote?.id, database?.orders]);
 
   // Totals
   const [showKitDetails, setShowKitDetails] = useState(false);
@@ -2492,17 +2496,18 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
 
       const shouldLiveRecalculate = !isQuoteFrozen;
 
-          try {
-            const tempConfig = { ...item.config, margin: quote.globalMargin ?? quoteSettings?.globalMargin ?? 2.2 };
-            const livePd = engine.calculatePrice(tempConfig);
-            if (livePd) {
-              pd = livePd;
-              if (livePd.priceHT) currentPriceHT = livePd.priceHT;
-            }
-          } catch(e) {
-            console.error("Error recalulating item price:", e);
+      if (shouldLiveRecalculate) {
+        try {
+          const tempConfig = { ...item.config, margin: quote.globalMargin ?? quoteSettings?.globalMargin ?? 2.2 };
+          const livePd = engine.calculatePrice(tempConfig);
+          if (livePd) {
+            pd = livePd;
+            if (livePd.priceHT) currentPriceHT = livePd.priceHT;
           }
-
+        } catch(e) {
+          console.error("Error recalculating item price:", e);
+        }
+      }
 
       ht += currentPriceHT * (item.qty || 1);
       
@@ -2658,6 +2663,10 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
   };
 
   const handleSaveProduct = () => {
+    if (isQuoteFrozen) {
+      alert("Ce devis est définitivement figé (lecture seule). Pour apporter des modifications, veuillez le dupliquer.");
+      return;
+    }
     const tempConfig = { ...draftConfig, margin: quote.globalMargin ?? quoteSettings?.globalMargin ?? 2.2 };
     const priceData = engine.calculatePrice(tempConfig);
     const existingItem = editingItemId ? (quote.items || []).find(i => i.id === editingItemId) : null;
@@ -2686,17 +2695,26 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
 
 
   const handleDeleteItem = (id) => {
+    if (isQuoteFrozen) {
+      alert("Ce devis est définitivement figé (lecture seule).");
+      return;
+    }
     if (!window.confirm('Supprimer ce produit du devis ?')) return;
     setCurrentQuote(prev => ({ ...prev, items: prev.items.filter(i => i.id !== id) }));
   };
 
   const handleDuplicateItem = (item) => {
+    if (isQuoteFrozen) {
+      alert("Ce devis est définitivement figé (lecture seule).");
+      return;
+    }
     const deepClone = JSON.parse(JSON.stringify(item));
     const copy = { ...deepClone, id: `ITEM-${Date.now()}-${Math.floor(Math.random() * 1000)}`, label: `${item.label} (copie)` };
     setCurrentQuote(prev => ({ ...prev, items: [...prev.items, copy] }));
   };
 
   const handleQtyChange = (id, val) => {
+    if (isQuoteFrozen) return;
     const q = Math.max(1, parseInt(val) || 1);
     setCurrentQuote(prev => ({ 
       ...prev, 
@@ -2724,10 +2742,24 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
         if (showAlert) alert("Veuillez ajouter au moins un produit avant d'enregistrer le devis.");
         return;
       }
+
+      // Protection stricte : si le devis en base est déjà figé/confirmé, interdiction de modifier son contenu
+      const dbExisting = (database?.quotes || []).find(q => q.id === quoteToSave.id);
+      if (dbExisting && isQuoteLocked(dbExisting, database?.orders)) {
+        if (showAlert) alert("Ce devis est définitivement figé (lecture seule). Pour apporter des modifications, veuillez le dupliquer.");
+        return;
+      }
+
       const finalQuote = { ...quoteToSave, totals };
       const isNewQuote = !(database?.quotes || []).some(q => q.id === finalQuote.id);
 
       setDatabase(prev => {
+        // Double vérification dans le setter
+        const currentDbQuote = (prev.quotes || []).find(q => q.id === finalQuote.id);
+        if (currentDbQuote && isQuoteLocked(currentDbQuote, prev.orders)) {
+          return prev;
+        }
+
         // Update quotes list
         const existsInQuotes = (prev.quotes || []).some(q => q.id === finalQuote.id);
         const quotes = existsInQuotes 
@@ -2756,10 +2788,13 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
               id: orderId, 
               quoteId: finalQuote.id, 
               batches: [], 
-              createdAt: new Date().toISOString() 
+              createdAt: new Date().toISOString(),
+              items: (finalQuote.items || []).map(item => ({
+                ...item,
+                siteMeasurements: []
+              }))
             }];
           }
-          // Note : Si la commande existe déjà pour ce devis, elle est verrouillée et autonome (aucun écrasement)
         }
 
         const updatedIds = orders
@@ -2778,7 +2813,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
       if (isNewQuote && setQuoteSettings) {
         setQuoteSettings(prevSettings => ({
           ...prevSettings,
-          quoteCounter: (prevSettings.quoteCounter || 1) + 1
+          quoteCounter: (prevSettings?.quoteCounter || 1) + 1
         }));
       }
 
@@ -2791,12 +2826,33 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
   };
 
   const handleStatusChange = (newStatus) => {
+    // Règle stricte d'irréversibilité : si déjà figé ou confirmé, impossible de changer
+    if (isQuoteFrozen) {
+      alert("Ce devis est définitivement figé et son statut ne peut plus être modifié. Pour créer un devis modifiable, veuillez le dupliquer.");
+      return;
+    }
+
+    if (newStatus === quote.status) return;
+
+    if (newStatus === 'Figé' || newStatus === 'Confirmé') {
+      const isFige = newStatus === 'Figé';
+      const confirmMsg = isFige
+        ? `Êtes-vous sûr de vouloir figer définitivement le devis ${quote.number || quote.id} ?\n\n⚠️ ATTENTION : Cette action est IRRÉVERSIBLE.\nToutes les dimensions, composants et prix seront définitivement verrouillés en lecture seule sans aucun délai.`
+        : `Êtes-vous sûr de vouloir confirmer le devis ${quote.number || quote.id} en commande ?\n\n⚠️ ATTENTION : Cette action est IRRÉVERSIBLE.\nUne commande unique sera générée et le devis sera définitivement figé.`;
+      if (!window.confirm(confirmMsg)) return;
+    }
+
     let updatedQuote;
     setCurrentQuote(prev => {
       const q = { ...prev, status: newStatus };
-      if (newStatus === 'Validé') {
-        q.validatedAt = new Date().toISOString();
-        // Snapshot
+      if (newStatus === 'Figé' || newStatus === 'Confirmé' || newStatus === 'Validé') {
+        if (newStatus === 'Figé' || newStatus === 'Confirmé') {
+          q.lockedAt = new Date().toISOString();
+        }
+        if (newStatus === 'Confirmé' || newStatus === 'Validé') {
+          q.validatedAt = q.validatedAt || new Date().toISOString();
+        }
+        // Figer définitivement les calculs de prix dans chaque article (Snapshot)
         q.items = (q.items || []).map(item => {
           try {
             if (item.isManual) { return { ...item }; }
@@ -2806,7 +2862,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
               ...item,
               unitPriceHT: pd?.priceHT || item.unitPriceHT,
               unitPriceTTC: pd?.priceTTC || item.unitPriceTTC,
-              priceData: JSON.parse(JSON.stringify(pd)),
+              priceData: pd ? JSON.parse(JSON.stringify(pd)) : item.priceData,
               config: JSON.parse(JSON.stringify(item.config))
             };
           } catch(e) { return item; }
@@ -2821,7 +2877,54 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
     }
   };
 
+  const handleDuplicateCurrentQuote = () => {
+    if (!quote || !quote.id) return;
+    const newId = `QUOTE-${Date.now()}`;
+    const nextNumber = generateNextQuoteNumber(quoteSettings, database);
+    const deepClone = JSON.parse(JSON.stringify(quote));
+    const calculatedTotals = getQuoteTotals(deepClone, quoteSettings);
+    const newQuote = {
+      ...deepClone,
+      id: newId,
+      number: nextNumber,
+      status: 'Brouillon',
+      createdAt: new Date().toISOString(),
+      validatedAt: null,
+      lockedAt: null,
+      totals: calculatedTotals,
+      sitePlanId: null, // Déconnecté du plan de l'ancien devis pour éviter tout chevauchement
+      items: (deepClone.items || []).map(item => ({
+        ...item,
+        id: `ITEM-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+        siteMeasurements: [] // Cotes chantier vierges pour le nouveau devis
+      }))
+    };
+
+    delete newQuote.orderId;
+    delete newQuote.quoteId;
+    delete newQuote.batches;
+
+    setDatabase(prev => ({
+      ...prev,
+      quotes: [...(prev.quotes || []), newQuote]
+    }));
+
+    if (setQuoteSettings) {
+      setQuoteSettings(prevSettings => ({
+        ...prevSettings,
+        quoteCounter: (prevSettings?.quoteCounter || 1) + 1
+      }));
+    }
+
+    setCurrentQuote(newQuote);
+    alert(`Devis ${quote.number || quote.id} dupliqué avec succès sous le nouveau numéro ${nextNumber} (statut Brouillon).`);
+  };
+
   const handleSaveGlobalQuote = () => {
+    if (isQuoteFrozen) {
+      alert("Ce devis est définitivement figé (lecture seule). Pour apporter des modifications, veuillez le dupliquer.");
+      return;
+    }
     saveQuoteToDatabase(quote, true);
   };
 
@@ -3499,6 +3602,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
         qty={draftQty}
         setQty={setDraftQty}
         globalMargin={quote.globalMargin ?? quoteSettings?.globalMargin ?? 2.2}
+        readOnly={isQuoteFrozen}
       />
     );
   }
@@ -3522,6 +3626,24 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
           <button onClick={onNewQuote} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1rem', border: '1px solid #e2e8f0', borderRadius: '0.5rem', background: 'white', cursor: 'pointer', color: '#64748b', fontSize: '0.875rem' }}>
             📄 Nouveau Devis
           </button>
+          {!isQuoteFrozen && (quote.items || []).length > 0 && (
+            <button 
+              onClick={() => handleStatusChange('Figé')} 
+              title="Figer définitivement ce devis (action irréversible)"
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1rem', border: '1px solid #cbd5e1', borderRadius: '0.5rem', background: '#f8fafc', color: '#475569', cursor: 'pointer', fontWeight: 700, fontSize: '0.875rem' }}
+            >
+              🔒 Figer le devis
+            </button>
+          )}
+          {isQuoteFrozen && (
+            <button 
+              onClick={handleDuplicateCurrentQuote} 
+              title="Dupliquer ce devis pour créer un nouveau devis modifiable"
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1.1rem', border: '1px solid #818cf8', borderRadius: '0.5rem', background: '#e0e7ff', color: '#4338ca', cursor: 'pointer', fontWeight: 700, fontSize: '0.875rem' }}
+            >
+              <Copy size={16} /> Dupliquer pour modifier
+            </button>
+          )}
           {!isQuoteFrozen && (
             <button onClick={startNewProduct} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1.2rem', border: 'none', borderRadius: '0.5rem', background: '#2563eb', color: 'white', cursor: 'pointer', fontWeight: 600 }}>
               <Plus size={16} /> Ajouter un produit
@@ -3531,8 +3653,22 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
       </header>
 
       {isQuoteFrozen && (
-        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1e40af', padding: '0.75rem 1rem', borderRadius: '0.5rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600, fontSize: '0.9rem' }}>
-          <Info size={18} /> Ce devis est figé (Validé le {new Date(quote.validatedAt).toLocaleDateString('fr-FR')}). Validité : {quoteSettings.validityDays || 30} j.
+        <div style={{ background: '#f8fafc', border: '1px solid #cbd5e1', color: '#334155', padding: '0.85rem 1.25rem', borderRadius: '0.6rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontWeight: 600, fontSize: '0.9rem' }}>
+            <span style={{ fontSize: '1.25rem' }}>🔒</span>
+            <div>
+              <strong style={{ color: '#0f172a' }}>Devis {quote.status === 'Confirmé' ? 'Confirmé en Commande' : 'Figé'} — Mode Lecture Seule.</strong>
+              <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 500, marginTop: '0.15rem' }}>
+                Toutes les dimensions, composants et prix sont définitivement verrouillés (action irréversible). Pour apporter des modifications, dupliquez ce devis pour créer un nouveau brouillon indépendant.
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={handleDuplicateCurrentQuote}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: '#4f46e5', color: 'white', border: 'none', borderRadius: '0.4rem', cursor: 'pointer', fontWeight: 700, fontSize: '0.82rem' }}
+          >
+            <Copy size={14} /> Dupliquer ce devis
+          </button>
         </div>
       )}
 
@@ -3560,28 +3696,45 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
             <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>N° :</span>
             <input 
               value={quote.number || ''} 
+              disabled={isQuoteFrozen}
               onChange={e => setCurrentQuote(p => ({ ...p, number: e.target.value }))}
               style={{ 
                 fontWeight: 800, fontSize: '1.3rem', color: '#2563eb', border: 'none', 
-                background: 'rgba(37, 99, 235, 0.05)', textAlign: 'right', width: '150px',
-                padding: '0.2rem 0.5rem', borderRadius: '0.4rem', outline: 'none'
+                background: isQuoteFrozen ? '#f1f5f9' : 'rgba(37, 99, 235, 0.05)', textAlign: 'right', width: '150px',
+                padding: '0.2rem 0.5rem', borderRadius: '0.4rem', outline: 'none', cursor: isQuoteFrozen ? 'not-allowed' : 'text'
               }}
             />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.4rem', marginBottom: '0.4rem' }}>
             <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>Statut :</span>
-            <select 
-              value={quote.status || 'Brouillon'} 
-              onChange={e => handleStatusChange(e.target.value)}
-              style={{
-                padding: '0.2rem', borderRadius: '0.3rem', border: 'none', background: quote.status === 'Brouillon' || !quote.status ? '#fef3c7' : '#dcfce3', color: quote.status === 'Brouillon' || !quote.status ? '#d97706' : '#16a34a', fontSize: '0.8rem', fontWeight: 700, outline: 'none'
-              }}
-            >
-              <option value="Brouillon">Brouillon</option>
-              <option value="Validé">Validé</option>
-              <option value="Envoyé">Envoyé</option>
-              <option value="Confirmé">Confirmé</option>
-            </select>
+            {isQuoteFrozen ? (
+              <span style={{
+                padding: '0.25rem 0.65rem',
+                borderRadius: '0.35rem',
+                border: '1px solid #cbd5e1',
+                background: quote.status === 'Confirmé' ? '#dbeafe' : '#f1f5f9',
+                color: quote.status === 'Confirmé' ? '#1d4ed8' : '#334155',
+                fontSize: '0.8rem',
+                fontWeight: 700,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.3rem'
+              }}>
+                🔒 {quote.status || 'Figé'} (Définitif)
+              </span>
+            ) : (
+              <select 
+                value={quote.status || 'Brouillon'} 
+                onChange={e => handleStatusChange(e.target.value)}
+                style={{
+                  padding: '0.25rem 0.5rem', borderRadius: '0.35rem', border: '1px solid #fed7aa', background: '#fef3c7', color: '#d97706', fontSize: '0.8rem', fontWeight: 700, outline: 'none', cursor: 'pointer'
+                }}
+              >
+                <option value="Brouillon">⏳ Brouillon</option>
+                <option value="Figé">🔒 Figé (Définitif)</option>
+                <option value="Confirmé">📦 Confirmé (Commande)</option>
+              </select>
+            )}
           </div>
           <div style={{ fontSize: '0.78rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.3rem', justifyContent: 'flex-end', marginBottom: '0.5rem' }}>
             <Calendar size={12} /> {new Date(quote.createdAt || Date.now()).toLocaleDateString('fr-FR')}
@@ -3590,6 +3743,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
             <span style={{ fontWeight: 600 }}>Client :</span>
             <SearchableDropdown 
               compact
+              disabled={isQuoteFrozen}
               value={quote.clientId}
               onChange={val => setCurrentQuote(p => ({ ...p, clientId: val }))}
               options={(database.clients || []).map(c => ({ value: c.id, label: c.nom }))}
@@ -3601,6 +3755,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
               <span style={{ fontWeight: 600 }}>Plan de Chantier :</span>
               <SearchableDropdown 
                 compact
+                disabled={isQuoteFrozen}
                 value={quote.sitePlanId || ''}
                 onChange={val => setCurrentQuote(p => ({ ...p, sitePlanId: val }))}
                 options={[
@@ -4077,19 +4232,21 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
               </div>
 
               {/* Remise / Discount Input */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginBottom: '0.5rem', background: 'rgba(255, 255, 255, 0.1)', padding: '0.5rem', borderRadius: '0.4rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginBottom: '0.5rem', background: 'rgba(255, 255, 255, 0.1)', padding: '0.5rem', borderRadius: '0.4rem', opacity: isQuoteFrozen ? 0.75 : 1 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>Remise Commerciale</span>
                   <div style={{ display: 'flex', gap: '2px', background: 'rgba(255,255,255,0.2)', padding: '2px', borderRadius: '4px' }}>
                     <button 
+                      disabled={isQuoteFrozen}
                       onClick={() => setCurrentQuote(p => ({ ...p, discountType: 'percent', discountValue: p.discountType === 'fixed' ? 0 : p.discountValue }))}
-                      style={{ fontSize: '0.65rem', border: 'none', background: (quote.discountType || 'percent') === 'percent' ? 'white' : 'transparent', color: (quote.discountType || 'percent') === 'percent' ? '#1e293b' : 'white', padding: '2px 6px', borderRadius: '3px', cursor: 'pointer', fontWeight: 700 }}
+                      style={{ fontSize: '0.65rem', border: 'none', background: (quote.discountType || 'percent') === 'percent' ? 'white' : 'transparent', color: (quote.discountType || 'percent') === 'percent' ? '#1e293b' : 'white', padding: '2px 6px', borderRadius: '3px', cursor: isQuoteFrozen ? 'not-allowed' : 'pointer', fontWeight: 700 }}
                     >
                       %
                     </button>
                     <button 
+                      disabled={isQuoteFrozen}
                       onClick={() => setCurrentQuote(p => ({ ...p, discountType: 'fixed', discountValue: p.discountType === 'percent' ? 0 : p.discountValue }))}
-                      style={{ fontSize: '0.65rem', border: 'none', background: quote.discountType === 'fixed' ? 'white' : 'transparent', color: quote.discountType === 'fixed' ? '#1e293b' : 'white', padding: '2px 6px', borderRadius: '3px', cursor: 'pointer', fontWeight: 700 }}
+                      style={{ fontSize: '0.65rem', border: 'none', background: quote.discountType === 'fixed' ? 'white' : 'transparent', color: quote.discountType === 'fixed' ? '#1e293b' : 'white', padding: '2px 6px', borderRadius: '3px', cursor: isQuoteFrozen ? 'not-allowed' : 'pointer', fontWeight: 700 }}
                     >
                       DZD
                     </button>
@@ -4099,13 +4256,14 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
                   <input 
                     type="number" 
                     min="0"
+                    disabled={isQuoteFrozen}
                     max={(quote.discountType || 'percent') === 'percent' ? 100 : undefined}
                     value={quote.discountValue || 0}
                     onChange={e => {
                       const val = Math.max(0, parseFloat(e.target.value) || 0);
                       setCurrentQuote(p => ({ ...p, discountValue: val }));
                     }}
-                    style={{ flex: 1, background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: 'white', borderRadius: '4px', padding: '4px 8px', fontSize: '0.85rem', fontWeight: 700, outline: 'none' }}
+                    style={{ flex: 1, background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: 'white', borderRadius: '4px', padding: '4px 8px', fontSize: '0.85rem', fontWeight: 700, outline: 'none', cursor: isQuoteFrozen ? 'not-allowed' : 'text' }}
                   />
                   <span style={{ fontSize: '0.8rem', fontWeight: 700, minWidth: '60px', textAlign: 'right' }}>
                     -{totals.discountAmount.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} DZD
@@ -4122,7 +4280,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
                   <input type="number" step="0.1" min="1" value={quote.globalMargin ?? quoteSettings?.globalMargin ?? 2.2}
                     disabled={isQuoteFrozen}
                     onChange={e => setCurrentQuote(prev => ({ ...prev, globalMargin: parseFloat(e.target.value) || 2.2 }))}
-                    style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: 'white', borderRadius: '4px', padding: '2px 6px', width: '60px', fontSize: '0.8rem', fontWeight: 700, textAlign: 'right' }} />
+                    style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: 'white', borderRadius: '4px', padding: '2px 6px', width: '60px', fontSize: '0.8rem', fontWeight: 700, textAlign: 'right', cursor: isQuoteFrozen ? 'not-allowed' : 'text' }} />
                   <span style={{ fontSize: '0.75rem' }}>x</span>
                 </div>
               </div>
@@ -4132,6 +4290,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
                   {[0, 9, 19].map(rate => (
                     <button 
                       key={rate}
+                      disabled={isQuoteFrozen}
                       onClick={() => setQuoteSettings(prev => ({ ...prev, tvaRate: rate }))}
                       style={{
                         padding: '2px 8px',
@@ -4141,7 +4300,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
                         border: '1px solid rgba(255,255,255,0.3)',
                         background: (quoteSettings?.tvaRate ?? 19) === rate ? 'white' : 'transparent',
                         color: (quoteSettings?.tvaRate ?? 19) === rate ? '#1e293b' : 'white',
-                        cursor: 'pointer',
+                        cursor: isQuoteFrozen ? 'not-allowed' : 'pointer',
                         transition: 'all 0.2s'
                       }}
                     >
