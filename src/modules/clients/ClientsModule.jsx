@@ -47,25 +47,31 @@ const ClientsModule = ({ data, setData, onOpenQuote, quoteSettings }) => {
   };
 
   const handleConvertToOrder = (quote) => {
+    const orders = data.orders || [];
+    const existingOrder = orders.find(o => o.quoteId === quote.id);
+    if (existingOrder) {
+      alert(`Ce devis est déjà associé à la commande active ${existingOrder.number || existingOrder.id}. Retrouvez-la dans l'onglet "Commandes".`);
+      return;
+    }
+
     if (!window.confirm(`Voulez-vous transformer le devis ${quote.number} en commande active ?`)) return;
     
     setData(prev => {
       // 1. Calculate orderId inside the state updater to avoid stale state race conditions
-      const orders = prev.orders || [];
-      const existingOrder = orders.find(o => o.quoteId === quote.id);
-      let orderId = existingOrder ? existingOrder.id : null;
-      if (!orderId) {
-        const ids = orders
-          .map(o => o.id)
-          .filter(id => id && id.startsWith('CMD-'))
-          .map(id => parseInt(id.split('-')[1], 10))
-          .filter(num => !isNaN(num));
-        let candidate = 1;
-        while (ids.includes(candidate)) {
-          candidate++;
-        }
-        orderId = `CMD-${String(candidate).padStart(2, '0')}`;
+      const currentOrders = prev.orders || [];
+      const alreadyHasOrder = currentOrders.find(o => o.quoteId === quote.id);
+      if (alreadyHasOrder) return prev; // Sécurité anti-doublon
+
+      const ids = currentOrders
+        .map(o => o.id)
+        .filter(id => id && id.startsWith('CMD-'))
+        .map(id => parseInt(id.split('-')[1], 10))
+        .filter(num => !isNaN(num));
+      let candidate = 1;
+      while (ids.includes(candidate)) {
+        candidate++;
       }
+      const orderId = `CMD-${String(candidate).padStart(2, '0')}`;
 
       const newOrder = {
         ...quote,
@@ -75,34 +81,15 @@ const ClientsModule = ({ data, setData, onOpenQuote, quoteSettings }) => {
         createdAt: new Date().toISOString(),
         status: 'Confirmé',
         batches: [],
-        items: (quote.items || []).map(item => {
-          const existingItem = existingOrder?.items?.find(i => i.id === item.id);
-          return {
-            ...item,
-            siteMeasurements: existingItem ? (existingItem.siteMeasurements || []) : []
-          };
-        })
+        items: (quote.items || []).map(item => ({
+          ...item,
+          siteMeasurements: []
+        }))
       };
 
       // 2. Update quote status to "Confirmé"
-      const quotes = (prev.quotes || []).map(q => q.id === quote.id ? { ...q, status: 'Confirmé' } : q);
-      
-      // 3. Add or Update Order
-      const orderExists = orders.some(o => o.id === orderId);
-      
-      let finalOrders;
-      if (orderExists) {
-        finalOrders = orders.map(o => {
-          if (o.id === orderId) {
-            const updated = { ...o, ...newOrder, batches: o.batches || [] };
-            delete updated._deleted; // Remove deleted tombstone flag in case it was a recycled deleted ID
-            return updated;
-          }
-          return o;
-        });
-      } else {
-        finalOrders = [...orders, newOrder];
-      }
+      const quotes = (prev.quotes || []).map(q => q.id === quote.id ? { ...q, status: 'Confirmé', _lastModified: new Date().toISOString() } : q);
+      const finalOrders = [...currentOrders, newOrder];
 
       const updatedIds = finalOrders
         .map(o => o.id)
@@ -142,13 +129,20 @@ const ClientsModule = ({ data, setData, onOpenQuote, quoteSettings }) => {
       createdAt: new Date().toISOString(),
       validatedAt: null,
       totals: calculatedTotals,
+      sitePlanId: null, // Déconnecté du plan de l'ancien devis pour éviter tout chevauchement
       // Give each item a new unique ID so they are fully independent from the original
       items: (deepClone.items || []).map(item => ({
         ...item,
-        id: `ITEM-${Date.now()}-${Math.floor(Math.random() * 10000)}`
+        id: `ITEM-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+        siteMeasurements: []
       }))
     };
     
+    // Nettoyer toute référence à une commande existante
+    delete newQuote.orderId;
+    delete newQuote.quoteId;
+    delete newQuote.batches;
+
     setData(prev => ({
       ...prev,
       quotes: [...(prev.quotes || []), newQuote]
@@ -352,9 +346,24 @@ const ClientsModule = ({ data, setData, onOpenQuote, quoteSettings }) => {
                           <button onClick={() => handleDuplicateQuote(q)} className="btn" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', color: '#6366f1', borderColor: '#6366f1' }} title="Dupliquer">
                             <Copy size={14} />
                           </button>
-                          <button onClick={() => handleConvertToOrder(q)} className="btn btn-primary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', background: '#10b981' }} title="Transformer en Commande">
-                            <CheckCircle size={14} /> Commande
-                          </button>
+                          {(() => {
+                            const existingOrder = (data.orders || []).find(o => o.quoteId === q.id);
+                            if (existingOrder) {
+                              return (
+                                <span style={{ padding: '0.3rem 0.5rem', fontSize: '0.75rem', fontWeight: 800, background: '#dcfce7', color: '#15803d', borderRadius: '4px', border: '1px solid #bbf7d0', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                                  📦 {existingOrder.id}
+                                </span>
+                              );
+                            }
+                            if (q.status !== 'Confirmé') {
+                              return (
+                                <button onClick={() => handleConvertToOrder(q)} className="btn btn-primary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', background: '#10b981' }} title="Transformer en Commande">
+                                  <CheckCircle size={14} /> Commande
+                                </button>
+                              );
+                            }
+                            return null;
+                          })()}
                         </div>
                       </td>
                     </tr>
@@ -505,9 +514,24 @@ const ClientsModule = ({ data, setData, onOpenQuote, quoteSettings }) => {
                                         <button onClick={() => handleDuplicateQuote(q)} className="btn" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', color: '#6366f1', borderColor: '#6366f1' }} title="Dupliquer">
                                           <Copy size={12} /> Copie
                                         </button>
-                                        <button onClick={() => handleConvertToOrder(q)} className="btn btn-primary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', background: '#10b981' }}>
-                                          Commander
-                                        </button>
+                                        {(() => {
+                                          const existingOrder = (data.orders || []).find(o => o.quoteId === q.id);
+                                          if (existingOrder) {
+                                            return (
+                                              <span style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', fontWeight: 800, background: '#dcfce7', color: '#15803d', borderRadius: '4px', border: '1px solid #bbf7d0', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                                                📦 {existingOrder.id}
+                                              </span>
+                                            );
+                                          }
+                                          if (q.status !== 'Confirmé') {
+                                            return (
+                                              <button onClick={() => handleConvertToOrder(q)} className="btn btn-primary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', background: '#10b981' }}>
+                                                Commander
+                                              </button>
+                                            );
+                                          }
+                                          return null;
+                                        })()}
                                       </div>
                                     </td>
                                   </tr>

@@ -158,26 +158,32 @@ const QuotesModule = ({ data, setData, quoteSettings, onOpenQuote, onNewQuote })
     };
   }, [data.quotes, quoteSettings]);
 
-  // Actions
+  // Actions (1 Devis = 1 Commande unique)
   const handleConvertToOrder = (quote) => {
+    const orders = data.orders || [];
+    const existingOrder = orders.find(o => o.quoteId === quote.id);
+    if (existingOrder) {
+      alert(`Ce devis est déjà associé à la commande active ${existingOrder.number || existingOrder.id}. Retrouvez-la dans l'onglet "Commandes".`);
+      return;
+    }
+
     if (!window.confirm(`Voulez-vous transformer le devis ${quote.number} en commande active ?`)) return;
     
     setData(prev => {
-      const orders = prev.orders || [];
-      const existingOrder = orders.find(o => o.quoteId === quote.id);
-      let orderId = existingOrder ? existingOrder.id : null;
-      if (!orderId) {
-        const ids = orders
-          .map(o => o.id)
-          .filter(id => id && id.startsWith('CMD-'))
-          .map(id => parseInt(id.split('-')[1], 10))
-          .filter(num => !isNaN(num));
-        let candidate = 1;
-        while (ids.includes(candidate)) {
-          candidate++;
-        }
-        orderId = `CMD-${String(candidate).padStart(2, '0')}`;
+      const currentOrders = prev.orders || [];
+      const alreadyHasOrder = currentOrders.find(o => o.quoteId === quote.id);
+      if (alreadyHasOrder) return prev; // Sécurité absolue anti-doublon
+
+      const ids = currentOrders
+        .map(o => o.id)
+        .filter(id => id && id.startsWith('CMD-'))
+        .map(id => parseInt(id.split('-')[1], 10))
+        .filter(num => !isNaN(num));
+      let candidate = 1;
+      while (ids.includes(candidate)) {
+        candidate++;
       }
+      const orderId = `CMD-${String(candidate).padStart(2, '0')}`;
 
       const newOrder = {
         ...quote,
@@ -187,31 +193,14 @@ const QuotesModule = ({ data, setData, quoteSettings, onOpenQuote, onNewQuote })
         createdAt: new Date().toISOString(),
         status: 'Confirmé',
         batches: [],
-        items: (quote.items || []).map(item => {
-          const existingItem = existingOrder?.items?.find(i => i.id === item.id);
-          return {
-            ...item,
-            siteMeasurements: existingItem ? (existingItem.siteMeasurements || []) : []
-          };
-        })
+        items: (quote.items || []).map(item => ({
+          ...item,
+          siteMeasurements: []
+        }))
       };
 
       const quotes = (prev.quotes || []).map(q => q.id === quote.id ? { ...q, status: 'Confirmé', _lastModified: new Date().toISOString() } : q);
-      const orderExists = orders.some(o => o.id === orderId);
-      
-      let finalOrders;
-      if (orderExists) {
-        finalOrders = orders.map(o => {
-          if (o.id === orderId) {
-            const updated = { ...o, ...newOrder, batches: o.batches || [], _lastModified: new Date().toISOString() };
-            delete updated._deleted;
-            return updated;
-          }
-          return o;
-        });
-      } else {
-        finalOrders = [...orders, newOrder];
-      }
+      const finalOrders = [...currentOrders, newOrder];
 
       const updatedIds = finalOrders
         .map(o => o.id)
@@ -249,11 +238,18 @@ const QuotesModule = ({ data, setData, quoteSettings, onOpenQuote, onNewQuote })
       createdAt: new Date().toISOString(),
       validatedAt: null,
       totals: calculatedTotals,
+      sitePlanId: null, // Déconnecté du plan de l'ancien devis pour éviter tout chevauchement
       items: (deepClone.items || []).map(item => ({
         ...item,
-        id: `ITEM-${Date.now()}-${Math.floor(Math.random() * 10000)}`
+        id: `ITEM-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+        siteMeasurements: [] // Cotes chantier vierges pour le nouveau devis
       }))
     };
+
+    // Nettoyer toute référence à une commande existante
+    delete newQuote.orderId;
+    delete newQuote.quoteId;
+    delete newQuote.batches;
     
     setData(prev => ({
       ...prev,
@@ -758,27 +754,54 @@ const QuotesModule = ({ data, setData, quoteSettings, onOpenQuote, onNewQuote })
                           <Copy size={14} />
                         </button>
 
-                        {/* Transformer en Commande */}
-                        {q.status !== 'Confirmé' && (
-                          <button
-                            onClick={() => handleConvertToOrder(q)}
-                            className="btn btn-primary"
-                            style={{ 
-                              padding: '0.4rem 0.65rem', 
-                              fontSize: '0.78rem', 
-                              fontWeight: 700, 
-                              background: '#10b981', 
-                              borderColor: '#10b981',
-                              color: 'white',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '0.3rem'
-                            }}
-                            title="Transformer en commande"
-                          >
-                            <ShoppingBag size={13} /> Commande
-                          </button>
-                        )}
+                        {/* Transformer en Commande ou Badge Commande existante */}
+                        {(() => {
+                          const existingOrder = (data.orders || []).find(o => o.quoteId === q.id);
+                          if (existingOrder) {
+                            return (
+                              <span 
+                                style={{ 
+                                  padding: '0.35rem 0.55rem', 
+                                  fontSize: '0.75rem', 
+                                  fontWeight: 800, 
+                                  background: '#dcfce7', 
+                                  color: '#15803d', 
+                                  borderRadius: '6px',
+                                  border: '1px solid #bbf7d0',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.25rem'
+                                }}
+                                title={`Commande active liée : ${existingOrder.id}`}
+                              >
+                                📦 {existingOrder.id}
+                              </span>
+                            );
+                          }
+                          if (q.status !== 'Confirmé') {
+                            return (
+                              <button
+                                onClick={() => handleConvertToOrder(q)}
+                                className="btn btn-primary"
+                                style={{ 
+                                  padding: '0.4rem 0.65rem', 
+                                  fontSize: '0.78rem', 
+                                  fontWeight: 700, 
+                                  background: '#10b981', 
+                                  borderColor: '#10b981',
+                                  color: 'white',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '0.3rem'
+                                }}
+                                title="Transformer en commande"
+                              >
+                                <ShoppingBag size={13} /> Commande
+                              </button>
+                            );
+                          }
+                          return null;
+                        })()}
 
                         {/* Supprimer */}
                         {(!q.status || q.status === 'Brouillon') && (

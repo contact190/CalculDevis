@@ -2734,13 +2734,13 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
           ? prev.quotes.map(q => q.id === finalQuote.id ? finalQuote : q)
           : [...(prev.quotes || []), finalQuote];
 
-        // Update orders list if status is "Confirmé"
+        // Update orders list if status is "Confirmé" (1 Devis = 1 Commande unique et verrouillée)
         let orders = prev.orders || [];
         if (finalQuote.status === 'Confirmé') {
           const existingOrder = orders.find(o => o.quoteId === finalQuote.id);
-          let orderId = existingOrder ? existingOrder.id : null;
           
-          if (!orderId) {
+          // Si aucune commande n'existe encore pour ce devis, on crée la commande
+          if (!existingOrder) {
             const ids = orders
               .map(o => o.id)
               .filter(id => id && id.startsWith('CMD-'))
@@ -2750,16 +2750,16 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
             while (ids.includes(candidate)) {
               candidate++;
             }
-            orderId = `CMD-${String(candidate).padStart(2, '0')}`;
+            const orderId = `CMD-${String(candidate).padStart(2, '0')}`;
+            orders = [...orders, { 
+              ...finalQuote, 
+              id: orderId, 
+              quoteId: finalQuote.id, 
+              batches: [], 
+              createdAt: new Date().toISOString() 
+            }];
           }
-
-          const existsInOrders = orders.some(o => o.id === orderId);
-          if (!existsInOrders) {
-            orders = [...orders, { ...finalQuote, id: orderId, quoteId: finalQuote.id, batches: [], createdAt: new Date().toISOString() }];
-          } else {
-            // Update order info but preserve existing batches and site measurements
-            orders = orders.map(o => o.id === orderId ? { ...o, ...finalQuote, id: orderId, quoteId: finalQuote.id, batches: o.batches || [] } : o);
-          }
+          // Note : Si la commande existe déjà pour ce devis, elle est verrouillée et autonome (aucun écrasement)
         }
 
         const updatedIds = orders
