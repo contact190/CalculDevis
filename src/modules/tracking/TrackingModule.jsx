@@ -123,19 +123,14 @@ export default function TrackingModule({ data, setData, quoteSettings }) {
     return false;
   }, []);
 
-  // Filter 1: COMMANDES EN COURS UNIQUEMENT (pas les finies)
+  // Filter 1: Commandes actives pour la gestion et le suivi de fabrication
   const activeOrders = useMemo(() => {
     return (data?.orders || []).filter(o => {
-      if (o.status === 'Terminé' || o.status === 'Livré') return false;
-      
-      // Si la commande a des lots et qu'ils sont TOUS terminés, elle est considérée finie
-      if (o.batches && o.batches.length > 0) {
-        const allBatchesDone = o.batches.every(b => isBatchCompleted(b));
-        if (allBatchesDone) return false;
-      }
-      return o.items && o.items.length > 0;
+      // Exclure uniquement les commandes complètement archivées ou déjà livrées au client
+      if (o.status === 'Archivé' || o.status === 'Livré') return false;
+      return (o.items && o.items.length > 0) || (o.batches && o.batches.length > 0);
     });
-  }, [data?.orders, isBatchCompleted]);
+  }, [data?.orders]);
 
   // Set default selected order if none or if current becomes invalid
   useEffect(() => {
@@ -163,15 +158,20 @@ export default function TrackingModule({ data, setData, quoteSettings }) {
     return clientPlans.find(p => p.id === selectedOrder.sitePlanId || p.quoteId === selectedOrder.quoteId) || null;
   }, [clientPlans, selectedOrder]);
 
-  // Filter 2: LOTS NON FINIS UNIQUEMENT (pour la sélection de travail)
+  // Tous les lots de fabrication de la commande sélectionnée
+  const orderBatches = useMemo(() => {
+    return selectedOrder?.batches || [];
+  }, [selectedOrder]);
+
+  // Lots non finis (pour filtres ou indicateurs)
   const activeBatches = useMemo(() => {
-    return (selectedOrder?.batches || []).filter(b => !isBatchCompleted(b));
-  }, [selectedOrder, isBatchCompleted]);
+    return orderBatches.filter(b => !isBatchCompleted(b));
+  }, [orderBatches, isBatchCompleted]);
 
   // LOTS TERMINÉS DE CETTE COMMANDE (pour le popup)
   const completedBatchesForOrder = useMemo(() => {
-    return (selectedOrder?.batches || []).filter(b => isBatchCompleted(b));
-  }, [selectedOrder, isBatchCompleted]);
+    return orderBatches.filter(b => isBatchCompleted(b));
+  }, [orderBatches, isBatchCompleted]);
 
   // LOTS TERMINÉS GLOBAUX (toutes commandes)
   const allCompletedBatches = useMemo(() => {
@@ -187,16 +187,19 @@ export default function TrackingModule({ data, setData, quoteSettings }) {
     return list;
   }, [data?.orders, data?.clients, isBatchCompleted]);
 
-  // Set default batch from activeBatches
+  // Set default batch from orderBatches (maintenir le lot sélectionné même quand il passe à Terminé !)
   useEffect(() => {
-    if (activeBatches.length > 0) {
-      if (!selectedBatchId || !activeBatches.some(b => b.id === selectedBatchId)) {
-        setSelectedBatchId(activeBatches[0].id);
+    if (orderBatches.length > 0) {
+      if (selectedBatchId && orderBatches.some(b => b.id === selectedBatchId)) {
+        return; // Le lot sélectionné est toujours valide dans cette commande, ne pas le désélectionner !
       }
+      // Sinon sélectionner le premier lot non fini, ou le premier lot
+      const firstActive = orderBatches.find(b => !isBatchCompleted(b));
+      setSelectedBatchId(firstActive ? firstActive.id : orderBatches[0].id);
     } else {
       setSelectedBatchId('');
     }
-  }, [activeBatches, selectedBatchId]);
+  }, [orderBatches, selectedBatchId, isBatchCompleted]);
 
   const selectedBatch = useMemo(() => {
     if (!selectedOrder) return null;
@@ -466,13 +469,24 @@ export default function TrackingModule({ data, setData, quoteSettings }) {
             if (b.id !== selectedBatch.id) return b;
             const updated = (b.subLots || []).map(s => {
               if (s.id !== subLotId) return s;
+              const allChecked = {};
+              (s.cadres || []).forEach(c => { allChecked[c.id] = true; });
+              (s.panneaux || []).forEach(p => { allChecked[p.id] = true; });
+              (s.ouvertures || []).forEach(ouv => { allChecked[ouv.id] = true; });
               return {
                 ...s,
                 status: 'Terminé',
-                completedAt: new Date().toISOString()
+                checklist: { ...(s.checklist || {}), ...allChecked },
+                completedAt: s.completedAt || new Date().toISOString()
               };
             });
-            return { ...b, subLots: updated };
+            const allSubLotsDone = updated.length > 0 && updated.every(s => s.status === 'Terminé');
+            return { 
+              ...b, 
+              subLots: updated,
+              subLotsApproved: true,
+              status: allSubLotsDone ? 'Terminé' : (b.status === 'Non commencé' ? 'En cours' : b.status)
+            };
           });
         }
 
@@ -480,10 +494,15 @@ export default function TrackingModule({ data, setData, quoteSettings }) {
         if (!selectedBatch && o.subLots) {
           newOrderSubLots = newOrderSubLots.map(s => {
             if (s.id !== subLotId) return s;
+            const allChecked = {};
+            (s.cadres || []).forEach(c => { allChecked[c.id] = true; });
+            (s.panneaux || []).forEach(p => { allChecked[p.id] = true; });
+            (s.ouvertures || []).forEach(ouv => { allChecked[ouv.id] = true; });
             return {
               ...s,
               status: 'Terminé',
-              completedAt: new Date().toISOString()
+              checklist: { ...(s.checklist || {}), ...allChecked },
+              completedAt: s.completedAt || new Date().toISOString()
             };
           });
         }
@@ -492,6 +511,7 @@ export default function TrackingModule({ data, setData, quoteSettings }) {
           ...o,
           batches: newBatches,
           subLots: newOrderSubLots,
+          subLotsApproved: true,
           _lastModified: new Date().toISOString()
         };
       });
@@ -1176,12 +1196,13 @@ export default function TrackingModule({ data, setData, quoteSettings }) {
                   }}
                   style={{ width: '100%', fontSize: '0.9rem', fontWeight: 600, padding: '0.6rem' }}
                 >
-                  <option value="">{activeOrders.length === 0 ? '-- Aucune commande en cours --' : '-- Sélectionnez une commande --'}</option>
+                  <option value="">{activeOrders.length === 0 ? '-- Aucune commande active --' : '-- Sélectionnez une commande --'}</option>
                   {activeOrders.map(o => {
                     const c = (data?.clients || []).find(cl => cl.id === o.clientId);
+                    const isAllDone = (o.batches && o.batches.length > 0 && o.batches.every(b => isBatchCompleted(b))) || o.status === 'Terminé';
                     return (
                       <option key={o.id} value={o.id}>
-                        Commande {o.id} — {c?.nom || 'Client'} ({o.batches?.length || 0} lot(s))
+                        {isAllDone ? '✅ [Terminé] ' : ''}Commande {o.id} — {c?.nom || 'Client'} ({o.batches?.length || 0} lot(s)) {isAllDone ? '✓ 100%' : ''}
                       </option>
                     );
                   })}
@@ -1197,19 +1218,20 @@ export default function TrackingModule({ data, setData, quoteSettings }) {
                   className="input"
                   value={selectedBatchId}
                   onChange={e => setSelectedBatchId(e.target.value)}
-                  disabled={!selectedOrderId || activeBatches.length === 0}
+                  disabled={!selectedOrderId || orderBatches.length === 0}
                   style={{ width: '100%', fontSize: '0.9rem', fontWeight: 600, padding: '0.6rem' }}
                 >
                   <option value="">
-                    {activeBatches.length === 0 
-                      ? (selectedOrder?.batches?.length > 0 ? '-- Tous les lots de cette commande sont terminés --' : '-- Aucun lot lancé --')
-                      : '-- Sélectionnez un lot non fini --'}
+                    {orderBatches.length === 0 
+                      ? '-- Aucun lot de fabrication créé --' 
+                      : '-- Sélectionnez un lot de fabrication --'}
                   </option>
-                  {activeBatches.map(b => {
+                  {orderBatches.map(b => {
                     const count = getBatchArticleCount(b);
+                    const isDone = isBatchCompleted(b);
                     return (
                       <option key={b.id} value={b.id}>
-                        {b.name || b.id} — {count} article{count > 1 ? 's' : ''} ({b.subLots?.length || 0} SL) {b.subLotsApproved ? '🔒 Figé' : ''} {b.destocked ? '📦 Déstocké' : ''}
+                        {isDone ? '✅ [Terminé] ' : ''}{b.name || b.id} — {count} article{count > 1 ? 's' : ''} ({b.subLots?.length || 0} SL) {isDone ? '✓ 100%' : b.subLotsApproved ? '🔒 Figé' : ''} {b.destocked ? '📦 Déstocké' : ''}
                       </option>
                     );
                   })}
@@ -1328,13 +1350,19 @@ export default function TrackingModule({ data, setData, quoteSettings }) {
           }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.2rem' }}>
-                {isSubLotsFrozen ? <Lock size={16} color="#16a34a" /> : <Sliders size={16} color="#d97706" />}
-                <strong style={{ fontSize: '0.9rem', color: isSubLotsFrozen ? '#166534' : '#92400e' }}>
-                  {isSubLotsFrozen ? 'Découpage Approuvé et Figé (Règle stricte respectée)' : 'Découpage Provisoire — En attente d\'approbation'}
+                {isBatchCompleted(selectedBatch) ? <CheckCircle size={16} color="#16a34a" /> : isSubLotsFrozen ? <Lock size={16} color="#16a34a" /> : <Sliders size={16} color="#d97706" />}
+                <strong style={{ fontSize: '0.9rem', color: (isBatchCompleted(selectedBatch) || isSubLotsFrozen) ? '#166534' : '#92400e' }}>
+                  {isBatchCompleted(selectedBatch) 
+                    ? '🎉 Lot 100% Terminé & Validé Atelier (Visible dans l\'onglet Stock Fini)' 
+                    : isSubLotsFrozen 
+                    ? 'Découpage Approuvé et Figé (Règle stricte respectée)' 
+                    : 'Découpage Provisoire — En attente d\'approbation'}
                 </strong>
               </div>
-              <p style={{ margin: 0, fontSize: '0.78rem', color: isSubLotsFrozen ? '#15803d' : '#b45309' }}>
-                {isSubLotsFrozen 
+              <p style={{ margin: 0, fontSize: '0.78rem', color: (isBatchCompleted(selectedBatch) || isSubLotsFrozen) ? '#15803d' : '#b45309' }}>
+                {isBatchCompleted(selectedBatch)
+                  ? 'Tous les sous-lots de ce lot ont été fabriqués et contrôlés. Les éléments sont disponibles dans l\'onglet « Stock Fini ».'
+                  : isSubLotsFrozen 
                   ? 'La découpe de ce lot est définitivement verrouillée en production. Les sous-lots peuvent être imprimés et fabriqués.'
                   : 'Vérifiez la répartition ci-dessous, puis cliquez sur « Approuver & Figer » pour verrouiller définitivement la découpe.'}
               </p>

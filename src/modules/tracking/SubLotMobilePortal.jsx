@@ -37,16 +37,30 @@ export default function SubLotMobilePortal({ data, setData, isOnline, isSyncing 
     return (data?.clients || []).find(c => c.id === order.clientId);
   }, [data?.clients, order]);
 
-  // Find batch
+  // Find batch (with fallback to search by sublotId across all batches)
   const batch = useMemo(() => {
     if (!order) return null;
-    return (order.batches || []).find(b => b.id === batchId);
-  }, [order, batchId]);
+    if (batchId) {
+      const found = (order.batches || []).find(b => b.id === batchId);
+      if (found) return found;
+    }
+    if (sublotId) {
+      return (order.batches || []).find(b => (b.subLots || []).some(s => s.id === sublotId)) || null;
+    }
+    return null;
+  }, [order, batchId, sublotId]);
 
   // Find sub-lot from batch or order
   const subLot = useMemo(() => {
     if (batch && batch.subLots) {
-      return (batch.subLots || []).find(s => s.id === sublotId);
+      const found = (batch.subLots || []).find(s => s.id === sublotId);
+      if (found) return found;
+    }
+    if (order && order.batches) {
+      for (const b of order.batches) {
+        const found = (b.subLots || []).find(s => s.id === sublotId);
+        if (found) return found;
+      }
     }
     if (order && order.subLots) {
       return (order.subLots || []).find(s => s.id === sublotId);
@@ -61,24 +75,28 @@ export default function SubLotMobilePortal({ data, setData, isOnline, isSyncing 
       const updatedOrders = (prev.orders || []).map(o => {
         if (o.id !== order.id) return o;
         
-        let newBatches = o.batches || [];
-        if (batch) {
-          newBatches = newBatches.map(b => {
-            if (b.id !== batch.id) return b;
-            const updatedSubLots = (b.subLots || []).map(s => s.id === updatedSubLot.id ? updatedSubLot : s);
-            return { ...b, subLots: updatedSubLots };
-          });
-        }
+        let batchFound = false;
+        let newBatches = (o.batches || []).map(b => {
+          const hasThisSubLot = (b.id === batch?.id) || (b.subLots || []).some(s => s.id === updatedSubLot.id);
+          if (!hasThisSubLot) return b;
+          batchFound = true;
+          const updatedSubLots = (b.subLots || []).map(s => s.id === updatedSubLot.id ? updatedSubLot : s);
+          const allSubLotsDone = updatedSubLots.length > 0 && updatedSubLots.every(s => s.status === 'Terminé');
+          return { 
+            ...b, 
+            subLots: updatedSubLots,
+            subLotsApproved: true,
+            status: allSubLotsDone ? 'Terminé' : (b.status === 'Non commencé' ? 'En cours' : b.status)
+          };
+        });
 
-        let newOrderSubLots = o.subLots || [];
-        if (!batch && o.subLots) {
-          newOrderSubLots = newOrderSubLots.map(s => s.id === updatedSubLot.id ? updatedSubLot : s);
-        }
+        let newOrderSubLots = (o.subLots || []).map(s => s.id === updatedSubLot.id ? updatedSubLot : s);
 
         return {
           ...o,
           batches: newBatches,
           subLots: newOrderSubLots,
+          subLotsApproved: true,
           _lastModified: new Date().toISOString()
         };
       });
@@ -153,6 +171,7 @@ export default function SubLotMobilePortal({ data, setData, isOnline, isSyncing 
       ...subLot,
       checklist: { ...(subLot.checklist || {}), ...allChecked },
       status: 'Terminé',
+      startedAt: subLot.startedAt || new Date().toISOString(),
       completedAt: new Date().toISOString(),
       completedBy: 'Opérateur Atelier'
     };

@@ -49,20 +49,14 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
     }));
   };
 
-  // Helper to check if a sub-lot is approved, launched AND finished in workshop (Gestion & Suivi)
-  const isSubLotFinished = useCallback((sl, isApproved) => {
+  // Helper to check if a sub-lot is finished in workshop (Gestion & Suivi / Atelier)
+  const isSubLotFinished = useCallback((sl) => {
     if (!sl) return false;
-    // 1. Découpage impérativement approuvé
-    if (!isApproved) return false;
 
-    // 2. Doit avoir été lancé
-    const wasLaunched = !!sl.startedAt || sl.status === 'En cours' || sl.status === 'Terminé';
-    if (!wasLaunched) return false;
-
-    // 3. Doit être FINI (Terminé en atelier)
+    // 1. Statut formellement Terminé ou date de fin renseignée
     if (sl.status === 'Terminé' || !!sl.completedAt) return true;
 
-    // Contrôle si checklist 100% complétée
+    // 2. Contrôle si checklist 100% complétée (avec fabrication commencée)
     const checklist = sl.checklist || {};
     const isSliding = sl.family === 'coulissant';
     const totalItems = isSliding
@@ -73,7 +67,7 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
       const checkedCount = isSliding
         ? (sl.cadres || []).filter(c => checklist[c.id]).length + (sl.panneaux || []).filter(p => checklist[p.id]).length
         : (sl.ouvertures || []).filter(o => checklist[o.id]).length;
-      if (checkedCount >= totalItems) return true;
+      if (checkedCount >= totalItems && (sl.status === 'En cours' || !!sl.startedAt)) return true;
     }
 
     return false;
@@ -89,7 +83,7 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
     return false;
   }, []);
 
-  // Helper to extract all elements (cadres, panneaux, ouvertures) from an order (sous-lots approuvés, lancés et finis)
+  // Helper to extract all elements (cadres, panneaux, ouvertures) from an order (sous-lots terminés)
   const getOrderElements = useCallback((order) => {
     if (!order) return { cadres: [], panneaux: [], all: [], lots: [] };
 
@@ -97,19 +91,17 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
     const panneaux = [];
     const lotsMap = new Map();
 
-    // 1. Ne retenir UNIQUEMENT que les sous-lots APPROUVÉS, LANCÉS et FINIS dans Gestion & Suivi
+    // 1. Ne retenir UNIQUEMENT que les sous-lots FINIS dans Gestion & Suivi / Atelier
     const allSubLots = [];
     (order.batches || []).forEach(b => {
-      const isApproved = !!b.subLotsApproved;
       (b.subLots || []).forEach(sl => {
-        if (isSubLotFinished(sl, isApproved)) {
+        if (isSubLotFinished(sl)) {
           allSubLots.push({ ...sl, batchName: b.name || `Lot ${b.id}` });
         }
       });
     });
-    const isOrderApproved = !!order.subLotsApproved;
     (order.subLots || []).forEach(sl => {
-      if (isSubLotFinished(sl, isOrderApproved) && !allSubLots.some(s => s.id === sl.id)) {
+      if (isSubLotFinished(sl) && !allSubLots.some(s => s.id === sl.id)) {
         allSubLots.push({ ...sl, batchName: 'Sous-Lot Général' });
       }
     });
@@ -127,7 +119,7 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
 
       // Cadres
       (sl.cadres || []).forEach(c => {
-        const isDone = !!checklist[c.id] || !!order.finishedGoodsStock?.[c.id];
+        const isDone = sl.status === 'Terminé' || !!checklist[c.id] || !!order.finishedGoodsStock?.[c.id];
         const glassStatus = order.glassStatuses?.[c.id] || 'non_commande';
         cadres.push({
           id: c.id,
@@ -147,7 +139,7 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
 
       // Panneaux (coulissant)
       (sl.panneaux || []).forEach(p => {
-        const isDone = !!checklist[p.id] || !!order.finishedGoodsStock?.[p.id];
+        const isDone = sl.status === 'Terminé' || !!checklist[p.id] || !!order.finishedGoodsStock?.[p.id];
         const glassStatus = order.glassStatuses?.[p.id] || 'non_commande';
         panneaux.push({
           id: p.id,
@@ -166,7 +158,7 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
 
       // Ouvertures (ouvrant/fixe)
       (sl.ouvertures || []).forEach(o => {
-        const isDone = !!checklist[o.id] || !!order.finishedGoodsStock?.[o.id];
+        const isDone = sl.status === 'Terminé' || !!checklist[o.id] || !!order.finishedGoodsStock?.[o.id];
         const glassStatus = order.glassStatuses?.[o.id] || 'non_commande';
         cadres.push({
           id: o.id,
@@ -243,15 +235,15 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
     });
   };
 
-  // Commandes actives ayant des produits finis (sous-lots approuvés, lancés et finis)
+  // Commandes actives ayant des produits finis (sous-lots terminés)
   const activeLaunchedOrders = useMemo(() => {
     return (data?.orders || []).filter(o => {
-      // 1. Exclure les commandes archivées ou déjà livrées au client
-      if (['Livré', 'Terminé / Historique'].includes(o.status)) {
+      // 1. Exclure uniquement les commandes archivées ou déjà livrées au client
+      if (['Livré', 'Archivé'].includes(o.status)) {
         return false;
       }
 
-      // 2. Doit impérativement contenir au moins un sous-lot approuvé, lancé et fini (Produit Fini)
+      // 2. Doit impérativement contenir au moins un sous-lot fini (Produit Fini)
       const elements = getOrderElements(o);
       if (elements.all.length === 0) {
         return false;
