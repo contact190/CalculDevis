@@ -76,7 +76,7 @@ const syncSitePlanToMeasurements = (sitePlan, items) => {
           H: v.H !== undefined && v.H !== '' ? parseFloat(v.H) : item.config.H,
           wallDepth: v.wallDepth !== undefined && v.wallDepth !== '' ? parseFloat(v.wallDepth) : '',
           handleHeight: v.handleHeight !== undefined && v.handleHeight !== '' ? parseFloat(v.handleHeight) : '',
-          openingDirection: v.openingDirection || undefined,
+          openingDirection: item.config.openingDirection || undefined,
           optionalSides: v.optionalSides !== undefined ? v.optionalSides : undefined,
           qty: 1,
           label: label,
@@ -1423,7 +1423,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                   ...item.config,
                                   L: v.L !== undefined && v.L !== '' ? parseFloat(v.L) : item.config.L,
                                   H: v.H !== undefined && v.H !== '' ? parseFloat(v.H) : item.config.H,
-                                  openingDirection: v.openingDirection || item.config.openingDirection || 'gauche',
+                                  openingDirection: item.config.openingDirection || 'gauche',
                                   hasShutter: v.shutter !== undefined ? !!v.shutter : item.config.hasShutter,
                                   shutterConfig: v.shutter ? {
                                     ...(item.config.shutterConfig || {}),
@@ -1533,17 +1533,30 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                           />
                                         </div>
                                         <div>
-                                          <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '0.25rem' }}>Sens Ouv.</label>
-                                          <select
-                                            className="input"
-                                            value={v.openingDirection || item.config.openingDirection || ''}
-                                            onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'openingDirection', e.target.value)}
-                                            style={{ fontSize: '0.85rem', padding: '0.35rem 0.6rem' }}
-                                          >
-                                            <option value="">Auto ({item.config.openingDirection || 'gauche'})</option>
-                                            <option value="gauche">Gauche</option>
-                                            <option value="droit">Droit</option>
-                                          </select>
+                                          <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '0.25rem' }}>Sens d'ouverture</label>
+                                          <div style={{
+                                            fontSize: '0.82rem',
+                                            padding: '0.35rem 0.6rem',
+                                            background: '#f8fafc',
+                                            border: '1px solid #cbd5e1',
+                                            borderRadius: '0.375rem',
+                                            fontWeight: 700,
+                                            color: '#1e293b',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            minHeight: '34px'
+                                          }}>
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                                              <span>🚪</span>
+                                              <span style={{ textTransform: 'capitalize' }}>
+                                                {item.config.openingDirection ? (item.config.openingDirection.toLowerCase() === 'droit' ? 'Droit' : 'Gauche') : 'Gauche'}
+                                              </span>
+                                            </span>
+                                            <span style={{ fontSize: '0.68rem', color: '#475569', fontWeight: 600, background: '#e2e8f0', padding: '0.15rem 0.4rem', borderRadius: '0.25rem' }}>
+                                              Fixé au devis
+                                            </span>
+                                          </div>
                                         </div>
                                       </div>
 

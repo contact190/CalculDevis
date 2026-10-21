@@ -88,7 +88,7 @@ const syncSitePlanToMeasurements = (sitePlan, items) => {
           H: v.H !== undefined && v.H !== '' ? parseFloat(v.H) : item.config.H,
           wallDepth: v.wallDepth !== undefined && v.wallDepth !== '' ? parseFloat(v.wallDepth) : '',
           handleHeight: v.handleHeight !== undefined && v.handleHeight !== '' ? parseFloat(v.handleHeight) : '',
-          openingDirection: v.openingDirection || undefined,
+          openingDirection: item.config.openingDirection || undefined,
           optionalSides: v.optionalSides !== undefined ? v.optionalSides : undefined,
           qty: 1,
           label: label,
@@ -718,7 +718,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                     handleHeight: v.handleHeight !== undefined && v.handleHeight !== '' ? parseFloat(v.handleHeight) : '',
                     // optionalSides: undefined = Auto (keep quote config), object = technician override
                     optionalSides: v.optionalSides !== undefined ? v.optionalSides : undefined,
-                    openingDirection: v.openingDirection || undefined,
+                    openingDirection: batchItem.config.openingDirection || undefined,
                     qty: 1,
                     label: `${f.name} - ${a.name} - ${v.name}`,
                     shutterList: shutterList,
@@ -1410,7 +1410,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                       ...item.config,
                                       L: v.L !== undefined && v.L !== '' ? parseFloat(v.L) : item.config.L,
                                       H: v.H !== undefined && v.H !== '' ? parseFloat(v.H) : item.config.H,
-                                      openingDirection: v.openingDirection || item.config.openingDirection || 'gauche',
+                                      openingDirection: item.config.openingDirection || 'gauche',
                                       hasShutter: v.shutter !== undefined ? !!v.shutter : item.config.hasShutter,
                                       shutterConfig: v.shutter ? {
                                         ...(item.config.shutterConfig || {}),
@@ -1499,16 +1499,28 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                     </div>
                                     <div style={{ gridColumn: '1 / -1' }}>
                                       <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '0.25rem' }}>SENS D'OUVERTURE</label>
-                                      <select
-                                        className="input"
-                                        value={v.openingDirection || item.config.openingDirection || ''}
-                                        onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'openingDirection', e.target.value)}
-                                        style={{ fontSize: '0.9rem', padding: '0.5rem', border: '1.5px solid #cbd5e1', fontWeight: 800, textAlign: 'center' }}
-                                      >
-                                        <option value="">Auto ({item.config.openingDirection || 'gauche'})</option>
-                                        <option value="gauche">Gauche</option>
-                                        <option value="droit">Droit</option>
-                                      </select>
+                                      <div style={{
+                                        fontSize: '0.88rem',
+                                        padding: '0.45rem 0.75rem',
+                                        background: '#f8fafc',
+                                        border: '1.5px solid #cbd5e1',
+                                        borderRadius: '0.375rem',
+                                        fontWeight: 700,
+                                        color: '#1e293b',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between'
+                                      }}>
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem' }}>
+                                          <span>🚪</span>
+                                          <span style={{ textTransform: 'capitalize' }}>
+                                            {item.config.openingDirection ? (item.config.openingDirection.toLowerCase() === 'droit' ? 'Droit' : 'Gauche') : 'Gauche'}
+                                          </span>
+                                        </span>
+                                        <span style={{ fontSize: '0.72rem', color: '#475569', fontWeight: 600, background: '#e2e8f0', padding: '0.2rem 0.5rem', borderRadius: '0.25rem' }}>
+                                          Fixé au devis
+                                        </span>
+                                      </div>
                                     </div>
 
                                     {/* Couvre-joint (optionalSides) */}

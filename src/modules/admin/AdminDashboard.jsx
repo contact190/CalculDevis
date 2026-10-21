@@ -282,11 +282,29 @@ const CollapsibleGroup = ({ title, children, defaultOpen = false, count = 0 }) =
   );
 };
 
+export const ADMIN_TABS = [
+  { id: 'ranges', label: 'Gammes & Limites', sheetName: 'Gammes' },
+  { id: 'categories', label: 'Catégories', sheetName: 'Catégories' },
+  { id: 'profiles', label: 'Profilés & Stocks', sheetName: 'Profilés' },
+  { id: 'glass', label: 'Vitrages', sheetName: 'Vitrages' },
+  { id: 'colors', label: 'Coloris & Plus-values', sheetName: 'Coloris' },
+  { id: 'accessories', label: 'Accessoires', sheetName: 'Accessoires' },
+  { id: 'gaskets', label: 'Joints Vitrage', sheetName: 'Joints Vitrage' },
+  { id: 'glassProfiles', label: 'Parcloses', sheetName: 'Parcloses' },
+  { id: 'compositions', label: 'Compositions (Modèles)', sheetName: 'Modèles' },
+  { id: 'options', label: 'Options & Variantes', sheetName: 'Options' },
+  { id: 'volets', label: 'Volets Roulants', sheetName: 'Volets Roulants' },
+  { id: 'traverses', label: 'Traverses & Unions', sheetName: 'Traverses' },
+  { id: 'extraElements', label: 'Éléments supplémentaires', sheetName: 'Éléments Supp' }
+];
+
 const AdminDashboard = ({ data, setData }) => {
   const [activeTab, setActiveTab] = useState('ranges');
   const [editingAddonItem, setEditingAddonItem] = useState(null); // { family, idx, item }
   const [editingComposition, setEditingComposition] = useState(null);
   const [localIpUrl, setLocalIpUrl] = useState('');
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportSelectedTab, setExportSelectedTab] = useState('profiles');
 
   useEffect(() => {
     // Fetch local IP from the server to generate accurate QR code
@@ -834,12 +852,12 @@ const AdminDashboard = ({ data, setData }) => {
 
           if (category === 'profiles') {
             return {
-              id: normalizedRow.id || normalizedRow.code || generateId('P'),
+              id: normalizedRow.id || normalizedRow.code || normalizedRow.ref || normalizedRow.reference || generateId('P'),
               name: normalizedRow.name || normalizedRow.designation || 'Profilé Importé',
               rangeIds: normalizedRow.gammes ? normalizedRow.gammes.toString().split(',').map(s => s.trim()) : [data.ranges[0].id],
-              weightPerM: parseFloat(normalizedRow.poids) || 0,
-              pricePerKg: parseFloat(normalizedRow.prix) || 0,
-              barLength: parseFloat(normalizedRow.lgbarre) || 6000,
+              weightPerM: parseFloat(normalizedRow.poids || normalizedRow.poidskgm) || 0,
+              pricePerKg: parseFloat(normalizedRow.prix || normalizedRow.price || normalizedRow.prixkg) || 0,
+              barLength: parseFloat(normalizedRow.lgbarre || normalizedRow.lgbarremm) || 6000,
               thickness: parseFloat(normalizedRow.epaisseur) || 0,
               isUnion: !!normalizedRow.isunion,
               colors: normalizedRow.couleurs ? normalizedRow.couleurs.toString().split(',').map(s => s.trim()) : ['RAL9016'],
@@ -850,24 +868,24 @@ const AdminDashboard = ({ data, setData }) => {
           
           if (category === 'accessories') {
             return {
-              id: normalizedRow.id || normalizedRow.code || generateId('A'),
+              id: normalizedRow.id || normalizedRow.code || normalizedRow.ref || normalizedRow.reference || generateId('A'),
               name: normalizedRow.name || normalizedRow.designation || 'Accessoire Importé',
               rangeIds: normalizedRow.gammes ? normalizedRow.gammes.toString().split(',').map(s => s.trim()) : [data.ranges[0].id],
               unit: normalizedRow.unite || 'Unité',
-              price: parseFloat(normalizedRow.prix) || 0,
+              price: parseFloat(normalizedRow.prix || normalizedRow.price) || 0,
               _isNew: true
             };
           }
 
           if (category === 'glass') {
             return {
-              id: normalizedRow.id || normalizedRow.code || generateId('V'),
+              id: normalizedRow.id || normalizedRow.code || normalizedRow.ref || normalizedRow.reference || generateId('V'),
               name: normalizedRow.name || normalizedRow.designation || 'Vitrage Importé',
               type: (normalizedRow.type || 'SIMPLE').toUpperCase(),
               composition: normalizedRow.composition || '4',
               specification: normalizedRow.specification || 'Standard',
-              thickness: parseFloat(normalizedRow.epaisseur) || 4,
-              pricePerM2: parseFloat(normalizedRow.prix) || 0,
+              thickness: parseFloat(normalizedRow.epaisseur || normalizedRow.epaisseurmm) || 4,
+              pricePerM2: parseFloat(normalizedRow.prix || normalizedRow.price || normalizedRow.prixm2) || 0,
               _isNew: true
             };
           }
@@ -889,13 +907,256 @@ const AdminDashboard = ({ data, setData }) => {
     reader.readAsBinaryString(file);
   };
 
+  // ─── EXPORT ARTICLES EXCEL HELPER (Ref, Désignation, Prix) ─────────────
+  const getTabArticles = (tabId) => {
+    switch (tabId) {
+      case 'profiles':
+        return (data.profiles || []).map(p => ({
+          Ref: p.reference || p.id || '',
+          Designation: p.name || '',
+          Prix: p.pricePerKg ?? p.price ?? 0,
+          Unite: p.pricePerKg ? 'DZD/Kg' : 'DZD',
+          Prix_Barre: p.pricePerBar || 0,
+          Poids_Kg_M: p.weightPerM || 0,
+          Lg_Barre_mm: p.barLength || 6000,
+          Gammes: (p.rangeIds || (p.rangeId ? [p.rangeId] : [])).filter(Boolean).join(', '),
+          Type: p.category === 'divider' ? 'Jonction' : 'Standard'
+        }));
+
+      case 'accessories':
+        return (data.accessories || []).map(a => ({
+          Ref: a.reference || a.id || '',
+          Designation: a.name || '',
+          Prix: a.price ?? 0,
+          Unite: a.unit || 'Unité',
+          Gammes: (a.rangeIds || (a.rangeId ? [a.rangeId] : [])).filter(Boolean).join(', ')
+        }));
+
+      case 'glass':
+        return (data.glass || []).map(g => ({
+          Ref: g.reference || g.id || '',
+          Designation: g.name || '',
+          Prix: g.pricePerM2 ?? g.price ?? 0,
+          Unite: 'DZD/m²',
+          Type: g.type || 'SIMPLE',
+          Epaisseur_mm: g.thickness || 0,
+          Composition: g.composition || ''
+        }));
+
+      case 'volets': {
+        const shutterFamilies = [
+          { key: 'caissons', label: 'Caissons' },
+          { key: 'lames', label: 'Lames' },
+          { key: 'lameFinales', label: 'Lames Finales' },
+          { key: 'glissieres', label: 'Glissières' },
+          { key: 'axes', label: 'Axes' },
+          { key: 'moteurs', label: 'Moteurs' },
+          { key: 'kits', label: 'Kits Manœuvre' },
+          { key: 'extras', label: 'Composants Divers' }
+        ];
+        const rows = [];
+        shutterFamilies.forEach(fam => {
+          const list = data.shutterComponents?.[fam.key] || [];
+          list.forEach(item => {
+            rows.push({
+              Ref: item.reference || item.id || '',
+              Designation: item.name || '',
+              Prix: item.price ?? 0,
+              Unite: item.priceUnit || 'Unité',
+              Sous_Famille: fam.label,
+              Lg_Barre_mm: item.barLength || '',
+              Details: fam.key === 'caissons' ? `Taille: ${item.size || ''}mm` : fam.key === 'lames' ? `Larg: ${item.width || 39}mm` : ''
+            });
+          });
+        });
+        return rows;
+      }
+
+      case 'traverses':
+        return (data.traverses || []).map(t => ({
+          Ref: t.reference || t.id || '',
+          Designation: t.name || '',
+          Prix: t.price ?? 0,
+          Unite: t.priceUnit || 'ML',
+          Type: t.type || 'horizontale',
+          Profile_Associe: t.profileId || ''
+        }));
+
+      case 'extraElements':
+        return (data.extraElements || []).map(e => ({
+          Ref: e.reference || e.id || '',
+          Designation: e.name || '',
+          Prix: e.pricePerKg ?? e.price ?? 0,
+          Unite: e.priceUnit || 'DZD/Kg',
+          Poids_Kg_M: e.weightPerM || 0,
+          Gammes: (e.rangeIds || []).filter(Boolean).join(', ')
+        }));
+
+      case 'options':
+        return (data.options || []).map(o => ({
+          Ref: o.reference || o.id || '',
+          Designation: o.name || '',
+          Prix: o.price ?? 0,
+          Unite: 'Unité',
+          Accessoire_Inclus: o.addAccessoryId || '',
+          Remplace_Accessoire: o.removeAccessoryId || '',
+          Gammes: (o.rangeIds || []).filter(Boolean).join(', ')
+        }));
+
+      case 'colors':
+        return (data.colors || []).map(c => ({
+          Ref: c.id || '',
+          Designation: c.name || '',
+          Prix: c.factor ?? 1,
+          Unite: 'Facteur / Coeff',
+          Code_Hex: c.hex || ''
+        }));
+
+      case 'gaskets':
+        return (data.gasketCompatibility || []).map(gc => ({
+          Ref: gc.id || '',
+          Designation: `Joint Gamme ${gc.rangeId} (Vitrage ${gc.glassThickness}mm)`,
+          Prix: data.accessories?.find(a => a.id === gc.gasketId)?.price || 0,
+          Unite: 'ML',
+          Gamme: gc.rangeId || '',
+          Epaisseur_Vitrage: gc.glassThickness || '',
+          Accessoire_Joint: gc.gasketId || '',
+          Formule: gc.formula || ''
+        }));
+
+      case 'glassProfiles':
+        return (data.glassProfileCompatibility || []).map(gpc => ({
+          Ref: gpc.id || '',
+          Designation: `Parclose Gamme ${gpc.rangeId} (Vitrage ${gpc.glassThickness}mm)`,
+          Prix: 0,
+          Unite: 'ML',
+          Gamme: gpc.rangeId || '',
+          Epaisseur_Vitrage: gpc.glassThickness || '',
+          Profile_H: gpc.profileHId || '',
+          Profile_V: gpc.profileVId || ''
+        }));
+
+      case 'compositions':
+        return (data.compositions || []).map(comp => ({
+          Ref: comp.id || '',
+          Designation: comp.name || '',
+          Prix: 0,
+          Unite: 'Châssis',
+          Gamme: comp.rangeId || '',
+          Categorie: comp.categoryId || '',
+          Ouverture: comp.openingType || '',
+          Nb_Composants: comp.elements?.length || 0
+        }));
+
+      case 'ranges':
+        return (data.ranges || []).map(r => ({
+          Ref: r.id || '',
+          Designation: r.name || '',
+          Prix: 0,
+          Unite: 'Gamme',
+          Min_L: r.minL || 0,
+          Max_L: r.maxL || 0,
+          Min_H: r.minH || 0,
+          Max_H: r.maxH || 0
+        }));
+
+      case 'categories':
+        return (data.categories || []).map(cat => ({
+          Ref: cat.id || '',
+          Designation: cat.name || '',
+          Prix: 0,
+          Unite: 'Catégorie'
+        }));
+
+      default:
+        return [];
+    }
+  };
+
+  const setColWidths = (ws, rows) => {
+    if (!rows || rows.length === 0) return;
+    const keys = Object.keys(rows[0]);
+    ws['!cols'] = keys.map(k => {
+      let maxLen = k.length;
+      for (let i = 0; i < Math.min(rows.length, 50); i++) {
+        const val = rows[i][k];
+        if (val !== undefined && val !== null) {
+          maxLen = Math.max(maxLen, String(val).length);
+        }
+      }
+      return { wch: Math.min(Math.max(maxLen + 3, 10), 45) };
+    });
+  };
+
+  const handleExportExcelSingleTab = (tabId) => {
+    try {
+      const tabInfo = ADMIN_TABS.find(t => t.id === tabId) || { id: tabId, label: tabId, sheetName: tabId };
+      const items = getTabArticles(tabId);
+      if (items.length === 0) {
+        alert(`Aucun article trouvé dans l'onglet "${tabInfo.label}".`);
+        return;
+      }
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(items);
+      setColWidths(ws, items);
+      XLSX.utils.book_append_sheet(wb, ws, tabInfo.sheetName.substring(0, 31));
+
+      const today = new Date().toISOString().slice(0, 10);
+      XLSX.writeFile(wb, `articles_${tabId}_${today}.xlsx`);
+    } catch (err) {
+      console.error(err);
+      alert("Erreur lors de l'export Excel.");
+    }
+  };
+
+  const handleExportExcelAllTabs = () => {
+    try {
+      const wb = XLSX.utils.book_new();
+      const today = new Date().toISOString().slice(0, 10);
+      const allArticles = [];
+
+      ADMIN_TABS.forEach(tab => {
+        const items = getTabArticles(tab.id);
+        if (items.length > 0) {
+          const ws = XLSX.utils.json_to_sheet(items);
+          setColWidths(ws, items);
+          XLSX.utils.book_append_sheet(wb, ws, tab.sheetName.substring(0, 31));
+
+          items.forEach(item => {
+            allArticles.push({
+              Sous_Onglet: tab.label,
+              Ref: item.Ref,
+              Designation: item.Designation,
+              Prix: item.Prix,
+              Unite: item.Unite,
+              Gammes: item.Gammes || item.Gamme || '',
+              Details: item.Details || item.Type || item.Sous_Famille || ''
+            });
+          });
+        }
+      });
+
+      if (allArticles.length > 0) {
+        const wsAll = XLSX.utils.json_to_sheet(allArticles);
+        setColWidths(wsAll, allArticles);
+        wb.SheetNames.unshift('Tous les Articles');
+        wb.Sheets['Tous les Articles'] = wsAll;
+      }
+
+      XLSX.writeFile(wb, `catalogue_articles_complet_${today}.xlsx`);
+    } catch (err) {
+      console.error(err);
+      alert("Erreur lors de l'export complet Excel.");
+    }
+  };
+
   return (
     <div className="animate-fade-in">
       <header style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h1 style={{ fontSize: '1.875rem', fontWeight: 700, color: '#1e293b' }}>Administration Système</h1>
           <p style={{ color: '#64748b' }}>Gestion du catalogue, des tarifs et des formules de calcul.</p>
-          <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center', marginTop: '1rem' }}>
+          <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center', marginTop: '1rem', flexWrap: 'wrap' }}>
             <button className="btn btn-secondary" onClick={handleExportJSON} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
               <Download size={16} /> Exporter JSON
             </button>
@@ -911,6 +1172,28 @@ const AdminDashboard = ({ data, setData }) => {
               <FileSpreadsheet size={16} /> Import Excel
               <input type="file" accept=".xlsx, .xls" onChange={handleExcelImport} style={{ display: 'none' }} />
             </label>
+
+            <button 
+              className="btn btn-secondary" 
+              onClick={() => {
+                setExportSelectedTab(activeTab);
+                setShowExportModal(true);
+              }}
+              style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '0.5rem', 
+                fontSize: '0.85rem',
+                backgroundColor: '#f0fdf4',
+                color: '#166534',
+                borderColor: '#86efac',
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+              title="Exporter les articles de chaque sous-onglet en fichier Excel (Ref, Désignation, Prix...)"
+            >
+              <FileSpreadsheet size={16} color="#16a34a" /> Exporter Articles Excel
+            </button>
           </div>
         </div>
         <div style={{ display: 'flex', gap: '1rem' }}>
@@ -967,24 +1250,202 @@ const AdminDashboard = ({ data, setData }) => {
         </div>
       </dialog>
 
+      {/* Export Modal */}
+      {showExportModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          background: 'rgba(15, 23, 42, 0.65)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '1rem',
+          backdropFilter: 'blur(4px)'
+        }}>
+          <div className="glass shadow-2xl" style={{
+            width: '100%',
+            maxWidth: '580px',
+            background: 'white',
+            borderRadius: '1rem',
+            padding: '2rem',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            color: '#1e293b'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#dcfce7', display: 'grid', placeItems: 'center', color: '#16a34a' }}>
+                  <FileSpreadsheet size={22} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#0f172a' }}>Exporter les Articles en Excel</h3>
+                  <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>Format structuré : Ref, Désignation, Prix et spécifications</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowExportModal(false)}
+                className="btn" 
+                style={{ padding: '0.4rem 0.65rem', border: 'none', background: '#f1f5f9', color: '#64748b', borderRadius: '0.5rem', cursor: 'pointer', fontSize: '1rem', fontWeight: 600 }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1.5rem' }}>
+              {/* Option 1: Active Tab Export */}
+              <div style={{
+                border: '1px solid #bbf7d0',
+                background: '#f0fdf4',
+                borderRadius: '0.75rem',
+                padding: '1.25rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.75rem'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: '#16a34a', letterSpacing: '0.05em' }}>
+                      Option 1 : Sous-onglet actif
+                    </span>
+                    <h4 style={{ margin: '0.2rem 0 0', fontSize: '1.05rem', color: '#14532d', fontWeight: 700 }}>
+                      {ADMIN_TABS.find(t => t.id === activeTab)?.label || activeTab}
+                    </h4>
+                  </div>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 600, padding: '0.25rem 0.6rem', background: '#dcfce7', color: '#15803d', borderRadius: '1rem' }}>
+                    {getTabArticles(activeTab).length} article{getTabArticles(activeTab).length > 1 ? 's' : ''}
+                  </span>
+                </div>
+                <p style={{ margin: 0, fontSize: '0.8rem', color: '#166534', lineHeight: 1.4 }}>
+                  Télécharger le fichier Excel contenant uniquement les articles de cet onglet avec les colonnes <strong>Ref, Désignation, Prix</strong>.
+                </p>
+                <button 
+                  className="btn"
+                  onClick={() => {
+                    handleExportExcelSingleTab(activeTab);
+                    setShowExportModal(false);
+                  }}
+                  style={{
+                    backgroundColor: '#16a34a',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '0.5rem',
+                    padding: '0.65rem 1rem',
+                    fontWeight: 600,
+                    fontSize: '0.85rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.5rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <Download size={16} /> Télécharger ({ADMIN_TABS.find(t => t.id === activeTab)?.label || activeTab})
+                </button>
+              </div>
+
+              {/* Option 2: Export All Tabs */}
+              <div style={{
+                border: '1px solid #bfdbfe',
+                background: '#eff6ff',
+                borderRadius: '0.75rem',
+                padding: '1.25rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.75rem'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: '#2563eb', letterSpacing: '0.05em' }}>
+                      Option 2 : Catalogue Complet
+                    </span>
+                    <h4 style={{ margin: '0.2rem 0 0', fontSize: '1.05rem', color: '#1e3a8a', fontWeight: 700 }}>
+                      Tous les sous-onglets (Multi-feuilles)
+                    </h4>
+                  </div>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 600, padding: '0.25rem 0.6rem', background: '#dbeafe', color: '#1d4ed8', borderRadius: '1rem' }}>
+                    Classeur complet
+                  </span>
+                </div>
+                <p style={{ margin: 0, fontSize: '0.8rem', color: '#1e40af', lineHeight: 1.4 }}>
+                  Génère un classeur Excel complet avec une feuille par sous-onglet (Profilés, Accessoires, Vitrages, Volets, Traverses...) et une feuille de synthèse générale.
+                </p>
+                <button 
+                  className="btn"
+                  onClick={() => {
+                    handleExportExcelAllTabs();
+                    setShowExportModal(false);
+                  }}
+                  style={{
+                    backgroundColor: '#2563eb',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '0.5rem',
+                    padding: '0.65rem 1rem',
+                    fontWeight: 600,
+                    fontSize: '0.85rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.5rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <Layers size={16} /> Télécharger Tout le Catalogue (.xlsx)
+                </button>
+              </div>
+
+              {/* Option 3: Choose another tab */}
+              <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '1rem' }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '0.4rem' }}>
+                  Ou choisir un autre sous-onglet à exporter :
+                </label>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <select 
+                    className="input" 
+                    value={exportSelectedTab} 
+                    onChange={e => setExportSelectedTab(e.target.value)}
+                    style={{ flex: 1, fontSize: '0.85rem' }}
+                  >
+                    {ADMIN_TABS.map(tab => (
+                      <option key={tab.id} value={tab.id}>
+                        {tab.label} ({getTabArticles(tab.id).length} articles)
+                      </option>
+                    ))}
+                  </select>
+                  <button 
+                    className="btn btn-secondary" 
+                    onClick={() => {
+                      handleExportExcelSingleTab(exportSelectedTab);
+                      setShowExportModal(false);
+                    }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem' }}
+                  >
+                    <Download size={14} /> Exporter
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button 
+                onClick={() => setShowExportModal(false)} 
+                className="btn btn-secondary"
+                style={{ fontSize: '0.85rem', padding: '0.5rem 1.25rem' }}
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="glass shadow-lg" style={{ padding: 0 }}>
         {/* Tabs */}
         <div className="tabs-container">
-          {[
-            { id: 'ranges', label: 'Gammes & Limites' },
-            { id: 'categories', label: 'Catégories' },
-            { id: 'profiles', label: 'Profilés & Stocks' },
-            { id: 'glass', label: 'Vitrages' },
-            { id: 'colors', label: 'Coloris & Plus-values' },
-            { id: 'accessories', label: 'Accessoires' },
-            { id: 'gaskets', label: 'Joints Vitrage' },
-            { id: 'glassProfiles', label: 'Parcloses' },
-            { id: 'compositions', label: 'Compositions (Modèles)' },
-            { id: 'options', label: 'Options & Variantes' },
-            { id: 'volets', label: 'Volets Roulants' },
-            { id: 'traverses', label: 'Traverses & Unions' },
-            { id: 'extraElements', label: 'Éléments supplémentaires' }
-          ].map(tab => (
+          {ADMIN_TABS.map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
@@ -1269,6 +1730,67 @@ const AdminDashboard = ({ data, setData }) => {
         })()}
 
         <div style={{ padding: '1.5rem' }}>
+          {/* Sub-tab Toolbar Header */}
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center', 
+            flexWrap: 'wrap', 
+            gap: '0.8rem', 
+            marginBottom: '1.5rem', 
+            paddingBottom: '0.85rem', 
+            borderBottom: '1px solid #f1f5f9' 
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <h2 style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0, color: '#1e293b' }}>
+                {ADMIN_TABS.find(t => t.id === activeTab)?.label || activeTab}
+              </h2>
+              <span style={{ fontSize: '0.75rem', fontWeight: 600, padding: '0.2rem 0.65rem', borderRadius: '1rem', background: '#e0f2fe', color: '#0369a1' }}>
+                {getTabArticles(activeTab).length} élément{getTabArticles(activeTab).length > 1 ? 's' : ''}
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <button
+                className="btn btn-secondary"
+                onClick={() => handleExportExcelSingleTab(activeTab)}
+                style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '0.45rem', 
+                  fontSize: '0.8rem', 
+                  padding: '0.45rem 0.85rem',
+                  backgroundColor: '#f8fafc',
+                  cursor: 'pointer'
+                }}
+                title={`Télécharger les articles de cet onglet (${ADMIN_TABS.find(t => t.id === activeTab)?.label || activeTab}) en Excel (Ref, Désignation, Prix...)`}
+              >
+                <Download size={14} color="#16a34a" /> Exporter cet onglet (Excel)
+              </button>
+              <button
+                className="btn btn-secondary"
+                onClick={() => {
+                  setExportSelectedTab(activeTab);
+                  setShowExportModal(true);
+                }}
+                style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '0.45rem', 
+                  fontSize: '0.8rem', 
+                  padding: '0.45rem 0.85rem',
+                  backgroundColor: '#f0fdf4',
+                  color: '#166534',
+                  borderColor: '#bbf7d0',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+                title="Ouvrir les options d'exportation Excel"
+              >
+                <FileSpreadsheet size={14} color="#16a34a" /> Exporter Excel...
+              </button>
+            </div>
+          </div>
           {activeTab === 'categories' && (
             <div className="table-responsive" style={{ border: '1px solid #e2e8f0', borderRadius: '8px' }}>
               <table className="data-table">
