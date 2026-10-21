@@ -220,8 +220,8 @@ export const syncDatabase = {
               const { data: urlData } = bucket.getPublicUrl(`${key}/bucket-${bucketIdx}.json`);
               downloadPromises.push(
                 fetchWithTimeout(`${urlData.publicUrl}?t=${t}`, {}, 60000).then(res => {
-                  if (res.status === 404) return []; // If file doesn't exist yet on cloud, it's empty
-                  if (!res.ok) throw new Error(`Failed to download ${key}/bucket-${bucketIdx}.json`);
+                  if (res.status === 404 || res.status === 400) return []; // If file doesn't exist yet on cloud, it's empty
+                  if (!res.ok) throw new Error(`Failed to download ${key}/bucket-${bucketIdx}.json status: ${res.status}`);
                   return res.json();
                 })
               );

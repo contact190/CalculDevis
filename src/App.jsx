@@ -55,20 +55,21 @@ const LOCAL_KEY = 'calculDevis_main';
 const BACKUP_KEY = 'calculDevis_backup';
 
 const DEFAULT_QUOTE_SETTINGS = {
-  companyName: '',
-  companyAddress: '',
-  companyPhone: '',
-  companyEmail: '',
-  companyRC: '',
-  companyIMP: '',
-  companyMF: '',
-  companyBank: '',
+  companyName: 'EURL IDEAL ALUMINIUM',
+  companyAddress: 'N°35 DE LA DECISION DU LOTISSEMENT DE LA ZONE INDUSTRIELLE',
+  companyPhone: '0560 09 30 11',
+  companyEmail: 'Contact@idealalubois.com',
+  companyRC: '31/00-0110358 B 08 DU 21/01/2021',
+  companyIMP: '31131163555',
+  companyMF: '000831011035842',
+  companyBank: "001.00951.0300.001.263/21 - BANQUE NATIONALE D'ALGERIE Agence: 951 SOUMMAM -ORAN",
   logoBase64: null,
   footerText: "Devis valable sous réserve d'acceptation dans le délai indiqué.",
-  validityDays: 30,
+  validityDays: 7,
   tvaRate: 19,
   quotePrefix: 'DEV-',
-  quoteCounter: 1,
+  quoteCounter: 55,
+  globalMargin: 1.308559,
 };
 
 const makeNewQuote = (settings, db) => {
