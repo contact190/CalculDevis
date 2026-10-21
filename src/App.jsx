@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo, Suspense } from 'react';
-import { Home, Package, Settings, ChevronRight, LayoutDashboard, Users, RefreshCw, ShoppingBag, Truck, CheckCircle, Building, Wifi, WifiOff, TrendingUp, Store, FileText, CheckSquare } from 'lucide-react';
+import { Home, Package, Settings, ChevronRight, LayoutDashboard, Users, RefreshCw, ShoppingBag, Truck, CheckCircle, Building, Wifi, WifiOff, TrendingUp, Store, FileText, CheckSquare, PackageCheck } from 'lucide-react';
 
 // Helper to handle ChunkLoadError (e.g. after a new deployment, old chunks are missing on server)
 const lazyWithRetry = (importFn) => {
@@ -35,6 +35,7 @@ const SitePlanModule = lazyWithRetry(() => import('./modules/siteplan/SitePlanMo
 const FinanceModule = lazyWithRetry(() => import('./modules/finance/FinanceModule'));
 const TrackingModule = lazyWithRetry(() => import('./modules/tracking/TrackingModule'));
 const SubLotMobilePortal = lazyWithRetry(() => import('./modules/tracking/SubLotMobilePortal'));
+const FinishedGoodsModule = lazyWithRetry(() => import('./modules/finishedgoods/FinishedGoodsModule'));
 
 import { DEFAULT_DATA } from './data/default-data';
 import { syncDatabase, cloudSync } from './utils/supabaseClient';
@@ -1063,6 +1064,7 @@ function App() {
     { id: 'orders', label: 'Commandes', icon: ShoppingBag },
     { id: 'production', label: 'Atelier / Production', icon: Package },
     { id: 'tracking', label: 'Gestion & Suivi', icon: CheckSquare },
+    { id: 'finished_goods', label: 'Produit Fini', icon: PackageCheck },
     { id: 'shipping', label: 'Expédition & Colisage', icon: Truck },
     { id: 'clients', label: 'Clients', icon: Users },
     { id: 'finance', label: 'Finance', icon: TrendingUp },
@@ -1359,6 +1361,13 @@ function App() {
           )}
           {activeTab === 'tracking' && (
             <TrackingModule 
+              data={filteredDatabase}
+              setData={setDatabase}
+              quoteSettings={quoteSettings}
+            />
+          )}
+          {activeTab === 'finished_goods' && (
+            <FinishedGoodsModule 
               data={filteredDatabase}
               setData={setDatabase}
               quoteSettings={quoteSettings}

@@ -325,6 +325,216 @@ export default function TrackingModule({ data, setData, quoteSettings }) {
     });
   };
 
+  // Lancer la fabrication d'un sous-lot (Statut : En cours)
+  const handleStartSubLot = (subLotId) => {
+    if (!selectedOrder) return;
+    if (!isSubLotsFrozen) {
+      alert("⚠️ Approbation requise :\n\nLe découpage de ce lot doit d'abord être approuvé et figé avant de pouvoir lancer la fabrication.\n\nVeuillez cliquer sur le bouton vert « Approuver & Figer la Découpe ».");
+      return;
+    }
+    setData(prev => {
+      const updatedOrders = (prev.orders || []).map(o => {
+        if (o.id !== selectedOrder.id) return o;
+        
+        let newBatches = o.batches || [];
+        if (selectedBatch) {
+          newBatches = newBatches.map(b => {
+            if (b.id !== selectedBatch.id) return b;
+            const updated = (b.subLots || []).map(s => {
+              if (s.id !== subLotId) return s;
+              return {
+                ...s,
+                status: 'En cours',
+                startedAt: s.startedAt || new Date().toISOString()
+              };
+            });
+            return { ...b, subLots: updated };
+          });
+        }
+
+        let newOrderSubLots = o.subLots || [];
+        if (!selectedBatch && o.subLots) {
+          newOrderSubLots = newOrderSubLots.map(s => {
+            if (s.id !== subLotId) return s;
+            return {
+              ...s,
+              status: 'En cours',
+              startedAt: s.startedAt || new Date().toISOString()
+            };
+          });
+        }
+
+        return {
+          ...o,
+          batches: newBatches,
+          subLots: newOrderSubLots,
+          _lastModified: new Date().toISOString()
+        };
+      });
+
+      return {
+        ...prev,
+        orders: updatedOrders
+      };
+    });
+  };
+
+  // Marquer un sous-lot comme terminé
+  const handleFinishSubLot = (subLotId) => {
+    if (!selectedOrder) return;
+    setData(prev => {
+      const updatedOrders = (prev.orders || []).map(o => {
+        if (o.id !== selectedOrder.id) return o;
+        
+        let newBatches = o.batches || [];
+        if (selectedBatch) {
+          newBatches = newBatches.map(b => {
+            if (b.id !== selectedBatch.id) return b;
+            const updated = (b.subLots || []).map(s => {
+              if (s.id !== subLotId) return s;
+              return {
+                ...s,
+                status: 'Terminé',
+                completedAt: new Date().toISOString()
+              };
+            });
+            return { ...b, subLots: updated };
+          });
+        }
+
+        let newOrderSubLots = o.subLots || [];
+        if (!selectedBatch && o.subLots) {
+          newOrderSubLots = newOrderSubLots.map(s => {
+            if (s.id !== subLotId) return s;
+            return {
+              ...s,
+              status: 'Terminé',
+              completedAt: new Date().toISOString()
+            };
+          });
+        }
+
+        return {
+          ...o,
+          batches: newBatches,
+          subLots: newOrderSubLots,
+          _lastModified: new Date().toISOString()
+        };
+      });
+
+      return {
+        ...prev,
+        orders: updatedOrders
+      };
+    });
+  };
+
+  // Réinitialiser un sous-lot (Statut : En attente)
+  const handleResetSubLot = (subLotId) => {
+    if (!selectedOrder) return;
+    setData(prev => {
+      const updatedOrders = (prev.orders || []).map(o => {
+        if (o.id !== selectedOrder.id) return o;
+        
+        let newBatches = o.batches || [];
+        if (selectedBatch) {
+          newBatches = newBatches.map(b => {
+            if (b.id !== selectedBatch.id) return b;
+            const updated = (b.subLots || []).map(s => {
+              if (s.id !== subLotId) return s;
+              return {
+                ...s,
+                status: 'En attente',
+                startedAt: null,
+                completedAt: null
+              };
+            });
+            return { ...b, subLots: updated };
+          });
+        }
+
+        let newOrderSubLots = o.subLots || [];
+        if (!selectedBatch && o.subLots) {
+          newOrderSubLots = newOrderSubLots.map(s => {
+            if (s.id !== subLotId) return s;
+            return {
+              ...s,
+              status: 'En attente',
+              startedAt: null,
+              completedAt: null
+            };
+          });
+        }
+
+        return {
+          ...o,
+          batches: newBatches,
+          subLots: newOrderSubLots,
+          _lastModified: new Date().toISOString()
+        };
+      });
+
+      return {
+        ...prev,
+        orders: updatedOrders
+      };
+    });
+  };
+
+  // Lancer tous les sous-lots du lot/de la commande
+  const handleStartAllSubLots = () => {
+    if (!selectedOrder) return;
+    if (!isSubLotsFrozen) {
+      alert("⚠️ Approbation requise :\n\nLe découpage de ce lot doit d'abord être approuvé et figé avant de pouvoir lancer la fabrication.\n\nVeuillez cliquer sur le bouton vert « Approuver & Figer la Découpe ».");
+      return;
+    }
+    setData(prev => {
+      const updatedOrders = (prev.orders || []).map(o => {
+        if (o.id !== selectedOrder.id) return o;
+        
+        let newBatches = o.batches || [];
+        if (selectedBatch) {
+          newBatches = newBatches.map(b => {
+            if (b.id !== selectedBatch.id) return b;
+            const updated = (b.subLots || []).map(s => {
+              if (s.status === 'Terminé') return s;
+              return {
+                ...s,
+                status: 'En cours',
+                startedAt: s.startedAt || new Date().toISOString()
+              };
+            });
+            return { ...b, subLots: updated };
+          });
+        }
+
+        let newOrderSubLots = o.subLots || [];
+        if (!selectedBatch && o.subLots) {
+          newOrderSubLots = newOrderSubLots.map(s => {
+            if (s.status === 'Terminé') return s;
+            return {
+              ...s,
+              status: 'En cours',
+              startedAt: s.startedAt || new Date().toISOString()
+            };
+          });
+        }
+
+        return {
+          ...o,
+          batches: newBatches,
+          subLots: newOrderSubLots,
+          _lastModified: new Date().toISOString()
+        };
+      });
+
+      return {
+        ...prev,
+        orders: updatedOrders
+      };
+    });
+  };
+
   // Automatic sub-lot division
   const handleAutoDivideSubLots = () => {
     if (isSubLotsFrozen) {
@@ -948,15 +1158,28 @@ export default function TrackingModule({ data, setData, quoteSettings }) {
               </p>
             </div>
 
-            {!isSubLotsFrozen && (
-              <button
-                onClick={handleApproveAndFreezeSubLots}
-                className="btn btn-primary"
-                style={{ background: '#10b981', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 800, fontSize: '0.85rem', padding: '0.55rem 1.2rem', boxShadow: '0 4px 10px rgba(16, 185, 129, 0.25)' }}
-              >
-                <Lock size={15} /> Approuver & Figer la Découpe
-              </button>
-            )}
+            <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              {isSubLotsFrozen && currentSubLots.some(s => s.status === 'En attente') && (
+                <button
+                  onClick={handleStartAllSubLots}
+                  className="btn btn-primary"
+                  style={{ background: '#0284c7', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 800, fontSize: '0.85rem', padding: '0.55rem 1.1rem', boxShadow: '0 4px 10px rgba(2, 132, 199, 0.25)' }}
+                  title="Lancer la fabrication de tous les sous-lots en attente"
+                >
+                  <Play size={15} /> Lancer tous les sous-lots
+                </button>
+              )}
+
+              {!isSubLotsFrozen && (
+                <button
+                  onClick={handleApproveAndFreezeSubLots}
+                  className="btn btn-primary"
+                  style={{ background: '#10b981', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 800, fontSize: '0.85rem', padding: '0.55rem 1.2rem', boxShadow: '0 4px 10px rgba(16, 185, 129, 0.25)' }}
+                >
+                  <Lock size={15} /> Approuver & Figer la Découpe
+                </button>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -1062,7 +1285,50 @@ export default function TrackingModule({ data, setData, quoteSettings }) {
                     </div>
 
                     {/* Header Action Buttons */}
-                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                      {subLot.status === 'En attente' && (
+                        <button
+                          onClick={() => handleStartSubLot(subLot.id)}
+                          className="btn btn-primary"
+                          style={{ 
+                            fontSize: '0.8rem', 
+                            padding: '0.45rem 0.85rem', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: '0.4rem', 
+                            background: isSubLotsFrozen ? '#0284c7' : '#94a3b8', 
+                            color: 'white', 
+                            fontWeight: 700,
+                            cursor: isSubLotsFrozen ? 'pointer' : 'not-allowed'
+                          }}
+                          title={isSubLotsFrozen ? "Lancer la fabrication de ce sous-lot" : "Veuillez d'abord approuver et figer le découpage"}
+                        >
+                          <Play size={14} /> {isSubLotsFrozen ? 'Lancer la fabrication' : '🔒 Approbation requise'}
+                        </button>
+                      )}
+
+                      {subLot.status === 'En cours' && (
+                        <button
+                          onClick={() => handleFinishSubLot(subLot.id)}
+                          className="btn btn-primary"
+                          style={{ fontSize: '0.8rem', padding: '0.45rem 0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem', background: '#16a34a', color: 'white', fontWeight: 700 }}
+                          title="Marquer la fabrication de ce sous-lot comme terminée"
+                        >
+                          <CheckCircle size={14} /> Marquer Terminé
+                        </button>
+                      )}
+
+                      {subLot.status === 'Terminé' && (
+                        <button
+                          onClick={() => handleResetSubLot(subLot.id)}
+                          className="btn btn-secondary"
+                          style={{ fontSize: '0.78rem', padding: '0.4rem 0.7rem', display: 'flex', alignItems: 'center', gap: '0.35rem', background: 'white', color: '#64748b' }}
+                          title="Remettre ce sous-lot en attente"
+                        >
+                          <RefreshCw size={13} /> Relancer
+                        </button>
+                      )}
+
                       <button
                         onClick={() => generateSubLotPDF(subLot)}
                         className="btn btn-secondary"
