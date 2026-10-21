@@ -282,10 +282,12 @@ function App() {
           settingsData = await persistentStorage.load('quoteSettings');
         }
 
-        if (settingsData) {
+        if (settingsData && settingsData.companyName) {
           setQuoteSettings({ ...DEFAULT_QUOTE_SETTINGS, ...settingsData });
+        } else {
+          setQuoteSettings(DEFAULT_QUOTE_SETTINGS);
           try {
-            localStorage.setItem('quoteSettings', JSON.stringify(settingsData));
+            localStorage.setItem('quoteSettings', JSON.stringify(DEFAULT_QUOTE_SETTINGS));
           } catch(e) {}
         }
 
@@ -446,22 +448,26 @@ function App() {
       } catch(e) {}
       persistentStorage.save('quoteSettings', next).catch(e => console.error(e));
       setDatabase(db => db ? { ...db, quoteSettings: next } : db);
+      // Figer instantanément dans le Cloud (Storage et Postgres)
+      syncDatabase.saveQuoteSettings(next).catch(err => console.warn("Cloud save quoteSettings:", err));
       return next;
     });
   }, []);
 
   useEffect(() => {
     if (database) {
-      if (database.quoteSettings) {
+      if (database.quoteSettings && database.quoteSettings.companyName) {
         setQuoteSettings(prev => {
           if (JSON.stringify(prev) !== JSON.stringify(database.quoteSettings)) {
             persistentStorage.save('quoteSettings', database.quoteSettings).catch(e => {});
+            try { localStorage.setItem('quoteSettings', JSON.stringify(database.quoteSettings)); } catch(e) {}
             return database.quoteSettings;
           }
           return prev;
         });
       } else {
-        setDatabase(db => ({ ...db, quoteSettings: quoteSettings }));
+        const fallback = (quoteSettings && quoteSettings.companyName) ? quoteSettings : DEFAULT_QUOTE_SETTINGS;
+        setDatabase(db => ({ ...db, quoteSettings: fallback }));
       }
     }
   }, [database]);

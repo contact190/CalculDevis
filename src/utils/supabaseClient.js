@@ -407,8 +407,8 @@ export const syncDatabase = {
           if (cloudMeta && cloudMeta.updated_at) {
             const cloudTime = new Date(cloudMeta.updated_at).getTime();
             const clientMaxTime = getClientMaxTime(db);
-            // 5 minutes clock skew safety buffer (increased from 5s)
-            if (cloudTime > clientMaxTime + 300000) {
+            // Only abort if clientMaxTime is recent (last 24h) and cloudTime is legitimately ahead by > 5min
+            if (clientMaxTime > 0 && (Date.now() - clientMaxTime < 86400000) && (cloudTime > clientMaxTime + 300000)) {
               console.warn(`⚠️ Aborting cloud snapshot save: Cloud snapshot is newer than client database (${new Date(cloudTime).toISOString()} > ${new Date(clientMaxTime).toISOString()}).`);
               return cloudMeta.updated_at;
             }
@@ -540,6 +540,50 @@ export const syncDatabase = {
     } catch (e) {
       console.error("Failed to save to Supabase Storage:", e);
       throw e;
+    }
+  },
+
+  /**
+   * Save quoteSettings directly and instantly to Supabase Storage & Postgres
+   */
+  async saveQuoteSettings(settings) {
+    if (!settings) return;
+    try {
+      const bucket = supabase.storage.from('app-state');
+      const { data: catUrl } = bucket.getPublicUrl('catalog.json');
+      let catalog = {};
+      try {
+        const res = await fetchWithTimeout(`${catUrl.publicUrl}?t=${Date.now()}`, {}, 10000);
+        if (res.ok) catalog = await res.json();
+      } catch(e) {}
+      
+      catalog.quoteSettings = settings;
+      const catBlob = new Blob([JSON.stringify(catalog)], { type: 'application/json' });
+      await bucket.upload('catalog.json', catBlob, { upsert: true, contentType: 'application/json' });
+
+      // Update meta.json hash
+      const { data: metaUrlData } = bucket.getPublicUrl('meta.json');
+      let meta = {};
+      try {
+        const metaRes = await fetchWithTimeout(`${metaUrlData.publicUrl}?t=${Date.now()}`, {}, 10000);
+        if (metaRes.ok) meta = await metaRes.json();
+      } catch(e) {}
+      meta.hashes = meta.hashes || {};
+      meta.hashes.catalog = getHash(JSON.stringify(catalog));
+      meta.updated_at = new Date().toISOString();
+      const metaBlob = new Blob([JSON.stringify(meta)], { type: 'application/json' });
+      await bucket.upload('meta.json', metaBlob, { upsert: true, contentType: 'application/json' });
+
+      // Redundant update in Postgres app_state main-db
+      const { data: rows } = await supabase.from('app_state').select('*').eq('id', 'main-db');
+      if (rows && rows.length > 0) {
+        const mainData = rows[0].data || {};
+        mainData.quoteSettings = settings;
+        await supabase.from('app_state').update({ data: mainData, updated_at: new Date().toISOString() }).eq('id', 'main-db');
+      }
+      console.log('✅ Coordonnées figées dans le Cloud avec succès !');
+    } catch(e) {
+      console.warn("Erreur sauvegarde directe quoteSettings Cloud:", e);
     }
   }
 };
