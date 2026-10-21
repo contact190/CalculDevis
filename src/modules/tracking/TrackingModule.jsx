@@ -25,10 +25,14 @@ import {
   Archive,
   X,
   Smartphone,
-  Eye
+  Eye,
+  BarChart2,
+  TrendingUp,
+  AlertTriangle
 } from 'lucide-react';
 import { QRCodeSVG, QRCodeCanvas } from 'qrcode.react';
 import jsPDF from 'jspdf';
+import WorkshopAnalysisTab from './WorkshopAnalysisTab';
 
 // Helper to classify joinery type according to strict workshop rules
 export const classifyOpeningFamily = (item, database) => {
@@ -107,6 +111,7 @@ export default function TrackingModule({ data, setData, quoteSettings }) {
   const [groupSize, setGroupSize] = useState(3);
   const [showCompletedBatchesModal, setShowCompletedBatchesModal] = useState(false);
   const [selectedCompletedBatchDetails, setSelectedCompletedBatchDetails] = useState(null);
+  const [activeSubTab, setActiveSubTab] = useState('tracking'); // 'tracking' | 'analysis'
 
   // Helper to check if a batch is completed
   const isBatchCompleted = useCallback((batch) => {
@@ -219,6 +224,75 @@ export default function TrackingModule({ data, setData, quoteSettings }) {
     }
     return false;
   }, [selectedBatch, selectedOrder]);
+
+  // Total articles in batch (number of items or measurements)
+  const getBatchArticleCount = useCallback((b) => {
+    if (!b) return 0;
+    if (Array.isArray(b.items) && b.items.length > 0) {
+      return b.items.reduce((sum, it) => {
+        if (it.measurements && it.measurements.length > 0) {
+          return sum + it.measurements.length;
+        }
+        return sum + (it.qty || it.quantity || 1);
+      }, 0);
+    }
+    if (Array.isArray(b.subLots) && b.subLots.length > 0) {
+      return b.subLots.reduce((sum, sl) => sum + (sl.items?.length || 0), 0);
+    }
+    return 0;
+  }, []);
+
+  // Déstockage barres & matières pour le lot ou la commande sélectionnée
+  const isDestocked = useMemo(() => {
+    if (selectedBatch) {
+      return !!selectedBatch.destocked;
+    }
+    if (selectedOrder) {
+      return !!selectedOrder.destocked;
+    }
+    return false;
+  }, [selectedBatch, selectedOrder]);
+
+  // Handler to toggle destocked status
+  const handleToggleDestock = () => {
+    if (!selectedOrder) return;
+    setData(prev => {
+      const updatedOrders = (prev.orders || []).map(o => {
+        if (o.id !== selectedOrder.id) return o;
+        
+        let newBatches = o.batches || [];
+        if (selectedBatch) {
+          newBatches = newBatches.map(b => {
+            if (b.id !== selectedBatch.id) return b;
+            const newStatus = !b.destocked;
+            return {
+              ...b,
+              destocked: newStatus,
+              destockedAt: newStatus ? new Date().toISOString() : null
+            };
+          });
+        }
+
+        let newOrderDestocked = o.destocked;
+        if (!selectedBatch) {
+          newOrderDestocked = !o.destocked;
+        }
+
+        return {
+          ...o,
+          destocked: newOrderDestocked,
+          destockedAt: newOrderDestocked ? new Date().toISOString() : null,
+          batches: newBatches,
+          _lastModified: new Date().toISOString()
+        };
+      });
+
+      return {
+        ...prev,
+        orders: updatedOrders
+      };
+    });
+  };
 
   // Helper to collect all openings from either the selected batch or the site plan
   const collectBatchOpenings = useCallback(() => {
@@ -542,6 +616,13 @@ export default function TrackingModule({ data, setData, quoteSettings }) {
       return;
     }
     if (!selectedOrder) return;
+
+    // Règle bloquante : Déstockage des barres obligatoire avant de créer les sous-lots
+    if (!isDestocked) {
+      alert("⛔ Action impossible :\n\nLe déstockage des barres et profilés pour ce lot n'a pas encore été validé.\n\nVeuillez d'abord cliquer sur « Déstockage fait (barres etc.) » avant de pouvoir découper les sous-lots.");
+      return;
+    }
+
     const allOpenings = collectBatchOpenings();
 
     if (allOpenings.length === 0) {
@@ -1028,107 +1109,208 @@ export default function TrackingModule({ data, setData, quoteSettings }) {
         </button>
       </div>
 
-      {/* Selectors Bar */}
-      <div className="glass shadow-sm" style={{ padding: '1.25rem', borderRadius: '1rem', background: 'white', marginBottom: '1.5rem', border: '1px solid #e2e8f0' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem', alignItems: 'flex-end' }}>
-          
-          {/* Order Selector (EN COURS SEULEMENT) */}
-          <div>
-            <label style={{ fontSize: '0.85rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '0.4rem' }}>
-              1. Commande en cours
-            </label>
-            <select
-              className="input"
-              value={selectedOrderId}
-              onChange={e => {
-                setSelectedOrderId(e.target.value);
-                setSelectedBatchId('');
-              }}
-              style={{ width: '100%', fontSize: '0.9rem', fontWeight: 600, padding: '0.6rem' }}
-            >
-              <option value="">{activeOrders.length === 0 ? '-- Aucune commande en cours --' : '-- Sélectionnez une commande --'}</option>
-              {activeOrders.map(o => {
-                const c = (data?.clients || []).find(cl => cl.id === o.clientId);
-                return (
-                  <option key={o.id} value={o.id}>
-                    Commande {o.id} — {c?.nom || 'Client'} ({o.batches?.length || 0} lot(s))
-                  </option>
-                );
-              })}
-            </select>
-          </div>
+      {/* Sub-Tabs: Suivi Fabrication vs Analyse */}
+      <div style={{ display: 'flex', gap: '0.65rem', marginBottom: '1.5rem', borderBottom: '2px solid #e2e8f0', paddingBottom: '0.6rem' }}>
+        <button
+          onClick={() => setActiveSubTab('tracking')}
+          style={{
+            border: 'none',
+            background: activeSubTab === 'tracking' ? '#0284c7' : '#f1f5f9',
+            color: activeSubTab === 'tracking' ? 'white' : '#64748b',
+            fontWeight: 800,
+            fontSize: '0.9rem',
+            padding: '0.65rem 1.25rem',
+            borderRadius: '0.65rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            cursor: 'pointer',
+            transition: 'all 0.15s ease',
+            boxShadow: activeSubTab === 'tracking' ? '0 4px 10px rgba(2, 132, 199, 0.25)' : 'none'
+          }}
+        >
+          <Layers size={18} /> 1. Suivi & Sous-Lots
+        </button>
 
-          {/* Batch Selector (NON FINIS SEULEMENT) */}
-          <div>
-            <label style={{ fontSize: '0.85rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '0.4rem' }}>
-              2. Lot de Fabrication (En cours / Non fini)
-            </label>
-            <select
-              className="input"
-              value={selectedBatchId}
-              onChange={e => setSelectedBatchId(e.target.value)}
-              disabled={!selectedOrderId || activeBatches.length === 0}
-              style={{ width: '100%', fontSize: '0.9rem', fontWeight: 600, padding: '0.6rem' }}
-            >
-              <option value="">
-                {activeBatches.length === 0 
-                  ? (selectedOrder?.batches?.length > 0 ? '-- Tous les lots de cette commande sont terminés --' : '-- Aucun lot lancé --')
-                  : '-- Sélectionnez un lot non fini --'}
-              </option>
-              {activeBatches.map(b => (
-                <option key={b.id} value={b.id}>
-                  {b.name || b.id} ({b.subLots?.length || 0} sous-lot(s)) {b.subLotsApproved ? '🔒 Figé' : ''}
-                </option>
-              ))}
-            </select>
-          </div>
+        <button
+          onClick={() => setActiveSubTab('analysis')}
+          style={{
+            border: 'none',
+            background: activeSubTab === 'analysis' ? '#0284c7' : '#f1f5f9',
+            color: activeSubTab === 'analysis' ? 'white' : '#64748b',
+            fontWeight: 800,
+            fontSize: '0.9rem',
+            padding: '0.65rem 1.25rem',
+            borderRadius: '0.65rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            cursor: 'pointer',
+            transition: 'all 0.15s ease',
+            boxShadow: activeSubTab === 'analysis' ? '0 4px 10px rgba(2, 132, 199, 0.25)' : 'none'
+          }}
+        >
+          <BarChart2 size={18} /> 2. Analyse & Performance
+        </button>
+      </div>
 
-          {/* Sizing & Auto-divide & Freeze */}
-          <div>
-            <label style={{ fontSize: '0.85rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '0.4rem' }}>
-              3. Découpage des Sous-Lots
-            </label>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '0.5rem', padding: '0 0.5rem' }}>
-                <span style={{ fontSize: '0.75rem', color: '#64748b', marginRight: '0.4rem' }}>Par</span>
-                <input
-                  type="number"
-                  min="1"
-                  max="50"
-                  value={groupSize}
-                  onChange={e => setGroupSize(e.target.value)}
-                  disabled={isSubLotsFrozen}
-                  style={{ width: '40px', border: 'none', background: 'transparent', fontWeight: 800, fontSize: '0.9rem', textAlign: 'center' }}
-                />
+      {activeSubTab === 'analysis' ? (
+        <WorkshopAnalysisTab data={data} quoteSettings={quoteSettings} />
+      ) : (
+        <>
+          {/* Selectors Bar */}
+          <div className="glass shadow-sm" style={{ padding: '1.25rem', borderRadius: '1rem', background: 'white', marginBottom: '1.5rem', border: '1px solid #e2e8f0' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.25rem', alignItems: 'flex-end' }}>
+              
+              {/* 1. Order Selector */}
+              <div>
+                <label style={{ fontSize: '0.85rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '0.4rem' }}>
+                  1. Commande en cours
+                </label>
+                <select
+                  className="input"
+                  value={selectedOrderId}
+                  onChange={e => {
+                    setSelectedOrderId(e.target.value);
+                    setSelectedBatchId('');
+                  }}
+                  style={{ width: '100%', fontSize: '0.9rem', fontWeight: 600, padding: '0.6rem' }}
+                >
+                  <option value="">{activeOrders.length === 0 ? '-- Aucune commande en cours --' : '-- Sélectionnez une commande --'}</option>
+                  {activeOrders.map(o => {
+                    const c = (data?.clients || []).find(cl => cl.id === o.clientId);
+                    return (
+                      <option key={o.id} value={o.id}>
+                        Commande {o.id} — {c?.nom || 'Client'} ({o.batches?.length || 0} lot(s))
+                      </option>
+                    );
+                  })}
+                </select>
               </div>
 
-              {!isSubLotsFrozen ? (
-                <button
-                  onClick={handleAutoDivideSubLots}
-                  disabled={!selectedOrderId}
-                  className="btn btn-primary"
-                  style={{ 
-                    flex: 1, 
-                    background: '#3b82f6', 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'center', 
-                    gap: '0.4rem', 
-                    fontWeight: 700, 
-                    fontSize: '0.82rem'
-                  }}
+              {/* 2. Batch Selector (Avec Nombre d'Articles) */}
+              <div>
+                <label style={{ fontSize: '0.85rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '0.4rem' }}>
+                  2. Lot de Fabrication
+                </label>
+                <select
+                  className="input"
+                  value={selectedBatchId}
+                  onChange={e => setSelectedBatchId(e.target.value)}
+                  disabled={!selectedOrderId || activeBatches.length === 0}
+                  style={{ width: '100%', fontSize: '0.9rem', fontWeight: 600, padding: '0.6rem' }}
                 >
-                  <Sliders size={15} /> Découper
-                </button>
-              ) : (
-                <div style={{ flex: 1, background: '#f0fdf4', border: '1.5px solid #86efac', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', color: '#166534', fontWeight: 800, fontSize: '0.82rem' }}>
-                  <Lock size={14} /> Découpe Figée
-                </div>
-              )}
-            </div>
-          </div>
+                  <option value="">
+                    {activeBatches.length === 0 
+                      ? (selectedOrder?.batches?.length > 0 ? '-- Tous les lots de cette commande sont terminés --' : '-- Aucun lot lancé --')
+                      : '-- Sélectionnez un lot non fini --'}
+                  </option>
+                  {activeBatches.map(b => {
+                    const count = getBatchArticleCount(b);
+                    return (
+                      <option key={b.id} value={b.id}>
+                        {b.name || b.id} — {count} article{count > 1 ? 's' : ''} ({b.subLots?.length || 0} SL) {b.subLotsApproved ? '🔒 Figé' : ''} {b.destocked ? '📦 Déstocké' : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
 
-        </div>
+              {/* 3. Déstockage Barres & Matières (BLOCAGE OBLIGATOIRE) */}
+              <div>
+                <label style={{ fontSize: '0.85rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '0.4rem' }}>
+                  3. Déstockage Barres (Matières)
+                </label>
+                <button
+                  onClick={handleToggleDestock}
+                  disabled={!selectedOrderId || !selectedBatchId || isSubLotsFrozen}
+                  className="btn"
+                  style={{
+                    width: '100%',
+                    padding: '0.6rem 0.8rem',
+                    fontSize: '0.83rem',
+                    fontWeight: 800,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.45rem',
+                    borderRadius: '0.5rem',
+                    transition: 'all 0.2s ease',
+                    background: isDestocked ? '#dcfce7' : '#fef3c7',
+                    border: isDestocked ? '1.5px solid #86efac' : '1.5px solid #f59e0b',
+                    color: isDestocked ? '#166534' : '#b45309',
+                    cursor: (!selectedOrderId || !selectedBatchId || isSubLotsFrozen) ? 'not-allowed' : 'pointer',
+                    boxShadow: isDestocked ? '0 2px 6px rgba(22, 101, 52, 0.12)' : '0 2px 6px rgba(180, 83, 9, 0.12)'
+                  }}
+                  title={isDestocked ? "Déstockage validé. Cliquez pour annuler." : "Cliquer pour valider que les barres ont été déstockées"}
+                >
+                  {isDestocked ? (
+                    <>
+                      <CheckCircle size={16} color="#16a34a" /> Déstockage Fait (Barres etc.)
+                    </>
+                  ) : (
+                    <>
+                      <Package size={16} color="#b45309" /> Valider Déstockage (Barres)
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* 4. Sizing & Auto-divide (Bloqué si déstockage non fait) */}
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                  <label style={{ fontSize: '0.85rem', fontWeight: 700, color: '#334155' }}>
+                    4. Découpage
+                  </label>
+                  {!isDestocked && !isSubLotsFrozen && (
+                    <span style={{ fontSize: '0.72rem', color: '#dc2626', fontWeight: 700 }}>
+                      ⚠️ Déstockage requis
+                    </span>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '0.5rem', padding: '0 0.5rem' }}>
+                    <span style={{ fontSize: '0.75rem', color: '#64748b', marginRight: '0.4rem' }}>Par</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max="50"
+                      value={groupSize}
+                      onChange={e => setGroupSize(e.target.value)}
+                      disabled={isSubLotsFrozen || !isDestocked}
+                      style={{ width: '40px', border: 'none', background: 'transparent', fontWeight: 800, fontSize: '0.9rem', textAlign: 'center' }}
+                    />
+                  </div>
+
+                  {!isSubLotsFrozen ? (
+                    <button
+                      onClick={handleAutoDivideSubLots}
+                      disabled={!selectedOrderId || !isDestocked}
+                      className="btn btn-primary"
+                      style={{ 
+                        flex: 1, 
+                        background: isDestocked ? '#3b82f6' : '#94a3b8', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center', 
+                        gap: '0.4rem', 
+                        fontWeight: 700, 
+                        fontSize: '0.82rem',
+                        cursor: isDestocked ? 'pointer' : 'not-allowed'
+                      }}
+                      title={!isDestocked ? "Veuillez d'abord valider le déstockage des barres" : "Découper en sous-lots"}
+                    >
+                      <Sliders size={15} /> Découper
+                    </button>
+                  ) : (
+                    <div style={{ flex: 1, background: '#f0fdf4', border: '1.5px solid #86efac', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', color: '#166534', fontWeight: 800, fontSize: '0.82rem' }}>
+                      <Lock size={14} /> Découpe Figée
+                    </div>
+                  )}
+                </div>
+              </div>
+
+            </div>
 
         {/* Freezing / Approval Banner if sub-lots exist */}
         {currentSubLots.length > 0 && (
@@ -1282,6 +1464,40 @@ export default function TrackingModule({ data, setData, quoteSettings }) {
                       }}>
                         {subLot.status} ({percent}%)
                       </span>
+
+                      {/* Alerte Dépassement > +50% */}
+                      {(() => {
+                        const benchmark = subLot.family === 'coulissant' ? 120 : subLot.family === 'ouvrant' ? 80 : 45;
+                        let duration = 0;
+                        if (subLot.startedAt && subLot.completedAt) {
+                          duration = (new Date(subLot.completedAt).getTime() - new Date(subLot.startedAt).getTime()) / (1000 * 60);
+                        } else if (subLot.startedAt && subLot.status === 'En cours') {
+                          duration = (new Date().getTime() - new Date(subLot.startedAt).getTime()) / (1000 * 60);
+                        }
+                        if (duration > benchmark * 1.5) {
+                          const overrunPct = Math.round(((duration - benchmark) / benchmark) * 100);
+                          return (
+                            <span 
+                              style={{ 
+                                fontSize: '0.72rem', 
+                                fontWeight: 800, 
+                                background: '#fef2f2', 
+                                color: '#dc2626', 
+                                padding: '0.2rem 0.55rem', 
+                                borderRadius: '9999px',
+                                border: '1px solid #fca5a5',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.25rem'
+                              }}
+                              title={`Dépassement de temps de fabrication : ${Math.round(duration)} min constatées vs ${benchmark} min standard (+${overrunPct}%)`}
+                            >
+                              <AlertTriangle size={12} color="#dc2626" /> Dépassement (+{overrunPct}%)
+                            </span>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
 
                     {/* Header Action Buttons */}
@@ -1506,6 +1722,8 @@ export default function TrackingModule({ data, setData, quoteSettings }) {
           </div>
 
         </div>
+      )}
+        </>
       )}
 
       {/* MODAL POPUP: LOTS TERMINÉS */}
