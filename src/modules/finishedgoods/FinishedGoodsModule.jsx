@@ -176,6 +176,48 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
     return false;
   }, []);
 
+  // Helper to extract unit glass cost for an element
+  const getElementGlassValue = (itemObj, sl, order) => {
+    // 1. Try finding in sl.items by voidId or repere
+    if (sl?.items && Array.isArray(sl.items)) {
+      const match = sl.items.find(sli => 
+        (itemObj.id && sli.voidId && itemObj.id.includes(sli.voidId)) ||
+        (sli.repere && itemObj.repere && sli.repere === itemObj.repere)
+      );
+      if (match && typeof match.item?.priceData?.subtotals?.glass === 'number') {
+        return match.item.priceData.subtotals.glass;
+      }
+      if (match && match.itemId && order?.items) {
+        const it = order.items.find(x => x.id === match.itemId);
+        if (typeof it?.priceData?.subtotals?.glass === 'number') {
+          return it.priceData.subtotals.glass;
+        }
+      }
+    }
+
+    // 2. Try matching by label with order.items
+    if (order?.items && itemObj.label) {
+      const it = order.items.find(x => x.label && itemObj.label.includes(x.label));
+      if (typeof it?.priceData?.subtotals?.glass === 'number') {
+        return it.priceData.subtotals.glass;
+      }
+    }
+
+    // 3. Fallback: order total glass divided by total items
+    let totalOrderGlass = 0;
+    let totalOrderQty = 0;
+    (order?.items || []).forEach(it => {
+      const qty = Number(it.qty) || 1;
+      totalOrderQty += qty;
+      totalOrderGlass += (it.priceData?.subtotals?.glass || 0) * qty;
+    });
+    if (totalOrderQty > 0 && totalOrderGlass > 0) {
+      return totalOrderGlass / totalOrderQty;
+    }
+
+    return 0;
+  };
+
   // Helper to extract all elements (fenêtres complètes coulissantes & ouvrantes) from an order (sous-lots terminés)
   const getOrderElements = useCallback((order) => {
     if (!order) return { cadres: [], panneaux: [], all: [], lots: [], coulissants: [], ouvrants: [], fixes: [] };
@@ -243,6 +285,7 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
             lotLabel,
             inStock: isDone,
             glassStatus,
+            glassCost: getElementGlassValue(o, sl, order),
             isDelivered,
             deliveredAt: deliveryInfo?.deliveredAt || null,
             deliveryRef: deliveryInfo?.deliveryRef || ''
@@ -281,6 +324,7 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
             lotLabel,
             inStock: isDone,
             glassStatus,
+            glassCost: getElementGlassValue(c, sl, order),
             isDelivered,
             deliveredAt: deliveryInfo?.deliveredAt || null,
             deliveryRef: deliveryInfo?.deliveryRef || ''
@@ -309,6 +353,7 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
             lotLabel,
             inStock: isDone,
             glassStatus,
+            glassCost: getElementGlassValue(p, sl, order),
             isDelivered,
             deliveredAt: deliveryInfo?.deliveredAt || null,
             deliveryRef: deliveryInfo?.deliveryRef || ''
@@ -445,6 +490,10 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
     let totalFixes = 0;
     let fixesInStock = 0;
     let totalGlassLivres = 0;
+    let totalGlassCommandeValue = 0;
+    let totalGlassCommandeCount = 0;
+    let totalGlassACommanderValue = 0;
+    let totalGlassACommanderCount = 0;
     let totalStockValue = 0;
     let totalDeliveredValue = 0;
     let totalDeliveredItems = 0;
@@ -480,6 +529,19 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
       totalInStockItems += stockAll.length;
       totalDeliveredItems += deliveredAll.length;
 
+      // Calcul des valeurs et quantités de vitrage commandé et à commander
+      all.forEach(item => {
+        const gCost = item.glassCost || 0;
+        const gStatus = item.glassStatus || 'non_commande';
+        if (gStatus === 'commande') {
+          totalGlassCommandeValue += gCost;
+          totalGlassCommandeCount++;
+        } else if (gStatus === 'non_commande') {
+          totalGlassACommanderValue += gCost;
+          totalGlassACommanderCount++;
+        }
+      });
+
       if (totalItemsCount > 0 && orderHT > 0) {
         totalStockValue += orderHT * (stockAll.length / totalItemsCount);
         totalDeliveredValue += orderHT * (deliveredAll.length / totalItemsCount);
@@ -496,6 +558,10 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
       totalWindows,
       windowsInStock,
       totalGlassLivres,
+      totalGlassCommandeValue,
+      totalGlassCommandeCount,
+      totalGlassACommanderValue,
+      totalGlassACommanderCount,
       totalStockValue,
       totalDeliveredValue,
       totalDeliveredItems,
@@ -745,14 +811,14 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
         </div>
       </div>
 
-      {/* ─── KPI STATS SUMMARY (AVEC VALEUR DU STOCK EN HAUT DE PAGE) ─────────── */}
+      {/* ─── KPI STATS SUMMARY (STOCK + VALEUR DU STOCK + LIVRÉ + VITRAGE) ────── */}
       <div style={{ 
         display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', 
+        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', 
         gap: '1rem', 
         marginBottom: '1.75rem' 
       }}>
-        {/* 1. VALEUR DU STOCK ATELIER (DEMANDÉ EXPRESSÉMENT PAR L'UTILISATEUR) */}
+        {/* 1. VALEUR DU STOCK ATELIER */}
         <div style={{ 
           background: 'linear-gradient(135deg, #064e3b 0%, #047857 100%)', 
           color: 'white', 
@@ -798,32 +864,56 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
           </span>
         </div>
 
-        {/* 3. Stock Coulissants */}
+        {/* 3. STOCK ATELIER (Coulissants, Ouvrants & Fixes combinés) */}
         <div style={{ background: 'white', padding: '1.25rem', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#64748b' }}>STOCK COULISSANTS</span>
+            <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>STOCK ATELIER</span>
             <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#0284c7', background: '#e0f2fe', padding: '0.15rem 0.5rem', borderRadius: '9999px' }}>
-              {globalStats.totalCoulissants > 0 ? Math.round((globalStats.coulissantsInStock / globalStats.totalCoulissants) * 100) : 0}%
+              {globalStats.totalWindows > 0 ? Math.round((globalStats.windowsInStock / globalStats.totalWindows) * 100) : 0}%
             </span>
           </div>
           <div style={{ fontSize: '1.7rem', fontWeight: 800, color: '#0284c7' }}>
-            {globalStats.coulissantsInStock} <span style={{ fontSize: '1rem', color: '#94a3b8', fontWeight: 600 }}>/ {globalStats.totalCoulissants}</span>
+            {globalStats.windowsInStock} <span style={{ fontSize: '1rem', color: '#94a3b8', fontWeight: 600 }}>/ {globalStats.totalWindows}</span>
           </div>
-          <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Fenêtres coulissantes complètes</span>
+          <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>
+            📦 Pièces complètes prêtes en atelier
+          </span>
         </div>
 
-        {/* 4. Stock Ouvrants & Fixes */}
+        {/* 4. VALEUR VITRAGE COMMANDÉ */}
         <div style={{ background: 'white', padding: '1.25rem', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#64748b' }}>STOCK OUVRANTS & FIXES</span>
-            <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#7c3aed', background: '#ede9fe', padding: '0.15rem 0.5rem', borderRadius: '9999px' }}>
-              {(globalStats.totalOuvrants + globalStats.totalFixes) > 0 ? Math.round(((globalStats.ouvrantsInStock + globalStats.fixesInStock) / (globalStats.totalOuvrants + globalStats.totalFixes)) * 100) : 0}%
+            <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#1e40af', textTransform: 'uppercase' }}>
+              VITRAGE COMMANDÉ
+            </span>
+            <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#1d4ed8', background: '#eff6ff', padding: '0.15rem 0.5rem', borderRadius: '9999px', border: '1px solid #bfdbfe' }}>
+              📦 {globalStats.totalGlassCommandeCount} pce(s)
             </span>
           </div>
-          <div style={{ fontSize: '1.7rem', fontWeight: 800, color: '#7c3aed' }}>
-            {globalStats.ouvrantsInStock + globalStats.fixesInStock} <span style={{ fontSize: '1rem', color: '#94a3b8', fontWeight: 600 }}>/ {globalStats.totalOuvrants + globalStats.totalFixes}</span>
+          <div style={{ fontSize: '1.7rem', fontWeight: 800, color: '#1d4ed8' }}>
+            {formatMoney(globalStats.totalGlassCommandeValue)} <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#94a3b8' }}>{quoteSettings?.currency || 'DZD'}</span>
           </div>
-          <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Fenêtres battantes & fixes complètes</span>
+          <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>
+            Vitrages commandés chez le fournisseur
+          </span>
+        </div>
+
+        {/* 5. VALEUR VITRAGE À COMMANDER */}
+        <div style={{ background: 'white', padding: '1.25rem', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+            <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#b45309', textTransform: 'uppercase' }}>
+              VITRAGE À COMMANDER
+            </span>
+            <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#b45309', background: '#fef3c7', padding: '0.15rem 0.5rem', borderRadius: '9999px', border: '1px solid #fde68a' }}>
+              ⏳ {globalStats.totalGlassACommanderCount} pce(s)
+            </span>
+          </div>
+          <div style={{ fontSize: '1.7rem', fontWeight: 800, color: '#d97706' }}>
+            {formatMoney(globalStats.totalGlassACommanderValue)} <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#94a3b8' }}>{quoteSettings?.currency || 'DZD'}</span>
+          </div>
+          <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>
+            Vitrages en attente de commande fournisseur
+          </span>
         </div>
       </div>
 
