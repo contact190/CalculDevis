@@ -251,14 +251,19 @@ export default function WorkshopAnalysisTab({ data, quoteSettings }) {
     };
 
     // D. Daily production cadence
+    // Remise à 0 de la cadence initiale (exclusion de la commande historique CMD-1548 pour démarrer le calcul sur les prochaines commandes)
+    const cadenceSubLots = subLotsWithDuration.filter(item => item.order?.id !== 'CMD-1548' && !item.order?.isLegacyOrder);
+
     const daysMap = new Map();
-    subLotsWithDuration.forEach(item => {
+    let cadenceOpenings = 0;
+    cadenceSubLots.forEach(item => {
       const dStr = (item.subLot.completedAt || item.subLot.startedAt || new Date().toISOString()).slice(0, 10);
       daysMap.set(dStr, (daysMap.get(dStr) || 0) + item.totalOpenings);
+      cadenceOpenings += item.totalOpenings;
     });
 
-    const activeDaysCount = Math.max(1, daysMap.size);
-    const avgDailyOpenings = (totalOpenings / activeDaysCount).toFixed(1);
+    const activeDaysCount = daysMap.size;
+    const avgDailyOpenings = activeDaysCount > 0 ? (cadenceOpenings / activeDaysCount).toFixed(1) : '0';
 
     let maxDay = { date: '—', count: 0 };
     daysMap.forEach((cnt, dt) => {
@@ -483,7 +488,9 @@ export default function WorkshopAnalysisTab({ data, quoteSettings }) {
               {analysisStats.avgDailyOpenings} <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#64748b' }}>ouv/j</span>
             </div>
             <div style={{ fontSize: '0.75rem', color: '#b45309', fontWeight: 600, marginTop: '0.15rem' }}>
-              Pic record : {analysisStats.maxDay.count} ouv. ({analysisStats.maxDay.date})
+              {analysisStats.maxDay.count > 0 
+                ? `Pic record : ${analysisStats.maxDay.count} ouv. (${analysisStats.maxDay.date})`
+                : 'En attente des prochaines fabrications'}
             </div>
           </div>
         </div>
