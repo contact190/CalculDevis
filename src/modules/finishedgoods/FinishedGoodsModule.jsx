@@ -137,6 +137,7 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
   const [selectedMonth, setSelectedMonth] = useState('all'); // 'all' | '0'..'11'
   const [selectedWeek, setSelectedWeek] = useState('all'); // 'all' | '1'..'52'
   const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
+  const [deliveredGlassFilter, setDeliveredGlassFilter] = useState('all'); // 'all' | 'non_commande' | 'commande' | 'arrive' | 'rempli' | 'livre'
 
   // Delivery Confirmation Modal State
   const [deliveryModalOpen, setDeliveryModalOpen] = useState(false);
@@ -334,6 +335,33 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
             ...(o.glassStatuses || {}),
             [itemId]: status
           },
+          _lastModified: new Date().toISOString()
+        };
+      });
+      return { ...prev, orders };
+    });
+  };
+
+  // Bulk update glass status for multiple delivered items
+  const handleBulkUpdateDeliveredGlass = (items, newStatus) => {
+    if (!items || items.length === 0 || !newStatus) return;
+    const byOrder = {};
+    items.forEach(it => {
+      if (!byOrder[it.orderId]) byOrder[it.orderId] = [];
+      byOrder[it.orderId].push(it.id);
+    });
+
+    setData(prev => {
+      const orders = (prev.orders || []).map(o => {
+        const itemIds = byOrder[o.id];
+        if (!itemIds || itemIds.length === 0) return o;
+        const updated = { ...(o.glassStatuses || {}) };
+        itemIds.forEach(id => {
+          updated[id] = newStatus;
+        });
+        return {
+          ...o,
+          glassStatuses: updated,
           _lastModified: new Date().toISOString()
         };
       });
@@ -551,9 +579,15 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
         if (itemDate.getFullYear() !== parseInt(selectedYear, 10)) return false;
       }
 
+      // 6. Vitrage filter
+      if (deliveredGlassFilter !== 'all') {
+        const itemGlass = item.glassStatus || 'non_commande';
+        if (itemGlass !== deliveredGlassFilter) return false;
+      }
+
       return true;
     });
-  }, [allDeliveredItems, deliveredSearchTerm, periodFilter, selectedMonth, selectedWeek, selectedYear]);
+  }, [allDeliveredItems, deliveredSearchTerm, periodFilter, selectedMonth, selectedWeek, selectedYear, deliveredGlassFilter]);
 
   // Delivered items total value on current filter
   const deliveredFilteredValue = useMemo(() => {
@@ -1625,39 +1659,74 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
                 </strong>
               </div>
 
-              {/* Raccourcis Périodes Rapides */}
-              <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                {[
-                  { id: 'all', label: 'Toutes les dates' },
-                  { id: 'this_week', label: 'Cette semaine' },
-                  { id: 'last_week', label: 'Semaine dernière' },
-                  { id: 'this_month', label: 'Ce mois-ci' },
-                  { id: 'last_month', label: 'Mois dernier' }
-                ].map(p => (
-                  <button
-                    key={p.id}
-                    onClick={() => {
-                      setPeriodFilter(p.id);
-                      if (p.id !== 'all') {
-                        setSelectedMonth('all');
-                        setSelectedWeek('all');
-                      }
-                    }}
-                    style={{
-                      padding: '0.35rem 0.75rem',
-                      borderRadius: '0.5rem',
-                      border: '1px solid',
-                      borderColor: periodFilter === p.id ? '#16a34a' : '#e2e8f0',
-                      background: periodFilter === p.id ? '#f0fdf4' : 'white',
-                      color: periodFilter === p.id ? '#15803d' : '#64748b',
-                      fontSize: '0.78rem',
-                      fontWeight: 700,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    {p.label}
-                  </button>
-                ))}
+              {/* Filtres Rapides (Périodes & Vitrage) */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'flex-end' }}>
+                {/* Raccourcis Périodes Rapides */}
+                <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#64748b' }}>Période :</span>
+                  {[
+                    { id: 'all', label: 'Toutes les dates' },
+                    { id: 'this_week', label: 'Cette semaine' },
+                    { id: 'last_week', label: 'Semaine dernière' },
+                    { id: 'this_month', label: 'Ce mois-ci' },
+                    { id: 'last_month', label: 'Mois dernier' }
+                  ].map(p => (
+                    <button
+                      key={p.id}
+                      onClick={() => {
+                        setPeriodFilter(p.id);
+                        if (p.id !== 'all') {
+                          setSelectedMonth('all');
+                          setSelectedWeek('all');
+                        }
+                      }}
+                      style={{
+                        padding: '0.3rem 0.65rem',
+                        borderRadius: '0.5rem',
+                        border: '1px solid',
+                        borderColor: periodFilter === p.id ? '#16a34a' : '#e2e8f0',
+                        background: periodFilter === p.id ? '#f0fdf4' : 'white',
+                        color: periodFilter === p.id ? '#15803d' : '#64748b',
+                        fontSize: '0.76rem',
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Raccourcis Vitrage Rapides */}
+                <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#64748b' }}>Vitrage :</span>
+                  {[
+                    { id: 'all', label: 'Tous vitrages', color: '#0f172a', bg: '#f8fafc' },
+                    { id: 'non_commande', label: '⏳ À commander', color: '#64748b', bg: '#f1f5f9' },
+                    { id: 'commande', label: '📦 Commandé', color: '#1d4ed8', bg: '#eff6ff' },
+                    { id: 'arrive', label: '🚚 Arrivé', color: '#b45309', bg: '#fef3c7' },
+                    { id: 'livre', label: '✅ Livré', color: '#15803d', bg: '#f0fdf4' }
+                  ].map(vg => (
+                    <button
+                      key={vg.id}
+                      onClick={() => setDeliveredGlassFilter(vg.id)}
+                      style={{
+                        padding: '0.3rem 0.65rem',
+                        borderRadius: '0.5rem',
+                        border: '1px solid',
+                        borderColor: deliveredGlassFilter === vg.id ? (vg.color || '#16a34a') : '#e2e8f0',
+                        background: deliveredGlassFilter === vg.id ? (vg.bg || '#f0fdf4') : 'white',
+                        color: deliveredGlassFilter === vg.id ? (vg.color || '#15803d') : '#64748b',
+                        fontSize: '0.76rem',
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        boxShadow: deliveredGlassFilter === vg.id ? '0 1px 3px rgba(0,0,0,0.06)' : 'none'
+                      }}
+                    >
+                      {vg.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -1724,6 +1793,34 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
                 </select>
               </div>
 
+              {/* Filtre par État Vitrage */}
+              <div>
+                <label style={{ fontSize: '0.78rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '0.35rem' }}>
+                  🪟 État Vitrage :
+                </label>
+                <select
+                  value={deliveredGlassFilter}
+                  onChange={e => setDeliveredGlassFilter(e.target.value)}
+                  className="input"
+                  style={{
+                    width: '100%',
+                    fontSize: '0.85rem',
+                    fontWeight: 700,
+                    padding: '0.5rem',
+                    borderColor: deliveredGlassFilter !== 'all' ? '#16a34a' : '#cbd5e1',
+                    background: deliveredGlassFilter !== 'all' ? '#f0fdf4' : 'white',
+                    color: deliveredGlassFilter !== 'all' ? '#15803d' : '#0f172a'
+                  }}
+                >
+                  <option value="all">-- Tous les états vitrage --</option>
+                  <option value="non_commande">⏳ À commander (Non commandé)</option>
+                  <option value="commande">📦 Commandé</option>
+                  <option value="arrive">🚚 Arrivé</option>
+                  <option value="rempli">🏭 Rempli (Vitré)</option>
+                  <option value="livre">✅ Livré</option>
+                </select>
+              </div>
+
               {/* Recherche texte */}
               <div>
                 <label style={{ fontSize: '0.78rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '0.35rem' }}>
@@ -1741,7 +1838,7 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
 
             </div>
 
-            {/* Récapitulatif de la sélection filtrée */}
+            {/* Récapitulatif de la sélection filtrée & Action de masse */}
             <div style={{
               marginTop: '1rem',
               paddingTop: '0.75rem',
@@ -1750,13 +1847,52 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
               justifyContent: 'space-between',
               alignItems: 'center',
               flexWrap: 'wrap',
-              gap: '0.5rem',
+              gap: '0.75rem',
               fontSize: '0.82rem',
               color: '#475569'
             }}>
-              <div>
-                Affichage de <strong>{filteredDeliveredItems.length}</strong> pièce(s) livrée(s)
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                <div>
+                  Affichage de <strong>{filteredDeliveredItems.length}</strong> pièce(s) livrée(s)
+                </div>
+
+                {/* Modification en masse de l'état vitrage pour les pièces filtrées */}
+                {filteredDeliveredItems.length > 0 && (
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', background: '#f8fafc', padding: '0.2rem 0.6rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                    <span style={{ fontSize: '0.76rem', fontWeight: 700, color: '#334155' }}>
+                      🪟 Modifier vitrage affiché :
+                    </span>
+                    <select
+                      value=""
+                      onChange={e => {
+                        const val = e.target.value;
+                        if (!val) return;
+                        const label = val === 'livre' ? 'Livré' : val === 'commande' ? 'Commandé' : val === 'arrive' ? 'Arrivé' : val === 'non_commande' ? 'À commander' : val;
+                        if (window.confirm(`Voulez-vous passer l'état du vitrage des ${filteredDeliveredItems.length} pièce(s) affichée(s) à « ${label} » ?`)) {
+                          handleBulkUpdateDeliveredGlass(filteredDeliveredItems, val);
+                        }
+                      }}
+                      style={{
+                        fontSize: '0.76rem',
+                        fontWeight: 700,
+                        padding: '0.2rem 0.5rem',
+                        borderRadius: '5px',
+                        border: '1px solid #cbd5e1',
+                        background: 'white',
+                        color: '#0f172a',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <option value="">Sélectionner statut...</option>
+                      <option value="non_commande">⏳ Passer à « À commander »</option>
+                      <option value="commande">📦 Passer à « Commandé »</option>
+                      <option value="arrive">🚚 Passer à « Arrivé »</option>
+                      <option value="livre">✅ Passer à « Livré »</option>
+                    </select>
+                  </div>
+                )}
               </div>
+
               <div style={{
                 background: '#f0fdf4',
                 color: '#166534',
@@ -1882,22 +2018,41 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
                           ) : '—'}
                         </td>
 
-                        {/* État Vitrage */}
+                        {/* État Vitrage (Modifiable en direct) */}
                         <td style={{ padding: '0.85rem 1rem' }}>
-                          <span style={{ 
-                            fontSize: '0.72rem', 
-                            fontWeight: 800, 
-                            background: '#f0fdf4', 
-                            color: '#15803d', 
-                            padding: '0.2rem 0.5rem', 
-                            borderRadius: '9999px',
-                            border: '1px solid #bbf7d0',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '0.3rem'
-                          }}>
-                            <Check size={12} /> {item.glassStatus === 'livre' ? 'Livré' : item.glassStatus}
-                          </span>
+                          {(() => {
+                            const glassStatusesList = item.isSliding ? GLASS_STATUSES_SLIDING : GLASS_STATUSES_STANDARD;
+                            const currentGlass = item.glassStatus || 'non_commande';
+                            const currentGlassObj = glassStatusesList.find(s => s.id === currentGlass) || glassStatusesList[0];
+
+                            return (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                <select
+                                  value={currentGlass}
+                                  onChange={e => updateGlassStatus(item.orderId, item.id, e.target.value)}
+                                  style={{
+                                    fontSize: '0.78rem',
+                                    fontWeight: 800,
+                                    padding: '0.3rem 0.55rem',
+                                    borderRadius: '0.45rem',
+                                    border: `1.5px solid ${currentGlassObj.border}`,
+                                    background: currentGlassObj.bg,
+                                    color: currentGlassObj.color,
+                                    cursor: 'pointer',
+                                    outline: 'none',
+                                    boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                                  }}
+                                  title="Changer l'état du vitrage"
+                                >
+                                  {glassStatusesList.map(st => (
+                                    <option key={st.id} value={st.id}>
+                                      {st.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            );
+                          })()}
                         </td>
 
                         {/* Action: Remettre en Stock Atelier */}
