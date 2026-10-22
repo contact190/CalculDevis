@@ -43,6 +43,11 @@ import { persistentStorage } from './utils/storage';
 import { localSync } from './utils/localSync';
 import { smartMerge } from './utils/smartMerge';
 import { applyOps, generateOps, getDeviceId } from './utils/patchEngine';
+import { setCurrentAuthorName } from './utils/patchEngine';
+import LoginModal from './components/auth/LoginModal';
+import AccessControlModal from './modules/access/AccessControlModal';
+import { getActiveUser, setActiveUser, canAccessTab, recordAccessLog } from './utils/accessControl';
+import { ShieldCheck, LogOut, Lock } from 'lucide-react';
 
 // ─── SUSPENSE FALLBACK: Shown while a lazy module is loading ─────────────────
 const ModuleLoader = () => (
@@ -107,6 +112,15 @@ function App() {
     if (allowedTabs && allowedTabs.length > 0) return allowedTabs[0];
     return 'commercial';
   });
+  const [currentUser, setCurrentUser] = useState(() => getActiveUser());
+  const [isAccessModalOpen, setIsAccessModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (currentUser) {
+      setCurrentAuthorName(currentUser.name);
+    }
+  }, [currentUser]);
+
   const [database, setDatabase] = useState(null); // null = loading
   const [isLoading, setIsLoading] = useState(true);
   const [loadingMessage, setLoadingMessage] = useState('Chargement de vos données locales...');
@@ -138,6 +152,35 @@ function App() {
     currentQuoteRef.current = currentQuote;
   }, [currentQuote]);
   const [selectedShopQuote, setSelectedShopQuote] = useState(null);
+
+  const menuItems = useMemo(() => {
+    return [
+      { id: 'commercial', label: 'Commercial', icon: LayoutDashboard },
+      { id: 'quotes', label: 'Devis', icon: FileText },
+      { id: 'shop', label: 'Shop', icon: Store },
+      { id: 'siteplan', label: 'Plan de Chantier', icon: Building },
+      { id: 'orders', label: 'Commandes', icon: ShoppingBag },
+      { id: 'production', label: 'Atelier / Production', icon: Package },
+      { id: 'tracking', label: 'Gestion & Suivi', icon: CheckSquare },
+      { id: 'finished_goods', label: 'Produit Fini', icon: PackageCheck },
+      { id: 'shipping', label: 'Expédition & Colisage', icon: Truck },
+      { id: 'clients', label: 'Clients', icon: Users },
+      { id: 'finance', label: 'Finance', icon: TrendingUp },
+      { id: 'admin', label: 'Administration', icon: Settings },
+    ].filter(item => {
+      if (allowedTabs && !allowedTabs.includes(item.id)) return false;
+      return canAccessTab(currentUser, item.id);
+    });
+  }, [allowedTabs, currentUser]);
+
+  useEffect(() => {
+    if (currentUser && menuItems.length > 0) {
+      const isCurrentTabAllowed = menuItems.some(item => item.id === activeTab);
+      if (!isCurrentTabAllowed) {
+        setActiveTab(menuItems[0].id);
+      }
+    }
+  }, [currentUser, activeTab, menuItems]);
 
   const [currentConfig, setCurrentConfig] = useState({
     L: 1200,
@@ -1060,20 +1103,18 @@ function App() {
     );
   }
 
-  const menuItems = [
-    { id: 'commercial', label: 'Commercial', icon: LayoutDashboard },
-    { id: 'quotes', label: 'Devis', icon: FileText },
-    { id: 'shop', label: 'Shop', icon: Store },
-    { id: 'siteplan', label: 'Plan de Chantier', icon: Building },
-    { id: 'orders', label: 'Commandes', icon: ShoppingBag },
-    { id: 'production', label: 'Atelier / Production', icon: Package },
-    { id: 'tracking', label: 'Gestion & Suivi', icon: CheckSquare },
-    { id: 'finished_goods', label: 'Produit Fini', icon: PackageCheck },
-    { id: 'shipping', label: 'Expédition & Colisage', icon: Truck },
-    { id: 'clients', label: 'Clients', icon: Users },
-    { id: 'finance', label: 'Finance', icon: TrendingUp },
-    { id: 'admin', label: 'Administration', icon: Settings },
-  ].filter(item => !allowedTabs || allowedTabs.includes(item.id));
+  // ─── Verification du code d'accès / session ───────────────────────────────
+  if (!currentUser) {
+    return (
+      <LoginModal 
+        database={database} 
+        setDatabase={setDatabase} 
+        onLoginSuccess={(user) => {
+          setCurrentUser(user);
+        }} 
+      />
+    );
+  }
 
   const isInstallerMode = urlParams.get('mode') === 'installer';
   const installerOrderId = urlParams.get('orderId');
@@ -1296,13 +1337,44 @@ function App() {
         </div>
 
         <div className="sidebar-footer" style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '1rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem' }}>
-            <div style={{ width: '40px', height: '40px', background: '#334155', borderRadius: '50%', display: 'grid', placeItems: 'center' }}>
-              <span style={{ fontWeight: 600 }}>JD</span>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem', background: 'rgba(255,255,255,0.03)', borderRadius: '0.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', minWidth: 0 }}>
+              <div style={{ width: '36px', height: '36px', background: currentUser?.role === 'admin' ? '#7c3aed' : '#2563eb', borderRadius: '50%', display: 'grid', placeItems: 'center', flexShrink: 0, fontWeight: 700, fontSize: '0.85rem', color: 'white' }}>
+                {currentUser?.name ? currentUser.name.slice(0, 2).toUpperCase() : 'U'}
+              </div>
+              <div className="nav-label" style={{ minWidth: 0, overflow: 'hidden' }}>
+                <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 700, color: 'white', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {currentUser?.name || 'Utilisateur'}
+                </p>
+                <p style={{ margin: 0, fontSize: '0.68rem', color: currentUser?.role === 'admin' ? '#c084fc' : '#93c5fd' }}>
+                  {currentUser?.role === 'admin' ? 'Administrateur' : 'Opérateur'}
+                </p>
+              </div>
             </div>
-            <div className="nav-label">
-              <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600, color: 'white' }}>Jean Dupont</p>
-              <p style={{ margin: 0, fontSize: '0.75rem', color: '#94a3b8' }}>Administrateur</p>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+              {currentUser?.role === 'admin' && (
+                <button
+                  onClick={() => setIsAccessModalOpen(true)}
+                  style={{ background: 'rgba(59, 130, 246, 0.15)', border: 'none', color: '#93c5fd', cursor: 'pointer', padding: '6px', borderRadius: '6px', display: 'grid', placeItems: 'center' }}
+                  title="Gérer les comptes, codes et traçabilité"
+                >
+                  <ShieldCheck size={17} />
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  if (window.confirm("Se déconnecter de cette session et verrouiller l'application ?")) {
+                    recordAccessLog(currentUser, 'logout', database, setDatabase);
+                    setActiveUser(null);
+                    setCurrentUser(null);
+                  }
+                }}
+                style={{ background: 'rgba(239, 68, 68, 0.1)', border: 'none', color: '#f87171', cursor: 'pointer', padding: '6px', borderRadius: '6px', display: 'grid', placeItems: 'center' }}
+                title="Déconnexion (Verrouiller)"
+              >
+                <LogOut size={16} />
+              </button>
             </div>
           </div>
         </div>
@@ -1433,6 +1505,17 @@ function App() {
           )}
         </Suspense>
       </main>
+
+      {/* Modale de gestion des accès & traçabilité (Admin) */}
+      {isAccessModalOpen && (
+        <AccessControlModal
+          isOpen={isAccessModalOpen}
+          onClose={() => setIsAccessModalOpen(false)}
+          database={database}
+          setDatabase={setDatabase}
+          currentUser={currentUser}
+        />
+      )}
     </div>
   );
 }

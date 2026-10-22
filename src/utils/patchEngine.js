@@ -39,6 +39,7 @@ const TRACKABLE_COLLECTIONS = [
   'clients', 'quotes', 'orders', 'contracts', 'financialTrackers', 'invoiceRecords', 'compositions', 'glass', 'colors',
   'options', 'accessories', 'profiles', 'joints', 'reinforcements', 'hardwareSets',
   'ranges', 'categories', 'traverses', 'glassProfileCompatibility', 'gasketCompatibility', 'shopProducts',
+  'userAccounts', 'accessLogs',
   'shutterComponents.caissons', 'shutterComponents.lames',
   'shutterComponents.lamesFinales', 'shutterComponents.lameFinales', 'shutterComponents.glissieres',
   'shutterComponents.axes', 'shutterComponents.kits', 'shutterComponents.extras', 'shutterComponents.moteurs'
@@ -68,6 +69,23 @@ export function getSynchronizedDate() {
   return new Date(Date.now() + clockSkew);
 }
 
+let _currentAuthorName = null;
+export function setCurrentAuthorName(name) {
+  _currentAuthorName = name;
+}
+
+export function getCurrentAuthor() {
+  if (_currentAuthorName) return `${_currentAuthorName} (${getDeviceId()})`;
+  try {
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('calculDevis_activeUser') : null;
+    if (raw) {
+      const u = JSON.parse(raw);
+      if (u && u.name) return `${u.name} (${getDeviceId()})`;
+    }
+  } catch (e) {}
+  return getDeviceId();
+}
+
 /**
  * Stamp an item with _lastModified metadata
  */
@@ -76,7 +94,7 @@ export function stampItem(item) {
   return {
     ...item,
     _lastModified: getSynchronizedDate().toISOString(),
-    _modifiedBy: getDeviceId()
+    _modifiedBy: getCurrentAuthor()
   };
 }
 
