@@ -166,7 +166,11 @@ export default function WorkshopAnalysisTab({ data, quoteSettings }) {
         }
       }
 
-      const totalItems = sl.items?.length || 1;
+      const totalItems = (sl.ouvertures && sl.ouvertures.length > 0)
+        ? sl.ouvertures.length
+        : (sl.cadres && sl.cadres.length > 0)
+          ? sl.cadres.length
+          : (sl.items?.length || 1);
       const surfaceM2 = getSubLotTotalSurface(sl.items);
 
       // Realistic benchmark calculation if actual recorded timestamps were missing or simulated
@@ -296,9 +300,9 @@ export default function WorkshopAnalysisTab({ data, quoteSettings }) {
     // Sort alerts by highest overrun
     alertOverruns.sort((a, b) => b.overrunPct - a.overrunPct);
 
-    // G. Period totals (orders, clients, sub-lots, openings)
-    const distinctOrders = new Set(filteredSubLotsByPeriod.map(i => i.order.id));
-    const distinctClients = new Set(filteredSubLotsByPeriod.map(i => i.clientId).filter(Boolean));
+    // G. Period totals (orders, clients, sub-lots, openings from completed sub-lots)
+    const distinctOrders = new Set(completedItems.map(i => i.order.id));
+    const distinctClients = new Set(completedItems.map(i => i.clientId).filter(Boolean));
 
     return {
       totalSubLots,
