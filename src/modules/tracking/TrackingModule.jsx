@@ -670,32 +670,16 @@ export default function TrackingModule({ data, setData, quoteSettings }) {
       return chunks;
     };
 
-    // Coulissant
+    // Coulissant : directement fenêtre complète (comme dans les ouvrants)
     const coulissantChunks = chunkArray(groups.coulissant, size);
     coulissantChunks.forEach(chunk => {
-      const cadres = [];
-      const panneaux = [];
-
-      chunk.forEach(op => {
-        const panelCount = getSlidingPanelsCount(op.item, data);
-        cadres.push({
-          id: `cadre_${op.voidId}`,
-          repere: op.repere,
-          label: `Cadre Dormant ${op.label}`,
-          dim: `${op.L} x ${op.H} mm`,
-          location: `${op.floorName} - ${op.aptName}`
-        });
-
-        for (let p = 1; p <= panelCount; p++) {
-          panneaux.push({
-            id: `panneau_${op.voidId}_${p}`,
-            repere: op.repere,
-            label: `${op.label}`,
-            panelName: panelCount === 2 ? (p === 1 ? 'Vantail Gauche (V1)' : 'Vantail Droit (V2)') : `Vantail ${p}`,
-            dim: `${Math.round(op.L / panelCount)} x ${op.H} mm approx.`
-          });
-        }
-      });
+      const ouvertures = chunk.map(op => ({
+        id: `coul_${op.voidId}`,
+        repere: op.repere,
+        label: op.label,
+        dim: `${op.L} x ${op.H} mm`,
+        location: `${op.floorName} - ${op.aptName}`
+      }));
 
       newSubLots.push({
         id: `SL-${Date.now()}-${subLotCounter}`,
@@ -703,9 +687,9 @@ export default function TrackingModule({ data, setData, quoteSettings }) {
         name: `Sous-Lot SL-${String(subLotCounter).padStart(2, '0')} (Coulissant - ${chunk.length} ouv.)`,
         family: 'coulissant',
         items: chunk,
-        cadres: cadres,
-        panneaux: panneaux,
-        ouvertures: [],
+        cadres: [],
+        panneaux: [],
+        ouvertures: ouvertures,
         remarks: '',
         status: 'En attente',
         checklist: {},
@@ -1048,7 +1032,7 @@ export default function TrackingModule({ data, setData, quoteSettings }) {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(6.5);
     doc.setTextColor(100, 116, 139);
-    doc.text("Pointeuse Cadres/Panneaux", 15 + qrBoxW + 5 + qrBoxW / 2, y + 42, { align: 'center' });
+    doc.text("Pointeuse Contrôle Fenêtres", 15 + qrBoxW + 5 + qrBoxW / 2, y + 42, { align: 'center' });
 
     // QR 3: PORTAIL MOBILE
     doc.setFillColor(254, 243, 199);
@@ -1430,11 +1414,12 @@ export default function TrackingModule({ data, setData, quoteSettings }) {
 
               // Count completion
               const checklist = subLot.checklist || {};
-              const totalItems = isSliding 
+              const hasLegacyPanneaux = (subLot.cadres?.length > 0 || subLot.panneaux?.length > 0) && (!subLot.ouvertures || subLot.ouvertures.length === 0);
+              const totalItems = hasLegacyPanneaux
                 ? (subLot.cadres || []).length + (subLot.panneaux || []).length
                 : (subLot.ouvertures || []).length;
               
-              const checkedItems = isSliding
+              const checkedItems = hasLegacyPanneaux
                 ? (subLot.cadres || []).filter(c => !!checklist[c.id]).length + (subLot.panneaux || []).filter(p => !!checklist[p.id]).length
                 : (subLot.ouvertures || []).filter(o => !!checklist[o.id]).length;
               

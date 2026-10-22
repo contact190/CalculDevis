@@ -267,7 +267,7 @@ export default function WorkshopAnalysisTab({ data, quoteSettings }) {
     const familyEntries = [
       { key: 'fixe', label: 'Châssis Fixe Seul', avg: avgByFamily.fixe, count: familyStats.fixe.count },
       { key: 'ouvrant', label: 'Châssis Ouvrant Frappe', avg: avgByFamily.ouvrant, count: familyStats.ouvrant.count },
-      { key: 'coulissant', label: 'Coulissant (Cadre & Vantaux)', avg: avgByFamily.coulissant, count: familyStats.coulissant.count }
+      { key: 'coulissant', label: 'Coulissant', avg: avgByFamily.coulissant, count: familyStats.coulissant.count }
     ].filter(f => f.avg > 0);
 
     familyEntries.sort((a, b) => a.avg - b.avg);
@@ -511,7 +511,7 @@ export default function WorkshopAnalysisTab({ data, quoteSettings }) {
             <div style={{ padding: '0.85rem 1rem', background: '#f0f9ff', borderRadius: '0.75rem', border: '1px solid #bae6fd' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
                 <span style={{ fontWeight: 800, fontSize: '0.9rem', color: '#0369a1' }}>
-                  🟦 Coulissant (Cadre & Vantaux)
+                  🟦 Coulissant
                 </span>
                 <span style={{ fontWeight: 800, fontSize: '1.1rem', color: '#0c4a6e' }}>
                   {formatDuration(analysisStats.avgByFamily.coulissant)}

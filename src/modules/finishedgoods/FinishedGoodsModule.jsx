@@ -160,13 +160,13 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
 
     // 2. Contrôle si checklist 100% complétée (avec fabrication commencée)
     const checklist = sl.checklist || {};
-    const isSliding = sl.family === 'coulissant';
-    const totalItems = isSliding
+    const hasLegacy = (sl.cadres?.length > 0 || sl.panneaux?.length > 0) && (!sl.ouvertures || sl.ouvertures.length === 0);
+    const totalItems = hasLegacy
       ? (sl.cadres || []).length + (sl.panneaux || []).length
       : (sl.ouvertures || []).length;
     
     if (totalItems > 0) {
-      const checkedCount = isSliding
+      const checkedCount = hasLegacy
         ? (sl.cadres || []).filter(c => checklist[c.id]).length + (sl.panneaux || []).filter(p => checklist[p.id]).length
         : (sl.ouvertures || []).filter(o => checklist[o.id]).length;
       if (checkedCount >= totalItems && (sl.status === 'En cours' || !!sl.startedAt)) return true;
@@ -175,12 +175,16 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
     return false;
   }, []);
 
-  // Helper to extract all elements (cadres, panneaux, ouvertures) from an order (sous-lots terminés)
+  // Helper to extract all elements (fenêtres complètes coulissantes & ouvrantes) from an order (sous-lots terminés)
   const getOrderElements = useCallback((order) => {
-    if (!order) return { cadres: [], panneaux: [], all: [], lots: [] };
+    if (!order) return { cadres: [], panneaux: [], all: [], lots: [], coulissants: [], ouvrants: [], fixes: [] };
 
     const cadres = [];
     const panneaux = [];
+    const coulissants = [];
+    const ouvrants = [];
+    const fixes = [];
+    const all = [];
     const lotsMap = new Map();
 
     // 1. Ne retenir UNIQUEMENT que les sous-lots FINIS dans Gestion & Suivi / Atelier
@@ -199,7 +203,7 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
     });
 
     if (allSubLots.length === 0) {
-      return { cadres: [], panneaux: [], all: [], lots: [] };
+      return { cadres: [], panneaux: [], all: [], lots: [], coulissants: [], ouvrants: [], fixes: [] };
     }
 
     allSubLots.forEach(sl => {
@@ -209,94 +213,114 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
       const checklist = sl.checklist || {};
       const isSliding = sl.family === 'coulissant';
 
-      // Cadres
-      (sl.cadres || []).forEach(c => {
-        const isDone = sl.status === 'Terminé' || !!checklist[c.id] || !!order.finishedGoodsStock?.[c.id];
-        const glassStatus = order.glassStatuses?.[c.id] || 'non_commande';
-        const deliveryInfo = order.finishedGoodsDelivery?.[c.id];
-        const isDelivered = !!deliveryInfo?.delivered;
+      // Flux standard / moderne : fenêtres complètes (coulissants, ouvrants et fixes)
+      if (sl.ouvertures && sl.ouvertures.length > 0) {
+        sl.ouvertures.forEach(o => {
+          const isDone = sl.status === 'Terminé' || !!checklist[o.id] || !!order.finishedGoodsStock?.[o.id];
+          const glassStatus = order.glassStatuses?.[o.id] || 'non_commande';
+          const deliveryInfo = order.finishedGoodsDelivery?.[o.id];
+          const isDelivered = !!deliveryInfo?.delivered;
 
-        cadres.push({
-          id: c.id,
-          orderId: order.id,
-          clientId: order.clientId,
-          repere: c.repere || '—',
-          label: c.label || 'Cadre Dormant',
-          dim: c.dim || '—',
-          location: c.location || '',
-          type: 'cadre',
-          family: sl.family,
-          isSliding,
-          subLotId: sl.id,
-          lotLabel,
-          inStock: isDone,
-          glassStatus,
-          isDelivered,
-          deliveredAt: deliveryInfo?.deliveredAt || null,
-          deliveryRef: deliveryInfo?.deliveryRef || ''
+          const defaultLabel = isSliding
+            ? 'Fenêtre Coulissante'
+            : sl.family === 'fixe'
+              ? 'Châssis Fixe'
+              : 'Fenêtre Ouvrante';
+
+          const itemObj = {
+            id: o.id,
+            orderId: order.id,
+            clientId: order.clientId,
+            repere: o.repere || '—',
+            label: o.label || defaultLabel,
+            dim: o.dim || '—',
+            location: o.location || '',
+            type: isSliding ? 'coulissant' : sl.family === 'fixe' ? 'fixe' : 'ouvrant',
+            family: sl.family,
+            isSliding,
+            subLotId: sl.id,
+            lotLabel,
+            inStock: isDone,
+            glassStatus,
+            isDelivered,
+            deliveredAt: deliveryInfo?.deliveredAt || null,
+            deliveryRef: deliveryInfo?.deliveryRef || ''
+          };
+
+          all.push(itemObj);
+          if (isSliding) {
+            coulissants.push(itemObj);
+          } else if (sl.family === 'fixe') {
+            fixes.push(itemObj);
+          } else {
+            ouvrants.push(itemObj);
+          }
+          cadres.push(itemObj);
         });
-      });
+      } else {
+        // Rétrocompatibilité : anciens sous-lots qui étaient séparés en cadres et panneaux
+        (sl.cadres || []).forEach(c => {
+          const isDone = sl.status === 'Terminé' || !!checklist[c.id] || !!order.finishedGoodsStock?.[c.id];
+          const glassStatus = order.glassStatuses?.[c.id] || 'non_commande';
+          const deliveryInfo = order.finishedGoodsDelivery?.[c.id];
+          const isDelivered = !!deliveryInfo?.delivered;
 
-      // Panneaux (coulissant)
-      (sl.panneaux || []).forEach(p => {
-        const isDone = sl.status === 'Terminé' || !!checklist[p.id] || !!order.finishedGoodsStock?.[p.id];
-        const glassStatus = order.glassStatuses?.[p.id] || 'non_commande';
-        const deliveryInfo = order.finishedGoodsDelivery?.[p.id];
-        const isDelivered = !!deliveryInfo?.delivered;
-
-        panneaux.push({
-          id: p.id,
-          orderId: order.id,
-          clientId: order.clientId,
-          repere: p.repere || '—',
-          label: `${p.label || 'Vantail'} (${p.panelName || 'Panneau'})`,
-          dim: p.dim || '—',
-          type: 'panneau',
-          family: sl.family,
-          isSliding,
-          subLotId: sl.id,
-          lotLabel,
-          inStock: isDone,
-          glassStatus,
-          isDelivered,
-          deliveredAt: deliveryInfo?.deliveredAt || null,
-          deliveryRef: deliveryInfo?.deliveryRef || ''
+          const itemObj = {
+            id: c.id,
+            orderId: order.id,
+            clientId: order.clientId,
+            repere: c.repere || '—',
+            label: c.label || 'Cadre Dormant',
+            dim: c.dim || '—',
+            location: c.location || '',
+            type: 'cadre',
+            family: sl.family,
+            isSliding,
+            subLotId: sl.id,
+            lotLabel,
+            inStock: isDone,
+            glassStatus,
+            isDelivered,
+            deliveredAt: deliveryInfo?.deliveredAt || null,
+            deliveryRef: deliveryInfo?.deliveryRef || ''
+          };
+          cadres.push(itemObj);
+          all.push(itemObj);
         });
-      });
 
-      // Ouvertures (ouvrant/fixe)
-      (sl.ouvertures || []).forEach(o => {
-        const isDone = sl.status === 'Terminé' || !!checklist[o.id] || !!order.finishedGoodsStock?.[o.id];
-        const glassStatus = order.glassStatuses?.[o.id] || 'non_commande';
-        const deliveryInfo = order.finishedGoodsDelivery?.[o.id];
-        const isDelivered = !!deliveryInfo?.delivered;
+        (sl.panneaux || []).forEach(p => {
+          const isDone = sl.status === 'Terminé' || !!checklist[p.id] || !!order.finishedGoodsStock?.[p.id];
+          const glassStatus = order.glassStatuses?.[p.id] || 'non_commande';
+          const deliveryInfo = order.finishedGoodsDelivery?.[p.id];
+          const isDelivered = !!deliveryInfo?.delivered;
 
-        cadres.push({
-          id: o.id,
-          orderId: order.id,
-          clientId: order.clientId,
-          repere: o.repere || '—',
-          label: o.label || (sl.family === 'fixe' ? 'Châssis Fixe' : 'Châssis Ouvrant'),
-          dim: o.dim || '—',
-          location: o.location || '',
-          type: 'cadre',
-          family: sl.family,
-          isSliding: false,
-          subLotId: sl.id,
-          lotLabel,
-          inStock: isDone,
-          glassStatus,
-          isDelivered,
-          deliveredAt: deliveryInfo?.deliveredAt || null,
-          deliveryRef: deliveryInfo?.deliveryRef || ''
+          const itemObj = {
+            id: p.id,
+            orderId: order.id,
+            clientId: order.clientId,
+            repere: p.repere || '—',
+            label: `${p.label || 'Vantail'} (${p.panelName || 'Panneau'})`,
+            dim: p.dim || '—',
+            type: 'panneau',
+            family: sl.family,
+            isSliding,
+            subLotId: sl.id,
+            lotLabel,
+            inStock: isDone,
+            glassStatus,
+            isDelivered,
+            deliveredAt: deliveryInfo?.deliveredAt || null,
+            deliveryRef: deliveryInfo?.deliveryRef || ''
+          };
+          panneaux.push(itemObj);
+          all.push(itemObj);
         });
-      });
+      }
     });
 
     const lots = Array.from(lotsMap.entries()).map(([id, label]) => ({ id, label }));
-    const all = [...cadres, ...panneaux];
 
-    return { cadres, panneaux, all, lots };
+    return { cadres, panneaux, all, lots, coulissants, ouvrants, fixes };
   }, [isSubLotFinished]);
 
   // Update glass status for a specific item
@@ -386,35 +410,45 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
 
   // Global KPIs across all active orders (Stock, Delivered, Values)
   const globalStats = useMemo(() => {
-    let totalCadres = 0;
-    let cadresInStock = 0;
-    let totalPanneaux = 0;
-    let panneauxInStock = 0;
-    let panneauxRemplis = 0;
+    let totalCoulissants = 0;
+    let coulissantsInStock = 0;
+    let totalOuvrants = 0;
+    let ouvrantsInStock = 0;
+    let totalFixes = 0;
+    let fixesInStock = 0;
     let totalGlassLivres = 0;
     let totalStockValue = 0;
     let totalDeliveredValue = 0;
     let totalDeliveredItems = 0;
     let totalInStockItems = 0;
+    let totalWindows = 0;
+    let windowsInStock = 0;
 
     activeLaunchedOrders.forEach(o => {
-      const { cadres, panneaux, all } = getOrderElements(o);
+      const { all, coulissants, ouvrants, fixes } = getOrderElements(o);
       const orderHT = getOrderTotalHT(o, data, quoteSettings);
       const totalItemsCount = all.length;
 
-      // In stock items (not delivered)
-      const stockCadres = cadres.filter(c => c.inStock && !c.isDelivered);
-      const stockPanneaux = panneaux.filter(p => p.inStock && !p.isDelivered);
+      const notDeliveredAll = all.filter(a => !a.isDelivered);
       const stockAll = all.filter(a => a.inStock && !a.isDelivered);
       const deliveredAll = all.filter(a => a.isDelivered);
 
-      totalCadres += cadres.filter(c => !c.isDelivered).length;
-      cadresInStock += stockCadres.length;
-      totalPanneaux += panneaux.filter(p => !p.isDelivered).length;
-      panneauxInStock += stockPanneaux.length;
-      panneauxRemplis += stockPanneaux.filter(p => p.isSliding && p.glassStatus === 'rempli').length;
-      totalGlassLivres += all.filter(i => i.glassStatus === 'livre').length;
+      totalWindows += notDeliveredAll.length;
+      windowsInStock += stockAll.length;
 
+      const notDeliveredCoulissants = (coulissants || []).filter(c => !c.isDelivered);
+      totalCoulissants += notDeliveredCoulissants.length;
+      coulissantsInStock += notDeliveredCoulissants.filter(c => c.inStock).length;
+
+      const notDeliveredOuvrants = (ouvrants || []).filter(ouv => !ouv.isDelivered);
+      totalOuvrants += notDeliveredOuvrants.length;
+      ouvrantsInStock += notDeliveredOuvrants.filter(ouv => ouv.inStock).length;
+
+      const notDeliveredFixes = (fixes || []).filter(f => !f.isDelivered);
+      totalFixes += notDeliveredFixes.length;
+      fixesInStock += notDeliveredFixes.filter(f => f.inStock).length;
+
+      totalGlassLivres += all.filter(i => i.glassStatus === 'livre').length;
       totalInStockItems += stockAll.length;
       totalDeliveredItems += deliveredAll.length;
 
@@ -425,16 +459,25 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
     });
 
     return {
-      totalCadres,
-      cadresInStock,
-      totalPanneaux,
-      panneauxInStock,
-      panneauxRemplis,
+      totalCoulissants,
+      coulissantsInStock,
+      totalOuvrants,
+      ouvrantsInStock,
+      totalFixes,
+      fixesInStock,
+      totalWindows,
+      windowsInStock,
       totalGlassLivres,
       totalStockValue,
       totalDeliveredValue,
       totalDeliveredItems,
-      totalInStockItems
+      totalInStockItems,
+      // Compatibilité
+      totalCadres: totalCoulissants + totalOuvrants + totalFixes,
+      cadresInStock: coulissantsInStock + ouvrantsInStock + fixesInStock,
+      totalPanneaux: 0,
+      panneauxInStock: 0,
+      panneauxRemplis: 0
     };
   }, [activeLaunchedOrders, getOrderElements, data, quoteSettings]);
 
@@ -642,7 +685,7 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
                 Stock Atelier & Produits Finis
               </h1>
               <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748b' }}>
-                Suivi du stock physique (cadres & panneaux), expéditions / livraisons et valorisation financière
+                Suivi du stock physique (fenêtres complètes coulissantes & ouvrantes), expéditions / livraisons et valorisation financière
               </p>
             </div>
           </div>
@@ -721,32 +764,32 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
           </span>
         </div>
 
-        {/* 3. Stock Cadres */}
+        {/* 3. Stock Coulissants */}
         <div style={{ background: 'white', padding: '1.25rem', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#64748b' }}>STOCK CADRES</span>
+            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#64748b' }}>STOCK COULISSANTS</span>
             <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#0284c7', background: '#e0f2fe', padding: '0.15rem 0.5rem', borderRadius: '9999px' }}>
-              {globalStats.totalCadres > 0 ? Math.round((globalStats.cadresInStock / globalStats.totalCadres) * 100) : 0}%
+              {globalStats.totalCoulissants > 0 ? Math.round((globalStats.coulissantsInStock / globalStats.totalCoulissants) * 100) : 0}%
             </span>
           </div>
           <div style={{ fontSize: '1.7rem', fontWeight: 800, color: '#0284c7' }}>
-            {globalStats.cadresInStock} <span style={{ fontSize: '1rem', color: '#94a3b8', fontWeight: 600 }}>/ {globalStats.totalCadres}</span>
+            {globalStats.coulissantsInStock} <span style={{ fontSize: '1rem', color: '#94a3b8', fontWeight: 600 }}>/ {globalStats.totalCoulissants}</span>
           </div>
-          <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Cadres dormants en stock</span>
+          <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Fenêtres coulissantes complètes</span>
         </div>
 
-        {/* 4. Stock Panneaux */}
+        {/* 4. Stock Ouvrants & Fixes */}
         <div style={{ background: 'white', padding: '1.25rem', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#64748b' }}>STOCK PANNEAUX</span>
+            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#64748b' }}>STOCK OUVRANTS & FIXES</span>
             <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#7c3aed', background: '#ede9fe', padding: '0.15rem 0.5rem', borderRadius: '9999px' }}>
-              {globalStats.totalPanneaux > 0 ? Math.round((globalStats.panneauxInStock / globalStats.totalPanneaux) * 100) : 0}%
+              {(globalStats.totalOuvrants + globalStats.totalFixes) > 0 ? Math.round(((globalStats.ouvrantsInStock + globalStats.fixesInStock) / (globalStats.totalOuvrants + globalStats.totalFixes)) * 100) : 0}%
             </span>
           </div>
           <div style={{ fontSize: '1.7rem', fontWeight: 800, color: '#7c3aed' }}>
-            {globalStats.panneauxInStock} <span style={{ fontSize: '1rem', color: '#94a3b8', fontWeight: 600 }}>/ {globalStats.totalPanneaux}</span>
+            {globalStats.ouvrantsInStock + globalStats.fixesInStock} <span style={{ fontSize: '1rem', color: '#94a3b8', fontWeight: 600 }}>/ {globalStats.totalOuvrants + globalStats.totalFixes}</span>
           </div>
-          <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Vantaux coulissants & ouvrants</span>
+          <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Fenêtres battantes & fixes complètes</span>
         </div>
       </div>
 
@@ -871,25 +914,30 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
               <p style={{ color: '#64748b', fontSize: '0.875rem', margin: 0 }}>
                 {searchTerm 
                   ? "Aucune commande ne correspond à votre recherche."
-                  : "Dès que des sous-lots sont lancés et terminés dans « Gestion & Suivi », leurs cadres et panneaux apparaîtront ici."}
+                  : "Dès que des sous-lots sont lancés et terminés dans « Gestion & Suivi », leurs fenêtres et châssis apparaîtront ici."}
               </p>
             </div>
           ) : (
             filteredOrders.map(order => {
               const client = (data?.clients || []).find(c => c.id === order.clientId);
               const clientName = client?.nom || client?.name || 'Client Inconnu';
-              const { cadres, panneaux, all, lots } = getOrderElements(order);
+              const { cadres, panneaux, all, lots, coulissants, ouvrants, fixes } = getOrderElements(order);
 
               // Éléments non encore livrés (actuellement présents dans l'atelier)
-              const activeCadres = cadres.filter(c => !c.isDelivered);
-              const activePanneaux = panneaux.filter(p => !p.isDelivered);
               const activeAll = all.filter(a => !a.isDelivered);
+              const activeCoulissants = (coulissants || []).filter(c => !c.isDelivered);
+              const activeOuvrants = (ouvrants || []).filter(o => !o.isDelivered);
+              const activeFixes = (fixes || []).filter(f => !f.isDelivered);
+              const activePanneaux = (panneaux || []).filter(p => !p.isDelivered);
+              const activeCadres = (cadres || []).filter(c => !c.isDelivered);
 
-              // Cadres & Panneaux prêts
-              const cadresDone = activeCadres.filter(c => c.inStock).length;
+              // Quantités prêtes en stock
+              const coulissantsDone = activeCoulissants.filter(c => c.inStock).length;
+              const ouvrantsDone = activeOuvrants.filter(o => o.inStock).length;
+              const fixesDone = activeFixes.filter(f => f.inStock).length;
               const panneauxDone = activePanneaux.filter(p => p.inStock).length;
-              const slidingPanneaux = activePanneaux.filter(p => p.isSliding);
-              const slidingRemplis = slidingPanneaux.filter(p => p.glassStatus === 'rempli').length;
+              const cadresDone = activeCadres.filter(c => c.inStock).length;
+              const slidingRemplis = activeCoulissants.filter(c => c.glassStatus === 'rempli').length;
 
               const isExpanded = !!expandedOrders[order.id];
               const orderHT = getOrderTotalHT(order, data, quoteSettings);
@@ -994,38 +1042,60 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
 
                     {/* Synthèse rapide à droite */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
-                      <div style={{ display: 'flex', gap: '0.65rem' }}>
-                        {/* Badge Cadres */}
-                        <div style={{ 
-                          display: 'flex', 
-                          flexDirection: 'column', 
-                          alignItems: 'center', 
-                          background: '#f8fafc', 
-                          padding: '0.35rem 0.75rem', 
-                          borderRadius: '0.5rem', 
-                          border: '1px solid #e2e8f0' 
-                        }}>
-                          <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748b' }}>STOCK CADRES</span>
-                          <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#0284c7' }}>
-                            {cadresDone} / {activeCadres.length}
-                          </span>
-                        </div>
+                      <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap' }}>
+                        {/* Badge Coulissants */}
+                        {activeCoulissants.length > 0 && (
+                          <div style={{ 
+                            display: 'flex', 
+                            flexDirection: 'column', 
+                            alignItems: 'center', 
+                            background: '#f0f9ff', 
+                            padding: '0.35rem 0.75rem', 
+                            borderRadius: '0.5rem', 
+                            border: '1px solid #bae6fd' 
+                          }}>
+                            <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#0369a1' }}>COULISSANTS</span>
+                            <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#0284c7' }}>
+                              {coulissantsDone} / {activeCoulissants.length}
+                            </span>
+                          </div>
+                        )}
 
-                        {/* Badge Panneaux */}
-                        <div style={{ 
-                          display: 'flex', 
-                          flexDirection: 'column', 
-                          alignItems: 'center', 
-                          background: '#f8fafc', 
-                          padding: '0.35rem 0.75rem', 
-                          borderRadius: '0.5rem', 
-                          border: '1px solid #e2e8f0' 
-                        }}>
-                          <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748b' }}>STOCK PANNEAUX</span>
-                          <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#7c3aed' }}>
-                            {panneauxDone} / {activePanneaux.length}
-                          </span>
-                        </div>
+                        {/* Badge Ouvrants & Fixes */}
+                        {(activeOuvrants.length > 0 || activeFixes.length > 0) && (
+                          <div style={{ 
+                            display: 'flex', 
+                            flexDirection: 'column', 
+                            alignItems: 'center', 
+                            background: '#faf5ff', 
+                            padding: '0.35rem 0.75rem', 
+                            borderRadius: '0.5rem', 
+                            border: '1px solid #e9d5ff' 
+                          }}>
+                            <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#7c3aed' }}>OUVRANTS & FIXES</span>
+                            <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#6d28d9' }}>
+                              {ouvrantsDone + fixesDone} / {activeOuvrants.length + activeFixes.length}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Rétrocompatibilité anciens panneaux */}
+                        {activePanneaux.length > 0 && (
+                          <div style={{ 
+                            display: 'flex', 
+                            flexDirection: 'column', 
+                            alignItems: 'center', 
+                            background: '#f8fafc', 
+                            padding: '0.35rem 0.75rem', 
+                            borderRadius: '0.5rem', 
+                            border: '1px solid #e2e8f0' 
+                          }}>
+                            <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748b' }}>PANNEAUX</span>
+                            <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#475569' }}>
+                              {panneauxDone} / {activePanneaux.length}
+                            </span>
+                          </div>
+                        )}
                       </div>
 
                       {/* Bouton Tout Livrer */}
@@ -1081,52 +1151,56 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
                         marginBottom: '1.5rem' 
                       }}>
                         
-                        {/* Carte Stock Cadres */}
-                        <div style={{ background: 'white', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                            <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                              🚪 Stock Cadres Dormants
-                            </span>
-                            <span style={{ fontSize: '0.8rem', fontWeight: 800, color: cadresDone === activeCadres.length && activeCadres.length > 0 ? '#16a34a' : '#0284c7' }}>
-                              {cadresDone} / {activeCadres.length} prêts
-                            </span>
-                          </div>
-                          <div style={{ width: '100%', height: '8px', background: '#f1f5f9', borderRadius: '9999px', overflow: 'hidden' }}>
-                            <div style={{ 
-                              width: `${activeCadres.length > 0 ? (cadresDone / activeCadres.length) * 100 : 0}%`, 
-                              height: '100%', 
-                              background: '#0284c7', 
-                              borderRadius: '9999px',
-                              transition: 'width 0.3s ease'
-                            }} />
-                          </div>
-                        </div>
-
-                        {/* Carte Stock Panneaux */}
-                        <div style={{ background: 'white', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                            <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                              🪟 Stock Panneaux (Vantaux)
-                            </span>
-                            <span style={{ fontSize: '0.8rem', fontWeight: 800, color: panneauxDone === activePanneaux.length && activePanneaux.length > 0 ? '#16a34a' : '#7c3aed' }}>
-                              {panneauxDone} / {activePanneaux.length} prêts
-                            </span>
-                          </div>
-                          <div style={{ width: '100%', height: '8px', background: '#f1f5f9', borderRadius: '9999px', overflow: 'hidden' }}>
-                            <div style={{ 
-                              width: `${activePanneaux.length > 0 ? (panneauxDone / activePanneaux.length) * 100 : 0}%`, 
-                              height: '100%', 
-                              background: '#7c3aed', 
-                              borderRadius: '9999px',
-                              transition: 'width 0.3s ease'
-                            }} />
-                          </div>
-                          {slidingPanneaux.length > 0 && (
-                            <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: '#6d28d9', fontWeight: 600 }}>
-                              ✨ {slidingRemplis} / {slidingPanneaux.length} vantaux coulissants vitrés en atelier (remplis)
+                        {/* Carte Stock Coulissants */}
+                        {activeCoulissants.length > 0 && (
+                          <div style={{ background: 'white', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                              <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                🚪 Stock Fenêtres Coulissantes
+                              </span>
+                              <span style={{ fontSize: '0.8rem', fontWeight: 800, color: coulissantsDone === activeCoulissants.length && activeCoulissants.length > 0 ? '#16a34a' : '#0284c7' }}>
+                                {coulissantsDone} / {activeCoulissants.length} prêtes
+                              </span>
                             </div>
-                          )}
-                        </div>
+                            <div style={{ width: '100%', height: '8px', background: '#f1f5f9', borderRadius: '9999px', overflow: 'hidden' }}>
+                              <div style={{ 
+                                width: `${activeCoulissants.length > 0 ? (coulissantsDone / activeCoulissants.length) * 100 : 0}%`, 
+                                height: '100%', 
+                                background: '#0284c7', 
+                                borderRadius: '9999px',
+                                transition: 'width 0.3s ease'
+                              }} />
+                            </div>
+                            {slidingRemplis > 0 && (
+                              <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: '#0369a1', fontWeight: 600 }}>
+                                ✨ {slidingRemplis} / {activeCoulissants.length} coulissants vitrés en atelier (remplis)
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Carte Stock Ouvrants & Fixes */}
+                        {(activeOuvrants.length > 0 || activeFixes.length > 0) && (
+                          <div style={{ background: 'white', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                              <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                🪟 Stock Ouvrants & Fixes
+                              </span>
+                              <span style={{ fontSize: '0.8rem', fontWeight: 800, color: (ouvrantsDone + fixesDone) === (activeOuvrants.length + activeFixes.length) && (activeOuvrants.length + activeFixes.length) > 0 ? '#16a34a' : '#7c3aed' }}>
+                                {ouvrantsDone + fixesDone} / {activeOuvrants.length + activeFixes.length} prêts
+                              </span>
+                            </div>
+                            <div style={{ width: '100%', height: '8px', background: '#f1f5f9', borderRadius: '9999px', overflow: 'hidden' }}>
+                              <div style={{ 
+                                width: `${(activeOuvrants.length + activeFixes.length) > 0 ? ((ouvrantsDone + fixesDone) / (activeOuvrants.length + activeFixes.length)) * 100 : 0}%`, 
+                                height: '100%', 
+                                background: '#7c3aed', 
+                                borderRadius: '9999px',
+                                transition: 'width 0.3s ease'
+                              }} />
+                            </div>
+                          </div>
+                        )}
 
                         {/* Carte Lots Associés */}
                         <div style={{ background: 'white', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
@@ -1185,37 +1259,97 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
                             Tout ({activeAll.length})
                           </button>
                           <button 
-                            onClick={() => setActiveItemFilter('cadres')}
+                            onClick={() => setActiveItemFilter('all')}
                             style={{
                               padding: '0.4rem 0.85rem',
                               fontSize: '0.8rem',
                               fontWeight: 700,
                               borderRadius: '0.5rem',
                               border: '1px solid',
-                              borderColor: activeItemFilter === 'cadres' ? '#0284c7' : '#cbd5e1',
-                              background: activeItemFilter === 'cadres' ? '#0284c7' : 'white',
-                              color: activeItemFilter === 'cadres' ? 'white' : '#475569',
+                              borderColor: activeItemFilter === 'all' ? '#10b981' : '#cbd5e1',
+                              background: activeItemFilter === 'all' ? '#10b981' : 'white',
+                              color: activeItemFilter === 'all' ? 'white' : '#475569',
                               cursor: 'pointer'
                             }}
                           >
-                            🚪 Cadres ({activeCadres.length})
+                            Tout ({activeAll.length})
                           </button>
-                          <button 
-                            onClick={() => setActiveItemFilter('panneaux')}
-                            style={{
-                              padding: '0.4rem 0.85rem',
-                              fontSize: '0.8rem',
-                              fontWeight: 700,
-                              borderRadius: '0.5rem',
-                              border: '1px solid',
-                              borderColor: activeItemFilter === 'panneaux' ? '#7c3aed' : '#cbd5e1',
-                              background: activeItemFilter === 'panneaux' ? '#7c3aed' : 'white',
-                              color: activeItemFilter === 'panneaux' ? 'white' : '#475569',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            🪟 Panneaux ({activePanneaux.length})
-                          </button>
+
+                          {activeCoulissants.length > 0 && (
+                            <button 
+                              onClick={() => setActiveItemFilter('coulissant')}
+                              style={{
+                                padding: '0.4rem 0.85rem',
+                                fontSize: '0.8rem',
+                                fontWeight: 700,
+                                borderRadius: '0.5rem',
+                                border: '1px solid',
+                                borderColor: activeItemFilter === 'coulissant' ? '#0284c7' : '#cbd5e1',
+                                background: activeItemFilter === 'coulissant' ? '#0284c7' : 'white',
+                                color: activeItemFilter === 'coulissant' ? 'white' : '#475569',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              🚪 Coulissants ({activeCoulissants.length})
+                            </button>
+                          )}
+
+                          {activeOuvrants.length > 0 && (
+                            <button 
+                              onClick={() => setActiveItemFilter('ouvrant')}
+                              style={{
+                                padding: '0.4rem 0.85rem',
+                                fontSize: '0.8rem',
+                                fontWeight: 700,
+                                borderRadius: '0.5rem',
+                                border: '1px solid',
+                                borderColor: activeItemFilter === 'ouvrant' ? '#7c3aed' : '#cbd5e1',
+                                background: activeItemFilter === 'ouvrant' ? '#7c3aed' : 'white',
+                                color: activeItemFilter === 'ouvrant' ? 'white' : '#475569',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              🪟 Ouvrants ({activeOuvrants.length})
+                            </button>
+                          )}
+
+                          {activeFixes.length > 0 && (
+                            <button 
+                              onClick={() => setActiveItemFilter('fixe')}
+                              style={{
+                                padding: '0.4rem 0.85rem',
+                                fontSize: '0.8rem',
+                                fontWeight: 700,
+                                borderRadius: '0.5rem',
+                                border: '1px solid',
+                                borderColor: activeItemFilter === 'fixe' ? '#d97706' : '#cbd5e1',
+                                background: activeItemFilter === 'fixe' ? '#d97706' : 'white',
+                                color: activeItemFilter === 'fixe' ? 'white' : '#475569',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              🖼️ Fixes ({activeFixes.length})
+                            </button>
+                          )}
+
+                          {activePanneaux.length > 0 && (
+                            <button 
+                              onClick={() => setActiveItemFilter('panneaux')}
+                              style={{
+                                padding: '0.4rem 0.85rem',
+                                fontSize: '0.8rem',
+                                fontWeight: 700,
+                                borderRadius: '0.5rem',
+                                border: '1px solid',
+                                borderColor: activeItemFilter === 'panneaux' ? '#64748b' : '#cbd5e1',
+                                background: activeItemFilter === 'panneaux' ? '#64748b' : 'white',
+                                color: activeItemFilter === 'panneaux' ? 'white' : '#475569',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              Panneaux ({activePanneaux.length})
+                            </button>
+                          )}
                         </div>
 
                         {/* Actions Rapides Vitrage en Masse */}
@@ -1235,13 +1369,13 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
                           >
                             Tout Arrivé
                           </button>
-                          {activePanneaux.some(p => p.isSliding) && (
+                          {activeCoulissants.length > 0 && (
                             <button
-                              onClick={() => bulkUpdateGlassStatus(order.id, activePanneaux.filter(p => p.isSliding).map(p => p.id), 'rempli')}
+                              onClick={() => bulkUpdateGlassStatus(order.id, activeCoulissants.map(p => p.id), 'rempli')}
                               className="btn btn-secondary"
                               style={{ fontSize: '0.75rem', padding: '0.35rem 0.65rem', background: '#f5f3ff', color: '#6d28d9', borderColor: '#ddd6fe' }}
                             >
-                              Panneaux Remplis (Vitrés)
+                              Coulissants Remplis (Vitrés)
                             </button>
                           )}
                           <button
@@ -1275,11 +1409,17 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
                           </thead>
                           <tbody>
                             {(() => {
-                              const itemsToDisplay = activeItemFilter === 'cadres' 
-                                ? activeCadres 
-                                : activeItemFilter === 'panneaux' 
-                                  ? activePanneaux 
-                                  : activeAll;
+                              const itemsToDisplay = activeItemFilter === 'coulissant'
+                                ? activeCoulissants
+                                : activeItemFilter === 'ouvrant'
+                                  ? activeOuvrants
+                                  : activeItemFilter === 'fixe'
+                                    ? activeFixes
+                                    : activeItemFilter === 'cadres'
+                                      ? activeCadres
+                                      : activeItemFilter === 'panneaux'
+                                        ? activePanneaux
+                                        : activeAll;
 
                               if (itemsToDisplay.length === 0) {
                                 return (
@@ -1292,9 +1432,17 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
                               }
 
                               return itemsToDisplay.map((item, idx) => {
-                                const isSlidingPanel = item.type === 'panneau' && item.isSliding;
-                                const availableGlassStatuses = isSlidingPanel ? GLASS_STATUSES_SLIDING : GLASS_STATUSES_STANDARD;
+                                const isSlidingItem = item.isSliding;
+                                const availableGlassStatuses = isSlidingItem ? GLASS_STATUSES_SLIDING : GLASS_STATUSES_STANDARD;
                                 const currentGlassObj = availableGlassStatuses.find(s => s.id === item.glassStatus) || availableGlassStatuses[0];
+
+                                const badgeColor = isSlidingItem 
+                                  ? { bg: '#e0f2fe', text: '#0369a1', label: 'COULISSANT' }
+                                  : item.family === 'fixe' 
+                                    ? { bg: '#fef3c7', text: '#92400e', label: 'FIXE' }
+                                    : item.type === 'panneau'
+                                      ? { bg: '#f1f5f9', text: '#475569', label: 'PANNEAU' }
+                                      : { bg: '#ede9fe', text: '#6d28d9', label: 'OUVRANT' };
 
                                 return (
                                   <tr 
@@ -1307,14 +1455,14 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
                                     {/* Type */}
                                     <td style={{ padding: '0.75rem 1rem' }}>
                                       <span style={{ 
-                                        fontSize: '0.75rem', 
+                                        fontSize: '0.72rem', 
                                         fontWeight: 800, 
-                                        background: item.type === 'cadre' ? '#e0f2fe' : '#ede9fe', 
-                                        color: item.type === 'cadre' ? '#0369a1' : '#6d28d9',
+                                        background: badgeColor.bg, 
+                                        color: badgeColor.text,
                                         padding: '0.25rem 0.5rem',
                                         borderRadius: '6px'
                                       }}>
-                                        {item.type === 'cadre' ? 'CADRE' : 'PANNEAU'}
+                                        {badgeColor.label}
                                       </span>
                                     </td>
 
@@ -1686,14 +1834,14 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
                         {/* Type */}
                         <td style={{ padding: '0.85rem 1rem' }}>
                           <span style={{ 
-                            fontSize: '0.75rem', 
+                            fontSize: '0.72rem', 
                             fontWeight: 800, 
-                            background: item.type === 'cadre' ? '#e0f2fe' : '#ede9fe', 
-                            color: item.type === 'cadre' ? '#0369a1' : '#6d28d9',
+                            background: item.isSliding ? '#e0f2fe' : item.family === 'fixe' ? '#fef3c7' : item.type === 'panneau' ? '#f1f5f9' : '#ede9fe', 
+                            color: item.isSliding ? '#0369a1' : item.family === 'fixe' ? '#92400e' : item.type === 'panneau' ? '#475569' : '#6d28d9',
                             padding: '0.2rem 0.5rem', 
                             borderRadius: '6px'
                           }}>
-                            {item.type === 'cadre' ? 'CADRE' : 'PANNEAU'}
+                            {item.isSliding ? 'COULISSANT' : item.family === 'fixe' ? 'FIXE' : (item.type === 'panneau' ? 'PANNEAU' : 'OUVRANT')}
                           </span>
                         </td>
 

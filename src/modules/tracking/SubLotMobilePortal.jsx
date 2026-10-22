@@ -114,7 +114,7 @@ export default function SubLotMobilePortal({ data, setData, isOnline, isSyncing 
 
     // Règle stricte d'atelier : Impossible de cocher avant d'avoir lancé la production
     if (subLot.status === 'En attente' || !subLot.startedAt) {
-      alert("⛔ Action bloquée :\n\nVous ne pouvez pas commencer à cocher les cadres et les panneaux avant d'avoir lancé la production de ce sous-lot.\n\nVeuillez d'abord cliquer sur « Démarrer la fabrication ».");
+      alert("⛔ Action bloquée :\n\nVous ne pouvez pas commencer à cocher les fenêtres avant d'avoir lancé la production de ce sous-lot.\n\nVeuillez d'abord cliquer sur « Démarrer la fabrication ».");
       setActiveAction('start');
       return;
     }
@@ -196,7 +196,7 @@ export default function SubLotMobilePortal({ data, setData, isOnline, isSyncing 
     );
   }
 
-  const isSliding = subLot.family === 'coulissant';
+  const hasLegacyPanneaux = (subLot.cadres?.length > 0 || subLot.panneaux?.length > 0) && (!subLot.ouvertures || subLot.ouvertures.length === 0);
   const checklist = subLot.checklist || {};
 
   // Calculate progress stats
@@ -210,7 +210,7 @@ export default function SubLotMobilePortal({ data, setData, isOnline, isSyncing 
   const checkedOuvertures = (subLot.ouvertures || []).filter(o => !!checklist[o.id]).length;
 
   let overallPercent = 0;
-  if (isSliding) {
+  if (hasLegacyPanneaux) {
     const totalItems = totalCadres + totalPanneaux;
     const checkedItems = checkedCadres + checkedPanneaux;
     overallPercent = totalItems > 0 ? Math.round((checkedItems / totalItems) * 100) : 0;
@@ -270,7 +270,7 @@ export default function SubLotMobilePortal({ data, setData, isOnline, isSyncing 
                 display: 'inline-block',
                 marginBottom: '0.35rem'
               }}>
-                {subLot.family === 'coulissant' ? 'Coulissant (Cadres & Panneaux)' : subLot.family === 'fixe' ? 'Fixe seul' : 'Ouvrant / Battant'}
+                {subLot.family === 'coulissant' ? 'Coulissant' : subLot.family === 'fixe' ? 'Fixe seul' : 'Ouvrant / Battant'}
               </span>
               <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#1e293b', margin: 0 }}>
                 {subLot.name}
@@ -421,7 +421,7 @@ export default function SubLotMobilePortal({ data, setData, isOnline, isSyncing 
                   <span>Production non lancée : Pointage verrouillé</span>
                 </div>
                 <p style={{ margin: '0 0 1rem', fontSize: '0.85rem', color: '#b91c1c', lineHeight: 1.4 }}>
-                  Vous ne pouvez pas commencer à cocher la liste des cadres et des panneaux tant que la fabrication de ce sous-lot n'a pas été officiellement démarrée.
+                  Vous ne pouvez pas commencer à cocher la liste des fenêtres tant que la fabrication de ce sous-lot n'a pas été officiellement démarrée.
                 </p>
                 <button
                   onClick={handleStartSubLot}
@@ -447,8 +447,8 @@ export default function SubLotMobilePortal({ data, setData, isOnline, isSyncing 
               </div>
             )}
 
-            {/* If SLIDING: Separate Cadres vs Panneaux */}
-            {isSliding ? (
+            {/* If LEGACY PANNEAUX: Separate Cadres vs Panneaux */}
+            {hasLegacyPanneaux ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                 
                 {/* 1. SECTION CADRES (DORMANTS) */}
@@ -581,13 +581,15 @@ export default function SubLotMobilePortal({ data, setData, isOnline, isSyncing 
 
               </div>
             ) : (
-              /* If OUVRANT or FIXE: Checklist by opening */
+              /* Checklist Fenêtres Complètes (Coulissants, Ouvrants, Fixes) */
               <div style={{ background: 'white', borderRadius: '1rem', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 2px 4px rgba(0,0,0,0.03)' }}>
                 <div style={{ background: '#f8fafc', padding: '0.85rem 1rem', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span style={{ fontSize: '1.1rem' }}>🪟</span>
+                    <span style={{ fontSize: '1.1rem' }}>
+                      {subLot.family === 'coulissant' ? '🚪' : subLot.family === 'fixe' ? '🖼️' : '🪟'}
+                    </span>
                     <strong style={{ fontSize: '0.95rem', color: '#1e293b' }}>
-                      Contrôle & Validation des Ouvertures ({subLot.family === 'fixe' ? 'Fixes' : 'Ouvrants'})
+                      Contrôle & Validation des Fenêtres ({subLot.family === 'coulissant' ? 'Coulissants' : subLot.family === 'fixe' ? 'Fixes' : 'Ouvrants'})
                     </strong>
                   </div>
                   <span style={{ fontSize: '0.75rem', fontWeight: 800, background: '#eff6ff', color: '#1d4ed8', padding: '0.2rem 0.5rem', borderRadius: '9999px' }}>
