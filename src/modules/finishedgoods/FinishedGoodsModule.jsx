@@ -1579,8 +1579,8 @@ export default function FinishedGoodsModule({ data, setData, quoteSettings }) {
                                           ))}
                                         </select>
 
-                                        {isSlidingPanel && (
-                                          <span style={{ fontSize: '0.7rem', color: '#6d28d9', fontWeight: 600 }}>
+                                        {isSlidingItem && (
+                                          <span style={{ fontSize: '0.7rem', color: '#0369a1', fontWeight: 600 }}>
                                             (Coulissant)
                                           </span>
                                         )}
