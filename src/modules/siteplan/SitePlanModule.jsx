@@ -311,7 +311,7 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
           const rL = v.L !== undefined ? v.L : '—';
           const rH = v.H !== undefined ? v.H : '—';
           const rD = v.wallDepth !== undefined ? v.wallDepth : '—';
-          const rP = v.handleHeight !== undefined ? v.handleHeight : '—';
+          const rP = (v.handleHeight !== undefined && v.handleHeight !== '') ? (typeof v.handleHeight === 'number' ? `${v.handleHeight} mm` : v.handleHeight) : '—';
 
           doc.text(`Larg. réelle : ${rL}`, pw - 17, mesY, { align: 'right' });
           doc.text(`Haut. réelle : ${rH}`, pw - 17, mesY + 5, { align: 'right' });

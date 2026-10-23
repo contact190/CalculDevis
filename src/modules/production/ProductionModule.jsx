@@ -1790,9 +1790,19 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
         nextY += 7;
       }
       doc.setTextColor(30, 41, 59);
-      const hPoignee = cfg.handleHeight || Math.round(cfg.H / 2);
+      const rawHPoignee = cfg.handleHeight;
+      let displayHPoignee = '';
+      if (rawHPoignee === 'Axé (fenêtre)' || rawHPoignee === 'axé' || rawHPoignee === 'Axé') {
+        displayHPoignee = 'Axé (fenêtre)';
+      } else if (rawHPoignee === '1500 (porte)' || rawHPoignee === '1500' || rawHPoignee === 1500) {
+        displayHPoignee = '1500 mm (porte)';
+      } else if (rawHPoignee !== undefined && rawHPoignee !== null && rawHPoignee !== '') {
+        displayHPoignee = isNaN(rawHPoignee) ? String(rawHPoignee) : `${rawHPoignee} mm`;
+      } else {
+        displayHPoignee = `${Math.round(cfg.H / 2)} mm (Auto / Axé)`;
+      }
       doc.setFontSize(11);
-      doc.text(`Hauteur Poignée: ${hPoignee} mm`, startX, nextY);
+      doc.text(`Hauteur Poignée: ${displayHPoignee}`, startX, nextY);
       nextY += 7;
       doc.setTextColor(0, 0, 0);
       

@@ -54,6 +54,19 @@ const ItemPreview = ({ config, database }) => {
   );
 };
 
+const parseHandleHeight = (val) => {
+  if (val === undefined || val === null || val === '') return '';
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (trimmed === '') return '';
+    if (!isNaN(trimmed) && !isNaN(parseFloat(trimmed))) {
+      return parseFloat(trimmed);
+    }
+    return trimmed;
+  }
+  return val;
+};
+
 const syncSitePlanToMeasurements = (sitePlan, items) => {
   const newItems = items.map(item => ({
     ...item,
@@ -87,7 +100,7 @@ const syncSitePlanToMeasurements = (sitePlan, items) => {
           L: v.L !== undefined && v.L !== '' ? parseFloat(v.L) : item.config.L,
           H: v.H !== undefined && v.H !== '' ? parseFloat(v.H) : item.config.H,
           wallDepth: v.wallDepth !== undefined && v.wallDepth !== '' ? parseFloat(v.wallDepth) : '',
-          handleHeight: v.handleHeight !== undefined && v.handleHeight !== '' ? parseFloat(v.handleHeight) : '',
+          handleHeight: parseHandleHeight(v.handleHeight),
           openingDirection: item.config.openingDirection || undefined,
           optionalSides: v.optionalSides !== undefined ? v.optionalSides : undefined,
           qty: 1,
@@ -715,7 +728,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                     L: v.L !== undefined && v.L !== '' ? parseFloat(v.L) : batchItem.config.L,
                     H: v.H !== undefined && v.H !== '' ? parseFloat(v.H) : batchItem.config.H,
                     wallDepth: v.wallDepth !== undefined && v.wallDepth !== '' ? parseFloat(v.wallDepth) : '',
-                    handleHeight: v.handleHeight !== undefined && v.handleHeight !== '' ? parseFloat(v.handleHeight) : '',
+                    handleHeight: parseHandleHeight(v.handleHeight),
                     // optionalSides: undefined = Auto (keep quote config), object = technician override
                     optionalSides: v.optionalSides !== undefined ? v.optionalSides : undefined,
                     openingDirection: batchItem.config.openingDirection || undefined,
@@ -1487,15 +1500,67 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                       />
                                     </div>
                                     <div>
-                                      <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '0.25rem' }}>HT. POIGNÉE mm</label>
-                                      <DebouncedInput
-                                        type="number"
-                                        className="input"
-                                        value={v.handleHeight !== undefined ? v.handleHeight : ''}
-                                        onChange={val => updateVoidProperty(floor.id, apt.id, v.id, 'handleHeight', val)}
-                                        style={{ fontSize: '0.9rem', padding: '0.5rem', border: '1.5px solid #cbd5e1', fontWeight: 700, textAlign: 'center' }}
-                                        placeholder="Auto"
-                                      />
+                                      <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '0.25rem' }}>HT. POIGNÉE</label>
+                                      {(() => {
+                                        const rawVal = v.handleHeight !== undefined && v.handleHeight !== null ? v.handleHeight : '';
+                                        let selectedMode = '';
+                                        if (rawVal === 'Axé (fenêtre)' || rawVal === 'axé' || rawVal === 'Axé') {
+                                          selectedMode = 'Axé (fenêtre)';
+                                        } else if (rawVal === '1500 (porte)' || rawVal === 1500 || rawVal === '1500') {
+                                          selectedMode = '1500 (porte)';
+                                        } else if (rawVal === '') {
+                                          selectedMode = '';
+                                        } else {
+                                          selectedMode = 'Autre';
+                                        }
+
+                                        return (
+                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                            <select
+                                              value={selectedMode}
+                                              onChange={e => {
+                                                const newMode = e.target.value;
+                                                if (newMode === 'Axé (fenêtre)') {
+                                                  updateVoidProperty(floor.id, apt.id, v.id, 'handleHeight', 'Axé (fenêtre)');
+                                                } else if (newMode === '1500 (porte)') {
+                                                  updateVoidProperty(floor.id, apt.id, v.id, 'handleHeight', '1500 (porte)');
+                                                } else if (newMode === '') {
+                                                  updateVoidProperty(floor.id, apt.id, v.id, 'handleHeight', '');
+                                                } else if (newMode === 'Autre') {
+                                                  const currNum = (typeof rawVal === 'number' || (!isNaN(rawVal) && rawVal !== '')) ? rawVal : '';
+                                                  updateVoidProperty(floor.id, apt.id, v.id, 'handleHeight', currNum || '');
+                                                }
+                                              }}
+                                              style={{
+                                                fontSize: '0.82rem',
+                                                padding: '0.45rem 0.4rem',
+                                                border: '1.5px solid #cbd5e1',
+                                                borderRadius: '0.375rem',
+                                                fontWeight: 700,
+                                                background: 'white',
+                                                color: '#1e293b',
+                                                width: '100%',
+                                                cursor: 'pointer'
+                                              }}
+                                            >
+                                              <option value="">Auto (mi-hauteur)</option>
+                                              <option value="Axé (fenêtre)">Axé (fenêtre)</option>
+                                              <option value="1500 (porte)">1500 (porte)</option>
+                                              <option value="Autre">Autre</option>
+                                            </select>
+                                            {selectedMode === 'Autre' && (
+                                              <DebouncedInput
+                                                type="number"
+                                                className="input"
+                                                value={typeof rawVal === 'number' || (!isNaN(rawVal) && rawVal !== '' && rawVal !== 'Axé (fenêtre)' && rawVal !== '1500 (porte)') ? rawVal : ''}
+                                                onChange={val => updateVoidProperty(floor.id, apt.id, v.id, 'handleHeight', val !== '' ? parseFloat(val) : '')}
+                                                style={{ fontSize: '0.85rem', padding: '0.4rem', border: '1.5px solid #0f766e', borderRadius: '0.375rem', fontWeight: 700, textAlign: 'center' }}
+                                                placeholder="Hauteur mm"
+                                              />
+                                            )}
+                                          </div>
+                                        );
+                                      })()}
                                     </div>
                                     <div style={{ gridColumn: '1 / -1' }}>
                                       <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '0.25rem' }}>SENS D'OUVERTURE</label>
