@@ -43,7 +43,7 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
   const [quoteClient, setQuoteClient] = useState('');
   const [quoteItems, setQuoteItems] = useState([]);
   const [currentCategory, setCurrentCategory] = useState('');
-  const [quoteValidity, setQuoteValidity] = useState(quoteSettings.validityDays || 30);
+  const [quoteValidity, setQuoteValidity] = useState(quoteSettings.validityDays || 7);
   const [quoteTva, setQuoteTva] = useState(quoteSettings.tvaRate || 9);
   const [quoteRemise, setQuoteRemise] = useState(0);
   
@@ -543,9 +543,9 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
     
     finalY += totalAmountLines.length * 5 + 5;
     
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Validité de l'offre : ${quoteValidity || 30} jours`, 15, finalY);
+    const shopVal = quoteValidity || 7;
+    const shopValStr = shopVal === 7 ? '1 semaine (7 jours)' : `${shopVal} jours`;
+    doc.text(`Validité de l'offre : ${shopValStr}`, 15, finalY);
 
     // --- PIED DE PAGE ---
     doc.setFontSize(8);

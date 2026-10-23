@@ -2424,7 +2424,7 @@ export const QuoteSettingsPanel = ({ settings, onSave, onClose, title = "Paramè
               </div>
               <div>
                 <label style={{ fontSize: '0.75rem', color: '#64748b' }}>Validité (jours)</label>
-                <input type="number" className="input" value={draft.validityDays || 30} onChange={e => setDraft(p => ({ ...p, validityDays: parseInt(e.target.value) || 30 }))} />
+                <input type="number" className="input" value={draft.validityDays || 7} onChange={e => setDraft(p => ({ ...p, validityDays: parseInt(e.target.value) || 7 }))} />
               </div>
             </div>
           </div>
@@ -3219,6 +3219,31 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
           descLines.push(`Couvre-Joint : Non`);
         }
 
+        // Hauteur de poignée explicite quel que soit le produit (porte & fenêtre)
+        descLines.push(`Note : Hauteur poignée : 1,50 m (porte) / Axée (fenêtre)`);
+
+        // Détection fixe en bas (hauteur fixe bas + allège : 1,10 m)
+        const itemLabelLower = (item.label || '').toLowerCase();
+        const compNameLower = (comp?.name || '').toLowerCase();
+        const openCompNameLower = (openingComp?.name || '').toLowerCase();
+        const fullDescText = `${itemLabelLower} ${compNameLower} ${openCompNameLower}`;
+
+        let hasFixeEnBas = false;
+        if (isCompound && cfg.compoundConfig?.orientation === 'vertical' && cfg.compoundConfig?.parts?.length > 1) {
+          const parts = cfg.compoundConfig.parts;
+          const bottomPart = parts[parts.length - 1];
+          if (bottomPart && bottomPart.type === 'fixe') {
+            hasFixeEnBas = true;
+          }
+        }
+        if (!hasFixeEnBas && (fullDescText.includes('fixe en bas') || fullDescText.includes('fixe bas') || fullDescText.includes('allège') || fullDescText.includes('allege'))) {
+          hasFixeEnBas = true;
+        }
+
+        if (hasFixeEnBas) {
+          descLines.push(`Note : Hauteur fixe bas + allège : 1,10 m`);
+        }
+
         // Options sélectionnées
         if (cfg.selectedOptions?.length > 0) {
           const optNames = cfg.selectedOptions.map(oId => {
@@ -3471,7 +3496,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
     }
 
     y += 10;
-    if (y > 220) {
+    if (y > 165) {
       doc.addPage();
       y = 20;
     }
@@ -3592,11 +3617,83 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
     const totalAmountLines = doc.splitTextToSize(totalAmountText, pw - 30);
     doc.text(totalAmountLines, 15, y);
     
-    y += totalAmountLines.length * 5 + 5;
+    y += totalAmountLines.length * 5 + 4;
     
-    doc.setFontSize(9);
+    doc.setFontSize(8.5);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Validité de l'offre : ${(quoteSettings?.validityDays || 30)} jours`, 15, y);
+    const valDays = quoteSettings?.validityDays || 7;
+    const valStr = valDays === 7 ? '1 semaine (7 jours)' : `${valDays} jours`;
+    doc.text(`Validité de l'offre : ${valStr}`, 15, y);
+
+    // --- CONDITIONS PARTICULIÈRES (BAS DE DERNIÈRE PAGE) ---
+    const advanceAmount60 = formatPrice((totals.ttc || 0) * 0.6);
+    const notesBoxW = pw - 30; // 180mm
+    const notesInnerW = notesBoxW - 8; // 172mm
+    const notesBoxH = 43;
+    
+    let notesY = Math.max(y + 4, 281 - notesBoxH);
+    if (notesY + notesBoxH > 283) {
+      doc.addPage();
+      notesY = 281 - notesBoxH;
+    }
+
+    // Encadré stylisé avec fond léger et bordure douce
+    doc.setDrawColor(203, 213, 225); // Slate 300
+    doc.setFillColor(248, 250, 252); // Slate 50
+    doc.setLineWidth(0.3);
+    doc.roundedRect(15, notesY, notesBoxW, notesBoxH, 2, 2, 'FD');
+
+    // Titre de l'encadré
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(30, 41, 59); // Slate 800
+    doc.text('CONDITIONS PARTICULIÈRES :', 19, notesY + 4.5);
+
+    // Note 1 : Tolérance cotes chantier > 10 cm
+    let curNY = notesY + 8.5;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(15, 23, 42); // Slate 900
+    doc.text('1. Tolérance dimensionnelle & cotes chantier :', 19, curNY);
+    curNY += 3.4;
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(71, 85, 105); // Slate 600
+    const note1Lines = doc.splitTextToSize(
+      "Le présent chiffrage est établi sur la base des cotes estimatives transmises. En cas d'écart dimensionnel supérieur à 10 cm (en largeur ou en hauteur) constaté lors du relevé définitif sur chantier, une révision du devis (ajustement tarifaire) sera automatiquement appliquée.",
+      notesInnerW
+    );
+    doc.text(note1Lines, 19, curNY);
+    curNY += (note1Lines.length * 3.3) + 2.2;
+
+    // Note 2 : Acompte de 60% à la signature
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(15, 23, 42); // Slate 900
+    doc.text('2. Modalités de règlement & acompte :', 19, curNY);
+    curNY += 3.4;
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(71, 85, 105); // Slate 600
+    const note2Lines = doc.splitTextToSize(
+      `Le versement d'un acompte de 60 % du montant total TTC (soit ${advanceAmount60} DZD) est exigible dès la signature du devis pour validation définitive de la commande et lancement de la fabrication. Le solde sera réglé selon les modalités convenues.`,
+      notesInnerW
+    );
+    doc.text(note2Lines, 19, curNY);
+
+    // Note 3 : Hauteurs de référence (poignée & allège)
+    curNY += (note2Lines.length * 3.3) + 2.2;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(15, 23, 42); // Slate 900
+    doc.text('3. Hauteurs de poignée & allège :', 19, curNY);
+    curNY += 3.4;
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(71, 85, 105); // Slate 600
+    const note3Lines = doc.splitTextToSize(
+      "Hauteur de poignée conventionnelle (applicable à tout produit) : 1,50 m pour les portes et axée (au centre de l'ouvrant) pour les fenêtres. Pour tout produit comportant une partie fixe en bas, la hauteur du fixe plus allège est fixée à 1,10 m du sol fini.",
+      notesInnerW
+    );
+    doc.text(note3Lines, 19, curNY);
+    doc.setTextColor(0, 0, 0);
 
     // Footer
     doc.setFontSize(8);
@@ -3623,7 +3720,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
   // ── RENDER: LIST VIEW ──
   const validityDate = (() => {
     const d = new Date();
-    d.setDate(d.getDate() + (quoteSettings?.validityDays || 30));
+    d.setDate(d.getDate() + (quoteSettings?.validityDays || 7));
     return d.toLocaleDateString('fr-FR');
   })();
 
@@ -4356,7 +4453,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
                 <span>TOTAL TTC</span><span>{totals.ttc.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</span>
               </div>
               <div style={{ marginTop: '0.4rem', fontSize: '0.75rem', opacity: 0.7, textAlign: 'right' }}>
-                Validité : {quoteSettings?.validityDays || 30} jours 
+                Validité : {(quoteSettings?.validityDays || 7) === 7 ? '1 semaine (7 jours)' : `${quoteSettings?.validityDays} jours`} 
               </div>
               <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.2rem' }}>
                 {!isQuoteFrozen && (
@@ -4768,6 +4865,29 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
                     </div>
                   </div>
                 )}
+                {/* Note Hauteur Poignée & Allège */}
+                <div style={{ background: '#f8fafc', borderRadius: '0.6rem', padding: '0.75rem', border: '1px solid #e2e8f0', gridColumn: '1 / -1' }}>
+                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Hauteur de poignée & allège</div>
+                  <div style={{ fontSize: '0.85rem', color: '#1e293b' }}>
+                    Note : Hauteur poignée : <strong>1,50 m</strong> (porte) / <strong>Axée</strong> (fenêtre)
+                    {(() => {
+                      const cfg = infoPopupItem.config || {};
+                      const itemLabelLower = (infoPopupItem.label || '').toLowerCase();
+                      const compNameLower = (popupComp?.name || '').toLowerCase();
+                      const fullText = `${itemLabelLower} ${compNameLower}`;
+                      let hasFixeEnBas = false;
+                      if (cfg.compoundType && cfg.compoundType !== 'none' && cfg.compoundConfig?.orientation === 'vertical' && cfg.compoundConfig?.parts?.length > 1) {
+                        const parts = cfg.compoundConfig.parts;
+                        const bottomPart = parts[parts.length - 1];
+                        if (bottomPart && bottomPart.type === 'fixe') hasFixeEnBas = true;
+                      }
+                      if (!hasFixeEnBas && (fullText.includes('fixe en bas') || fullText.includes('fixe bas') || fullText.includes('allège') || fullText.includes('allege'))) {
+                        hasFixeEnBas = true;
+                      }
+                      return hasFixeEnBas ? <div style={{ marginTop: '0.25rem', color: '#0369a1' }}>Note : Hauteur fixe bas + allège : <strong>1,10 m</strong></div> : null;
+                    })()}
+                  </div>
+                </div>
               </div>
 
               {/* Quantity info */}

@@ -284,7 +284,11 @@ function App() {
         }
 
         if (settingsData && settingsData.companyName) {
-          setQuoteSettings({ ...DEFAULT_QUOTE_SETTINGS, ...settingsData });
+          const effectiveSettings = { ...DEFAULT_QUOTE_SETTINGS, ...settingsData };
+          if (!settingsData.validityDays || settingsData.validityDays === 30) {
+            effectiveSettings.validityDays = 7;
+          }
+          setQuoteSettings(effectiveSettings);
         } else {
           setQuoteSettings(DEFAULT_QUOTE_SETTINGS);
           try {
