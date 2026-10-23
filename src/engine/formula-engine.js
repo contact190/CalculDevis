@@ -1691,7 +1691,7 @@ export class FormulaEngine {
     if (vars.lameId) {
       const l = (sc.lames || []).find(x => x.id === vars.lameId);
       if (l) {
-        vars.lameWidth = parseFloat(l.lameWidth) || 0;
+        vars.lameWidth = parseFloat(l.lameWidth) || parseFloat((l.formula || "").match(/\/(\d+)/)?.[1]) || parseFloat((l.name || "").match(/\d+/)?.[0]) || 0;
         vars.weightPerM2 = parseFloat(l.weightPerM2) || 0;
         vars.totalWeight = vars.area * vars.weightPerM2;
       }
