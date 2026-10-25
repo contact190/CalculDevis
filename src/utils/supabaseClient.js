@@ -388,7 +388,8 @@ export const syncDatabase = {
    * Save data to Cloud Storage Bucket with a shared timestamp.
    * Compares hashes of individual partitions and only uploads modified ones.
    */
-  async save({ mainDb, quotes }) {
+  async save({ mainDb, quotes }, options = {}) {
+    const notify = options && options.notify === true;
     const now = getSynchronizedDate().toISOString();
     
     try {
@@ -522,18 +523,20 @@ export const syncDatabase = {
       });
       if (metaErr) throw metaErr;
       
-      // Notify other devices in real-time about this full refresh
-      try {
-        await cloudSync.pushOps([{
-          op: 'replace_key',
-          collection: '_meta',
-          id: 'force_refresh',
-          data: now,
-          timestamp: now,
-          deviceId: getDeviceId()
-        }]);
-      } catch (err) {
-        console.warn("Failed to push force_refresh notification:", err);
+      // Notify other devices in real-time only if explicitly requested (e.g. manual import / force save)
+      if (notify) {
+        try {
+          await cloudSync.pushOps([{
+            op: 'replace_key',
+            collection: '_meta',
+            id: 'force_refresh',
+            data: now,
+            timestamp: now,
+            deviceId: getDeviceId()
+          }]);
+        } catch (err) {
+          console.warn("Failed to push force_refresh notification:", err);
+        }
       }
       
       return now; // Return the timestamp used
@@ -632,6 +635,8 @@ export async function uploadInstallerPhoto(base64DataUrl, orderId = 'general') {
 }
 
 
+let lastForceRefreshSent = 0;
+
 export const cloudSync = {
   /**
    * Push a batch of operations to the Supabase operations_log table
@@ -685,15 +690,21 @@ export const cloudSync = {
       }
 
       if (needsForceRefresh) {
-        // Add a force_refresh signal so other devices know to download the snapshot
-        safeRows.push({
-          op: 'replace_key',
-          collection: '_meta',
-          doc_id: 'force_refresh',
-          data: getSynchronizedDate().toISOString(),
-          timestamp: getSynchronizedDate().toISOString(),
-          device_id: ops[0]?.deviceId || 'unknown'
-        });
+        const nowMs = Date.now();
+        if (nowMs - lastForceRefreshSent > 300000) {
+          lastForceRefreshSent = nowMs;
+          // Add a force_refresh signal so other devices know to download the snapshot
+          safeRows.push({
+            op: 'replace_key',
+            collection: '_meta',
+            doc_id: 'force_refresh',
+            data: getSynchronizedDate().toISOString(),
+            timestamp: getSynchronizedDate().toISOString(),
+            device_id: ops[0]?.deviceId || 'unknown'
+          });
+        } else {
+          console.warn("⚠️ Signal force_refresh ignoré (déjà envoyé il y a moins de 5 min pour protéger la RAM).");
+        }
       }
 
       if (safeRows.length > 0) {

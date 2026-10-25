@@ -142,6 +142,7 @@ function App() {
   const previousDbRef = useRef(null); // Previous db state for diffing
   const lastBackupTimeRef = useRef(0); // Timestamp of last BACKUP_KEY save
   const bgSnapshotTimerRef = useRef(null); // Timer for background snapshot saves
+  const lastFullRefreshTimeRef = useRef(0); // Anti-rebond force_refresh pour protéger la RAM
 
   const [quoteSettings, setQuoteSettings] = useState(DEFAULT_QUOTE_SETTINGS);
 
@@ -687,7 +688,7 @@ function App() {
                } catch (e) {
                  console.warn('Background snapshot save error:', e);
                }
-             }, 3000);
+             }, 30000);
           }
 
           // ─── Uniquement si changement structurel lourd, envoi du snapshot Cloud complet instantané ───
@@ -704,7 +705,7 @@ function App() {
             }
           }
         }
-        previousDbRef.current = database;
+        previousDbRef.current = stampedDb;
       } catch (e) {
         console.error('IndexedDB save error:', e);
         setSaveStatus('error');
@@ -737,6 +738,14 @@ function App() {
       
       const hasForceRefresh = remoteOps.some(op => op.op === 'replace_key' && op.collection === '_meta' && op.id === 'force_refresh');
       if (hasForceRefresh) {
+        const nowMs = Date.now();
+        if (nowMs - lastFullRefreshTimeRef.current < 60000) {
+          console.log("☁️ Ordre force_refresh ignoré (rechargement complet déjà effectué il y a moins de 60s pour protéger la RAM).");
+          return;
+        }
+        lastFullRefreshTimeRef.current = nowMs;
+        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+        if (bgSnapshotTimerRef.current) clearTimeout(bgSnapshotTimerRef.current);
         console.log("☁️ Reçu ordre de rechargement complet (Import/Force Save)...");
         setCloudSyncStatus('syncing');
         setSupabaseSyncStatus('syncing');
@@ -775,17 +784,20 @@ function App() {
             setSupabaseSyncStatus('ok');
             setLastSupabaseSync(new Date());
             console.log("✅ Base rechargée avec succès depuis le stockage Cloud.");
-            setTimeout(() => { isApplyingRemoteOps.current = false; }, 50);
+            setTimeout(() => { isApplyingRemoteOps.current = false; }, 2500);
           }
         } catch (e) {
           console.error("Failed to load snapshot after force_refresh:", e);
           setSupabaseSyncStatus('error');
+          setTimeout(() => { isApplyingRemoteOps.current = false; }, 2500);
         }
         return;
       }
 
       console.log(`📥 Application de ${remoteOps.length} ops distantes en temps réel...`);
       isApplyingRemoteOps.current = true;
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      if (bgSnapshotTimerRef.current) clearTimeout(bgSnapshotTimerRef.current);
       
       const { db: newDb, appliedCount } = applyOps(databaseRef.current, remoteOps);
       if (appliedCount > 0) {
@@ -809,8 +821,8 @@ function App() {
         setLastCloudSync(new Date());
       }
       
-      // Reset flag after React batches the state update
-      setTimeout(() => { isApplyingRemoteOps.current = false; }, 50);
+      // Reset flag after React batches the state update and local save debounce passes
+      setTimeout(() => { isApplyingRemoteOps.current = false; }, 2500);
     };
 
     // Connect with delta-aware callbacks
@@ -822,6 +834,8 @@ function App() {
       onFullRefresh: async () => {
         console.log('🔄 Refresh complet depuis le serveur...');
         setCloudSyncStatus('syncing');
+        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+        if (bgSnapshotTimerRef.current) clearTimeout(bgSnapshotTimerRef.current);
         const serverData = await localSync.fetchData();
         if (serverData) {
           isApplyingRemoteOps.current = true;
@@ -844,7 +858,7 @@ function App() {
           previousDbRef.current = repaired;
           setCloudSyncStatus('ok');
           setLastCloudSync(new Date());
-          setTimeout(() => { isApplyingRemoteOps.current = false; }, 50);
+          setTimeout(() => { isApplyingRemoteOps.current = false; }, 2500);
         }
       },
 
@@ -1041,7 +1055,7 @@ function App() {
 
     // 2. Try Cloud Snapshot (the important one)
     try {
-      await syncDatabase.save({ mainDb: database, quotes: database.quotes || [] });
+      await syncDatabase.save({ mainDb: database, quotes: database.quotes || [] }, { notify: true });
       cloudOk = true;
       console.log('☁️ Snapshot Cloud forcé avec succès');
     } catch (e) {
@@ -1322,7 +1336,7 @@ function App() {
                       try {
                         setCloudSyncStatus('syncing');
                         setSupabaseSyncStatus('syncing');
-                        await syncDatabase.save({ mainDb: repairedImport, quotes: repairedImport.quotes || [] });
+                        await syncDatabase.save({ mainDb: repairedImport, quotes: repairedImport.quotes || [] }, { notify: true });
                         setCloudSyncStatus('ok');
                         setLastCloudSync(new Date());
                         setSupabaseSyncStatus('ok');
