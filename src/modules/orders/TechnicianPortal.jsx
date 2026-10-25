@@ -86,7 +86,7 @@ const syncSitePlanToMeasurements = (sitePlan, items) => {
         const label = `${floor.name} - ${appt.name} - ${v.name}`;
         
         const shutterList = [];
-        if (v.shutter && v.shutter.qty > 0) {
+        if (item.config.hasShutter && v.shutter && v.shutter.qty > 0) {
           shutterList.push({
             id: v.shutter.id || `shutter-${v.id}`,
             qty: v.shutter.qty,
@@ -1559,8 +1559,9 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                             if (!item) return null;
 
                             const voidRepere = v.name?.trim() || `${floor.name}${apt.name}${vIndex + 1}`;
-                            const actualShutter = v.shutter !== undefined ? v.shutter : (item.config.hasShutter ? { qty: 1, customLV: '', overrides: {} } : null);
-                            const isShutterActive = actualShutter !== null;
+                            const itemHasShutter = !!item.config?.hasShutter;
+                            const actualShutter = itemHasShutter ? (v.shutter || { qty: 1, customLV: '', overrides: {} }) : null;
+                            const isShutterActive = itemHasShutter;
                             const deltaCheck = checkVoidCriticalDelta(v, item);
 
                             return (
@@ -1678,11 +1679,11 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                             L: v.L !== undefined && v.L !== '' ? parseFloat(v.L) : item.config.L,
                                             H: v.H !== undefined && v.H !== '' ? parseFloat(v.H) : item.config.H,
                                             openingDirection: item.config.openingDirection || 'gauche',
-                                            hasShutter: v.shutter !== undefined ? !!v.shutter : item.config.hasShutter,
-                                            shutterConfig: v.shutter ? {
+                                            hasShutter: itemHasShutter,
+                                            shutterConfig: itemHasShutter ? {
                                               ...(item.config.shutterConfig || {}),
-                                              ...(v.shutter.overrides || {})
-                                            } : (v.shutter === null ? null : item.config.shutterConfig),
+                                              ...(actualShutter?.overrides || {})
+                                            } : null,
                                             partOverrides: v.partOverrides || {}
                                           }} database={data} />
                                         </div>
@@ -2026,31 +2027,16 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                     </div>
                                   )}
 
-                                  {/* Shutter Toggle Section */}
-                                  <div style={{ background: '#f8fafc', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                                      <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#475569' }}>🌀 Volet Roulant</span>
-                                      <button
-                                        onClick={() => {
-                                          
-                                          updateVoidProperty(floor.id, apt.id, v.id, 'shutter', isShutterActive ? null : { qty: 1, customLV: v.L || item.config.L, overrides: {} });
-                                        }}
-                                        style={{
-                                          border: 'none',
-                                          background: isShutterActive ? '#fee2e2' : '#e2e8f0',
-                                          color: isShutterActive ? '#ef4444' : '#475569',
-                                          fontSize: '0.75rem',
-                                          fontWeight: 800,
-                                          padding: '0.3rem 0.7rem',
-                                          borderRadius: '4px',
-                                          cursor: 'pointer'
-                                        }}
-                                      >
-                                        {isShutterActive ? '✕ Désactiver' : '＋ Activer'}
-                                      </button>
-                                    </div>
+                                  {/* Shutter Parameters Section - Uniquement si le produit contient un volet au devis */}
+                                  {itemHasShutter && (
+                                    <div style={{ background: '#f8fafc', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0' }}>
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                                        <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#475569' }}>🌀 Paramètres Volet Roulant</span>
+                                        <span style={{ fontSize: '0.65rem', background: '#dcfce7', color: '#166534', padding: '0.15rem 0.5rem', borderRadius: '4px', fontWeight: 800 }}>
+                                          INCLUS AU DEVIS
+                                        </span>
+                                      </div>
 
-                                    {isShutterActive && (
                                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginTop: '0.75rem' }}>
                                         <div>
                                           <label style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', marginBottom: '0.2rem', fontWeight: 600 }}>QUANTITÉ VOLET</label>
@@ -2215,8 +2201,8 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                            );
                                          })()}
                                        </div>
-                                    )}
-                                  </div>
+                                    </div>
+                                  )}
                                   </div>
 
                                   {/* Assign Button */}

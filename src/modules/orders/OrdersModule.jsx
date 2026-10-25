@@ -74,7 +74,7 @@ const syncSitePlanToMeasurements = (sitePlan, items) => {
         const label = `${floor.name} - ${appt.name} - ${v.name}`;
         
         const shutterList = [];
-        if (v.shutter && v.shutter.qty > 0) {
+        if (item.config.hasShutter && v.shutter && v.shutter.qty > 0) {
           shutterList.push({
             id: v.shutter.id || `shutter-${v.id}`,
             qty: v.shutter.qty,
@@ -1504,18 +1504,19 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
 
                                 const voidRepere = v.name?.trim() || `${floor.name}${apt.name}${vIndex + 1}`;
                                 const deltaCheck = checkVoidCriticalDelta(v, item);
-                                const actualShutter = v.shutter !== undefined ? v.shutter : (item.config.hasShutter ? { qty: 1, customLV: '', overrides: {} } : null);
-                                const isShutterActive = actualShutter !== null;
+                                const itemHasShutter = !!item.config?.hasShutter;
+                                const actualShutter = itemHasShutter ? (v.shutter || { qty: 1, customLV: '', overrides: {} }) : null;
+                                const isShutterActive = itemHasShutter;
                                 const previewConfig = {
                                   ...item.config,
                                   L: v.L !== undefined && v.L !== '' ? parseFloat(v.L) : item.config.L,
                                   H: v.H !== undefined && v.H !== '' ? parseFloat(v.H) : item.config.H,
                                   openingDirection: item.config.openingDirection || 'gauche',
-                                  hasShutter: v.shutter !== undefined ? !!v.shutter : item.config.hasShutter,
-                                  shutterConfig: v.shutter ? {
+                                  hasShutter: itemHasShutter,
+                                  shutterConfig: itemHasShutter ? {
                                     ...(item.config.shutterConfig || {}),
-                                    ...(v.shutter.overrides || {})
-                                  } : (v.shutter === null ? null : item.config.shutterConfig),
+                                    ...(actualShutter?.overrides || {})
+                                  } : null,
                                   partOverrides: v.partOverrides || {}
                                 };
 
@@ -1802,30 +1803,16 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                         </div>
                                       )}
 
-                                      {/* Inline Shutter Configuration */}
-                                      <div style={{ background: '#f8fafc', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0', marginBottom: '1rem' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                                          <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>🌀 Configuration du Volet</span>
-                                          <button
-                                            onClick={() => {
-                                              updateVoidProperty(floor.id, apt.id, v.id, 'shutter', isShutterActive ? null : { qty: 1, customLV: v.L || item.config.L, overrides: {} });
-                                            }}
-                                            style={{
-                                              border: 'none',
-                                              background: isShutterActive ? '#fef3c7' : '#e2e8f0',
-                                              color: isShutterActive ? '#d97706' : '#475569',
-                                              fontSize: '0.7rem',
-                                              fontWeight: 700,
-                                              padding: '0.2rem 0.6rem',
-                                              borderRadius: '4px',
-                                              cursor: 'pointer'
-                                            }}
-                                          >
-                                            {isShutterActive ? '❌ Retirer le volet' : '➕ Activer le volet'}
-                                          </button>
-                                        </div>
+                                      {/* Inline Shutter Configuration - Uniquement si le produit contient un volet au devis */}
+                                      {itemHasShutter && (
+                                        <div style={{ background: '#f8fafc', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0', marginBottom: '1rem' }}>
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                                            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>🌀 Paramètres du Volet</span>
+                                            <span style={{ fontSize: '0.65rem', background: '#dcfce7', color: '#166534', padding: '0.15rem 0.5rem', borderRadius: '4px', fontWeight: 800 }}>
+                                              INCLUS AU DEVIS
+                                            </span>
+                                          </div>
 
-                                        {isShutterActive && (
                                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem' }}>
                                             <div>
                                               <label style={{ fontSize: '0.65rem', color: '#64748b', display: 'block' }}>Quantité</label>
@@ -2012,8 +1999,8 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                                );
                                              })()}
                                            </div>
-                                        )}
-                                      </div>
+                                        </div>
+                                      )}
 
                                       {/* Actions Footer */}
                                       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'auto' }}>
