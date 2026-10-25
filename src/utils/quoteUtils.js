@@ -103,12 +103,18 @@ export const isQuoteLocked = (quote, orders = []) => {
 };
 
 /**
- * Vérifie si la cote réelle d'une ouverture s'écarte de plus de 100 mm par rapport à la cote devis.
- * Seuil critique : > 100 mm en largeur (L) ou en hauteur (H).
+ * Vérifie si la cote réelle d'une ouverture s'écarte des cotes devis.
+ * - Seuil critique bloquant (+10 cm / > +100 mm) : Bloque la validation et le passage en fabrication (devis à refaire).
+ * - Seuil alerte non-bloquant (-10 cm / < -100 mm) : Alerte visuelle (champ rouge, message d'avertissement), mais saisie et validation autorisées.
  */
 export const checkVoidCriticalDelta = (v, item) => {
   if (!v || !item || !item.config) {
-    return { isCritical: false, isCriticalL: false, isCriticalH: false, deltaL: 0, deltaH: 0, quoteL: 0, quoteH: 0, realL: 0, realH: 0 };
+    return { 
+      isCritical: false, isCriticalL: false, isCriticalH: false, 
+      isWarning: false, isWarningL: false, isWarningH: false,
+      hasDeltaIssue: false, hasDeltaIssueL: false, hasDeltaIssueH: false,
+      deltaL: 0, deltaH: 0, quoteL: 0, quoteH: 0, realL: 0, realH: 0 
+    };
   }
   const quoteL = parseFloat(item.config.L) || 0;
   const quoteH = parseFloat(item.config.H) || 0;
@@ -116,12 +122,27 @@ export const checkVoidCriticalDelta = (v, item) => {
   const realH = v.H !== undefined && v.H !== '' ? parseFloat(v.H) : quoteH;
   const deltaL = Math.round(realL - quoteL);
   const deltaH = Math.round(realH - quoteH);
-  const isCriticalL = Math.abs(deltaL) > 100;
-  const isCriticalH = Math.abs(deltaH) > 100;
+
+  // Écart supérieur à +10 cm (+100 mm) : BLOQUANT
+  const isCriticalL = deltaL > 100;
+  const isCriticalH = deltaH > 100;
+  const isCritical = isCriticalL || isCriticalH;
+
+  // Écart inférieur à -10 cm (-100 mm) : ALERTE NON BLOQUANTE (validation permise)
+  const isWarningL = deltaL < -100;
+  const isWarningH = deltaH < -100;
+  const isWarning = isWarningL || isWarningH;
+
   return {
-    isCritical: isCriticalL || isCriticalH,
+    isCritical,
     isCriticalL,
     isCriticalH,
+    isWarning,
+    isWarningL,
+    isWarningH,
+    hasDeltaIssue: isCritical || isWarning,
+    hasDeltaIssueL: isCriticalL || isWarningL,
+    hasDeltaIssueH: isCriticalH || isWarningH,
     deltaL,
     deltaH,
     quoteL,

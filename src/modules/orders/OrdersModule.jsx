@@ -220,6 +220,24 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
     return list;
   }, [activeSitePlan, selectedOrder]);
 
+  const warningVoids = useMemo(() => {
+    if (!selectedOrder || !activeSitePlan?.floors) return [];
+    const list = [];
+    (activeSitePlan.floors || []).forEach(f => {
+      (f.apartments || []).forEach(a => {
+        (a.voids || []).forEach(v => {
+          const item = selectedOrder.items?.find(i => i.id === v.itemId);
+          if (!item) return;
+          const check = checkVoidCriticalDelta(v, item);
+          if (check.isWarning) {
+            list.push({ void: v, item, floor: f, apt: a, check });
+          }
+        });
+      });
+    });
+    return list;
+  }, [activeSitePlan, selectedOrder]);
+
   const handleUpdateOrder = (updatedOrder) => {
     setData(prev => ({
       ...prev,
@@ -347,8 +365,8 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
   const handleLaunchProductionBatch = () => {
     // Strict block: if any void has critical delta (> 100mm), refuse launch
     if (criticalVoids.length > 0) {
-      alert(`⛔ Impossible de lancer le lot de fabrication !\n\n${criticalVoids.length} ouverture(s) ont un écart supérieur à 100 mm avec le devis :\n` +
-        criticalVoids.map(c => `• ${c.void.name || 'Ouverture'} (${c.floor.name} - ${c.apt.name}) : ${c.check.isCriticalL ? `Largeur Δ = ${c.check.deltaL > 0 ? `+` : ``}${c.check.deltaL} mm ` : ''}${c.check.isCriticalH ? `Hauteur Δ = ${c.check.deltaH > 0 ? `+` : ``}${c.check.deltaH} mm` : ''}`).join('\n') +
+      alert(`⛔ Impossible de lancer le lot de fabrication !\n\n${criticalVoids.length} ouverture(s) ont un écart supérieur à +10 cm (+100 mm) avec le devis :\n` +
+        criticalVoids.map(c => `• ${c.void.name || 'Ouverture'} (${c.floor.name} - ${c.apt.name}) : ${c.check.isCriticalL ? `Largeur Δ = +${c.check.deltaL} mm ` : ''}${c.check.isCriticalH ? `Hauteur Δ = +${c.check.deltaH} mm` : ''}`).join('\n') +
         `\n\nLe devis doit impérativement être refait pour ces ouvertures avant toute mise en fabrication.`);
       return;
     }
@@ -576,6 +594,10 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
               voids: (a.voids || []).map(v => {
                 if (v.id !== voidId) return v;
 
+                if (typeof property === 'object' && property !== null) {
+                  return { ...v, ...property };
+                }
+
                 if (property === 'itemId') {
                   const item = selectedOrder.items.find(i => i.id === value);
                   return {
@@ -700,6 +722,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                     H: sourceVoid.H,
                     wallDepth: sourceVoid.wallDepth,
                     handleHeight: sourceVoid.handleHeight,
+                    handleHeightMode: sourceVoid.handleHeightMode,
                     shutter: JSON.parse(JSON.stringify(sourceVoid.shutter || { qty: 1, overrides: {} })),
                     partOverrides: sourceVoid.partOverrides ? JSON.parse(JSON.stringify(sourceVoid.partOverrides)) : {}
                   };
@@ -1357,7 +1380,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                     </div>
                   </div>
 
-                  {/* Global Critical Delta Alert Banner */}
+                  {/* Global Critical Delta Alert Banner (> +10 cm, Blocking) */}
                   {criticalVoids.length > 0 && (
                     <div style={{
                       background: '#fef2f2',
@@ -1368,10 +1391,10 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                     }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: '#991b1b', fontWeight: 900, fontSize: '1rem', marginBottom: '0.5rem' }}>
                         <span style={{ fontSize: '1.4rem' }}>⛔</span>
-                        <span>ATTENTION : {criticalVoids.length} OUVERTURE(S) AVEC ÉCART CRITIQUE (&gt; 100 mm)</span>
+                        <span>ATTENTION : {criticalVoids.length} OUVERTURE(S) AVEC ÉCART BLOQUANT (&gt; +10 cm)</span>
                       </div>
                       <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', color: '#b91c1c', lineHeight: 1.4 }}>
-                        Certaines cotes réelles dépassent de plus de 100 mm les dimensions prévues au devis. Ces ouvertures <strong>ne peuvent pas être lancées en fabrication</strong>. Le devis doit impérativement être refait.
+                        Certaines cotes réelles dépassent de plus de 10 cm (+100 mm) les dimensions prévues au devis. Ces ouvertures <strong>ne peuvent pas être lancées en fabrication</strong>. Le devis doit impérativement être refait.
                       </p>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                         {criticalVoids.map(({ void: cv, item: ci, floor: cf, apt: ca, check }) => (
@@ -1384,12 +1407,54 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                             <div style={{ display: 'flex', gap: '0.75rem', fontWeight: 800 }}>
                               {check.isCriticalL && (
                                 <span style={{ color: '#dc2626' }}>
-                                  L: {check.realL} mm vs devis {check.quoteL} mm (Δ {check.deltaL > 0 ? `+${check.deltaL}` : check.deltaL} mm)
+                                  L: {check.realL} mm vs devis {check.quoteL} mm (Δ +{check.deltaL} mm)
                                 </span>
                               )}
                               {check.isCriticalH && (
                                 <span style={{ color: '#dc2626' }}>
-                                  H: {check.realH} mm vs devis {check.quoteH} mm (Δ {check.deltaH > 0 ? `+${check.deltaH}` : check.deltaH} mm)
+                                  H: {check.realH} mm vs devis {check.quoteH} mm (Δ +{check.deltaH} mm)
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Warning Delta Alert Banner (< -10 cm, Non-blocking) */}
+                  {warningVoids.length > 0 && (
+                    <div style={{
+                      background: '#fff7ed',
+                      border: '1.5px solid #f97316',
+                      borderRadius: '1rem',
+                      padding: '1rem 1.25rem',
+                      boxShadow: '0 4px 12px rgba(249, 115, 22, 0.1)'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: '#9a3412', fontWeight: 800, fontSize: '0.95rem', marginBottom: '0.4rem' }}>
+                        <span style={{ fontSize: '1.3rem' }}>⚠️</span>
+                        <span>ALERTE COTE : {warningVoids.length} OUVERTURE(S) INFÉRIEURE(S) (&lt; -10 cm)</span>
+                      </div>
+                      <p style={{ margin: '0 0 0.6rem 0', fontSize: '0.8rem', color: '#c2410c' }}>
+                        Ces ouvertures sont inférieures de plus de 10 cm (-100 mm) au devis. La saisie et le lancement sont autorisés, mais veuillez vérifier la conformité des mesures.
+                      </p>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                        {warningVoids.map(({ void: cv, item: ci, floor: cf, apt: ca, check }) => (
+                          <div key={cv.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'white', padding: '0.45rem 0.75rem', borderRadius: '0.5rem', border: '1px solid #fdba74', fontSize: '0.8rem', flexWrap: 'wrap', gap: '0.4rem' }}>
+                            <div>
+                              <strong style={{ color: '#c2410c' }}>{cv.name || 'Sans nom'}</strong>
+                              <span style={{ color: '#64748b', marginLeft: '0.4rem' }}>({cf.name} - {ca.name})</span>
+                              <span style={{ color: '#1e293b', marginLeft: '0.5rem', fontWeight: 600 }}>{ci.label}</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.6rem', fontWeight: 700, fontSize: '0.78rem' }}>
+                              {check.isWarningL && (
+                                <span style={{ color: '#ea580c' }}>
+                                  L: {check.realL} mm vs devis {check.quoteL} mm (Δ {check.deltaL} mm)
+                                </span>
+                              )}
+                              {check.isWarningH && (
+                                <span style={{ color: '#ea580c' }}>
+                                  H: {check.realH} mm vs devis {check.quoteH} mm (Δ {check.deltaH} mm)
                                 </span>
                               )}
                             </div>
@@ -1448,11 +1513,11 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                 return (
                                   <div key={v.id} style={{ 
                                     display: 'flex', 
-                                    background: deltaCheck.isCritical ? '#fff8f8' : 'white', 
+                                    background: deltaCheck.isCritical ? '#fff8f8' : (deltaCheck.isWarning ? '#fefefe' : 'white'), 
                                     borderRadius: '1rem', 
-                                    border: deltaCheck.isCritical ? '2px solid #ef4444' : '1px solid #e2e8f0', 
+                                    border: deltaCheck.isCritical ? '2px solid #ef4444' : (deltaCheck.isWarning ? '2px solid #fca5a5' : '1px solid #e2e8f0'), 
                                     overflow: 'hidden', 
-                                    boxShadow: deltaCheck.isCritical ? '0 4px 12px rgba(239, 68, 68, 0.15)' : '0 4px 6px -1px rgb(0 0 0 / 0.05)' 
+                                    boxShadow: deltaCheck.isCritical ? '0 4px 12px rgba(239, 68, 68, 0.15)' : (deltaCheck.isWarning ? '0 4px 12px rgba(249, 115, 22, 0.1)' : '0 4px 6px -1px rgb(0 0 0 / 0.05)') 
                                   }}>
                                     {/* Visual Preview */}
                                     <div style={{ width: '220px', background: '#f8fafc', borderRight: '1px solid #e2e8f0', flexShrink: 0 }}>
@@ -1468,7 +1533,12 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                           <strong style={{ fontSize: '0.95rem', color: '#1e293b' }}>{item.label}</strong>
                                           {deltaCheck.isCritical && (
                                             <span style={{ fontSize: '0.72rem', background: '#fee2e2', color: '#991b1b', border: '1px solid #ef4444', padding: '0.15rem 0.5rem', borderRadius: '9999px', fontWeight: 800 }}>
-                                              ⛔ ÉCART CRITIQUE (&gt; 100 mm)
+                                              ⛔ ÉCART BLOQUANT (&gt; +100 mm)
+                                            </span>
+                                          )}
+                                          {!deltaCheck.isCritical && deltaCheck.isWarning && (
+                                            <span style={{ fontSize: '0.72rem', background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5', padding: '0.15rem 0.5rem', borderRadius: '9999px', fontWeight: 800 }}>
+                                              ⚠️ ALERTE COTE (&lt; -100 mm)
                                             </span>
                                           )}
                                         </div>
@@ -1478,7 +1548,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                       {/* Real Dimensions Grid */}
                                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.75rem', marginBottom: '1rem' }}>
                                         <div>
-                                          <label style={{ fontSize: '0.75rem', fontWeight: 700, color: deltaCheck.isCriticalL ? '#991b1b' : '#475569', display: 'block', marginBottom: '0.25rem' }}>Largeur Réelle (L) mm</label>
+                                          <label style={{ fontSize: '0.75rem', fontWeight: 700, color: (deltaCheck.isCriticalL || deltaCheck.isWarningL) ? '#991b1b' : '#475569', display: 'block', marginBottom: '0.25rem' }}>Largeur Réelle (L) mm</label>
                                           <input
                                             type="number"
                                             className="input"
@@ -1487,21 +1557,26 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                             style={{ 
                                               fontSize: '0.85rem', 
                                               padding: '0.35rem 0.6rem',
-                                              border: deltaCheck.isCriticalL ? '2px solid #ef4444' : '1.5px solid #cbd5e1',
-                                              background: deltaCheck.isCriticalL ? '#fee2e2' : '#ffffff',
-                                              color: deltaCheck.isCriticalL ? '#991b1b' : '#1e293b',
-                                              fontWeight: deltaCheck.isCriticalL ? 800 : 600
+                                              border: (deltaCheck.isCriticalL || deltaCheck.isWarningL) ? '2px solid #ef4444' : '1.5px solid #cbd5e1',
+                                              background: (deltaCheck.isCriticalL || deltaCheck.isWarningL) ? '#fee2e2' : '#ffffff',
+                                              color: (deltaCheck.isCriticalL || deltaCheck.isWarningL) ? '#991b1b' : '#1e293b',
+                                              fontWeight: (deltaCheck.isCriticalL || deltaCheck.isWarningL) ? 800 : 600
                                             }}
                                             placeholder={item.config.L}
                                           />
                                           {deltaCheck.isCriticalL && (
                                             <span style={{ fontSize: '0.68rem', color: '#dc2626', fontWeight: 700, display: 'block', marginTop: '0.2rem' }}>
-                                              ⚠️ Écart: {deltaCheck.deltaL > 0 ? `+${deltaCheck.deltaL}` : deltaCheck.deltaL} mm (Devis: {deltaCheck.quoteL})
+                                              ⛔ Écart bloquant: +{deltaCheck.deltaL} mm (&gt; +10 cm — devis à refaire)
+                                            </span>
+                                          )}
+                                          {!deltaCheck.isCriticalL && deltaCheck.isWarningL && (
+                                            <span style={{ fontSize: '0.68rem', color: '#b91c1c', fontWeight: 700, display: 'block', marginTop: '0.2rem' }}>
+                                              ⚠️ Alerte écart: {deltaCheck.deltaL} mm (&lt; -10 cm — vérifiez la cote)
                                             </span>
                                           )}
                                         </div>
                                         <div>
-                                          <label style={{ fontSize: '0.75rem', fontWeight: 700, color: deltaCheck.isCriticalH ? '#991b1b' : '#475569', display: 'block', marginBottom: '0.25rem' }}>Hauteur Réelle (H) mm</label>
+                                          <label style={{ fontSize: '0.75rem', fontWeight: 700, color: (deltaCheck.isCriticalH || deltaCheck.isWarningH) ? '#991b1b' : '#475569', display: 'block', marginBottom: '0.25rem' }}>Hauteur Réelle (H) mm</label>
                                           <input
                                             type="number"
                                             className="input"
@@ -1510,16 +1585,21 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                             style={{ 
                                               fontSize: '0.85rem', 
                                               padding: '0.35rem 0.6rem',
-                                              border: deltaCheck.isCriticalH ? '2px solid #ef4444' : '1.5px solid #cbd5e1',
-                                              background: deltaCheck.isCriticalH ? '#fee2e2' : '#ffffff',
-                                              color: deltaCheck.isCriticalH ? '#991b1b' : '#1e293b',
-                                              fontWeight: deltaCheck.isCriticalH ? 800 : 600
+                                              border: (deltaCheck.isCriticalH || deltaCheck.isWarningH) ? '2px solid #ef4444' : '1.5px solid #cbd5e1',
+                                              background: (deltaCheck.isCriticalH || deltaCheck.isWarningH) ? '#fee2e2' : '#ffffff',
+                                              color: (deltaCheck.isCriticalH || deltaCheck.isWarningH) ? '#991b1b' : '#1e293b',
+                                              fontWeight: (deltaCheck.isCriticalH || deltaCheck.isWarningH) ? 800 : 600
                                             }}
                                             placeholder={item.config.H}
                                           />
                                           {deltaCheck.isCriticalH && (
                                             <span style={{ fontSize: '0.68rem', color: '#dc2626', fontWeight: 700, display: 'block', marginTop: '0.2rem' }}>
-                                              ⚠️ Écart: {deltaCheck.deltaH > 0 ? `+${deltaCheck.deltaH}` : deltaCheck.deltaH} mm (Devis: {deltaCheck.quoteH})
+                                              ⛔ Écart bloquant: +{deltaCheck.deltaH} mm (&gt; +10 cm — devis à refaire)
+                                            </span>
+                                          )}
+                                          {!deltaCheck.isCriticalH && deltaCheck.isWarningH && (
+                                            <span style={{ fontSize: '0.68rem', color: '#b91c1c', fontWeight: 700, display: 'block', marginTop: '0.2rem' }}>
+                                              ⚠️ Alerte: {deltaCheck.deltaH} mm (&lt; -10 cm — vérifiez la cote)
                                             </span>
                                           )}
                                         </div>
@@ -1539,7 +1619,9 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                           {(() => {
                                             const rawVal = v.handleHeight !== undefined && v.handleHeight !== null ? v.handleHeight : '';
                                             let selectedMode = '';
-                                            if (rawVal === 'Axé (fenêtre)' || rawVal === 'axé' || rawVal === 'Axé') {
+                                            if (v.handleHeightMode === 'Autre') {
+                                              selectedMode = 'Autre';
+                                            } else if (rawVal === 'Axé (fenêtre)' || rawVal === 'axé' || rawVal === 'Axé') {
                                               selectedMode = 'Axé (fenêtre)';
                                             } else if (rawVal === '1500 (porte)' || rawVal === 1500 || rawVal === '1500') {
                                               selectedMode = '1500 (porte)';
@@ -1556,14 +1638,14 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                                   onChange={e => {
                                                     const newMode = e.target.value;
                                                     if (newMode === 'Axé (fenêtre)') {
-                                                      updateVoidProperty(floor.id, apt.id, v.id, 'handleHeight', 'Axé (fenêtre)');
+                                                      updateVoidProperty(floor.id, apt.id, v.id, { handleHeightMode: undefined, handleHeight: 'Axé (fenêtre)' });
                                                     } else if (newMode === '1500 (porte)') {
-                                                      updateVoidProperty(floor.id, apt.id, v.id, 'handleHeight', '1500 (porte)');
+                                                      updateVoidProperty(floor.id, apt.id, v.id, { handleHeightMode: undefined, handleHeight: '1500 (porte)' });
                                                     } else if (newMode === '') {
-                                                      updateVoidProperty(floor.id, apt.id, v.id, 'handleHeight', '');
+                                                      updateVoidProperty(floor.id, apt.id, v.id, { handleHeightMode: undefined, handleHeight: '' });
                                                     } else if (newMode === 'Autre') {
-                                                      const currNum = (typeof rawVal === 'number' || (!isNaN(rawVal) && rawVal !== '')) ? rawVal : '';
-                                                      updateVoidProperty(floor.id, apt.id, v.id, 'handleHeight', currNum || '');
+                                                      const currVal = (rawVal !== 'Axé (fenêtre)' && rawVal !== '1500 (porte)') ? rawVal : '';
+                                                      updateVoidProperty(floor.id, apt.id, v.id, { handleHeightMode: 'Autre', handleHeight: currVal });
                                                     }
                                                   }}
                                                   style={{
@@ -1585,12 +1667,12 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                                 </select>
                                                 {selectedMode === 'Autre' && (
                                                   <input
-                                                    type="number"
+                                                    type="text"
                                                     className="input"
-                                                    value={typeof rawVal === 'number' || (!isNaN(rawVal) && rawVal !== '' && rawVal !== 'Axé (fenêtre)' && rawVal !== '1500 (porte)') ? rawVal : ''}
-                                                    onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'handleHeight', e.target.value !== '' ? parseFloat(e.target.value) : '')}
-                                                    style={{ fontSize: '0.85rem', padding: '0.35rem 0.6rem', border: '1px solid #3b82f6', borderRadius: '0.375rem', fontWeight: 600, textAlign: 'center' }}
-                                                    placeholder="Hauteur mm"
+                                                    value={v.handleHeight !== undefined && v.handleHeight !== null && v.handleHeight !== 'Axé (fenêtre)' && v.handleHeight !== '1500 (porte)' ? String(v.handleHeight) : ''}
+                                                    onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'handleHeight', e.target.value)}
+                                                    style={{ fontSize: '0.85rem', padding: '0.35rem 0.6rem', border: '1.5px solid #0f766e', borderRadius: '0.375rem', fontWeight: 600, textAlign: 'center' }}
+                                                    placeholder="Hauteur mm ou texte"
                                                   />
                                                 )}
                                               </div>
@@ -1917,7 +1999,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
             }}>
               {criticalVoids.length > 0 && (
                 <span style={{ fontSize: '0.85rem', color: '#991b1b', fontWeight: 700 }}>
-                  ⛔ Lancement bloqué : {criticalVoids.length} ouverture(s) avec écart &gt; 100 mm (devis à refaire)
+                  ⛔ Lancement bloqué : {criticalVoids.length} ouverture(s) avec écart &gt; +10 cm (devis à refaire)
                 </span>
               )}
               <button

@@ -256,7 +256,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
     return { total, filled, validated, launched };
   }, [activeSitePlan]);
 
-  // Openings with critical dimension delta (> 100 mm from quote)
+  // Openings with critical dimension delta (> +100 mm from quote, blocking)
   const criticalVoids = useMemo(() => {
     if (!activeSitePlan?.floors || !order?.items) return [];
     const list = [];
@@ -267,6 +267,26 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
           if (item) {
             const check = checkVoidCriticalDelta(v, item);
             if (check.isCritical) {
+              list.push({ floor: f, apt: a, void: v, item, ...check });
+            }
+          }
+        });
+      });
+    });
+    return list;
+  }, [activeSitePlan, order?.items]);
+
+  // Openings with warning dimension delta (< -100 mm from quote, non-blocking)
+  const warningVoids = useMemo(() => {
+    if (!activeSitePlan?.floors || !order?.items) return [];
+    const list = [];
+    activeSitePlan.floors.forEach(f => {
+      (f.apartments || []).forEach(a => {
+        (a.voids || []).forEach(v => {
+          const item = order.items.find(i => i.id === v.itemId);
+          if (item) {
+            const check = checkVoidCriticalDelta(v, item);
+            if (!check.isCritical && check.isWarning) {
               list.push({ floor: f, apt: a, void: v, item, ...check });
             }
           }
@@ -292,6 +312,10 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
               ...a,
               voids: (a.voids || []).map(v => {
                 if (v.id !== voidId) return v;
+
+                if (typeof property === 'object' && property !== null) {
+                  return { ...v, ...property };
+                }
 
                 if (property === 'itemId') {
                   const item = order.items.find(i => i.id === value);
@@ -383,7 +407,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                 if (property === 'measurementsValidated' && value === true) {
                   const item = order.items.find(i => i.id === v.itemId);
                   if (item && checkVoidCriticalDelta(v, item).isCritical) {
-                    alert("Validation bloquée : l'écart avec les cotes du devis dépasse 100 mm. Le devis doit être refait.");
+                    alert("Validation bloquée : l'écart avec les cotes du devis dépasse +10 cm (+100 mm). Le devis doit être refait.");
                     return v;
                   }
                 }
@@ -497,6 +521,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                     H: sourceVoid.H !== undefined ? sourceVoid.H : v.H,
                     wallDepth: sourceVoid.wallDepth,
                     handleHeight: sourceVoid.handleHeight,
+                    handleHeightMode: sourceVoid.handleHeightMode,
                     openingDirection: sourceVoid.openingDirection,
                     optionalSides: sourceVoid.optionalSides !== undefined ? JSON.parse(JSON.stringify(sourceVoid.optionalSides)) : undefined,
                     shutter: sourceVoid.shutter ? JSON.parse(JSON.stringify(sourceVoid.shutter)) : null,
@@ -610,18 +635,18 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
               ⛔ Validation Bloquée
             </h2>
             <p style={{ fontSize: '0.85rem', color: '#475569', marginBottom: '0.75rem' }}>
-              L'ouverture <strong>{v.name}</strong> ({item.label}) présente un écart supérieur à 100 mm par rapport au devis initial :
+              L'ouverture <strong>{v.name}</strong> ({item.label}) présente un écart supérieur à +10 cm (+100 mm) par rapport au devis initial :
             </p>
             <div style={{ background: '#fef2f2', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #fca5a5', marginBottom: '0.75rem', fontSize: '0.8rem', color: '#991b1b' }}>
               <div>Devis : <strong>{check.quoteL} x {check.quoteH} mm</strong></div>
               <div>Mesuré : <strong>{check.realL} x {check.realH} mm</strong></div>
               <div style={{ marginTop: '0.35rem', fontWeight: 800 }}>
-                {check.isCriticalL && <div>• Écart Largeur : {check.deltaL > 0 ? `+${check.deltaL}` : check.deltaL} mm</div>}
-                {check.isCriticalH && <div>• Écart Hauteur : {check.deltaH > 0 ? `+${check.deltaH}` : check.deltaH} mm</div>}
+                {check.isCriticalL && <div>• Écart Largeur : +{check.deltaL} mm</div>}
+                {check.isCriticalH && <div>• Écart Hauteur : +{check.deltaH} mm</div>}
               </div>
             </div>
             <p style={{ fontSize: '0.8rem', color: '#dc2626', fontWeight: 700, margin: '0 0 1.25rem 0' }}>
-              Cette ouverture ne peut pas être lancée en production. Le devis doit être refait entièrement.
+              Cette ouverture dépasse de plus de 10 cm la cote devis. Le devis doit être refait entièrement.
             </p>
             <button onClick={() => setVoidToValidate(null)} style={{ width: '100%', padding: '0.65rem', borderRadius: '0.5rem', border: 'none', background: '#991b1b', color: 'white', fontWeight: 700, cursor: 'pointer' }}>
               Compris, fermer
@@ -633,14 +658,27 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
 
     return (
       <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000, padding: '1rem' }}>
-        <div style={{ background: 'white', padding: '1.5rem', borderRadius: '1rem', maxWidth: '400px', width: '100%', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+        <div style={{ background: 'white', padding: '1.5rem', borderRadius: '1rem', maxWidth: '420px', width: '100%', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
           <h2 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#1e293b', marginBottom: '1rem' }}>Confirmer la validation</h2>
-          <div style={{ fontSize: '0.85rem', color: '#475569', marginBottom: '1.5rem' }}>
+          <div style={{ fontSize: '0.85rem', color: '#475569', marginBottom: '1.25rem' }}>
             <p style={{ margin: '0 0 0.5rem 0' }}><strong>{v.name}</strong> ({item.label})</p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', background: '#f8fafc', padding: '0.75rem', borderRadius: '0.5rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', background: '#f8fafc', padding: '0.75rem', borderRadius: '0.5rem', marginBottom: '0.75rem' }}>
               <div><span style={{ color: '#94a3b8' }}>Devis:</span> {item.config.L} x {item.config.H}</div>
               <div><span style={{ color: '#0f766e' }}>Mesuré:</span> {v.L !== undefined ? v.L : item.config.L} x {v.H !== undefined ? v.H : item.config.H}</div>
             </div>
+
+            {check.isWarning && (
+              <div style={{ background: '#fef2f2', border: '1.5px solid #fca5a5', padding: '0.65rem 0.75rem', borderRadius: '0.5rem', color: '#991b1b', fontSize: '0.8rem' }}>
+                <div style={{ fontWeight: 800, marginBottom: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                  ⚠️ Alerte : Cote inférieure de plus de 10 cm (&lt; -100 mm)
+                </div>
+                {check.isWarningL && <div>• Écart Largeur : <strong>{check.deltaL} mm</strong> (Devis : {check.quoteL} mm)</div>}
+                {check.isWarningH && <div>• Écart Hauteur : <strong>{check.deltaH} mm</strong> (Devis : {check.quoteH} mm)</div>}
+                <div style={{ fontSize: '0.72rem', marginTop: '0.3rem', color: '#b91c1c' }}>
+                  Vérifiez cette cote. Vous pouvez confirmer et valider la fenêtre si elle est conforme au chantier.
+                </div>
+              </div>
+            )}
           </div>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button onClick={() => setVoidToValidate(null)} style={{ flex: 1, padding: '0.6rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', background: 'white', color: '#475569', fontWeight: 700, cursor: 'pointer' }}>Annuler</button>
@@ -1237,12 +1275,15 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
             <span style={{ color: '#0ea5e9' }}>✓ {stats.validated} validées</span>
             <span style={{ color: '#166534' }}>🚀 {stats.launched} lancées</span>
             {criticalVoids.length > 0 && (
-              <span style={{ color: '#dc2626', fontWeight: 800 }}>⛔ {criticalVoids.length} anomalie{criticalVoids.length > 1 ? 's' : ''} (&gt;100mm)</span>
+              <span style={{ color: '#dc2626', fontWeight: 800 }}>⛔ {criticalVoids.length} bloquée{criticalVoids.length > 1 ? 's' : ''} (&gt; +10cm)</span>
+            )}
+            {warningVoids.length > 0 && (
+              <span style={{ color: '#b91c1c', fontWeight: 800 }}>⚠️ {warningVoids.length} alerte{warningVoids.length > 1 ? 's' : ''} (&lt; -10cm)</span>
             )}
           </div>
         </div>
 
-        {/* Global Critical Dimensions Alert Banner */}
+        {/* Global Critical Dimensions Alert Banner (> +10 cm, Blocking) */}
         {criticalVoids.length > 0 && (
           <div style={{
             background: '#fef2f2',
@@ -1258,10 +1299,10 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
               <span style={{ fontSize: '1.4rem' }}>⛔</span>
               <div>
                 <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: '#991b1b' }}>
-                  ALERTE DIMENSIONS CRITIQUES ({criticalVoids.length} ouverture{criticalVoids.length > 1 ? 's' : ''})
+                  ALERTE DIMENSIONS BLOQUANTES (&gt; +10 cm) ({criticalVoids.length} ouverture{criticalVoids.length > 1 ? 's' : ''})
                 </h4>
                 <p style={{ margin: 0, fontSize: '0.75rem', color: '#b91c1c' }}>
-                  Écart supérieur à 100 mm par rapport au devis initial. Lancement en production strictement bloqué (devis à refaire).
+                  Écart supérieur à +10 cm (+100 mm) par rapport au devis initial. Lancement en production strictement bloqué (devis à refaire).
                 </p>
               </div>
             </div>
@@ -1288,12 +1329,73 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                   <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
                     {cv.isCriticalL && (
                       <span style={{ background: '#fee2e2', color: '#991b1b', padding: '0.15rem 0.45rem', borderRadius: '4px', fontWeight: 700, fontSize: '0.72rem' }}>
-                        L : {cv.realL} mm (Devis: {cv.quoteL}, {cv.deltaL > 0 ? `+${cv.deltaL}` : cv.deltaL} mm)
+                        L : {cv.realL} mm (Devis: {cv.quoteL}, +{cv.deltaL} mm)
                       </span>
                     )}
                     {cv.isCriticalH && (
                       <span style={{ background: '#fee2e2', color: '#991b1b', padding: '0.15rem 0.45rem', borderRadius: '4px', fontWeight: 700, fontSize: '0.72rem' }}>
-                        H : {cv.realH} mm (Devis: {cv.quoteH}, {cv.deltaH > 0 ? `+${cv.deltaH}` : cv.deltaH} mm)
+                        H : {cv.realH} mm (Devis: {cv.quoteH}, +{cv.deltaH} mm)
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Global Warning Dimensions Alert Banner (< -10 cm, Non-blocking) */}
+        {warningVoids.length > 0 && (
+          <div style={{
+            background: '#fffbeb',
+            border: '1.5px solid #fcd34d',
+            borderRadius: '1rem',
+            padding: '1rem 1.25rem',
+            boxShadow: '0 4px 12px rgba(245, 158, 11, 0.1)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.6rem'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <span style={{ fontSize: '1.4rem' }}>⚠️</span>
+              <div>
+                <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: '#92400e' }}>
+                  ALERTES COTES INFÉRIEURES (&lt; -10 cm) ({warningVoids.length} ouverture{warningVoids.length > 1 ? 's' : ''})
+                </h4>
+                <p style={{ margin: 0, fontSize: '0.75rem', color: '#b45309' }}>
+                  Écart inférieur à -10 cm (-100 mm) par rapport au devis. Ces ouvertures peuvent être validées sur chantier après vérification.
+                </p>
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.25rem' }}>
+              {warningVoids.map((wv, idx) => (
+                <div key={idx} style={{
+                  background: 'white',
+                  padding: '0.5rem 0.75rem',
+                  borderRadius: '0.5rem',
+                  border: '1px solid #fde68a',
+                  fontSize: '0.78rem',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '0.4rem'
+                }}>
+                  <div>
+                    <strong style={{ color: '#1e293b' }}>{wv.void.name}</strong> ({wv.item.label})
+                    <span style={{ color: '#64748b', marginLeft: '0.5rem', fontSize: '0.72rem' }}>
+                      [{wv.floor.name} - {wv.apt.name}]
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    {wv.isWarningL && (
+                      <span style={{ background: '#fef2f2', color: '#b91c1c', padding: '0.15rem 0.45rem', borderRadius: '4px', fontWeight: 700, fontSize: '0.72rem' }}>
+                        L : {wv.realL} mm (Devis: {wv.quoteL}, {wv.deltaL} mm)
+                      </span>
+                    )}
+                    {wv.isWarningH && (
+                      <span style={{ background: '#fef2f2', color: '#b91c1c', padding: '0.15rem 0.45rem', borderRadius: '4px', fontWeight: 700, fontSize: '0.72rem' }}>
+                        H : {wv.realH} mm (Devis: {wv.quoteH}, {wv.deltaH} mm)
                       </span>
                     )}
                   </div>
@@ -1362,15 +1464,19 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                 borderRadius: '1rem', 
                                 border: deltaCheck.isCritical
                                   ? '2px solid #ef4444'
-                                  : (v.productionLaunched 
-                                      ? '2px solid #22c55e' 
-                                      : v.measurementsValidated 
-                                        ? '2px solid #0ea5e9' 
-                                        : '1px solid #e2e8f0'), 
-                                boxShadow: deltaCheck.isCritical ? '0 4px 14px rgba(239, 68, 68, 0.15)' : undefined,
+                                  : (deltaCheck.isWarning
+                                      ? '2px solid #f87171'
+                                      : (v.productionLaunched 
+                                          ? '2px solid #22c55e' 
+                                          : v.measurementsValidated 
+                                            ? '2px solid #0ea5e9' 
+                                            : '1px solid #e2e8f0')), 
+                                boxShadow: deltaCheck.isCritical 
+                                  ? '0 4px 14px rgba(239, 68, 68, 0.15)' 
+                                  : (deltaCheck.isWarning ? '0 4px 12px rgba(248, 113, 113, 0.1)' : undefined),
                                 overflow: 'hidden', 
                                 display: 'flex', 
-                                flexDirection: 'column',
+                                flexDirection: 'column', 
                                 transition: 'border-color 0.3s ease'
                               }}>
                                 
@@ -1378,9 +1484,11 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                 <div style={{ 
                                   background: deltaCheck.isCritical
                                     ? '#fef2f2'
-                                    : (v.productionLaunched ? '#f0fdf4' : v.measurementsValidated ? '#eff6ff' : '#f8fafc'), 
+                                    : (deltaCheck.isWarning 
+                                        ? '#fff8f8' 
+                                        : (v.productionLaunched ? '#f0fdf4' : v.measurementsValidated ? '#eff6ff' : '#f8fafc')), 
                                   padding: '0.75rem 1rem', 
-                                  borderBottom: deltaCheck.isCritical ? '1px solid #fecaca' : '1px solid #e2e8f0', 
+                                  borderBottom: (deltaCheck.isCritical || deltaCheck.isWarning) ? '1px solid #fecaca' : '1px solid #e2e8f0', 
                                   display: 'flex', 
                                   justifyContent: 'space-between', 
                                   alignItems: 'center',
@@ -1388,13 +1496,17 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                   gap: '0.5rem'
                                 }}>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    <span style={{ fontSize: '0.75rem', background: deltaCheck.isCritical ? '#dc2626' : '#0f766e', color: 'white', padding: '0.2rem 0.6rem', borderRadius: '9999px', fontWeight: 800 }}>{voidRepere}</span>
+                                    <span style={{ fontSize: '0.75rem', background: deltaCheck.isCritical ? '#dc2626' : (deltaCheck.isWarning ? '#ea580c' : '#0f766e'), color: 'white', padding: '0.2rem 0.6rem', borderRadius: '9999px', fontWeight: 800 }}>{voidRepere}</span>
                                     <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>{item.label}</strong>
                                   </div>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                                     {deltaCheck.isCritical ? (
                                       <span style={{ fontSize: '0.65rem', fontWeight: 800, background: '#fee2e2', color: '#991b1b', padding: '0.2rem 0.5rem', borderRadius: '9999px', border: '1px solid #fca5a5' }}>
-                                        ⛔ ÉCART CRITIQUE (&gt; 100 mm)
+                                        ⛔ ÉCART BLOQUANT (&gt; +100 mm)
+                                      </span>
+                                    ) : deltaCheck.isWarning ? (
+                                      <span style={{ fontSize: '0.65rem', fontWeight: 800, background: '#fef2f2', color: '#b91c1c', padding: '0.2rem 0.5rem', borderRadius: '9999px', border: '1px solid #fca5a5' }}>
+                                        ⚠️ ALERTE COTE (&lt; -100 mm)
                                       </span>
                                     ) : v.productionLaunched ? (
                                       <span style={{ fontSize: '0.65rem', fontWeight: 800, background: '#dcfce7', color: '#166534', padding: '0.15rem 0.5rem', borderRadius: '9999px' }}>🚀 LANCÉE</span>
@@ -1436,7 +1548,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                   {/* Inputs Grid */}
                                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                                     <div>
-                                      <label style={{ fontSize: '0.72rem', fontWeight: 700, color: deltaCheck.isCriticalL ? '#991b1b' : '#475569', display: 'block', marginBottom: '0.25rem' }}>
+                                      <label style={{ fontSize: '0.72rem', fontWeight: 700, color: (deltaCheck.isCriticalL || deltaCheck.isWarningL) ? '#991b1b' : '#475569', display: 'block', marginBottom: '0.25rem' }}>
                                         LARGEUR RÉELLE (L) mm
                                       </label>
                                       <DebouncedInput
@@ -1447,9 +1559,9 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                         style={{ 
                                           fontSize: '0.9rem', 
                                           padding: '0.5rem', 
-                                          border: deltaCheck.isCriticalL ? '2px solid #ef4444' : '1.5px solid #cbd5e1', 
-                                          background: deltaCheck.isCriticalL ? '#fef2f2' : '#ffffff',
-                                          color: deltaCheck.isCriticalL ? '#991b1b' : '#1e293b',
+                                          border: (deltaCheck.isCriticalL || deltaCheck.isWarningL) ? '2px solid #ef4444' : '1.5px solid #cbd5e1', 
+                                          background: (deltaCheck.isCriticalL || deltaCheck.isWarningL) ? '#fef2f2' : '#ffffff',
+                                          color: (deltaCheck.isCriticalL || deltaCheck.isWarningL) ? '#991b1b' : '#1e293b',
                                           fontWeight: 800, 
                                           textAlign: 'center' 
                                         }}
@@ -1457,12 +1569,17 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                       />
                                       {deltaCheck.isCriticalL && (
                                         <span style={{ fontSize: '0.68rem', color: '#dc2626', fontWeight: 700, display: 'block', marginTop: '0.2rem' }}>
-                                          ⚠️ Écart: {deltaCheck.deltaL > 0 ? `+${deltaCheck.deltaL}` : deltaCheck.deltaL} mm (Devis: {deltaCheck.quoteL})
+                                          ⛔ Écart bloquant: +{deltaCheck.deltaL} mm (&gt; +10 cm — devis à refaire)
+                                        </span>
+                                      )}
+                                      {!deltaCheck.isCriticalL && deltaCheck.isWarningL && (
+                                        <span style={{ fontSize: '0.68rem', color: '#b91c1c', fontWeight: 700, display: 'block', marginTop: '0.2rem' }}>
+                                          ⚠️ Alerte écart: {deltaCheck.deltaL} mm (&lt; -10 cm — vérifiez la cote)
                                         </span>
                                       )}
                                     </div>
                                     <div>
-                                      <label style={{ fontSize: '0.72rem', fontWeight: 700, color: deltaCheck.isCriticalH ? '#991b1b' : '#475569', display: 'block', marginBottom: '0.25rem' }}>
+                                      <label style={{ fontSize: '0.72rem', fontWeight: 700, color: (deltaCheck.isCriticalH || deltaCheck.isWarningH) ? '#991b1b' : '#475569', display: 'block', marginBottom: '0.25rem' }}>
                                         HAUTEUR RÉELLE (H) mm
                                       </label>
                                       <DebouncedInput
@@ -1473,9 +1590,9 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                         style={{ 
                                           fontSize: '0.9rem', 
                                           padding: '0.5rem', 
-                                          border: deltaCheck.isCriticalH ? '2px solid #ef4444' : '1.5px solid #cbd5e1', 
-                                          background: deltaCheck.isCriticalH ? '#fef2f2' : '#ffffff',
-                                          color: deltaCheck.isCriticalH ? '#991b1b' : '#1e293b',
+                                          border: (deltaCheck.isCriticalH || deltaCheck.isWarningH) ? '2px solid #ef4444' : '1.5px solid #cbd5e1', 
+                                          background: (deltaCheck.isCriticalH || deltaCheck.isWarningH) ? '#fef2f2' : '#ffffff',
+                                          color: (deltaCheck.isCriticalH || deltaCheck.isWarningH) ? '#991b1b' : '#1e293b',
                                           fontWeight: 800, 
                                           textAlign: 'center' 
                                         }}
@@ -1483,7 +1600,12 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                       />
                                       {deltaCheck.isCriticalH && (
                                         <span style={{ fontSize: '0.68rem', color: '#dc2626', fontWeight: 700, display: 'block', marginTop: '0.2rem' }}>
-                                          ⚠️ Écart: {deltaCheck.deltaH > 0 ? `+${deltaCheck.deltaH}` : deltaCheck.deltaH} mm (Devis: {deltaCheck.quoteH})
+                                          ⛔ Écart bloquant: +{deltaCheck.deltaH} mm (&gt; +10 cm — devis à refaire)
+                                        </span>
+                                      )}
+                                      {!deltaCheck.isCriticalH && deltaCheck.isWarningH && (
+                                        <span style={{ fontSize: '0.68rem', color: '#b91c1c', fontWeight: 700, display: 'block', marginTop: '0.2rem' }}>
+                                          ⚠️ Alerte: {deltaCheck.deltaH} mm (&lt; -10 cm — vérifiez la cote)
                                         </span>
                                       )}
                                     </div>
@@ -1504,7 +1626,9 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                       {(() => {
                                         const rawVal = v.handleHeight !== undefined && v.handleHeight !== null ? v.handleHeight : '';
                                         let selectedMode = '';
-                                        if (rawVal === 'Axé (fenêtre)' || rawVal === 'axé' || rawVal === 'Axé') {
+                                        if (v.handleHeightMode === 'Autre') {
+                                          selectedMode = 'Autre';
+                                        } else if (rawVal === 'Axé (fenêtre)' || rawVal === 'axé' || rawVal === 'Axé') {
                                           selectedMode = 'Axé (fenêtre)';
                                         } else if (rawVal === '1500 (porte)' || rawVal === 1500 || rawVal === '1500') {
                                           selectedMode = '1500 (porte)';
@@ -1521,14 +1645,14 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                               onChange={e => {
                                                 const newMode = e.target.value;
                                                 if (newMode === 'Axé (fenêtre)') {
-                                                  updateVoidProperty(floor.id, apt.id, v.id, 'handleHeight', 'Axé (fenêtre)');
+                                                  updateVoidProperty(floor.id, apt.id, v.id, { handleHeightMode: undefined, handleHeight: 'Axé (fenêtre)' });
                                                 } else if (newMode === '1500 (porte)') {
-                                                  updateVoidProperty(floor.id, apt.id, v.id, 'handleHeight', '1500 (porte)');
+                                                  updateVoidProperty(floor.id, apt.id, v.id, { handleHeightMode: undefined, handleHeight: '1500 (porte)' });
                                                 } else if (newMode === '') {
-                                                  updateVoidProperty(floor.id, apt.id, v.id, 'handleHeight', '');
+                                                  updateVoidProperty(floor.id, apt.id, v.id, { handleHeightMode: undefined, handleHeight: '' });
                                                 } else if (newMode === 'Autre') {
-                                                  const currNum = (typeof rawVal === 'number' || (!isNaN(rawVal) && rawVal !== '')) ? rawVal : '';
-                                                  updateVoidProperty(floor.id, apt.id, v.id, 'handleHeight', currNum || '');
+                                                  const currVal = (rawVal !== 'Axé (fenêtre)' && rawVal !== '1500 (porte)') ? rawVal : '';
+                                                  updateVoidProperty(floor.id, apt.id, v.id, { handleHeightMode: 'Autre', handleHeight: currVal });
                                                 }
                                               }}
                                               style={{
@@ -1550,12 +1674,12 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                             </select>
                                             {selectedMode === 'Autre' && (
                                               <DebouncedInput
-                                                type="number"
+                                                type="text"
                                                 className="input"
-                                                value={typeof rawVal === 'number' || (!isNaN(rawVal) && rawVal !== '' && rawVal !== 'Axé (fenêtre)' && rawVal !== '1500 (porte)') ? rawVal : ''}
-                                                onChange={val => updateVoidProperty(floor.id, apt.id, v.id, 'handleHeight', val !== '' ? parseFloat(val) : '')}
+                                                value={v.handleHeight !== undefined && v.handleHeight !== null && v.handleHeight !== 'Axé (fenêtre)' && v.handleHeight !== '1500 (porte)' ? String(v.handleHeight) : ''}
+                                                onChange={val => updateVoidProperty(floor.id, apt.id, v.id, 'handleHeight', val)}
                                                 style={{ fontSize: '0.85rem', padding: '0.4rem', border: '1.5px solid #0f766e', borderRadius: '0.375rem', fontWeight: 700, textAlign: 'center' }}
-                                                placeholder="Hauteur mm"
+                                                placeholder="Hauteur mm ou texte"
                                               />
                                             )}
                                           </div>
@@ -1897,7 +2021,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                   {/* Individual Validation Button */}
                                   {deltaCheck.isCritical ? (
                                     <div style={{ width: '100%', padding: '0.65rem', fontSize: '0.78rem', fontWeight: 800, background: '#fee2e2', color: '#991b1b', border: '1.5px solid #ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', borderRadius: '0.5rem', textAlign: 'center' }}>
-                                      ⛔ Validation bloquée (Écart &gt; 100 mm — Devis à refaire)
+                                      ⛔ Validation bloquée (Écart &gt; +100 mm — Devis à refaire)
                                     </div>
                                   ) : v.productionLaunched ? (
                                     <div style={{ width: '100%', padding: '0.6rem', fontSize: '0.78rem', fontWeight: 800, background: '#dcfce7', color: '#166534', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', borderRadius: '0.5rem' }}>
