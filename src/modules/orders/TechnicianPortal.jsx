@@ -410,6 +410,10 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                     alert("Validation bloquée : l'écart avec les cotes du devis dépasse +10 cm (+100 mm). Le devis doit être refait.");
                     return v;
                   }
+                  if (v.wallDepth === undefined || v.wallDepth === null || String(v.wallDepth).trim() === '' || Number(v.wallDepth) <= 0) {
+                    alert("Validation bloquée : la profondeur du mur est obligatoire. Vous devez impérativement la renseigner avant de valider.");
+                    return v;
+                  }
                 }
 
                 const updatedVoid = { ...v, [property]: value };
@@ -418,6 +422,9 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                   if (item && checkVoidCriticalDelta(updatedVoid, item).isCritical) {
                     updatedVoid.measurementsValidated = false;
                   }
+                }
+                if (property === 'wallDepth' && (!value || Number(value) <= 0)) {
+                  updatedVoid.measurementsValidated = false;
                 }
                 return updatedVoid;
               })
@@ -503,6 +510,11 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
 
   const applyGlobalVoidAssignment = (sourceVoid) => {
     if (!order || !selectedClient || !assignPopupState) return;
+
+    if (sourceVoid.wallDepth === undefined || sourceVoid.wallDepth === null || String(sourceVoid.wallDepth).trim() === '' || Number(sourceVoid.wallDepth) <= 0) {
+      alert("Validation bloquée : la profondeur du mur de la fenêtre source est obligatoire. Renseignez la profondeur avant d'assigner et valider.");
+      return;
+    }
 
     const currentPlan = activeSitePlan;
     const updatedPlan = {
@@ -656,16 +668,61 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
       );
     }
 
+    const isWallDepthMissing = v.wallDepth === undefined || v.wallDepth === null || String(v.wallDepth).trim() === '' || Number(v.wallDepth) <= 0;
+
     return (
       <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000, padding: '1rem' }}>
-        <div style={{ background: 'white', padding: '1.5rem', borderRadius: '1rem', maxWidth: '420px', width: '100%', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+        <div style={{ background: 'white', padding: '1.5rem', borderRadius: '1rem', maxWidth: '440px', width: '100%', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
           <h2 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#1e293b', marginBottom: '1rem' }}>Confirmer la validation</h2>
           <div style={{ fontSize: '0.85rem', color: '#475569', marginBottom: '1.25rem' }}>
             <p style={{ margin: '0 0 0.5rem 0' }}><strong>{v.name}</strong> ({item.label})</p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', background: '#f8fafc', padding: '0.75rem', borderRadius: '0.5rem', marginBottom: '0.75rem' }}>
-              <div><span style={{ color: '#94a3b8' }}>Devis:</span> {item.config.L} x {item.config.H}</div>
-              <div><span style={{ color: '#0f766e' }}>Mesuré:</span> {v.L !== undefined ? v.L : item.config.L} x {v.H !== undefined ? v.H : item.config.H}</div>
+              <div><span style={{ color: '#94a3b8' }}>Devis:</span> {item.config.L} x {item.config.H} mm</div>
+              <div><span style={{ color: '#0f766e' }}>Mesuré:</span> {v.L !== undefined ? v.L : item.config.L} x {v.H !== undefined ? v.H : item.config.H} mm</div>
+              <div style={{ gridColumn: '1 / -1', fontSize: '0.75rem', borderTop: '1px dashed #e2e8f0', paddingTop: '0.35rem' }}>
+                <span style={{ color: '#64748b' }}>Prof. Mur :</span>{' '}
+                {!isWallDepthMissing ? (
+                  <strong style={{ color: '#0f766e' }}>{v.wallDepth} mm</strong>
+                ) : (
+                  <span style={{ color: '#dc2626', fontWeight: 800 }}>⛔ Non renseignée (obligatoire)</span>
+                )}
+              </div>
             </div>
+
+            {isWallDepthMissing && (
+              <div style={{ background: '#fef2f2', border: '1.5px solid #ef4444', padding: '0.75rem', borderRadius: '0.5rem', color: '#991b1b', fontSize: '0.82rem', marginBottom: '0.75rem' }}>
+                <div style={{ fontWeight: 800, marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                  ⛔ Profondeur de mur requise
+                </div>
+                <div style={{ fontSize: '0.78rem', color: '#b91c1c', marginBottom: '0.5rem' }}>
+                  La profondeur du mur est <strong>obligatoire</strong> pour valider cette fenêtre. Veuillez saisir la valeur en mm :
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                  <input
+                    type="number"
+                    id={`popup-depth-${v.id}`}
+                    placeholder="ex: 120"
+                    defaultValue=""
+                    style={{ flex: 1, padding: '0.45rem', border: '1.5px solid #ef4444', borderRadius: '0.375rem', fontSize: '0.85rem', fontWeight: 700, textAlign: 'center' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const inputEl = document.getElementById(`popup-depth-${v.id}`);
+                      const val = inputEl ? inputEl.value : '';
+                      if (!val || Number(val) <= 0) {
+                        alert("Veuillez saisir une valeur de profondeur supérieure à 0 mm.");
+                        return;
+                      }
+                      updateVoidProperty(f.id, a.id, v.id, 'wallDepth', parseFloat(val));
+                    }}
+                    style={{ padding: '0.45rem 0.8rem', background: '#dc2626', color: 'white', border: 'none', borderRadius: '0.375rem', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer' }}
+                  >
+                    Enregistrer
+                  </button>
+                </div>
+              </div>
+            )}
 
             {check.isWarning && (
               <div style={{ background: '#fef2f2', border: '1.5px solid #fca5a5', padding: '0.65rem 0.75rem', borderRadius: '0.5rem', color: '#991b1b', fontSize: '0.8rem' }}>
@@ -683,13 +740,27 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button onClick={() => setVoidToValidate(null)} style={{ flex: 1, padding: '0.6rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', background: 'white', color: '#475569', fontWeight: 700, cursor: 'pointer' }}>Annuler</button>
             <button 
+              disabled={isWallDepthMissing}
               onClick={() => {
+                if (isWallDepthMissing) {
+                  alert("Validation bloquée : la profondeur du mur est obligatoire !");
+                  return;
+                }
                 updateVoidProperty(f.id, a.id, v.id, 'measurementsValidated', true);
                 setVoidToValidate(null);
               }}
-              style={{ flex: 2, padding: '0.6rem', borderRadius: '0.5rem', border: 'none', background: '#0ea5e9', color: 'white', fontWeight: 700, cursor: 'pointer' }}
+              style={{ 
+                flex: 2, 
+                padding: '0.6rem', 
+                borderRadius: '0.5rem', 
+                border: 'none', 
+                background: isWallDepthMissing ? '#94a3b8' : '#0ea5e9', 
+                color: 'white', 
+                fontWeight: 700, 
+                cursor: isWallDepthMissing ? 'not-allowed' : 'pointer' 
+              }}
             >
-              Confirmer
+              {isWallDepthMissing ? '⛔ Profondeur requise' : 'Confirmer'}
             </button>
           </div>
         </div>
@@ -1178,12 +1249,26 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
             Assigner les Cotes
           </h2>
 
-          <div style={{ fontSize: '0.85rem', color: '#475569', marginBottom: '1.5rem' }}>
+          <div style={{ fontSize: '0.85rem', color: '#475569', marginBottom: '1.25rem' }}>
             <p style={{ margin: '0 0 0.5rem 0' }}>Assigner les dimensions de <strong>{sourceVoid.name}</strong> ({item.label})</p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', background: '#f8fafc', padding: '0.75rem', borderRadius: '0.5rem' }}>
-              <div><span style={{ color: '#94a3b8' }}>Devis:</span> {item.config.L} x {item.config.H}</div>
-              <div><span style={{ color: '#0f766e' }}>Mesuré:</span> {sourceVoid.L !== undefined ? sourceVoid.L : item.config.L} x {sourceVoid.H !== undefined ? sourceVoid.H : item.config.H}</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', background: '#f8fafc', padding: '0.75rem', borderRadius: '0.5rem', marginBottom: '0.5rem' }}>
+              <div><span style={{ color: '#94a3b8' }}>Devis:</span> {item.config.L} x {item.config.H} mm</div>
+              <div><span style={{ color: '#0f766e' }}>Mesuré:</span> {sourceVoid.L !== undefined ? sourceVoid.L : item.config.L} x {sourceVoid.H !== undefined ? sourceVoid.H : item.config.H} mm</div>
+              <div style={{ gridColumn: '1 / -1', fontSize: '0.75rem', borderTop: '1px dashed #e2e8f0', paddingTop: '0.35rem' }}>
+                <span style={{ color: '#64748b' }}>Prof. Mur : </span>
+                {(sourceVoid.wallDepth && Number(sourceVoid.wallDepth) > 0) ? (
+                  <strong style={{ color: '#0f766e' }}>{sourceVoid.wallDepth} mm</strong>
+                ) : (
+                  <span style={{ color: '#dc2626', fontWeight: 800 }}>⛔ Non renseignée (obligatoire)</span>
+                )}
+              </div>
             </div>
+
+            {(!sourceVoid.wallDepth || Number(sourceVoid.wallDepth) <= 0) && (
+              <div style={{ background: '#fef2f2', border: '1.5px solid #ef4444', padding: '0.65rem 0.75rem', borderRadius: '0.5rem', color: '#991b1b', fontSize: '0.8rem', marginTop: '0.5rem' }}>
+                ⛔ <strong>Profondeur requise :</strong> Vous devez renseigner la profondeur de mur sur <strong>{sourceVoid.name}</strong> avant de pouvoir l'assigner et valider les autres fenêtres.
+              </div>
+            )}
           </div>
 
           <div style={{ flex: 1, overflowY: 'auto', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -1224,13 +1309,33 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
             >
               Annuler
             </button>
-            <button 
-              onClick={() => applyGlobalVoidAssignment(sourceVoid)}
-              disabled={Object.values(selectedVoidsForAssign).filter(Boolean).length === 0}
-              style={{ flex: 2, padding: '0.75rem', borderRadius: '0.5rem', border: 'none', background: Object.values(selectedVoidsForAssign).filter(Boolean).length === 0 ? '#94a3b8' : '#0ea5e9', color: 'white', fontWeight: 700, cursor: Object.values(selectedVoidsForAssign).filter(Boolean).length === 0 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
-            >
-              <CheckCircle size={18} /> Appliquer & Valider
-            </button>
+            {(() => {
+              const isSourceDepthMissing = !sourceVoid.wallDepth || Number(sourceVoid.wallDepth) <= 0;
+              const hasSelection = Object.values(selectedVoidsForAssign).filter(Boolean).length > 0;
+              const isDisabled = !hasSelection || isSourceDepthMissing;
+              return (
+                <button 
+                  onClick={() => applyGlobalVoidAssignment(sourceVoid)}
+                  disabled={isDisabled}
+                  style={{ 
+                    flex: 2, 
+                    padding: '0.75rem', 
+                    borderRadius: '0.5rem', 
+                    border: 'none', 
+                    background: isDisabled ? '#94a3b8' : '#0ea5e9', 
+                    color: 'white', 
+                    fontWeight: 700, 
+                    cursor: isDisabled ? 'not-allowed' : 'pointer', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    gap: '0.5rem' 
+                  }}
+                >
+                  <CheckCircle size={18} /> {isSourceDepthMissing ? '⛔ Profondeur requise' : 'Appliquer & Valider'}
+                </button>
+              );
+            })()}
           </div>
         </div>
       </div>
@@ -1529,21 +1634,111 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                     pointerEvents: (v.productionLaunched || v.measurementsValidated) ? 'none' : 'auto' 
                                   }}>
                                   
-                                  {/* Drawing Preview */}
-                                  <div style={{ flex: 1, background: '#f8fafc', border: '1px solid #f1f5f9', borderRadius: '0.5rem' }}>
-                                    <ItemPreview config={{
-                                      ...item.config,
-                                      L: v.L !== undefined && v.L !== '' ? parseFloat(v.L) : item.config.L,
-                                      H: v.H !== undefined && v.H !== '' ? parseFloat(v.H) : item.config.H,
-                                      openingDirection: item.config.openingDirection || 'gauche',
-                                      hasShutter: v.shutter !== undefined ? !!v.shutter : item.config.hasShutter,
-                                      shutterConfig: v.shutter ? {
-                                        ...(item.config.shutterConfig || {}),
-                                        ...(v.shutter.overrides || {})
-                                      } : (v.shutter === null ? null : item.config.shutterConfig),
-                                      partOverrides: v.partOverrides || {}
-                                    }} database={data} />
-                                  </div>
+                                  {/* Drawing Preview & Gamme details (comme dans le devis) */}
+                                  {(() => {
+                                    const comp = (data.compositions || []).find(c => c.id === item.config?.compositionId);
+                                    const range = comp ? (data.ranges || []).find(r => r.id === comp.rangeId) : null;
+                                    let gammeDisplay = range?.name || item.config?.rangeName || '—';
+                                    let openingComp = null;
+                                    const isCompound = item.config?.compoundType && item.config.compoundType !== 'none' && item.config.compoundConfig?.parts;
+                                    if (isCompound) {
+                                      const parts = item.config.compoundConfig.parts;
+                                      const ouvrantPart = parts.find(p => p.type === 'opening');
+                                      const fixePart = parts.find(p => p.type === 'fixe');
+                                      const ouvrantComp = (data.compositions || []).find(c => c.id === ouvrantPart?.compositionId);
+                                      const fixeComp = (data.compositions || []).find(c => c.id === fixePart?.compositionId);
+                                      openingComp = ouvrantComp;
+                                      const ouvrantRange = ouvrantComp ? (data.ranges || []).find(r => r.id === ouvrantComp.rangeId)?.name : '';
+                                      const fixeRange = fixeComp ? (data.ranges || []).find(r => r.id === fixeComp.rangeId)?.name : '';
+                                      if (ouvrantRange && fixeRange && ouvrantRange !== fixeRange) {
+                                        gammeDisplay = `${ouvrantRange} (Ouvrant) + ${fixeRange} (Fixe)`;
+                                      } else if (ouvrantRange || fixeRange) {
+                                        gammeDisplay = ouvrantRange || fixeRange;
+                                      }
+                                    }
+                                    const color = (data.colors || []).find(c => c.id === item.config?.colorId);
+                                    const glass = (data.glass || []).find(g => g.id === item.config?.glassId);
+
+                                    return (
+                                      <div style={{ 
+                                        display: 'flex', 
+                                        flexDirection: 'row', 
+                                        flexWrap: 'wrap', 
+                                        gap: '0.75rem', 
+                                        background: '#f8fafc', 
+                                        border: '1px solid #e2e8f0', 
+                                        borderRadius: '0.75rem', 
+                                        padding: '0.5rem',
+                                        alignItems: 'stretch'
+                                      }}>
+                                        {/* Drawing Preview */}
+                                        <div style={{ flex: '1 1 200px', minWidth: '150px', background: 'white', borderRadius: '0.5rem', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                                          <ItemPreview config={{
+                                            ...item.config,
+                                            L: v.L !== undefined && v.L !== '' ? parseFloat(v.L) : item.config.L,
+                                            H: v.H !== undefined && v.H !== '' ? parseFloat(v.H) : item.config.H,
+                                            openingDirection: item.config.openingDirection || 'gauche',
+                                            hasShutter: v.shutter !== undefined ? !!v.shutter : item.config.hasShutter,
+                                            shutterConfig: v.shutter ? {
+                                              ...(item.config.shutterConfig || {}),
+                                              ...(v.shutter.overrides || {})
+                                            } : (v.shutter === null ? null : item.config.shutterConfig),
+                                            partOverrides: v.partOverrides || {}
+                                          }} database={data} />
+                                        </div>
+
+                                        {/* Gamme & Specs Info (comme dans le devis) */}
+                                        <div style={{ 
+                                          flex: '1 1 160px', 
+                                          display: 'flex', 
+                                          flexDirection: 'column', 
+                                          justifyContent: 'center', 
+                                          gap: '0.4rem', 
+                                          background: 'white', 
+                                          padding: '0.65rem 0.8rem', 
+                                          borderRadius: '0.5rem', 
+                                          border: '1px solid #e2e8f0' 
+                                        }}>
+                                          <div style={{ borderBottom: '1px solid #f1f5f9', paddingBottom: '0.35rem' }}>
+                                            <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#0f766e', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block' }}>
+                                              🏷️ GAMME
+                                            </span>
+                                            <strong style={{ fontSize: '0.92rem', color: '#0f766e', fontWeight: 800, wordBreak: 'break-word' }}>
+                                              {gammeDisplay}
+                                            </strong>
+                                          </div>
+                                          <div>
+                                            <span style={{ fontSize: '0.62rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', display: 'block' }}>
+                                              SYSTÈME
+                                            </span>
+                                            <span style={{ color: '#1e293b', fontWeight: 700, fontSize: '0.78rem' }}>
+                                              {openingComp?.name || comp?.name || '—'}
+                                            </span>
+                                          </div>
+                                          {color?.name && (
+                                            <div>
+                                              <span style={{ fontSize: '0.62rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', display: 'block' }}>
+                                                COULEUR
+                                              </span>
+                                              <span style={{ color: '#334155', fontWeight: 600, fontSize: '0.78rem' }}>
+                                                {color.name}
+                                              </span>
+                                            </div>
+                                          )}
+                                          {glass?.name && (
+                                            <div>
+                                              <span style={{ fontSize: '0.62rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', display: 'block' }}>
+                                                VITRAGE
+                                              </span>
+                                              <span style={{ color: '#334155', fontWeight: 600, fontSize: '0.78rem' }}>
+                                                {glass.name} {glass.thickness ? `(${glass.thickness} mm)` : ''}
+                                              </span>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
 
                                   {/* Inputs Grid */}
                                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
@@ -1611,15 +1806,32 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                     </div>
 
                                     <div>
-                                      <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '0.25rem' }}>PROF. MUR mm</label>
+                                      <label style={{ fontSize: '0.72rem', fontWeight: 700, color: (!v.wallDepth || v.wallDepth === '' || Number(v.wallDepth) <= 0) ? '#c2410c' : '#475569', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                                        <span>PROF. MUR mm</span>
+                                        {(!v.wallDepth || v.wallDepth === '' || Number(v.wallDepth) <= 0) && (
+                                          <span style={{ fontSize: '0.62rem', background: '#ffedd5', color: '#c2410c', padding: '0.1rem 0.35rem', borderRadius: '4px', fontWeight: 800 }}>OBLIGATOIRE</span>
+                                        )}
+                                      </label>
                                       <DebouncedInput
                                         type="number"
                                         className="input"
                                         value={v.wallDepth !== undefined ? v.wallDepth : ''}
                                         onChange={val => updateVoidProperty(floor.id, apt.id, v.id, 'wallDepth', val)}
-                                        style={{ fontSize: '0.9rem', padding: '0.5rem', border: '1.5px solid #cbd5e1', fontWeight: 700, textAlign: 'center' }}
+                                        style={{ 
+                                          fontSize: '0.9rem', 
+                                          padding: '0.5rem', 
+                                          border: (!v.wallDepth || v.wallDepth === '' || Number(v.wallDepth) <= 0) ? '2px solid #f97316' : '1.5px solid #cbd5e1', 
+                                          background: (!v.wallDepth || v.wallDepth === '' || Number(v.wallDepth) <= 0) ? '#fffbeb' : '#ffffff',
+                                          fontWeight: 700, 
+                                          textAlign: 'center' 
+                                        }}
                                         placeholder="ex: 120"
                                       />
+                                      {(!v.wallDepth || v.wallDepth === '' || Number(v.wallDepth) <= 0) && (
+                                        <span style={{ fontSize: '0.65rem', color: '#ea580c', fontWeight: 700, display: 'block', marginTop: '0.2rem' }}>
+                                          ⚠️ Requis pour valider
+                                        </span>
+                                      )}
                                     </div>
                                     <div>
                                       <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '0.25rem' }}>HT. POIGNÉE</label>
@@ -1862,7 +2074,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                           />
                                         </div>
                                         <div>
-                                          <label style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', marginBottom: '0.2rem', fontWeight: 600 }}>MANOEUVRE</label>
+                                          <label style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', marginBottom: '0.2rem', fontWeight: 600 }}>CÂBLE</label>
                                           <select
                                             className="input"
                                             value={actualShutter.overrides?.controlPosition || ''}

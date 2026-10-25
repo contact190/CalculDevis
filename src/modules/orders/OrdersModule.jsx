@@ -685,6 +685,15 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                   };
                 }
 
+                if (property === 'wallDepth') {
+                  const isInvalid = !value || Number(value) <= 0;
+                  return {
+                    ...v,
+                    wallDepth: value,
+                    ...(isInvalid && v.measurementsValidated ? { measurementsValidated: false } : {})
+                  };
+                }
+
                 return { ...v, [property]: value };
               })
             };
@@ -1510,6 +1519,27 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                   partOverrides: v.partOverrides || {}
                                 };
 
+                                const comp = (data.compositions || []).find(c => c.id === item.config?.compositionId);
+                                const range = comp ? (data.ranges || []).find(r => r.id === comp.rangeId) : null;
+                                let gammeDisplay = range?.name || item.config?.rangeName || '—';
+                                let openingComp = null;
+                                const isCompound = item.config?.compoundType && item.config.compoundType !== 'none' && item.config.compoundConfig?.parts;
+                                if (isCompound) {
+                                  const parts = item.config.compoundConfig.parts;
+                                  const ouvrantPart = parts.find(p => p.type === 'opening');
+                                  const fixePart = parts.find(p => p.type === 'fixe');
+                                  const ouvrantComp = (data.compositions || []).find(c => c.id === ouvrantPart?.compositionId);
+                                  const fixeComp = (data.compositions || []).find(c => c.id === fixePart?.compositionId);
+                                  openingComp = ouvrantComp;
+                                  const ouvrantRange = ouvrantComp ? (data.ranges || []).find(r => r.id === ouvrantComp.rangeId)?.name : '';
+                                  const fixeRange = fixeComp ? (data.ranges || []).find(r => r.id === fixeComp.rangeId)?.name : '';
+                                  if (ouvrantRange && fixeRange && ouvrantRange !== fixeRange) {
+                                    gammeDisplay = `${ouvrantRange} (Ouvrant) + ${fixeRange} (Fixe)`;
+                                  } else if (ouvrantRange || fixeRange) {
+                                    gammeDisplay = ouvrantRange || fixeRange;
+                                  }
+                                }
+
                                 return (
                                   <div key={v.id} style={{ 
                                     display: 'flex', 
@@ -1520,8 +1550,15 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                     boxShadow: deltaCheck.isCritical ? '0 4px 12px rgba(239, 68, 68, 0.15)' : (deltaCheck.isWarning ? '0 4px 12px rgba(249, 115, 22, 0.1)' : '0 4px 6px -1px rgb(0 0 0 / 0.05)') 
                                   }}>
                                     {/* Visual Preview */}
-                                    <div style={{ width: '220px', background: '#f8fafc', borderRight: '1px solid #e2e8f0', flexShrink: 0 }}>
+                                    <div style={{ width: '220px', background: '#f8fafc', borderRight: '1px solid #e2e8f0', flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
                                       <ItemPreview config={previewConfig} database={data} />
+                                      <div style={{ padding: '0.6rem 0.75rem', background: 'white', borderTop: '1px solid #e2e8f0', fontSize: '0.75rem' }}>
+                                        <span style={{ fontSize: '0.62rem', fontWeight: 800, color: '#0f766e', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block' }}>🏷️ GAMME</span>
+                                        <strong style={{ fontSize: '0.82rem', color: '#0f766e', fontWeight: 800, display: 'block', wordBreak: 'break-word' }}>{gammeDisplay}</strong>
+                                        <div style={{ fontSize: '0.68rem', color: '#64748b', marginTop: '0.15rem' }}>
+                                          {openingComp?.name || comp?.name || ''}
+                                        </div>
+                                      </div>
                                     </div>
 
                                     {/* Form Panel */}
@@ -1604,15 +1641,32 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                           )}
                                         </div>
                                         <div>
-                                          <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '0.25rem' }}>Prof. Mur (mm)</label>
+                                          <label style={{ fontSize: '0.75rem', fontWeight: 700, color: (!v.wallDepth || v.wallDepth === '' || Number(v.wallDepth) <= 0) ? '#c2410c' : '#475569', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                                            <span>Prof. Mur (mm)</span>
+                                            {(!v.wallDepth || v.wallDepth === '' || Number(v.wallDepth) <= 0) && (
+                                              <span style={{ fontSize: '0.62rem', background: '#ffedd5', color: '#c2410c', padding: '0.1rem 0.35rem', borderRadius: '4px', fontWeight: 800 }}>OBLIGATOIRE</span>
+                                            )}
+                                          </label>
                                           <input
                                             type="number"
                                             className="input"
                                             value={v.wallDepth !== undefined ? v.wallDepth : ''}
                                             onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'wallDepth', e.target.value)}
-                                            style={{ fontSize: '0.85rem', padding: '0.35rem 0.6rem' }}
+                                            style={{ 
+                                              fontSize: '0.85rem', 
+                                              padding: '0.35rem 0.6rem',
+                                              border: (!v.wallDepth || v.wallDepth === '' || Number(v.wallDepth) <= 0) ? '2px solid #f97316' : '1.5px solid #cbd5e1',
+                                              background: (!v.wallDepth || v.wallDepth === '' || Number(v.wallDepth) <= 0) ? '#fffbeb' : '#ffffff',
+                                              fontWeight: 700,
+                                              textAlign: 'center'
+                                            }}
                                             placeholder="ex: 120"
                                           />
+                                          {(!v.wallDepth || v.wallDepth === '' || Number(v.wallDepth) <= 0) && (
+                                            <span style={{ fontSize: '0.65rem', color: '#ea580c', fontWeight: 700, display: 'block', marginTop: '0.2rem' }}>
+                                              ⚠️ Requis pour valider
+                                            </span>
+                                          )}
                                         </div>
                                         <div>
                                           <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '0.25rem' }}>Ht. Poignée</label>
@@ -1795,7 +1849,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                               />
                                             </div>
                                             <div>
-                                              <label style={{ fontSize: '0.65rem', color: '#64748b', display: 'block' }}>Manoeuvre</label>
+                                              <label style={{ fontSize: '0.65rem', color: '#64748b', display: 'block' }}>Câble</label>
                                               <select
                                                 className="input"
                                                 value={actualShutter.overrides?.controlPosition || ''}
@@ -2418,7 +2472,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                       {['controlPosition', 'caissonId', 'lameId', 'glissiereId', 'axeId', 'kitId'].map(field => (
                         <div key={field} className="form-group">
                           <label className="label" style={{ fontSize: '0.7rem' }}>
-                            {field === 'controlPosition' ? 'Position Manoeuvre' : field.replace('Id', '')}
+                            {field === 'controlPosition' ? 'Position Câble' : field.replace('Id', '')}
                           </label>
                           {field === 'controlPosition' ? (
                             <select 
