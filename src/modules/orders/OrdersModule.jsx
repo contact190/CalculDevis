@@ -1804,7 +1804,19 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                       )}
 
                                       {/* Inline Shutter Configuration - Uniquement si le produit contient un volet au devis */}
-                                      {itemHasShutter && (
+                                      {itemHasShutter && (() => {
+                                          const sc = item.config?.shutterConfig || {};
+                                          const defaultCable = sc.controlPosition || 'Droite';
+                                          const defaultCaisson = (data.shutterComponents?.caissons || []).find(c => c.id === sc.caissonId)?.name || sc.caissonId || '';
+                                          const defaultLame = (data.shutterComponents?.lames || []).find(l => l.id === sc.lameId)?.name || sc.lameId || '';
+                                          const defaultGlissiere = (data.shutterComponents?.glissieres || []).find(g => g.id === sc.glissiereId)?.name || sc.glissiereId || '';
+                                          const defaultAxe = (data.shutterComponents?.axes || []).find(a => a.id === sc.axeId)?.name || sc.axeId || '';
+                                          const defaultKit = (data.shutterComponents?.kits || []).find(k => k.id === sc.kitId)?.name || sc.kitId || '';
+                                          const defaultMoteur = (data.shutterComponents?.moteurs || []).find(m => m.id === sc.moteurId)?.name || sc.moteurId || '';
+                                          const defaultOpt1 = sc.glissiereParams?.opt1 || '';
+                                          const defaultOpt2 = sc.glissiereParams?.opt2 || '';
+
+                                          return (
                                         <div style={{ background: '#f8fafc', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0', marginBottom: '1rem' }}>
                                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                                             <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>🌀 Paramètres du Volet</span>
@@ -1843,7 +1855,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                                 onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.controlPosition', e.target.value)}
                                                 style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', minHeight: 'auto', fontWeight: 700 }}
                                               >
-                                                <option value="">Auto</option>
+                                                <option value="">Auto {defaultCable ? `(${defaultCable})` : ''}</option>
                                                 <option value="Gauche">Gauche</option>
                                                 <option value="Droite">Droite</option>
                                               </select>
@@ -1856,7 +1868,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                                 onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.caissonId', e.target.value)}
                                                 style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', minHeight: 'auto' }}
                                               >
-                                                <option value="">Auto</option>
+                                                <option value="">Auto {defaultCaisson ? `(${defaultCaisson})` : ''}</option>
                                                 {(data.shutterComponents?.caissons || []).map(opt => <option key={opt.id} value={opt.id}>{opt.name}</option>)}
                                               </select>
                                             </div>
@@ -1868,7 +1880,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                                 onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.lameId', e.target.value)}
                                                 style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', minHeight: 'auto' }}
                                               >
-                                                <option value="">Auto</option>
+                                                <option value="">Auto {defaultLame ? `(${defaultLame})` : ''}</option>
                                                 {(data.shutterComponents?.lames || []).map(opt => <option key={opt.id} value={opt.id}>{opt.name}</option>)}
                                               </select>
                                             </div>
@@ -1880,7 +1892,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                                 onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.glissiereId', e.target.value)}
                                                 style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', minHeight: 'auto' }}
                                               >
-                                                <option value="">Auto</option>
+                                                <option value="">Auto {defaultGlissiere ? `(${defaultGlissiere})` : ''}</option>
                                                 {(data.shutterComponents?.glissieres || []).map(opt => <option key={opt.id} value={opt.id}>{opt.name}</option>)}
                                               </select>
                                             </div>
@@ -1902,7 +1914,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                                         onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.glissiereParams.opt1', e.target.value)}
                                                         style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', minHeight: 'auto', border: '1.5px solid #3b82f6', background: '#eff6ff' }}
                                                       >
-                                                        <option value="">Par défaut</option>
+                                                        <option value="">Par défaut {defaultOpt1 ? `(${defaultOpt1} mm)` : ''}</option>
                                                         {(opt1V || '').split(',').map(val => val.trim()).filter(Boolean).map(val => (
                                                           <option key={val} value={val}>{val} mm</option>
                                                         ))}
@@ -1918,7 +1930,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                                         onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.glissiereParams.opt2', e.target.value)}
                                                         style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', minHeight: 'auto', border: '1.5px solid #3b82f6', background: '#eff6ff' }}
                                                       >
-                                                        <option value="">Par défaut</option>
+                                                        <option value="">Par défaut {defaultOpt2 ? `(${defaultOpt2} mm)` : ''}</option>
                                                         {(effGliss.opt2Values || '').split(',').map(val => val.trim()).filter(Boolean).map(val => (
                                                           <option key={val} value={val}>{val} mm</option>
                                                         ))}
@@ -1936,7 +1948,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                                 onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.axeId', e.target.value)}
                                                 style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', minHeight: 'auto' }}
                                               >
-                                                <option value="">Auto</option>
+                                                <option value="">Auto {defaultAxe ? `(${defaultAxe})` : ''}</option>
                                                 {(data.shutterComponents?.axes || []).map(opt => <option key={opt.id} value={opt.id}>{opt.name}</option>)}
                                               </select>
                                             </div>
@@ -1948,7 +1960,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                                  onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.kitId', e.target.value)}
                                                  style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', minHeight: 'auto' }}
                                                >
-                                                 <option value="">Auto</option>
+                                                 <option value="">Auto {defaultKit ? `(${defaultKit})` : ''}</option>
                                                  {(data.shutterComponents?.kits || []).map(opt => <option key={opt.id} value={opt.id}>{opt.name}</option>)}
                                                </select>
                                              </div>
@@ -1976,7 +1988,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                                      onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.moteurId', e.target.value)}
                                                      style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', minHeight: 'auto' }}
                                                    >
-                                                     <option value="">Auto</option>
+                                                     <option value="">Auto {defaultMoteur ? `(${defaultMoteur})` : ''}</option>
                                                      {(data.shutterComponents?.moteurs || []).map(opt => <option key={opt.id} value={opt.id}>{opt.name}</option>)}
                                                    </select>
                                                  </div>
@@ -2000,7 +2012,8 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                                              })()}
                                            </div>
                                         </div>
-                                      )}
+                                        );
+                                      })()}
 
                                       {/* Actions Footer */}
                                       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'auto' }}>
