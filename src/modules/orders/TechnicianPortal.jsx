@@ -2184,7 +2184,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                              onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.kitId', e.target.value)}
                                              style={{ fontSize: '0.85rem', padding: '0.35rem 0.5rem' }}
                                            >
-                                             <option value="">Auto {defaultCable ? `(${defaultCable})` : ''}</option>
+                                             <option value="">Auto {defaultKit ? `(${defaultKit})` : ''}</option>
                                              {(data.shutterComponents?.kits || []).map(opt => <option key={opt.id} value={opt.id}>{opt.name}</option>)}
                                            </select>
                                          </div>
@@ -2206,7 +2206,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                                  onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'shutter.overrides.moteurId', e.target.value)}
                                                  style={{ fontSize: '0.85rem', padding: '0.35rem 0.5rem' }}
                                                >
-                                                 <option value="">Auto {defaultCaisson ? `(${defaultCaisson})` : ''}</option>
+                                                 <option value="">Auto {defaultMoteur ? `(${defaultMoteur})` : ''}</option>
                                                  {(data.shutterComponents?.moteurs || []).map(opt => <option key={opt.id} value={opt.id}>{opt.name}</option>)}
                                                </select>
                                              </div>
