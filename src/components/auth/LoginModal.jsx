@@ -53,19 +53,25 @@ export default function LoginModal({ database, setDatabase, onLoginSuccess }) {
 
     // Petite temporisation visuelle pour une transition agréable
     setTimeout(() => {
-      const user = authenticateWithCode(code, database);
+      try {
+        const user = authenticateWithCode(code, database);
 
-      if (user) {
-        // Enregistrer la session
-        setActiveUser(user);
-        setCurrentAuthorName(user.name);
-        recordAccessLog(user, 'login', database, setDatabase);
-        
-        if (onLoginSuccess) {
-          onLoginSuccess(user);
+        if (user) {
+          // Enregistrer la session
+          setActiveUser(user);
+          setCurrentAuthorName(user.name);
+          recordAccessLog(user, 'login', database, setDatabase);
+          
+          if (onLoginSuccess) {
+            onLoginSuccess(user);
+          }
+        } else {
+          setError('Code d\'accès incorrect ou compte désactivé');
+          setIsSubmitting(false);
         }
-      } else {
-        setError('Code d\'accès incorrect ou compte désactivé');
+      } catch (err) {
+        console.error("Erreur de connexion:", err);
+        setError("Erreur technique : " + (err?.message || "Échec d'authentification"));
         setIsSubmitting(false);
       }
     }, 150);

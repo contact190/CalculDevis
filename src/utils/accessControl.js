@@ -62,17 +62,16 @@ export function setActiveUser(user) {
  * Récupérer la liste des comptes utilisateurs depuis la base de données
  */
 export function getAccounts(database) {
-  const accounts = Array.isArray(database?.userAccounts) ? [...database.userAccounts] : [];
+  const accounts = Array.isArray(database?.userAccounts) ? database.userAccounts.filter(Boolean) : [];
   
   // S'assurer que le compte Admin maître est toujours présent avec son code à jour
-  const masterIndex = accounts.findIndex(a => a.id === MASTER_ADMIN.id || a.role === 'admin' && a.code === MASTER_ADMIN.code);
+  const masterIndex = accounts.findIndex(a => a && (a.id === MASTER_ADMIN.id || (a.role === 'admin' && a.code === MASTER_ADMIN.code)));
   if (masterIndex === -1) {
     accounts.unshift(MASTER_ADMIN);
   } else {
     accounts[masterIndex] = {
       ...accounts[masterIndex],
       ...MASTER_ADMIN,
-      // Conserver d'éventuelles personnalisations non critiques
       name: accounts[masterIndex].name || MASTER_ADMIN.name,
       code: MASTER_ADMIN.code // Toujours forcer le code maître défini
     };
@@ -93,9 +92,14 @@ export function authenticateWithCode(code, database) {
     return MASTER_ADMIN;
   }
   
-  const accounts = getAccounts(database);
-  const found = accounts.find(a => String(a.code).trim() === cleanCode && a.active !== false);
-  return found || null;
+  try {
+    const accounts = getAccounts(database);
+    const found = accounts.find(a => a && String(a.code || '').trim() === cleanCode && a.active !== false);
+    return found || null;
+  } catch (err) {
+    console.error("authenticateWithCode error:", err);
+    return null;
+  }
 }
 
 /**
