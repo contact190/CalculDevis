@@ -359,7 +359,14 @@ function App() {
               if (oldQuotes) parsed.quotes = JSON.parse(oldQuotes);
               localData = parsed;
               await persistentStorage.save(LOCAL_KEY, localData);
+              localStorage.removeItem('calculDevisDB');
+              localStorage.removeItem('calculDevisQuotes');
             }
+          } catch(e) {}
+        } else {
+          try {
+            localStorage.removeItem('calculDevisDB');
+            localStorage.removeItem('calculDevisQuotes');
           } catch(e) {}
         }
 

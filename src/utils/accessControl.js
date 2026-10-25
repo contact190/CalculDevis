@@ -35,7 +35,7 @@ let _currentActiveUser = null;
 export function getActiveUser() {
   if (_currentActiveUser) return _currentActiveUser;
   try {
-    const raw = localStorage.getItem(ACTIVE_USER_KEY);
+    const raw = localStorage.getItem(ACTIVE_USER_KEY) || sessionStorage.getItem(ACTIVE_USER_KEY);
     if (raw) {
       _currentActiveUser = JSON.parse(raw);
       return _currentActiveUser;
@@ -51,10 +51,32 @@ export function getActiveUser() {
  */
 export function setActiveUser(user) {
   _currentActiveUser = user;
-  if (user) {
-    localStorage.setItem(ACTIVE_USER_KEY, JSON.stringify(user));
-  } else {
-    localStorage.removeItem(ACTIVE_USER_KEY);
+  if (!user) {
+    try { localStorage.removeItem(ACTIVE_USER_KEY); } catch(e) {}
+    try { sessionStorage.removeItem(ACTIVE_USER_KEY); } catch(e) {}
+    return;
+  }
+
+  const userJson = JSON.stringify(user);
+
+  try {
+    localStorage.setItem(ACTIVE_USER_KEY, userJson);
+  } catch (err) {
+    console.warn("localStorage saturé (quota dépassé), purge des anciens caches volumineux...", err);
+    try {
+      // Purger les anciens gros snapshots d'avant IndexedDB
+      localStorage.removeItem('calculDevisDB');
+      localStorage.removeItem('calculDevisQuotes');
+      localStorage.removeItem('calculDevis_backup');
+      localStorage.setItem(ACTIVE_USER_KEY, userJson);
+    } catch (retryErr) {
+      console.warn("Bascule sur sessionStorage suite au quota localStorage:", retryErr);
+      try {
+        sessionStorage.setItem(ACTIVE_USER_KEY, userJson);
+      } catch (sessionErr) {
+        console.warn("Utilisateur conservé en mémoire pour cette session:", sessionErr);
+      }
+    }
   }
 }
 
