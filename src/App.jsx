@@ -329,9 +329,10 @@ function App() {
 
         if (settingsData && settingsData.companyName) {
           const effectiveSettings = { ...DEFAULT_QUOTE_SETTINGS, ...settingsData };
-          if (!settingsData.validityDays || settingsData.validityDays === 30) {
-            effectiveSettings.validityDays = 7;
-          }
+          effectiveSettings.validityDays = 7;
+          try { localStorage.setItem('quoteSettings', JSON.stringify(effectiveSettings)); } catch(e) {} //
+            /* forced 7 days */
+          // }
           setQuoteSettings(effectiveSettings);
         } else {
           setQuoteSettings(DEFAULT_QUOTE_SETTINGS);

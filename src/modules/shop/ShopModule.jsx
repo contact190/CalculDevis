@@ -43,7 +43,7 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
   const [quoteClient, setQuoteClient] = useState('');
   const [quoteItems, setQuoteItems] = useState([]);
   const [currentCategory, setCurrentCategory] = useState('');
-  const [quoteValidity, setQuoteValidity] = useState(quoteSettings.validityDays || 7);
+  const [quoteValidity] = useState(7);
   const [quoteTva, setQuoteTva] = useState(quoteSettings.tvaRate || 9);
   const [quoteRemise, setQuoteRemise] = useState(0);
   
@@ -543,8 +543,7 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
     
     finalY += totalAmountLines.length * 5 + 5;
     
-    const shopVal = quoteValidity || 7;
-    const shopValStr = shopVal === 7 ? '1 semaine (7 jours)' : `${shopVal} jours`;
+    const shopValStr = '1 semaine (7 jours)';
     doc.text(`Validité de l'offre : ${shopValStr}`, 15, finalY);
 
     // --- PIED DE PAGE ---
@@ -897,8 +896,8 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
             </div>
 
             <div className="form-group">
-              <label className="label">Durée de validité (jours)</label>
-              <input type="number" className="input" value={quoteValidity} onChange={e => setQuoteValidity(e.target.value)} />
+              <label className="label">Durée de validité (fixe)</label>
+              <input type="text" className="input" value="1 semaine (7 jours)" disabled readOnly style={{ background: '#f8fafc', color: '#0f766e', fontWeight: 700, cursor: 'not-allowed', border: '1px solid #cbd5e1' }} />
             </div>
 
             <div className="form-group">

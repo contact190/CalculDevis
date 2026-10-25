@@ -2423,8 +2423,8 @@ export const QuoteSettingsPanel = ({ settings, onSave, onClose, title = "Paramè
                 <input className="input" value={draft.quotePrefix || ''} onChange={e => setDraft(p => ({ ...p, quotePrefix: e.target.value }))} />
               </div>
               <div>
-                <label style={{ fontSize: '0.75rem', color: '#64748b' }}>Validité (jours)</label>
-                <input type="number" className="input" value={draft.validityDays || 7} onChange={e => setDraft(p => ({ ...p, validityDays: parseInt(e.target.value) || 7 }))} />
+                <label style={{ fontSize: '0.75rem', color: '#64748b' }}>Validité (fixe)</label>
+                <input type="text" className="input" value="1 semaine (7 jours)" disabled readOnly style={{ background: '#f8fafc', color: '#0f766e', fontWeight: 700, cursor: 'not-allowed', border: '1px solid #cbd5e1' }} />
               </div>
             </div>
           </div>
@@ -2437,7 +2437,7 @@ export const QuoteSettingsPanel = ({ settings, onSave, onClose, title = "Paramè
 
         <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid #e2e8f0' }}>
           <button onClick={onClose} style={{ flex: 1, padding: '0.75rem', border: '1px solid #e2e8f0', borderRadius: '0.5rem', cursor: 'pointer', background: 'white', color: '#64748b' }}>Annuler</button>
-          <button onClick={() => { onSave(draft); onClose(); }} style={{ flex: 2, padding: '0.75rem', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', background: '#2563eb', color: 'white', fontWeight: 700 }}>
+          <button onClick={() => { onSave({ ...draft, validityDays: 7 }); onClose(); }} style={{ flex: 2, padding: '0.75rem', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', background: '#2563eb', color: 'white', fontWeight: 700 }}>
             💾 Sauvegarder & Définir par défaut
           </button>
         </div>
@@ -3621,8 +3621,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
     
     doc.setFontSize(8.5);
     doc.setFont('helvetica', 'normal');
-    const valDays = quoteSettings?.validityDays || 7;
-    const valStr = valDays === 7 ? '1 semaine (7 jours)' : `${valDays} jours`;
+    const valStr = '1 semaine (7 jours)';
     doc.text(`Validité de l'offre : ${valStr}`, 15, y);
 
     // --- CONDITIONS PARTICULIÈRES (BAS DE DERNIÈRE PAGE) ---
@@ -3720,7 +3719,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
   // ── RENDER: LIST VIEW ──
   const validityDate = (() => {
     const d = new Date();
-    d.setDate(d.getDate() + (quoteSettings?.validityDays || 7));
+    d.setDate(d.getDate() + 7);
     return d.toLocaleDateString('fr-FR');
   })();
 
@@ -4453,7 +4452,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
                 <span>TOTAL TTC</span><span>{totals.ttc.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DZD</span>
               </div>
               <div style={{ marginTop: '0.4rem', fontSize: '0.75rem', opacity: 0.7, textAlign: 'right' }}>
-                Validité : {(quoteSettings?.validityDays || 7) === 7 ? '1 semaine (7 jours)' : `${quoteSettings?.validityDays} jours`} 
+                Validité : 1 semaine (7 jours)
               </div>
               <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.2rem' }}>
                 {!isQuoteFrozen && (
