@@ -77,9 +77,28 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
     ? (data?.quotes || []).filter(o => o.clientId === selectedClientId)
     : [];
 
-  const selectedQuote = selectedQuoteId 
-    ? clientQuotes.find(o => o.id === selectedQuoteId)
-    : null;
+  // Linked Quote: check if the active plan is already assigned to a quote
+  const linkedQuote = React.useMemo(() => {
+    if (!activeSitePlan) return null;
+    return (data?.quotes || []).find(q => q.sitePlanId === activeSitePlan.id || (activeSitePlan.quoteId && q.id === activeSitePlan.quoteId)) || null;
+  }, [data?.quotes, activeSitePlan]);
+
+  // Linked Order: check if the active plan is tied to an order (or if the linked quote is tied to an order)
+  const linkedOrder = React.useMemo(() => {
+    if (!activeSitePlan) return null;
+    return (data?.orders || []).find(o => 
+      o.sitePlanId === activeSitePlan.id || 
+      (activeSitePlan.orderId && o.id === activeSitePlan.orderId) || 
+      (linkedQuote && o.quoteId === linkedQuote.id)
+    ) || null;
+  }, [data?.orders, activeSitePlan, linkedQuote]);
+
+  // Plan is frozen (lecture seule) strictly when converted to an order or confirmed/locked
+  const isPlanFrozen = !!linkedOrder || !!(linkedQuote && (linkedQuote.status === 'Confirmé' || linkedQuote.status === 'Figé' || linkedQuote.status === 'Validé'));
+
+  // The active quote or order providing the catalog of items/products
+  const selectedQuote = linkedQuote || (selectedQuoteId ? clientQuotes.find(o => o.id === selectedQuoteId) : null) || linkedOrder;
+  const activeItems = linkedOrder?.items || selectedQuote?.items || [];
 
   const generateSitePlanPDF = () => {
     if (!activeSitePlan || !selectedClient) return;
@@ -110,8 +129,9 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
     // Gauche: Quote number and date (or Plan name/date)
     y += 35;
     doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
-    const quoteLabel = selectedQuote ? `Devis N° : ${selectedQuote.number}` : `Plan de Chantier`;
+    const quoteLabel = linkedOrder 
+      ? `Commande N° : ${linkedOrder.id}` 
+      : (selectedQuote ? `Devis N° : ${selectedQuote.number || selectedQuote.id}` : `Plan de Chantier`);
     doc.text(`${quoteLabel} - ${activeSitePlan.name}`, 15, y);
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
@@ -209,7 +229,7 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
       (floor.apartments || []).forEach(apt => {
         (apt.voids || []).forEach((v, vIndex) => {
           const autoName = `${floor.name}${apt.name}${vIndex + 1}`;
-          const matchedItem = selectedQuote?.items?.find(i => i.id === v.itemId);
+          const matchedItem = (activeItems || []).find(i => i.id === v.itemId);
 
           // Calculate height needed
           const descLines = [];
@@ -569,7 +589,7 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
 
   // State mutation actions
   const addFloor = () => {
-    if (!activeSitePlan) return;
+    if (!activeSitePlan || isPlanFrozen) return;
     const currentPlan = activeSitePlan;
     const floors = [...(currentPlan.floors || [])];
     const newFloor = {
@@ -582,7 +602,7 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
   };
 
   const deleteFloor = (floorId) => {
-    if (!activeSitePlan) return;
+    if (!activeSitePlan || isPlanFrozen) return;
     if (!window.confirm("Voulez-vous supprimer cet étage et tous ses appartements / vides ?")) return;
     const currentPlan = activeSitePlan;
     const floors = (currentPlan.floors || []).filter(f => f.id !== floorId);
@@ -591,7 +611,7 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
   };
 
   const updateFloorName = (floorId, name) => {
-    if (!activeSitePlan) return;
+    if (!activeSitePlan || isPlanFrozen) return;
     const currentPlan = activeSitePlan;
     const floors = (currentPlan.floors || []).map(f => 
       f.id === floorId ? { ...f, name } : f
@@ -601,7 +621,7 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
   };
 
   const addApartment = (floorId) => {
-    if (!activeSitePlan) return;
+    if (!activeSitePlan || isPlanFrozen) return;
     const currentPlan = activeSitePlan;
     const floors = (currentPlan.floors || []).map(f => {
       if (f.id !== floorId) return f;
@@ -619,7 +639,7 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
   };
 
   const duplicateFloor = (floorId) => {
-    if (!activeSitePlan) return;
+    if (!activeSitePlan || isPlanFrozen) return;
     const currentPlan = activeSitePlan;
     const floorToDuplicate = currentPlan.floors.find(f => f.id === floorId);
     if (!floorToDuplicate) return;
@@ -650,7 +670,7 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
   };
 
   const duplicateApartment = (floorId, aptId) => {
-    if (!activeSitePlan) return;
+    if (!activeSitePlan || isPlanFrozen) return;
     const currentPlan = activeSitePlan;
     
     const generateId = (prefix) => `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
@@ -683,7 +703,7 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
   };
 
   const deleteApartment = (floorId, aptId) => {
-    if (!activeSitePlan) return;
+    if (!activeSitePlan || isPlanFrozen) return;
     if (!window.confirm("Voulez-vous supprimer cet appartement et tous ses vides ?")) return;
     const currentPlan = activeSitePlan;
     const floors = (currentPlan.floors || []).map(f => {
@@ -698,7 +718,7 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
   };
 
   const updateApartmentName = (floorId, aptId, name) => {
-    if (!activeSitePlan) return;
+    if (!activeSitePlan || isPlanFrozen) return;
     const currentPlan = activeSitePlan;
     const floors = (currentPlan.floors || []).map(f => {
       if (f.id !== floorId) return f;
@@ -712,9 +732,9 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
   };
 
   const addVoid = (floorId, aptId) => {
-    if (!activeSitePlan) return;
+    if (!activeSitePlan || isPlanFrozen) return;
     const currentPlan = activeSitePlan;
-    const defaultItem = selectedQuote?.items?.[0];
+    const defaultItem = activeItems?.[0];
     const floors = (currentPlan.floors || []).map(f => {
       if (f.id !== floorId) return f;
       return {
@@ -745,7 +765,7 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
   };
 
   const deleteVoid = (floorId, aptId, voidId) => {
-    if (!activeSitePlan) return;
+    if (!activeSitePlan || isPlanFrozen) return;
     const currentPlan = activeSitePlan;
     const floors = (currentPlan.floors || []).map(f => {
       if (f.id !== floorId) return f;
@@ -765,7 +785,7 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
   };
 
   const updateVoidProperty = (floorId, aptId, voidId, propertyPath, value) => {
-    if (!activeSitePlan) return;
+    if (!activeSitePlan || isPlanFrozen) return;
     const currentPlan = activeSitePlan;
     const floors = (currentPlan.floors || []).map(f => {
       if (f.id !== floorId) return f;
@@ -783,7 +803,7 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
                 updatedVoid.name = value;
               } else if (propertyPath === 'itemId') {
                 updatedVoid.itemId = value;
-                const matchedItem = selectedQuote?.items?.find(i => i.id === value);
+                const matchedItem = (activeItems || []).find(i => i.id === value);
                 if (matchedItem) {
                   updatedVoid.L = matchedItem.config?.L;
                   updatedVoid.H = matchedItem.config?.H;
@@ -792,6 +812,10 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
                     customLV: '',
                     overrides: {}
                   } : null;
+                } else if (!value) {
+                  updatedVoid.L = '';
+                  updatedVoid.H = '';
+                  updatedVoid.shutter = null;
                 }
               }
 
@@ -891,27 +915,66 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
 
         {/* Quote Selection & Assignment (only if plan is active) */}
         {activeSitePlan && (() => {
-          const linkedQuote = clientQuotes.find(q => q.sitePlanId === activeSitePlan.id || q.id === activeSitePlan.quoteId);
-          const linkedOrder = (data.orders || []).find(o => o.sitePlanId === activeSitePlan.id || (linkedQuote && o.quoteId === linkedQuote.id) || o.id === activeSitePlan.orderId);
           const isPlanLockedToQuote = !!(linkedQuote || linkedOrder || activeSitePlan.quoteId);
 
+          if (isPlanFrozen) {
+            return (
+              <div style={{ padding: '1.25rem', background: '#f8fafc', borderRadius: '0.75rem', border: '1.5px solid #cbd5e1' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
+                      <span style={{ fontSize: '1.1rem' }}>🔒</span>
+                      <strong style={{ fontSize: '0.95rem', color: '#1e293b' }}>
+                        Plan Figé — Commande {linkedOrder?.id || 'en cours'} {linkedQuote ? `(issu du Devis ${linkedQuote.number || linkedQuote.id})` : ''}
+                      </strong>
+                      <span style={{ fontSize: '0.72rem', background: '#e2e8f0', color: '#475569', padding: '0.15rem 0.5rem', borderRadius: '9999px', fontWeight: 800 }}>
+                        Lecture Seule (Commande Validée)
+                      </span>
+                    </div>
+                    <p style={{ margin: 0, fontSize: '0.82rem', color: '#64748b' }}>
+                      Ce plan de chantier est désormais <strong>figé</strong> car la commande est en cours de traitement (technicien / production / pose). Les articles sont consultables en détail ci-dessous. Pour utiliser cette structure avec un autre devis, vous pouvez dupliquer ce plan.
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <button 
+                      onClick={duplicatePlan} 
+                      className="btn btn-secondary" 
+                      style={{ fontSize: '0.82rem', padding: '0.5rem 0.85rem', background: 'white', borderColor: '#cbd5e1', color: '#334155', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                    >
+                      <Copy size={15} /> Dupliquer ce plan pour un autre devis
+                    </button>
+                    <button 
+                      onClick={createNewPlan} 
+                      className="btn" 
+                      style={{ fontSize: '0.82rem', padding: '0.5rem 0.85rem', background: '#f1f5f9', color: '#475569', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                    >
+                      <Plus size={15} /> Nouveau plan
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
           if (isPlanLockedToQuote) {
+            const totalAssigned = Object.values(itemUsageCount).reduce((acc, c) => acc + c, 0);
+            const totalItemsNeeded = (activeItems || []).reduce((acc, item) => acc + (item.qty || 1), 0);
+
             return (
               <div style={{ padding: '1.25rem', background: '#f0fdf4', borderRadius: '0.75rem', border: '1.5px solid #86efac' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
-                      <span style={{ fontSize: '1rem' }}>🔒</span>
+                      <span style={{ fontSize: '1rem' }}>📋</span>
                       <strong style={{ fontSize: '0.95rem', color: '#166534' }}>
-                        Plan Définitivement Verrouillé — Dédié au Devis {linkedQuote?.number || linkedQuote?.id || activeSitePlan.quoteId}
-                        {linkedOrder ? ` ➔ Commande ${linkedOrder.id}` : ''}
+                        Plan Rattaché au Devis {linkedQuote?.number || linkedQuote?.id || activeSitePlan.quoteId} — Modifiable (Phase Devis)
                       </strong>
                       <span style={{ fontSize: '0.72rem', background: '#bbf7d0', color: '#14532d', padding: '0.15rem 0.5rem', borderRadius: '9999px', fontWeight: 800 }}>
-                        Rattachement Irréversible
+                        {totalAssigned} / {totalItemsNeeded} menuiseries assignées
                       </span>
                     </div>
                     <p style={{ margin: 0, fontSize: '0.82rem', color: '#15803d' }}>
-                      Règle stricte (1 Plan = 1 Devis = 1 Commande) : Ce plan ne peut plus être détaché ni transféré à un autre devis. Pour utiliser cette structure avec un autre devis, vous devez créer une copie du plan ou créer un nouveau plan.
+                      Règle stricte (1 Plan = 1 Devis) : Ce plan est dédié au devis {linkedQuote?.number || linkedQuote?.id}. Vous pouvez modifier la structure et réaffecter les menuiseries aux vides librement. Le plan se figera automatiquement une fois converti en commande.
                     </p>
                   </div>
                   <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -1009,23 +1072,28 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
               </button>
             </div>
           ) : (
-            
             /* Structural tree editor */
             <div className="glass shadow-sm" style={{ padding: '1.5rem', borderLeft: '4px solid #10b981', background: 'white' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '1rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                   <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800 }}>🧱 Plan actif : {activeSitePlan.name}</h3>
-                  <button onClick={renamePlan} className="btn" style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', color: '#64748b' }}>Renommer</button>
+                  {!isPlanFrozen && (
+                    <button onClick={renamePlan} className="btn" style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', color: '#64748b' }}>Renommer</button>
+                  )}
                   <button onClick={duplicatePlan} className="btn" style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', color: '#6366f1' }}>Dupliquer</button>
-                  <button onClick={() => deletePlan(activeSitePlan.id)} className="btn" style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', color: '#ef4444' }}>Supprimer</button>
+                  {!isPlanFrozen && (
+                    <button onClick={() => deletePlan(activeSitePlan.id)} className="btn" style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', color: '#ef4444' }}>Supprimer</button>
+                  )}
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                   <button onClick={generateSitePlanPDF} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: '#3b82f6', color: 'white', border: 'none' }}>
                     <FileText size={16} /> Exporter Plan PDF
                   </button>
-                  <button onClick={addFloor} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: '#10b981' }}>
-                    <Plus size={16} /> Ajouter un Étage
-                  </button>
+                  {!isPlanFrozen && (
+                    <button onClick={addFloor} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: '#10b981' }}>
+                      <Plus size={16} /> Ajouter un Étage
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -1041,20 +1109,25 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
                         type="number"
                         className="input"
                         value={floor.name}
+                        readOnly={isPlanFrozen}
                         onChange={e => updateFloorName(floor.id, e.target.value)}
-                        style={{ fontWeight: 700, fontSize: '1.05rem', padding: '0.3rem 0.6rem', width: '80px' }}
+                        style={{ fontWeight: 700, fontSize: '1.05rem', padding: '0.3rem 0.6rem', width: '80px', background: isPlanFrozen ? '#f1f5f9' : 'white' }}
                       />
-                      <button onClick={() => addApartment(floor.id)} className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.3rem 0.6rem', display: 'flex', alignItems: 'center', gap: '0.3rem', background: 'white' }}>
-                        <Plus size={14} /> Ajouter un Appartement
-                      </button>
-                      <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem' }}>
-                        <button onClick={() => duplicateFloor(floor.id)} style={{ color: '#6366f1', border: 'none', background: 'transparent', cursor: 'pointer' }} title="Dupliquer l'étage">
-                          <Copy size={18} />
+                      {!isPlanFrozen && (
+                        <button onClick={() => addApartment(floor.id)} className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.3rem 0.6rem', display: 'flex', alignItems: 'center', gap: '0.3rem', background: 'white' }}>
+                          <Plus size={14} /> Ajouter un Appartement
                         </button>
-                        <button onClick={() => deleteFloor(floor.id)} style={{ color: '#ef4444', border: 'none', background: 'transparent', cursor: 'pointer' }} title="Supprimer l'étage">
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
+                      )}
+                      {!isPlanFrozen && (
+                        <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem' }}>
+                          <button onClick={() => duplicateFloor(floor.id)} style={{ color: '#6366f1', border: 'none', background: 'transparent', cursor: 'pointer' }} title="Dupliquer l'étage">
+                            <Copy size={18} />
+                          </button>
+                          <button onClick={() => deleteFloor(floor.id)} style={{ color: '#ef4444', border: 'none', background: 'transparent', cursor: 'pointer' }} title="Supprimer l'étage">
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     {/* Apartments List */}
@@ -1067,26 +1140,36 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
                               type="text"
                               className="input"
                               value={apt.name}
+                              readOnly={isPlanFrozen}
                               onChange={e => updateApartmentName(floor.id, apt.id, e.target.value)}
-                              style={{ fontWeight: 600, fontSize: '0.95rem', padding: '0.25rem 0.5rem', width: '120px' }}
+                              style={{ fontWeight: 600, fontSize: '0.95rem', padding: '0.25rem 0.5rem', width: '120px', background: isPlanFrozen ? '#f1f5f9' : 'white' }}
                             />
-                            <button onClick={() => addVoid(floor.id, apt.id)} className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', display: 'flex', alignItems: 'center', gap: '0.3rem', background: '#f8fafc' }}>
-                              <Plus size={12} /> Ajouter un Vide
-                            </button>
-                            <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem' }}>
-                              <button onClick={() => duplicateApartment(floor.id, apt.id)} style={{ color: '#6366f1', border: 'none', background: 'transparent', cursor: 'pointer' }} title="Dupliquer l'appartement">
-                                <Copy size={16} />
+                            {!isPlanFrozen && (
+                              <button onClick={() => addVoid(floor.id, apt.id)} className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', display: 'flex', alignItems: 'center', gap: '0.3rem', background: '#f8fafc' }}>
+                                <Plus size={12} /> Ajouter un Vide
                               </button>
-                              <button onClick={() => deleteApartment(floor.id, apt.id)} style={{ color: '#ef4444', border: 'none', background: 'transparent', cursor: 'pointer' }} title="Supprimer l'appartement">
-                                <Trash2 size={16} />
-                              </button>
-                            </div>
+                            )}
+                            {!isPlanFrozen && (
+                              <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem' }}>
+                                <button onClick={() => duplicateApartment(floor.id, apt.id)} style={{ color: '#6366f1', border: 'none', background: 'transparent', cursor: 'pointer' }} title="Dupliquer l'appartement">
+                                  <Copy size={16} />
+                                </button>
+                                <button onClick={() => deleteApartment(floor.id, apt.id)} style={{ color: '#ef4444', border: 'none', background: 'transparent', cursor: 'pointer' }} title="Supprimer l'appartement">
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
+                            )}
                           </div>
 
                           {/* Voids List */}
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', paddingLeft: '1.5rem' }}>
                             {(apt.voids || []).map((v, vIndex) => {
                               const autoName = `${floor.name}${apt.name}${vIndex + 1}`;
+                              const selItem = (activeItems || []).find(i => i.id === v.itemId);
+                              const itemComp = selItem ? (data.compositions || []).find(c => c.id === selItem.config?.compositionId) : null;
+                              const itemRange = itemComp ? (data.ranges || []).find(r => r.id === itemComp.rangeId) : null;
+                              const gammeName = itemRange?.name || itemComp?.rangeId || '—';
+
                               return (
                               <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: '#f8fafc', padding: '0.5rem 0.75rem', borderRadius: '0.5rem', border: '1px dashed #cbd5e1' }}>
                                 <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>Vide :</span>
@@ -1094,18 +1177,64 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
                                   {autoName}
                                 </div>
                                 <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600, marginLeft: '0.5rem' }}>Assigné à la Menuiserie :</span>
-                                {selectedQuote ? (() => {
-                                  const selItem = selectedQuote.items?.find(i => i.id === v.itemId);
-                                  return (
+
+                                {isPlanFrozen ? (
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    {selItem ? (
+                                      <div style={{ 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        gap: '0.4rem', 
+                                        background: '#f1f5f9', 
+                                        border: '1px solid #cbd5e1', 
+                                        borderRadius: '6px', 
+                                        padding: '0.25rem 0.6rem',
+                                        fontSize: '0.85rem',
+                                        fontWeight: 600,
+                                        color: '#1e293b'
+                                      }}>
+                                        <span style={{ color: '#0284c7', fontWeight: 700 }}>[{selItem.label || '?'}]</span>
+                                        <span>{itemComp?.name || selItem.categoryId || selItem.type || 'Menuiserie'}</span>
+                                        <span style={{ color: '#64748b' }}>({selItem.config?.L || '?'} × {selItem.config?.H || '?'} mm)</span>
+                                        <span style={{ fontSize: '0.75rem', background: '#e2e8f0', padding: '0.1rem 0.4rem', borderRadius: '4px', color: '#475569' }}>
+                                          Gamme : {gammeName}
+                                        </span>
+                                      </div>
+                                    ) : (
+                                      <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontStyle: 'italic', background: '#f8fafc', border: '1px solid #e2e8f0', padding: '0.2rem 0.5rem', borderRadius: '6px' }}>
+                                        Non assigné (Plan figé)
+                                      </span>
+                                    )}
+                                    <button 
+                                      onClick={() => { if (selItem) setInfoPopupItem(selItem); }}
+                                      disabled={!selItem}
+                                      style={{ 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        justifyContent: 'center',
+                                        cursor: selItem ? 'pointer' : 'not-allowed', 
+                                        color: selItem ? '#3b82f6' : '#cbd5e1',
+                                        background: selItem ? '#eff6ff' : 'transparent',
+                                        padding: '0.35rem',
+                                        borderRadius: '50%',
+                                        border: selItem ? '1px solid #bfdbfe' : '1px solid #e2e8f0',
+                                        transition: 'all 0.2s'
+                                      }}
+                                      title={selItem ? "Voir les détails du produit" : "Aucun produit assigné"}
+                                    >
+                                      <Info size={18} />
+                                    </button>
+                                  </div>
+                                ) : selectedQuote ? (
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                     <select
                                       className="input"
-                                      value={v.itemId}
+                                      value={v.itemId || ''}
                                       onChange={e => updateVoidProperty(floor.id, apt.id, v.id, 'itemId', e.target.value)}
                                       style={{ fontSize: '0.85rem', padding: '0.2rem 0.4rem', width: '350px' }}
                                     >
                                       <option value="">Sélectionnez un produit...</option>
-                                      {selectedQuote.items?.map(item => {
+                                      {activeItems.map(item => {
                                         const itemComp = (data.compositions || []).find(c => c.id === item.config?.compositionId);
                                         const itemRange = itemComp ? (data.ranges || []).find(r => r.id === itemComp.rangeId) : null;
                                         const gammeName = itemRange?.name || itemComp?.rangeId || '—';
@@ -1146,15 +1275,17 @@ export default function SitePlanModule({ data, setData, quoteSettings }) {
                                       <Info size={18} />
                                     </button>
                                   </div>
-                                )})() : (
+                                ) : (
                                   <span style={{ fontSize: '0.8rem', color: '#b45309', fontStyle: 'italic', background: '#fffbeb', border: '1px solid #fef3c7', padding: '0.2rem 0.5rem', borderRadius: '6px' }}>
-                                    ⚠️ Sélectionnez un Devis ci-dessus pour assigner ce vide.
+                                    ⚠️ Associez un Devis ci-dessus pour assigner les menuiseries à ce vide.
                                   </span>
                                 )}
 
-                                <button onClick={() => deleteVoid(floor.id, apt.id, v.id)} style={{ marginLeft: 'auto', color: '#ef4444', border: 'none', background: 'transparent', cursor: 'pointer' }} title="Supprimer le vide">
-                                  <Trash2 size={14} />
-                                </button>
+                                {!isPlanFrozen && (
+                                  <button onClick={() => deleteVoid(floor.id, apt.id, v.id)} style={{ marginLeft: 'auto', color: '#ef4444', border: 'none', background: 'transparent', cursor: 'pointer' }} title="Supprimer le vide">
+                                    <Trash2 size={14} />
+                                  </button>
+                                )}
                               </div>
                             );
                             })}
