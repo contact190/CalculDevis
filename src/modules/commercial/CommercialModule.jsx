@@ -2480,6 +2480,10 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
     return isQuoteLocked(quote, database?.orders);
   }, [quote?.status, quote?.id, database?.orders]);
 
+  const linkedOrder = useMemo(() => {
+    return (database?.orders || []).find(o => o.quoteId === quote?.id);
+  }, [database?.orders, quote?.id]);
+
   // Totals
   const [showKitDetails, setShowKitDetails] = useState(false);
   
@@ -2751,6 +2755,9 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
       }
 
       const finalQuote = { ...quoteToSave, totals };
+      if ((finalQuote.status === 'Figé' || finalQuote.status === 'Confirmé') && !finalQuote.lockedAt) {
+        finalQuote.lockedAt = new Date().toISOString();
+      }
       const isNewQuote = !(database?.quotes || []).some(q => q.id === finalQuote.id);
 
       setDatabase(prev => {
@@ -2860,7 +2867,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
       const q = { ...prev, status: newStatus };
       if (newStatus === 'Figé' || newStatus === 'Confirmé' || newStatus === 'Validé') {
         if (newStatus === 'Figé' || newStatus === 'Confirmé') {
-          q.lockedAt = new Date().toISOString();
+          q.lockedAt = q.lockedAt || new Date().toISOString();
         }
         if (newStatus === 'Confirmé' || newStatus === 'Validé') {
           q.validatedAt = q.validatedAt || new Date().toISOString();
@@ -3059,13 +3066,19 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
     doc.setTextColor(0, 0, 0);
 
     // Date next to the rectangle on the same level (at the bottom-right of that level)
+    // Règle : Si le devis est figé, afficher impérativement la date où il a été figé (et non la date du jour même).
+    const freezeDateRaw = quote.lockedAt || quote.validatedAt || quote.confirmedAt || linkedOrder?.createdAt || quote.updatedAt || quote.createdAt;
+    const pdfDate = (isQuoteFrozen && freezeDateRaw)
+      ? new Date(freezeDateRaw).toLocaleDateString('fr-FR')
+      : new Date().toLocaleDateString('fr-FR');
+
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
-    doc.text(`Date : ${new Date().toLocaleDateString('fr-FR')}`, pw - 15, boxY + 28, { align: 'right' });
+    doc.text(`Date : ${pdfDate}`, pw - 15, boxY + 28, { align: 'right' });
 
     // Devis number (centered below client box)
     y = boxY + 38;
-    const quoteYear = new Date(quote.createdAt || Date.now()).getFullYear().toString().slice(-2);
+    const quoteYear = new Date((isQuoteFrozen && freezeDateRaw) || quote.createdAt || Date.now()).getFullYear().toString().slice(-2);
     
     // Devis N° centered on the page
     doc.setFontSize(11);
@@ -3873,7 +3886,9 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
             )}
           </div>
           <div style={{ fontSize: '0.78rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.3rem', justifyContent: 'flex-end', marginBottom: '0.5rem' }}>
-            <Calendar size={12} /> {new Date(quote.createdAt || Date.now()).toLocaleDateString('fr-FR')}
+            <Calendar size={12} /> {isQuoteFrozen && (quote.lockedAt || quote.validatedAt || linkedOrder?.createdAt)
+              ? `Figé le ${new Date(quote.lockedAt || quote.validatedAt || linkedOrder?.createdAt).toLocaleDateString('fr-FR')}`
+              : `Créé le ${new Date(quote.createdAt || Date.now()).toLocaleDateString('fr-FR')}`}
           </div>
           <div style={{ fontSize: '0.78rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'flex-end' }}>
             <span style={{ fontWeight: 600 }}>Client :</span>

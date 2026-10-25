@@ -244,7 +244,7 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
     setQuoteItems(items => items.filter(i => i.id !== id));
   };
 
-  const generatePDF = (quoteNumber, client, items, totalHT, tva, totalTTC, tvaRate, totalHTBrut = 0, remiseAmount = 0) => {
+  const generatePDF = (quoteNumber, client, items, totalHT, tva, totalTTC, tvaRate, totalHTBrut = 0, remiseAmount = 0, quoteObj = null) => {
     const doc = new jsPDF({ format: 'a4' });
     const pw = doc.internal.pageSize.getWidth();
     let y = 15;
@@ -335,13 +335,21 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
     doc.setTextColor(0, 0, 0);
 
     // Date next to the rectangle on the same level (at the bottom-right of that level)
+    // Règle : Si le devis est figé, afficher impérativement la date où il a été figé (et non la date du jour même).
+    const isLocked = quoteObj && (quoteObj.status === 'Figé' || quoteObj.status === 'Confirmé' || (database?.orders || []).some(o => o.quoteId === quoteObj.id));
+    const linkedOrder = quoteObj && (database?.orders || []).find(o => o.quoteId === quoteObj.id);
+    const freezeDateRaw = quoteObj?.lockedAt || quoteObj?.validatedAt || quoteObj?.confirmedAt || linkedOrder?.createdAt || quoteObj?.updatedAt || quoteObj?.createdAt;
+    const pdfDate = (isLocked && freezeDateRaw)
+      ? new Date(freezeDateRaw).toLocaleDateString('fr-FR')
+      : new Date().toLocaleDateString('fr-FR');
+
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
-    doc.text(`Date : ${new Date().toLocaleDateString('fr-FR')}`, pw - 15, boxY + 28, { align: 'right' });
+    doc.text(`Date : ${pdfDate}`, pw - 15, boxY + 28, { align: 'right' });
 
     // Devis number (centered below client box)
     y = boxY + 38;
-    const quoteYear = new Date().getFullYear().toString().slice(-2);
+    const quoteYear = new Date((isLocked && freezeDateRaw) || quoteObj?.createdAt || Date.now()).getFullYear().toString().slice(-2);
     
     // Devis N° centered on the page
     doc.setFontSize(11);
@@ -634,7 +642,7 @@ const ShopModule = ({ database, setDatabase, quoteSettings, selectedQuote, onCle
     const tva = quote.totals?.tva || 0;
     const totalTTC = quote.totals?.ttc || 0;
     const tvaRateToUse = quote.tvaRate !== undefined ? quote.tvaRate : (quoteSettings?.tvaRate ?? 9);
-    generatePDF(quote.number, client, quote.items || [], totalHT, tva, totalTTC, tvaRateToUse, totalHTBrut, remiseAmount);
+    generatePDF(quote.number, client, quote.items || [], totalHT, tva, totalTTC, tvaRateToUse, totalHTBrut, remiseAmount, quote);
   };
 
 

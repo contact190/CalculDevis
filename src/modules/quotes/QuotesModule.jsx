@@ -233,7 +233,7 @@ const QuotesModule = ({ data, setData, quoteSettings, onOpenQuote, onNewQuote })
       quotes: (prev.quotes || []).map(q => q.id === quote.id ? {
         ...q,
         status: 'Figé',
-        lockedAt: new Date().toISOString(),
+        lockedAt: q.lockedAt || new Date().toISOString(),
         _lastModified: new Date().toISOString()
       } : q)
     }));
