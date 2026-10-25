@@ -1630,8 +1630,8 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                           selectedMode = 'Autre';
                                         } else if (rawVal === 'Axé (fenêtre)' || rawVal === 'axé' || rawVal === 'Axé') {
                                           selectedMode = 'Axé (fenêtre)';
-                                        } else if (rawVal === '1500 (porte)' || rawVal === 1500 || rawVal === '1500') {
-                                          selectedMode = '1500 (porte)';
+                                        } else if (rawVal === '1050 (porte)' || rawVal === 1050 || rawVal === '1050' || rawVal === '1500 (porte)' || rawVal === 1500 || rawVal === '1500') {
+                                          selectedMode = '1050 (porte)';
                                         } else if (rawVal === '') {
                                           selectedMode = '';
                                         } else {
@@ -1646,12 +1646,12 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                                 const newMode = e.target.value;
                                                 if (newMode === 'Axé (fenêtre)') {
                                                   updateVoidProperty(floor.id, apt.id, v.id, { handleHeightMode: undefined, handleHeight: 'Axé (fenêtre)' });
-                                                } else if (newMode === '1500 (porte)') {
-                                                  updateVoidProperty(floor.id, apt.id, v.id, { handleHeightMode: undefined, handleHeight: '1500 (porte)' });
+                                                } else if (newMode === '1050 (porte)') {
+                                                  updateVoidProperty(floor.id, apt.id, v.id, { handleHeightMode: undefined, handleHeight: '1050 (porte)' });
                                                 } else if (newMode === '') {
                                                   updateVoidProperty(floor.id, apt.id, v.id, { handleHeightMode: undefined, handleHeight: '' });
                                                 } else if (newMode === 'Autre') {
-                                                  const currVal = (rawVal !== 'Axé (fenêtre)' && rawVal !== '1500 (porte)') ? rawVal : '';
+                                                  const currVal = (rawVal !== 'Axé (fenêtre)' && rawVal !== '1050 (porte)' && rawVal !== '1500 (porte)') ? rawVal : '';
                                                   updateVoidProperty(floor.id, apt.id, v.id, { handleHeightMode: 'Autre', handleHeight: currVal });
                                                 }
                                               }}
@@ -1669,14 +1669,14 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                             >
                                               <option value="">Auto (mi-hauteur)</option>
                                               <option value="Axé (fenêtre)">Axé (fenêtre)</option>
-                                              <option value="1500 (porte)">1500 (porte)</option>
+                                              <option value="1050 (porte)">1050 (porte)</option>
                                               <option value="Autre">Autre</option>
                                             </select>
                                             {selectedMode === 'Autre' && (
                                               <DebouncedInput
                                                 type="text"
                                                 className="input"
-                                                value={v.handleHeight !== undefined && v.handleHeight !== null && v.handleHeight !== 'Axé (fenêtre)' && v.handleHeight !== '1500 (porte)' ? String(v.handleHeight) : ''}
+                                                value={v.handleHeight !== undefined && v.handleHeight !== null && v.handleHeight !== 'Axé (fenêtre)' && v.handleHeight !== '1050 (porte)' && v.handleHeight !== '1500 (porte)' ? String(v.handleHeight) : ''}
                                                 onChange={val => updateVoidProperty(floor.id, apt.id, v.id, 'handleHeight', val)}
                                                 style={{ fontSize: '0.85rem', padding: '0.4rem', border: '1.5px solid #0f766e', borderRadius: '0.375rem', fontWeight: 700, textAlign: 'center' }}
                                                 placeholder="Hauteur mm ou texte"

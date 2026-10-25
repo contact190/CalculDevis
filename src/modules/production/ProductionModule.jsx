@@ -1794,8 +1794,8 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
       let displayHPoignee = '';
       if (rawHPoignee === 'Axé (fenêtre)' || rawHPoignee === 'axé' || rawHPoignee === 'Axé') {
         displayHPoignee = 'Axé (fenêtre)';
-      } else if (rawHPoignee === '1500 (porte)' || rawHPoignee === '1500' || rawHPoignee === 1500) {
-        displayHPoignee = '1500 mm (porte)';
+      } else if (rawHPoignee === '1050 (porte)' || rawHPoignee === '1050' || rawHPoignee === 1050 || rawHPoignee === '1500 (porte)' || rawHPoignee === '1500' || rawHPoignee === 1500) {
+        displayHPoignee = '1050 mm (porte)';
       } else if (rawHPoignee !== undefined && rawHPoignee !== null && rawHPoignee !== '') {
         displayHPoignee = isNaN(rawHPoignee) ? String(rawHPoignee) : `${rawHPoignee} mm`;
       } else {
