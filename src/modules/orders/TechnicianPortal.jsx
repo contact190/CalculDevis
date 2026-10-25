@@ -1230,12 +1230,29 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
     const item = order.items.find(i => i.id === sourceVoid.itemId);
     if (!item) return null;
 
+    let sourceRepere = sourceVoid.name?.trim();
+    if (!sourceRepere) {
+      (activeSitePlan.floors || []).some(f => 
+        (f.apartments || []).some(a => 
+          (a.voids || []).some((v, idx) => {
+            if (v.id === sourceVoid.id) {
+              sourceRepere = v.name?.trim() || `${f.name}${a.name}${idx + 1}`;
+              return true;
+            }
+            return false;
+          })
+        )
+      );
+    }
+    sourceRepere = sourceRepere || 'Fenêtre source';
+
     const voidsToAssign = [];
     (activeSitePlan.floors || []).forEach(f => {
       (f.apartments || []).forEach(a => {
-        (a.voids || []).forEach(v => {
+        (a.voids || []).forEach((v, vIndex) => {
           if (v.itemId === sourceVoid.itemId && !v.productionLaunched) {
-            voidsToAssign.push({ floor: f, apt: a, void: v });
+            const voidRepere = v.name?.trim() || `${f.name}${a.name}${vIndex + 1}`;
+            voidsToAssign.push({ floor: f, apt: a, void: v, repere: voidRepere });
           }
         });
       });
@@ -1250,7 +1267,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
           </h2>
 
           <div style={{ fontSize: '0.85rem', color: '#475569', marginBottom: '1.25rem' }}>
-            <p style={{ margin: '0 0 0.5rem 0' }}>Assigner les dimensions de <strong>{sourceVoid.name}</strong> ({item.label})</p>
+            <p style={{ margin: '0 0 0.5rem 0' }}>Assigner les dimensions de <strong style={{ color: '#0f766e' }}>{sourceRepere}</strong> ({item.label})</p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', background: '#f8fafc', padding: '0.75rem', borderRadius: '0.5rem', marginBottom: '0.5rem' }}>
               <div><span style={{ color: '#94a3b8' }}>Devis:</span> {item.config.L} x {item.config.H} mm</div>
               <div><span style={{ color: '#0f766e' }}>Mesuré:</span> {sourceVoid.L !== undefined ? sourceVoid.L : item.config.L} x {sourceVoid.H !== undefined ? sourceVoid.H : item.config.H} mm</div>
@@ -1266,7 +1283,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
 
             {(!sourceVoid.wallDepth || Number(sourceVoid.wallDepth) <= 0) && (
               <div style={{ background: '#fef2f2', border: '1.5px solid #ef4444', padding: '0.65rem 0.75rem', borderRadius: '0.5rem', color: '#991b1b', fontSize: '0.8rem', marginTop: '0.5rem' }}>
-                ⛔ <strong>Profondeur requise :</strong> Vous devez renseigner la profondeur de mur sur <strong>{sourceVoid.name}</strong> avant de pouvoir l'assigner et valider les autres fenêtres.
+                ⛔ <strong>Profondeur requise :</strong> Vous devez renseigner la profondeur de mur sur <strong>{sourceRepere}</strong> avant de pouvoir l'assigner et valider les autres fenêtres.
               </div>
             )}
           </div>
@@ -1277,7 +1294,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                 Aucune autre fenêtre du même type.
               </div>
             ) : (
-              voidsToAssign.map(({ floor, apt, void: v }, idx) => (
+              voidsToAssign.map(({ floor, apt, void: v, repere }, idx) => (
                 <div key={idx} style={{ padding: '0.75rem', background: v.id === sourceVoid.id ? '#f0fdfa' : '#f8fafc', border: v.id === sourceVoid.id ? '1px solid #5eead4' : '1px solid #e2e8f0', borderRadius: '0.5rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
                   <input 
                     type="checkbox" 
@@ -1286,12 +1303,17 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                     style={{ width: '1.2rem', height: '1.2rem', cursor: 'pointer' }}
                   />
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: '0.25rem' }}>
-                      {floor.name} - {apt.name} - {v.name}
-                      {v.id === sourceVoid.id && <span style={{ marginLeft: '0.5rem', fontSize: '0.65rem', background: '#14b8a6', color: 'white', padding: '0.1rem 0.4rem', borderRadius: '10px' }}>Source</span>}
+                    <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1e293b', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{ fontSize: '0.75rem', background: '#0f766e', color: 'white', padding: '0.15rem 0.5rem', borderRadius: '4px', fontWeight: 800 }}>
+                        {repere}
+                      </span>
+                      <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>
+                        Étage {floor.name} - App {apt.name}
+                      </span>
+                      {v.id === sourceVoid.id && <span style={{ marginLeft: 'auto', fontSize: '0.65rem', background: '#14b8a6', color: 'white', padding: '0.15rem 0.45rem', borderRadius: '10px' }}>Source</span>}
                     </div>
-                    <div style={{ fontSize: '0.85rem' }}>
-                      Actuel: {v.L !== undefined ? v.L : item.config.L} x {v.H !== undefined ? v.H : item.config.H}
+                    <div style={{ fontSize: '0.82rem', color: '#475569' }}>
+                      Actuel: {v.L !== undefined ? v.L : item.config.L} x {v.H !== undefined ? v.H : item.config.H} mm
                     </div>
                   </div>
                 </div>
