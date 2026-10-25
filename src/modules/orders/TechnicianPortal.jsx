@@ -1549,6 +1549,15 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
 
               const isExpanded = expandedFloors[floor.id] !== false;
 
+              let floorTotal = 0;
+              let floorValidated = 0;
+              (floor.apartments || []).forEach(a => {
+                (a.voids || []).forEach(v => {
+                  floorTotal++;
+                  if (v.measurementsValidated) floorValidated++;
+                });
+              });
+
               return (
                 <div key={floor.id} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                   {/* Floor Header */}
@@ -1560,7 +1569,21 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                       <span style={{ fontSize: '1.1rem' }}>🏢</span>
                       <strong style={{ fontSize: '0.95rem', fontWeight: 800, textTransform: 'uppercase' }}>{floor.name}</strong>
                     </div>
-                    {isExpanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <span style={{
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        background: floorValidated === floorTotal && floorTotal > 0 ? '#14b8a6' : 'rgba(255, 255, 255, 0.2)',
+                        padding: '0.2rem 0.6rem',
+                        borderRadius: '9999px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.35rem'
+                      }}>
+                        {floorValidated === floorTotal && floorTotal > 0 ? '✓ ' : ''}{floorValidated} / {floorTotal} validée{floorTotal > 1 ? 's' : ''}
+                      </span>
+                      {isExpanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                    </div>
                   </div>
 
                   {/* Apartments */}

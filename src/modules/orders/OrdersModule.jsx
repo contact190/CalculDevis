@@ -1480,10 +1480,36 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                   return (
                     <div key={floor.id} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                       {/* Floor Separator */}
-                      <div style={{ padding: '0.5rem 1rem', background: '#e2e8f0', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <span style={{ fontSize: '1rem' }}>🏢</span>
-                        <strong style={{ fontSize: '0.95rem', color: '#1e293b', textTransform: 'uppercase' }}>{floor.name}</strong>
-                      </div>
+                      {(() => {
+                        let floorTotal = 0;
+                        let floorValidated = 0;
+                        (floor.apartments || []).forEach(a => {
+                          (a.voids || []).forEach(v => {
+                            floorTotal++;
+                            if (v.measurementsValidated) floorValidated++;
+                          });
+                        });
+                        const isAllValidated = floorValidated === floorTotal && floorTotal > 0;
+                        return (
+                          <div style={{ padding: '0.5rem 1rem', background: '#e2e8f0', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <span style={{ fontSize: '1rem' }}>🏢</span>
+                              <strong style={{ fontSize: '0.95rem', color: '#1e293b', textTransform: 'uppercase' }}>{floor.name}</strong>
+                            </div>
+                            <span style={{
+                              fontSize: '0.75rem',
+                              fontWeight: 700,
+                              background: isAllValidated ? '#dcfce7' : '#ffffff',
+                              color: isAllValidated ? '#15803d' : '#475569',
+                              padding: '0.15rem 0.55rem',
+                              borderRadius: '9999px',
+                              border: isAllValidated ? '1px solid #86efac' : '1px solid #cbd5e1'
+                            }}>
+                              {isAllValidated ? '✓ ' : ''}{floorValidated} / {floorTotal} validée{floorTotal > 1 ? 's' : ''}
+                            </span>
+                          </div>
+                        );
+                      })()}
 
                       {/* Apartments */}
                       {(floor.apartments || []).map(apt => {
