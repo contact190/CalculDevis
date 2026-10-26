@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { ShoppingBag, FileText, Ruler, Plus, Trash2, CheckCircle, Package, Scissors, Download, ExternalLink, ChevronRight, ChevronDown, ListOrdered, ShoppingCart, Layers, ArrowLeft, ClipboardList, Settings, Copy, QrCode } from 'lucide-react';
+import { ShoppingBag, FileText, Ruler, Plus, Trash2, CheckCircle, Package, Scissors, Download, ExternalLink, ChevronRight, ChevronDown, ListOrdered, ShoppingCart, Layers, ArrowLeft, ClipboardList, Settings, Copy, QrCode, Search, ArrowUpDown, ArrowUp, ArrowDown, Calendar, Building2, Grid, List, Activity } from 'lucide-react';
 import { FormulaEngine } from '../../engine/formula-engine';
 import { QuoteSettingsPanel } from '../commercial/CommercialModule';
 import jsPDF from 'jspdf';
@@ -114,6 +114,10 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
   const [selectedBatchId, setSelectedBatchId] = useState('current'); // 'current' or batch index
   const [showSettings, setShowSettings] = useState(false);
   const [listView, setListView] = useState('active'); // 'active' | 'history'
+  const [sortBy, setSortBy] = useState('date'); // 'date' | 'items' | 'progress'
+  const [sortOrder, setSortOrder] = useState('desc'); // 'asc' | 'desc'
+  const [searchQuery, setSearchQuery] = useState('');
+  const [viewMode, setViewMode] = useState('cards'); // 'cards' | 'table'
   const [orderToDelete, setOrderToDelete] = useState(null);
   const [confirmText, setConfirmText] = useState('');
   const [namingMeasure, setNamingMeasure] = useState(null); // { itemIdx, mId, qty, names: [], floors: [] }
@@ -159,22 +163,137 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
   const getOrderStats = (order) => {
     const items = order.items || [];
     const totalQty = items.reduce((s, i) => s + (i.qty || 1), 0);
+    const totalRefs = items.length;
+
+    // Cotes prises sur chantier
+    const measuredQty = items.reduce((s, i) => {
+      const mQty = (i.siteMeasurements || []).reduce((sum, m) => sum + (m.qty || 1), 0);
+      return s + mQty;
+    }, 0);
+
+    // Quantité intégrée dans les lots de fabrication
     const producedQty = (order.batches || []).reduce((sum, b) => {
       return sum + (b.items || []).reduce((isum, bi) => {
-        return isum + (bi.measurements || []).reduce((msum, m) => msum + m.qty, 0);
+        return isum + (bi.measurements || []).reduce((msum, m) => msum + (m.qty || 1), 0);
       }, 0);
     }, 0);
-    return { totalQty, producedQty, remaining: totalQty - producedQty };
+
+    // Sous-lots tracking si présents
+    const subLots = order.subLots || (order.batches || []).flatMap(b => b.subLots || []);
+    const completedSubLots = subLots.filter(s => s.status === 'Terminé' || s.isFinished).length;
+    const trackingPercent = subLots.length > 0 ? Math.round((completedSubLots / subLots.length) * 100) : null;
+
+    let progressPercent = 0;
+    let statusLabel = order.status || 'En attente';
+    let badgeColor = '#64748b';
+    let bgBadge = '#f1f5f9';
+
+    if (order.status === 'Terminé' || order.status === 'Terminé / Historique' || order.status === 'Livré') {
+      progressPercent = 100;
+      statusLabel = 'Terminé';
+      badgeColor = '#059669';
+      bgBadge = '#ecfdf5';
+    } else if (trackingPercent !== null) {
+      progressPercent = trackingPercent;
+      if (progressPercent === 100) {
+        statusLabel = 'Fabriqué à 100%';
+        badgeColor = '#059669';
+        bgBadge = '#ecfdf5';
+      } else if (progressPercent > 0) {
+        statusLabel = `En fabrication (${progressPercent}%)`;
+        badgeColor = '#2563eb';
+        bgBadge = '#eff6ff';
+      } else {
+        statusLabel = 'En attente atelier';
+        badgeColor = '#d97706';
+        bgBadge = '#fffbeb';
+      }
+    } else if (totalQty > 0) {
+      if (producedQty >= totalQty) {
+        progressPercent = 100;
+        statusLabel = 'Lots validés (100%)';
+        badgeColor = '#059669';
+        bgBadge = '#ecfdf5';
+      } else if (producedQty > 0) {
+        progressPercent = Math.round((producedQty / totalQty) * 100);
+        statusLabel = `En fabrication (${progressPercent}%)`;
+        badgeColor = '#2563eb';
+        bgBadge = '#eff6ff';
+      } else if (measuredQty >= totalQty) {
+        progressPercent = 35;
+        statusLabel = 'Mesuré (100%)';
+        badgeColor = '#7c3aed';
+        bgBadge = '#f5f3ff';
+      } else if (measuredQty > 0) {
+        progressPercent = Math.round((measuredQty / totalQty) * 35);
+        statusLabel = `Prise de cotes (${Math.round((measuredQty / totalQty) * 100)}%)`;
+        badgeColor = '#0284c7';
+        bgBadge = '#f0f9ff';
+      } else {
+        progressPercent = 5;
+        statusLabel = order.status || 'Cotes à prendre';
+        badgeColor = '#d97706';
+        bgBadge = '#fffbeb';
+      }
+    }
+
+    return { 
+      totalQty, 
+      totalRefs,
+      measuredQty,
+      producedQty, 
+      remaining: Math.max(0, totalQty - producedQty),
+      progressPercent,
+      statusLabel,
+      badgeColor,
+      bgBadge,
+      batchCount: (order.batches || []).length
+    };
   };
 
   const orders = useMemo(() => {
     const all = data?.orders || [];
-    return all.filter(o => {
+    
+    // 1. Filtrer par Actives vs Historique
+    let filtered = all.filter(o => {
       const { remaining } = getOrderStats(o);
-      const isHistory = remaining <= 0 && (o.batches?.length > 0 || o.status === 'Terminé / Historique');
+      const isHistory = remaining <= 0 && (o.batches?.length > 0 || o.status === 'Terminé / Historique' || o.status === 'Terminé' || o.status === 'Livré');
       return listView === 'history' ? isHistory : !isHistory;
-    }).slice(0, 100); // UI Performance Limit
-  }, [data?.orders, listView]);
+    });
+
+    // 2. Recherche textuelle
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter(o => {
+        const client = (data?.clients || []).find(c => c.id === o.clientId);
+        const clientName = (client?.nom || '').toLowerCase();
+        const orderId = (o.id || '').toLowerCase();
+        const quoteNum = (o.quoteNumber || o.quoteId || '').toLowerCase();
+        return orderId.includes(q) || clientName.includes(q) || quoteNum.includes(q);
+      });
+    }
+
+    // 3. Tri (date, nombre d'articles, état d'avancement)
+    filtered.sort((a, b) => {
+      const statsA = getOrderStats(a);
+      const statsB = getOrderStats(b);
+
+      let comparison = 0;
+      if (sortBy === 'date') {
+        const dateA = new Date(a.createdAt || a.date || 0).getTime();
+        const dateB = new Date(b.createdAt || b.date || 0).getTime();
+        comparison = dateA - dateB;
+      } else if (sortBy === 'items') {
+        comparison = (statsA.totalQty - statsB.totalQty) || (statsA.totalRefs - statsB.totalRefs);
+      } else if (sortBy === 'progress') {
+        comparison = statsA.progressPercent - statsB.progressPercent;
+      }
+
+      return sortOrder === 'desc' ? -comparison : comparison;
+    });
+
+    return filtered.slice(0, 100); // Limite d'affichage
+  }, [data?.orders, data?.clients, listView, searchQuery, sortBy, sortOrder]);
 
   const selectedOrder = (data?.orders || []).find(o => o.id === selectedOrderId);
 
@@ -2709,7 +2828,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
           <Settings size={16} /> Entête / Logo
         </button>
       </header>
-      <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem' }}>
+      <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.25rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem' }}>
         <button 
           onClick={() => setListView('active')}
           style={{ 
@@ -2731,80 +2850,399 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
           <Package size={18} style={{ verticalAlign: 'middle', marginRight: '0.5rem' }} /> Historique
         </button>
       </div>
-      <div className="glass shadow-md">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>ID Commande</th>
-              <th>N° Devis</th>
-              <th>Client</th>
-              <th>Date Création</th>
-              <th>Produits</th>
-              <th>Statut</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {orders.length === 0 && (
-              <tr>
-                <td colSpan="7" style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
-                    <ClipboardList size={32} opacity={0.3} />
-                    <span>Aucune commande {listView === 'history' ? 'dans l\'historique' : 'active'}.</span>
-                  </div>
-                </td>
-              </tr>
-            )}
-            {orders.map(order => {
-              const client = data?.clients?.find(c => c.id === order.clientId);
-              return (
-                <tr key={order.id}>
-                  <td style={{ fontWeight: 700 }}>{order.id}</td>
-                  <td>{order.quoteNumber}</td>
-                  <td style={{ fontWeight: 600 }}>{client?.nom || 'Inconnu'}</td>
-                  <td>{new Date(order.createdAt).toLocaleDateString('fr-FR')}</td>
-                  <td style={{ fontSize: '0.85rem' }}>
-                    <strong>{order.items?.length || 0}</strong> réf. 
-                    <span style={{ color: '#64748b', marginLeft: '0.5rem' }}>
-                      ({order.items?.reduce((s, i) => s + (i.qty || 1), 0)} u)
-                    </span>
-                  </td>
-                  <td>
-                    <span style={{ padding: '0.2rem 0.6rem', border: '1px solid #3b82f6', color: '#3b82f6', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 600 }}>
-                      {order.status}
-                    </span>
-                  </td>
-                  <td>
-                    <div style={{ display: 'flex', gap: '0.4rem' }}>
-                      <button 
-                        onClick={() => setSelectedOrderId(order.id)}
-                        className="btn btn-primary"
-                        style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
-                      >
-                        Détails / Cotes
-                      </button>
-                      <button 
-                        onClick={() => setOrderToDelete(order)}
-                        style={{ padding: '0.4rem', color: '#ef4444', border: '1px solid #fee2e2', borderRadius: '4px', background: '#fef2f2', cursor: 'pointer' }}
-                        title="Supprimer la commande"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-            {(data.orders || []).length === 0 && (
-              <tr>
-                <td colSpan="6" style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>
-                  Aucune commande en cours. Allez dans "Clients" pour transformer un devis en commande.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+
+      {/* TOOLBAR : RECHERCHE + FILTRE D'ORDRE (DATE, ARTICLES, AVANCEMENT) + VUE */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', background: '#f8fafc', padding: '0.85rem 1.25rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'white', padding: '0.45rem 0.85rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', flex: '1', minWidth: '240px', maxWidth: '380px' }}>
+          <Search size={16} color="#64748b" />
+          <input 
+            type="text"
+            placeholder="Rechercher client, N° commande, devis..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            style={{ border: 'none', outline: 'none', width: '100%', fontSize: '0.85rem' }}
+          />
+          {searchQuery && (
+            <button onClick={() => setSearchQuery('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '0.85rem' }}>✕</button>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+            <ArrowUpDown size={14} /> Trier par :
+          </span>
+
+          <div style={{ display: 'flex', background: 'white', borderRadius: '0.5rem', border: '1px solid #cbd5e1', padding: '2px' }}>
+            <button
+              type="button"
+              onClick={() => setSortBy('date')}
+              style={{
+                padding: '0.4rem 0.75rem',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                border: 'none',
+                borderRadius: '0.4rem',
+                cursor: 'pointer',
+                background: sortBy === 'date' ? '#2563eb' : 'transparent',
+                color: sortBy === 'date' ? 'white' : '#64748b',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <Calendar size={13} /> Date
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSortBy('items')}
+              style={{
+                padding: '0.4rem 0.75rem',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                border: 'none',
+                borderRadius: '0.4rem',
+                cursor: 'pointer',
+                background: sortBy === 'items' ? '#2563eb' : 'transparent',
+                color: sortBy === 'items' ? 'white' : '#64748b',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <Package size={13} /> Nbr Articles
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSortBy('progress')}
+              style={{
+                padding: '0.4rem 0.75rem',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                border: 'none',
+                borderRadius: '0.4rem',
+                cursor: 'pointer',
+                background: sortBy === 'progress' ? '#2563eb' : 'transparent',
+                color: sortBy === 'progress' ? 'white' : '#64748b',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <Activity size={13} /> État d'avancement
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
+            title={sortOrder === 'desc' ? 'Trier par ordre décroissant' : 'Trier par ordre croissant'}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              padding: '0.4rem 0.75rem',
+              background: 'white',
+              border: '1px solid #cbd5e1',
+              borderRadius: '0.5rem',
+              cursor: 'pointer',
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              color: '#1e293b'
+            }}
+          >
+            {sortOrder === 'desc' ? <ArrowDown size={14} color="#2563eb" /> : <ArrowUp size={14} color="#2563eb" />}
+            <span>{sortOrder === 'desc' ? 'Décroissant' : 'Croissant'}</span>
+          </button>
+
+          <div style={{ display: 'flex', background: 'white', borderRadius: '0.5rem', border: '1px solid #cbd5e1', padding: '2px', marginLeft: '0.25rem' }}>
+            <button
+              type="button"
+              onClick={() => setViewMode('cards')}
+              title="Affichage en cartes"
+              style={{
+                padding: '0.35rem 0.6rem',
+                border: 'none',
+                borderRadius: '0.4rem',
+                cursor: 'pointer',
+                background: viewMode === 'cards' ? '#eff6ff' : 'transparent',
+                color: viewMode === 'cards' ? '#2563eb' : '#64748b',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.3rem',
+                fontSize: '0.8rem',
+                fontWeight: 600
+              }}
+            >
+              <Grid size={14} /> Cartes
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('table')}
+              title="Affichage en tableau"
+              style={{
+                padding: '0.35rem 0.6rem',
+                border: 'none',
+                borderRadius: '0.4rem',
+                cursor: 'pointer',
+                background: viewMode === 'table' ? '#eff6ff' : 'transparent',
+                color: viewMode === 'table' ? '#2563eb' : '#64748b',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.3rem',
+                fontSize: '0.8rem',
+                fontWeight: 600
+              }}
+            >
+              <List size={14} /> Tableau
+            </button>
+          </div>
+        </div>
       </div>
+
+      {/* CONTENU PRINCIPAL : CARTES OU TABLEAU */}
+      {orders.length === 0 ? (
+        <div className="glass shadow-md" style={{ textAlign: 'center', padding: '4rem 2rem', background: 'white', borderRadius: '1rem', border: '1px solid #e2e8f0', color: '#64748b' }}>
+          <ClipboardList size={40} opacity={0.3} style={{ margin: '0 auto 1rem' }} />
+          <h3 style={{ margin: 0, fontWeight: 700, fontSize: '1.1rem', color: '#334155' }}>
+            {searchQuery ? 'Aucun résultat trouvé' : `Aucune commande ${listView === 'history' ? 'dans l\'historique' : 'active'}`}
+          </h3>
+          <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.9rem' }}>
+            {searchQuery ? 'Essayez de modifier votre recherche.' : 'Allez dans "Clients" pour transformer un devis en commande.'}
+          </p>
+        </div>
+      ) : viewMode === 'cards' ? (
+        /* VUE EN CARTES AVEC ÉTAT D'AVANCEMENT VISIBLE */
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '1.25rem' }}>
+          {orders.map(order => {
+            const client = data?.clients?.find(c => c.id === order.clientId);
+            const stats = getOrderStats(order);
+            const progressGradient = stats.progressPercent === 100 
+              ? 'linear-gradient(90deg, #10b981, #059669)' 
+              : stats.progressPercent >= 50 
+                ? 'linear-gradient(90deg, #3b82f6, #06b6d4)' 
+                : 'linear-gradient(90deg, #f59e0b, #d97706)';
+
+            return (
+              <div 
+                key={order.id} 
+                className="glass shadow-md"
+                style={{ 
+                  background: 'white', 
+                  borderRadius: '1rem', 
+                  border: '1px solid #e2e8f0', 
+                  padding: '1.25rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  gap: '1rem',
+                  transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                  position: 'relative'
+                }}
+              >
+                {/* Entête carte */}
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{ fontWeight: 800, fontSize: '1.1rem', color: '#1e293b' }}>{order.id}</span>
+                      {order.quoteNumber && (
+                        <span style={{ fontSize: '0.72rem', background: '#f1f5f9', color: '#475569', padding: '0.2rem 0.45rem', borderRadius: '4px', fontWeight: 600 }}>
+                          Devis: {order.quoteNumber}
+                        </span>
+                      )}
+                    </div>
+
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); setOrderToDelete(order); }}
+                      style={{ padding: '0.35rem', color: '#94a3b8', border: 'none', borderRadius: '4px', background: 'transparent', cursor: 'pointer' }}
+                      onMouseEnter={(e) => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.background = '#fef2f2'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.background = 'transparent'; }}
+                      title="Supprimer la commande"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+
+                  {/* Client & Date */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', color: '#0f172a', fontWeight: 600, fontSize: '1rem', marginTop: '0.35rem' }}>
+                    <Building2 size={16} color="#2563eb" />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {client?.nom || 'Client Inconnu'}
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#64748b', fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                    <Calendar size={13} />
+                    <span>Créée le {new Date(order.createdAt).toLocaleDateString('fr-FR')}</span>
+                  </div>
+                </div>
+
+                {/* Métriques clés (Articles, Cotes, Lots) */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem', background: '#f8fafc', padding: '0.65rem', borderRadius: '0.6rem', border: '1px solid #f1f5f9' }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Articles</div>
+                    <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#1e293b', marginTop: '2px' }}>
+                      {stats.totalRefs} <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748b' }}>({stats.totalQty} u)</span>
+                    </div>
+                  </div>
+
+                  <div style={{ textAlign: 'center', borderLeft: '1px solid #e2e8f0', borderRight: '1px solid #e2e8f0' }}>
+                    <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Cotes</div>
+                    <div style={{ fontSize: '0.9rem', fontWeight: 800, color: stats.measuredQty >= stats.totalQty && stats.totalQty > 0 ? '#059669' : '#0284c7', marginTop: '2px' }}>
+                      {stats.measuredQty}/{stats.totalQty}
+                    </div>
+                  </div>
+
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Lots Fab.</div>
+                    <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#475569', marginTop: '2px' }}>
+                      {stats.batchCount}
+                    </div>
+                  </div>
+                </div>
+
+                {/* ÉTAT D'AVANCEMENT DIRECTEMENT VISIBLE SUR LA CARTE */}
+                <div style={{ background: '#f8fafc', padding: '0.75rem 0.85rem', borderRadius: '0.6rem', border: '1px solid #e2e8f0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
+                    <span style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', color: '#475569', letterSpacing: '0.03em' }}>
+                      État d'avancement
+                    </span>
+                    <span style={{ 
+                      padding: '0.2rem 0.55rem', 
+                      borderRadius: '9999px', 
+                      fontSize: '0.72rem', 
+                      fontWeight: 700, 
+                      color: stats.badgeColor, 
+                      background: stats.bgBadge, 
+                      border: `1px solid ${stats.badgeColor}40` 
+                    }}>
+                      {stats.statusLabel} ({stats.progressPercent}%)
+                    </span>
+                  </div>
+
+                  {/* Barre de progression */}
+                  <div style={{ width: '100%', height: '8px', background: '#e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
+                    <div style={{ 
+                      width: `${stats.progressPercent}%`, 
+                      height: '100%', 
+                      background: progressGradient, 
+                      borderRadius: '4px',
+                      transition: 'width 0.4s ease' 
+                    }} />
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: '#64748b', marginTop: '0.4rem' }}>
+                    <span>Fabrication : <strong>{stats.producedQty} / {stats.totalQty}</strong> lancées</span>
+                    <span>Reste : <strong>{stats.remaining}</strong></span>
+                  </div>
+                </div>
+
+                {/* Actions au bas de la carte */}
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
+                  <button 
+                    onClick={() => setSelectedOrderId(order.id)}
+                    className="btn btn-primary"
+                    style={{ 
+                      flex: 1, 
+                      padding: '0.55rem 0.9rem', 
+                      fontSize: '0.85rem', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      gap: '0.4rem',
+                      fontWeight: 700
+                    }}
+                  >
+                    Détails / Cotes <ChevronRight size={16} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        /* VUE EN TABLEAU AVEC COLONNE AVANCEMENT */
+        <div className="glass shadow-md" style={{ background: 'white', borderRadius: '0.75rem', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
+          <table className="data-table" style={{ width: '100%' }}>
+            <thead>
+              <tr>
+                <th>ID Commande</th>
+                <th>N° Devis</th>
+                <th>Client</th>
+                <th>Date Création</th>
+                <th>Articles</th>
+                <th>État d'avancement</th>
+                <th>Statut</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {orders.map(order => {
+                const client = data?.clients?.find(c => c.id === order.clientId);
+                const stats = getOrderStats(order);
+                const progressGradient = stats.progressPercent === 100 
+                  ? 'linear-gradient(90deg, #10b981, #059669)' 
+                  : stats.progressPercent >= 50 
+                    ? 'linear-gradient(90deg, #3b82f6, #06b6d4)' 
+                    : 'linear-gradient(90deg, #f59e0b, #d97706)';
+
+                return (
+                  <tr key={order.id}>
+                    <td style={{ fontWeight: 700 }}>{order.id}</td>
+                    <td>{order.quoteNumber || order.quoteId || '—'}</td>
+                    <td style={{ fontWeight: 600 }}>{client?.nom || 'Inconnu'}</td>
+                    <td>{new Date(order.createdAt).toLocaleDateString('fr-FR')}</td>
+                    <td style={{ fontSize: '0.85rem' }}>
+                      <strong>{stats.totalRefs}</strong> réf. 
+                      <span style={{ color: '#64748b', marginLeft: '0.4rem' }}>
+                        ({stats.totalQty} u)
+                      </span>
+                    </td>
+                    <td style={{ minWidth: '180px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', fontWeight: 700, marginBottom: '0.25rem', color: stats.badgeColor }}>
+                        <span>{stats.statusLabel}</span>
+                        <span>{stats.progressPercent}%</span>
+                      </div>
+                      <div style={{ width: '100%', height: '6px', background: '#e2e8f0', borderRadius: '3px', overflow: 'hidden' }}>
+                        <div style={{ width: `${stats.progressPercent}%`, height: '100%', background: progressGradient, transition: 'width 0.3s ease' }} />
+                      </div>
+                    </td>
+                    <td>
+                      <span style={{ padding: '0.2rem 0.55rem', border: `1px solid ${stats.badgeColor}40`, color: stats.badgeColor, background: stats.bgBadge, borderRadius: '4px', fontSize: '0.72rem', fontWeight: 600 }}>
+                        {order.status || 'En attente'}
+                      </span>
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', gap: '0.4rem' }}>
+                        <button 
+                          onClick={() => setSelectedOrderId(order.id)}
+                          className="btn btn-primary"
+                          style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}
+                        >
+                          Détails / Cotes
+                        </button>
+                        <button 
+                          onClick={() => setOrderToDelete(order)}
+                          style={{ padding: '0.35rem', color: '#ef4444', border: '1px solid #fee2e2', borderRadius: '4px', background: '#fef2f2', cursor: 'pointer' }}
+                          title="Supprimer la commande"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* DELETE CONFIRMATION MODAL */}
 
       {/* DELETE CONFIRMATION MODAL */}
       {orderToDelete && (
