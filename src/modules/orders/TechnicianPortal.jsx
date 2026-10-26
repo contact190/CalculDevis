@@ -771,11 +771,22 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
   const renderValidationPopup = () => {
     if (!showValidation) return null;
 
+    // Récupérer les identifiants d'ouvertures déjà lancées dans les lots existants
+    const alreadyLaunchedIds = new Set();
+    (order.batches || []).forEach(b => {
+      (b.items || []).forEach(bi => {
+        (bi.measurements || []).forEach(m => {
+          if (m.id) alreadyLaunchedIds.add(m.id);
+        });
+      });
+    });
+
     const validatedVoids = [];
     (activeSitePlan.floors || []).forEach(f => {
       (f.apartments || []).forEach(a => {
         (a.voids || []).forEach(v => {
-          if (v.measurementsValidated && !v.productionLaunched) {
+          // Si l'ouverture a déjà été lancée dans un lot précédent, on ne la propose pas
+          if (v.measurementsValidated && !v.productionLaunched && !alreadyLaunchedIds.has(v.id)) {
             const item = order.items.find(i => i.id === v.itemId);
             if (item) {
               const check = checkVoidCriticalDelta(v, item);
@@ -807,7 +818,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
           apartments: (f.apartments || []).map(a => ({
             ...a,
             voids: (a.voids || []).map(v => {
-              if (selectedVoidsForLaunch[v.id]) {
+              if (selectedVoidsForLaunch[v.id] && !alreadyLaunchedIds.has(v.id)) {
                 const item = order.items.find(i => i.id === v.itemId);
                 if (!item || checkVoidCriticalDelta(v, item).isCritical) {
                   return v; // Strict block: do not launch critical voids

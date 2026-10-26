@@ -165,18 +165,58 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
     const totalQty = items.reduce((s, i) => s + (i.qty || 1), 0);
     const totalRefs = items.length;
 
-    // Cotes prises sur chantier
-    const measuredQty = items.reduce((s, i) => {
-      const mQty = (i.siteMeasurements || []).reduce((sum, m) => sum + (m.qty || 1), 0);
-      return s + mQty;
-    }, 0);
+    // 1. Déduplication des articles / cotes déjà lancés dans un lot de fabrication
+    const seenMeasurementIds = new Set();
+    const itemProducedMap = {}; // item.id -> nombre de pièces uniques lancées
 
-    // Quantité intégrée dans les lots de fabrication
-    const producedQty = (order.batches || []).reduce((sum, b) => {
-      return sum + (b.items || []).reduce((isum, bi) => {
-        return isum + (bi.measurements || []).reduce((msum, m) => msum + (m.qty || 1), 0);
-      }, 0);
-    }, 0);
+    (order.batches || []).forEach(b => {
+      (b.items || []).forEach(bi => {
+        const itemId = bi.id;
+        const itemDef = items.find(i => i.id === itemId);
+        const maxItemQty = itemDef ? (itemDef.qty || 1) : 999999;
+
+        (bi.measurements || []).forEach(m => {
+          // Si cette ouverture/cote a déjà été lancée dans un lot précédent, on ne la calcule pas !
+          if (m.id) {
+            if (seenMeasurementIds.has(m.id)) return;
+            seenMeasurementIds.add(m.id);
+          }
+          
+          const currentCount = itemProducedMap[itemId] || 0;
+          if (currentCount < maxItemQty) {
+            const qty = m.qty || 1;
+            const allowed = Math.min(qty, maxItemQty - currentCount);
+            itemProducedMap[itemId] = currentCount + allowed;
+          }
+        });
+      });
+    });
+
+    const rawProducedQty = Object.values(itemProducedMap).reduce((s, q) => s + q, 0);
+    const producedQty = Math.min(totalQty, rawProducedQty);
+
+    // 2. Cotes prises sur chantier :
+    // Cotes uniques lancées en lot + cotes uniques en attente non encore lancées
+    const seenMeasuredIds = new Set(seenMeasurementIds);
+    let unbatchedWithoutIdCount = 0;
+
+    items.forEach(i => {
+      (i.siteMeasurements || []).forEach(m => {
+        if (m.id) {
+          if (seenMeasuredIds.has(m.id)) return; // Déjà comptabilisé
+          seenMeasuredIds.add(m.id);
+        } else {
+          unbatchedWithoutIdCount += (m.qty || 1);
+        }
+      });
+    });
+
+    const rawMeasuredQty = seenMeasuredIds.size + unbatchedWithoutIdCount;
+
+    // 3. Règle de cohérence stricte :
+    // - Les cotes prises sont au minimum égales aux articles lancés en prod (car on ne lance pas sans mesurer)
+    // - Aucune quantité ne peut dépasser la quantité totale de la commande
+    const measuredQty = Math.min(totalQty, Math.max(rawMeasuredQty, producedQty));
 
     // Pourcentage d'avancement de production direct : lancés en prod / total
     const progressPercent = totalQty > 0 ? Math.min(100, Math.round((producedQty / totalQty) * 100)) : 0;
@@ -452,27 +492,40 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
       return;
     }
 
-    const totalCurrentQty = selectedOrder.items.reduce((sum, item) => 
-      sum + (item.siteMeasurements || []).reduce((s, m) => s + m.qty, 0), 0
+    // Récupérer les identifiants de cotes déjà lancées dans les lots existants
+    const alreadyLaunchedIds = new Set();
+    (selectedOrder.batches || []).forEach(b => {
+      (b.items || []).forEach(bi => {
+        (bi.measurements || []).forEach(m => {
+          if (m.id) alreadyLaunchedIds.add(m.id);
+        });
+      });
+    });
+
+    // Ne retenir pour le nouveau lot que les cotes non encore lancées
+    const newBatchItems = selectedOrder.items.map(i => ({
+      id: i.id,
+      label: i.label,
+      config: i.config,
+      measurements: (i.siteMeasurements || []).filter(m => !m.id || !alreadyLaunchedIds.has(m.id))
+    })).filter(i => i.measurements.length > 0);
+
+    const totalCurrentQty = newBatchItems.reduce((sum, item) => 
+      sum + item.measurements.reduce((s, m) => s + (m.qty || 1), 0), 0
     );
 
     if (totalCurrentQty === 0) {
-      alert("Veuillez saisir au moins une cote réelle avant de lancer la fabrication.");
+      alert("Toutes les cotes réelles saisies ont déjà été lancées dans un lot de fabrication précédent, ou aucune cote n'est en attente.");
       return;
     }
 
-    if (!window.confirm(`Voulez-vous valider la fabrication pour ce lot de ${totalCurrentQty} unités ?`)) return;
+    if (!window.confirm(`Voulez-vous valider la fabrication pour ce lot de ${totalCurrentQty} unité(s) ?`)) return;
 
     const newBatch = {
       id: `BATCH-${(selectedOrder.batches?.length || 0) + 1}`,
       name: `Lot N°${(selectedOrder.batches?.length || 0) + 1}`,
       createdAt: new Date().toISOString(),
-      items: selectedOrder.items.map(i => ({
-        id: i.id,
-        label: i.label,
-        config: i.config,
-        measurements: [...(i.siteMeasurements || [])]
-      }))
+      items: newBatchItems
     };
 
     const updatedOrder = {
@@ -1246,6 +1299,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
 
     doc.setFont('helvetica', 'normal');
     let hasLaunched = false;
+    const seenPdfMeasureIds = new Set();
     selectedOrder.items.forEach(item => {
       if (!situationSelection.has(item.id)) return;
       
@@ -1254,6 +1308,10 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
         const batchItem = batch.items.find(bi => bi.id === item.id);
         (batchItem.measurements || []).forEach(m => {
           if (m.qty <= 0) return;
+          if (m.id) {
+            if (seenPdfMeasureIds.has(m.id)) return;
+            seenPdfMeasureIds.add(m.id);
+          }
           hasLaunched = true;
           doc.text(item.label, 15, y);
           doc.text(`${item.config.L}x${item.config.H}`, 70, y);
@@ -1288,11 +1346,22 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
     doc.setFont('helvetica', 'normal');
     selectedOrder.items.forEach(item => {
       if (!situationSelection.has(item.id)) return;
-      const stats = (selectedOrder.batches || []).reduce((sum, b) => {
+      const seenItemMIds = new Set();
+      let rawItemLaunched = 0;
+      (selectedOrder.batches || []).forEach(b => {
         const bi = b.items?.find(x => x.id === item.id);
-        return sum + (bi?.measurements || []).reduce((s, m) => s + m.qty, 0);
-      }, 0);
-      const remaining = (item.qty || 1) - stats;
+        (bi?.measurements || []).forEach(m => {
+          if (m.id) {
+            if (seenItemMIds.has(m.id)) return;
+            seenItemMIds.add(m.id);
+          }
+          rawItemLaunched += (m.qty || 1);
+        });
+      });
+      const maxItemQty = item.qty || 1;
+      const launched = Math.min(maxItemQty, rawItemLaunched);
+      const remaining = Math.max(0, maxItemQty - launched);
+
       if (remaining > 0) {
         doc.text(item.label, 15, y);
         doc.text(`${item.config.L}x${item.config.H}`, 70, y);
@@ -2704,11 +2773,21 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                   </thead>
                   <tbody>
                     {selectedOrder.items.map(item => {
-                      const launched = (selectedOrder.batches || []).reduce((sum, b) => {
+                      const seenItemMIds = new Set();
+                      let rawItemLaunched = 0;
+                      (selectedOrder.batches || []).forEach(b => {
                         const bi = b.items?.find(x => x.id === item.id);
-                        return sum + (bi?.measurements || []).reduce((s, m) => s + m.qty, 0);
-                      }, 0);
-                      const remaining = (item.qty || 1) - launched;
+                        (bi?.measurements || []).forEach(m => {
+                          if (m.id) {
+                            if (seenItemMIds.has(m.id)) return;
+                            seenItemMIds.add(m.id);
+                          }
+                          rawItemLaunched += (m.qty || 1);
+                        });
+                      });
+                      const maxItemQty = item.qty || 1;
+                      const launched = Math.min(maxItemQty, rawItemLaunched);
+                      const remaining = Math.max(0, maxItemQty - launched);
                       
                       return (
                         <tr key={item.id}>
