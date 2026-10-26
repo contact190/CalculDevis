@@ -397,6 +397,21 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
   
   const bom = bomResult?.bom || { profiles: [], accessories: [], shutters: [], glass: { name: '', weight: 0 } };
   
+  // Glissière option info: option label (from engine display name) and option price
+  // (engine price already includes option plus-values => optionPrice = engine price - PRIX admin).
+  // Returns null for non-glissière items so their grouping/pricing is untouched.
+  const getGlissiereOptionInfo = (s) => {
+    if (!s || s.itemKey !== 'glissiereId') return null;
+    const dbG = (database.shutterComponents?.glissieres || []).find(g => g.id === s.id);
+    if (!dbG) return null;
+    const baseName = String(dbG.name || '');
+    const fullName = String(s.name || '');
+    const optionLabel = baseName && fullName.startsWith(baseName) ? fullName.slice(baseName.length).trim() : '';
+    const diff = (parseFloat(s.price) || 0) - (parseFloat(dbG.price) || 0);
+    const optionPrice = Math.max(0, Math.round(diff * 10000) / 10000);
+    return { optionLabel, optionPrice };
+  };
+
   // Derived arrays for Purchasing List
   const purchasingProfiles = useMemo(() => {
     const map = {};
@@ -471,7 +486,9 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
           const rangeInfo = database.ranges?.find(r => String(r.id) === String(rId));
           const rangeName = rangeInfo?.name || rId || '';
 
-          const mapKey = `${s.id}|${colorName}`;
+          const gOpt = getGlissiereOptionInfo(s);
+          const optionKey = gOpt?.optionLabel || '';
+          const mapKey = optionKey ? `${s.id}|${optionKey}|${colorName}` : `${s.id}|${colorName}`;
           const measure = (s.totalMeasure || (s.length * s.qty)) * cfgQty;
           
           const newPieces = [];
@@ -496,7 +513,9 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
               pieces: newPieces, 
               colorName,
               baseId: s.id,
-              isShutter: true
+              isShutter: true,
+              _optionKey: optionKey,
+              optionPrice: gOpt?.optionPrice || 0
             };
           } else {
             map[mapKey].totalMeasure += measure;
@@ -512,11 +531,11 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
       ...item,
       // For jumelage later we will use original base ref for id, but unique id is key
       baseId: item.id,
-      id: `${item.id}|${item.colorName}`,
+      id: item._optionKey ? `${item.id}|${item._optionKey}|${item.colorName}` : `${item.id}|${item.colorName}`,
       combinedName: Array.from(item.originalNames).filter(Boolean).join(' / '),
       combinedRanges: Array.from(item.originalRanges || []).join(', ')
     }));
-  }, [activeConfigs, engine, database.colors, database.ranges]);
+  }, [activeConfigs, engine, database.colors, database.ranges, database.shutterComponents]);
 
   const purchasingAccessories = useMemo(() => {
     const map = {};
@@ -534,13 +553,15 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
         });
 
         items.forEach(a => {
-          const mapKey = `${a.id}|${colorName}`;
+          const gOpt = getGlissiereOptionInfo(a);
+          const optionKey = gOpt?.optionLabel || '';
+          const mapKey = optionKey ? `${a.id}|${optionKey}|${colorName}` : `${a.id}|${colorName}`;
           const displayName = a.name ? `${a.name} ${a.label ? `[${a.label}]` : ''}` : (a.label || '');
           const aRef = (database.accessories || []).find(x => x.id === a.id);
           const unitPrice = aRef?.price || 0;
           
           if (!map[mapKey]) {
-            map[mapKey] = { ...a, isShutter: !!a.isShutter, originalNames: new Set([displayName]), totalMeasure: (a.totalMeasure || 0) * cfgQty, totalQty: (a.qty || 0) * cfgQty, colorName, unitPrice };
+            map[mapKey] = { ...a, isShutter: !!a.isShutter, originalNames: new Set([displayName]), totalMeasure: (a.totalMeasure || 0) * cfgQty, totalQty: (a.qty || 0) * cfgQty, colorName, unitPrice, _optionKey: optionKey, optionPrice: gOpt?.optionPrice || 0 };
           } else {
             map[mapKey].totalMeasure += (a.totalMeasure || 0) * cfgQty;
             map[mapKey].totalQty += (a.qty || 0) * cfgQty;
@@ -553,10 +574,10 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
     return Object.values(map).map(item => ({
       ...item,
       baseId: item.id,
-      id: `${item.id}|${item.colorName}`,
+      id: item._optionKey ? `${item.id}|${item._optionKey}|${item.colorName}` : `${item.id}|${item.colorName}`,
       combinedName: Array.from(item.originalNames).filter(Boolean).join(' / ')
     }));
-  }, [activeConfigs, engine, database.colors]);
+  }, [activeConfigs, engine, database.colors, database.shutterComponents]);
 
   const purchasingGlass = useMemo(() => {
     const map = {};
@@ -831,7 +852,8 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
         bars = Math.ceil(ml / bLength);
       }
       const factor = getColorFactor(p.colorId, p.colorName);
-      const basePrice = getItemUnitPrice(p, 'profileVolet', bLength);
+      // Glissière avec option payante : prix de l'option uniquement (sinon PRIX habituel)
+      const basePrice = (p.optionPrice > 0) ? p.optionPrice : getItemUnitPrice(p, 'profileVolet', bLength);
       const defaultUnitPrice = basePrice * factor;
       const unitPrice = customPricedItems[p.id] !== undefined ? customPricedItems[p.id] : defaultUnitPrice;
       const lineTotal = bars * unitPrice;
@@ -882,7 +904,10 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
     // 4. Joints & Éléments Linéaires Volet
     const itemsJointsVolet = jointsVolet.map(a => {
       const qtyMeters = (a.totalMeasure || 0) / 1000;
-      const defaultUnitPrice = getItemUnitPrice(a, 'joint');
+      // Glissière (au ML) avec option payante : prix de l'option × coefficient couleur (sinon calcul habituel)
+      const defaultUnitPrice = (a.optionPrice > 0)
+        ? a.optionPrice * getColorFactor(a.colorId, a.colorName)
+        : getItemUnitPrice(a, 'joint');
       const unitPrice = customPricedItems[a.id] !== undefined ? customPricedItems[a.id] : defaultUnitPrice;
       const lineTotal = qtyMeters * unitPrice;
       return {
@@ -932,7 +957,10 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
     const itemsAccVolet = accessoriesVolet.map(a => {
       const qty = a.totalQty || 0;
       const unitLabel = a.unit || a.priceUnit || 'U';
-      const defaultUnitPrice = getItemUnitPrice(a, 'accessory');
+      // Glissière avec option payante : prix de l'option × coefficient couleur (sinon calcul habituel)
+      const defaultUnitPrice = (a.optionPrice > 0)
+        ? a.optionPrice * getColorFactor(a.colorId, a.colorName)
+        : getItemUnitPrice(a, 'accessory');
       const unitPrice = customPricedItems[a.id] !== undefined ? customPricedItems[a.id] : defaultUnitPrice;
       const lineTotal = qty * unitPrice;
       return {
