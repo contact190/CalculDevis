@@ -192,7 +192,7 @@ function App() {
     optionalSides: { top: false, bottom: false, left: false, right: false },
     selectedOptions: [],
     hasShutter: false,
-    shutterConfig: { caissonId: 'CAI-140', lameId: 'LAM-39E', lameFinaleId: 'LF-ST', glissiereId: 'GLI-INVDC', axeId: 'AXE-40', kitId: 'KIT-SANG', enableBaguette: false },
+    shutterConfig: { caissonId: 'CAI-140', lameId: 'LAM-39E', lameFinaleId: 'LF-ST', glissiereId: 'GLI-INVDC', axeId: 'AXE-40', kitId: 'KIT-SANG', enableBaguette: true },
     margin: 2.2
   });
 

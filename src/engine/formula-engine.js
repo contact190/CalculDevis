@@ -1094,7 +1094,8 @@ export class FormulaEngine {
     }
 
     // 7. Baguette
-    if (key === 'lameId' && config.shutterConfig?.enableBaguette) {
+    const isBaguetteActive = (item.hasBaguette !== undefined ? !!item.hasBaguette : !!config.shutterConfig?.enableBaguette);
+    if (key === 'lameId' && isBaguetteActive) {
       const bPrice = item.baguettePrice || 0;
       const bUnit = item.priceUnit || 'ML';
       const bUnitUpper = bUnit.toUpperCase().trim();

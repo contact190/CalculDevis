@@ -269,6 +269,30 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
   }, []);
 
   useEffect(() => {
+    // Si la lame sélectionnée a la baguette activée dans admin, s'assurer que enableBaguette est true
+    if (config.hasShutter && config.shutterConfig?.lameId) {
+      const selectedLame = (database.shutterComponents?.lames || []).find(l => l.id === config.shutterConfig.lameId);
+      if (selectedLame?.hasBaguette && !config.shutterConfig.enableBaguette) {
+        setConfig(prev => ({
+          ...prev,
+          shutterConfig: {
+            ...(prev.shutterConfig || {}),
+            enableBaguette: true
+          }
+        }));
+      } else if (selectedLame && !selectedLame.hasBaguette && config.shutterConfig.enableBaguette) {
+        setConfig(prev => ({
+          ...prev,
+          shutterConfig: {
+            ...(prev.shutterConfig || {}),
+            enableBaguette: false
+          }
+        }));
+      }
+    }
+  }, [config.hasShutter, config.shutterConfig?.lameId, config.shutterConfig?.enableBaguette, database.shutterComponents?.lames]);
+
+  useEffect(() => {
     const v = engine.validate(config);
     setValidation(v);
     if (v.valid) {
@@ -1831,14 +1855,21 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
 
                   const handleShutterChange = (val) => {
                     setConfig(prev => {
+                      const nextShutterConfig = { 
+                        ...(prev.shutterConfig || {}), 
+                        [key]: val,
+                        // Reset params if glissiere changes
+                        ...(key === 'glissiereId' ? { glissiereParams: {} } : {})
+                      };
+
+                      if (key === 'lameId') {
+                        const selectedLame = (database.shutterComponents?.lames || []).find(l => l.id === val);
+                        nextShutterConfig.enableBaguette = !!selectedLame?.hasBaguette;
+                      }
+
                       const next = { 
                         ...prev, 
-                        shutterConfig: { 
-                          ...(prev.shutterConfig || {}), 
-                          [key]: val,
-                          // Reset params if glissiere changes
-                          ...(key === 'glissiereId' ? { glissiereParams: {} } : {})
-                        } 
+                        shutterConfig: nextShutterConfig 
                       };
                       if (next.compoundType && next.compoundType !== 'none') {
                         return syncCompoundParts(next, 'L', next.L);
@@ -2030,10 +2061,17 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                       )}
                       {key === 'lameId' && effectiveItem?.hasBaguette && (
                         <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, color: '#0369a1', background: '#f0f9ff', padding: '0.4rem 0.75rem', borderRadius: '0.4rem', border: '1px solid #bae6fd', width: '100%' }}>
-                            <input type="checkbox" checked={config.shutterConfig?.enableBaguette || false}
-                              onChange={e => setConfig(prev => ({ ...prev, shutterConfig: { ...(prev.shutterConfig || {}), enableBaguette: e.target.checked } }))} />
-                            Ajouter Baguette (Prix: {effectiveItem.baguettePrice} DZD)
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', cursor: 'not-allowed', fontSize: '0.85rem', fontWeight: 600, color: '#0369a1', background: '#f0f9ff', padding: '0.45rem 0.75rem', borderRadius: '0.4rem', border: '1px solid #bae6fd', width: '100%', userSelect: 'none' }} title="La baguette est configurée comme active pour cette lame dans l'administration et ne peut pas être désactivée.">
+                            <input 
+                              type="checkbox" 
+                              checked={true}
+                              disabled={true}
+                              readOnly
+                              style={{ cursor: 'not-allowed', width: '1rem', height: '1rem', accentColor: '#0284c7' }} 
+                            />
+                            <span>
+                              Baguette (Prix: {effectiveItem.baguettePrice || 0} DZD) — <strong style={{ color: '#0284c7' }}>Active par défaut (Non désactivable)</strong>
+                            </span>
                           </label>
                         </div>
                       )}
@@ -3338,6 +3376,9 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
 
           if (lame) {
             descLines.push(`  Lame : ${lame.name} (Poids: ${totalWeight.toFixed(2)} kg)`);
+            if (lame.hasBaguette || cfg.shutterConfig?.enableBaguette) {
+              descLines.push(`  Baguette : Incluse pour ${lame.name}`);
+            }
             processAlerts(lame);
           }
           if (axe) {
