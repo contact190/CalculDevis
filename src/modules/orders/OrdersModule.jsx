@@ -178,63 +178,25 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
       }, 0);
     }, 0);
 
-    // Sous-lots tracking si présents
-    const subLots = order.subLots || (order.batches || []).flatMap(b => b.subLots || []);
-    const completedSubLots = subLots.filter(s => s.status === 'Terminé' || s.isFinished).length;
-    const trackingPercent = subLots.length > 0 ? Math.round((completedSubLots / subLots.length) * 100) : null;
+    // Pourcentage d'avancement de production direct : lancés en prod / total
+    const progressPercent = totalQty > 0 ? Math.min(100, Math.round((producedQty / totalQty) * 100)) : 0;
 
-    let progressPercent = 0;
-    let statusLabel = order.status || 'En attente';
+    let statusLabel = `${producedQty}/${totalQty} lancées (${progressPercent}%)`;
     let badgeColor = '#64748b';
     let bgBadge = '#f1f5f9';
 
-    if (order.status === 'Terminé' || order.status === 'Terminé / Historique' || order.status === 'Livré') {
-      progressPercent = 100;
-      statusLabel = 'Terminé';
+    if (order.status === 'Terminé' || order.status === 'Terminé / Historique' || order.status === 'Livré' || (producedQty >= totalQty && totalQty > 0)) {
+      statusLabel = `${producedQty}/${totalQty} lancées (100%)`;
       badgeColor = '#059669';
       bgBadge = '#ecfdf5';
-    } else if (trackingPercent !== null) {
-      progressPercent = trackingPercent;
-      if (progressPercent === 100) {
-        statusLabel = 'Fabriqué à 100%';
-        badgeColor = '#059669';
-        bgBadge = '#ecfdf5';
-      } else if (progressPercent > 0) {
-        statusLabel = `En fabrication (${progressPercent}%)`;
-        badgeColor = '#2563eb';
-        bgBadge = '#eff6ff';
-      } else {
-        statusLabel = 'En attente atelier';
-        badgeColor = '#d97706';
-        bgBadge = '#fffbeb';
-      }
-    } else if (totalQty > 0) {
-      if (producedQty >= totalQty) {
-        progressPercent = 100;
-        statusLabel = 'Lots validés (100%)';
-        badgeColor = '#059669';
-        bgBadge = '#ecfdf5';
-      } else if (producedQty > 0) {
-        progressPercent = Math.round((producedQty / totalQty) * 100);
-        statusLabel = `En fabrication (${progressPercent}%)`;
-        badgeColor = '#2563eb';
-        bgBadge = '#eff6ff';
-      } else if (measuredQty >= totalQty) {
-        progressPercent = 35;
-        statusLabel = 'Mesuré (100%)';
-        badgeColor = '#7c3aed';
-        bgBadge = '#f5f3ff';
-      } else if (measuredQty > 0) {
-        progressPercent = Math.round((measuredQty / totalQty) * 35);
-        statusLabel = `Prise de cotes (${Math.round((measuredQty / totalQty) * 100)}%)`;
-        badgeColor = '#0284c7';
-        bgBadge = '#f0f9ff';
-      } else {
-        progressPercent = 5;
-        statusLabel = order.status || 'Cotes à prendre';
-        badgeColor = '#d97706';
-        bgBadge = '#fffbeb';
-      }
+    } else if (producedQty > 0) {
+      statusLabel = `${producedQty}/${totalQty} lancées (${progressPercent}%)`;
+      badgeColor = '#2563eb';
+      bgBadge = '#eff6ff';
+    } else {
+      statusLabel = `0/${totalQty} lancée (0%)`;
+      badgeColor = '#64748b';
+      bgBadge = '#f8fafc';
     }
 
     return { 
@@ -3109,18 +3071,18 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                 <div style={{ background: '#f8fafc', padding: '0.75rem 0.85rem', borderRadius: '0.6rem', border: '1px solid #e2e8f0' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
                     <span style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', color: '#475569', letterSpacing: '0.03em' }}>
-                      État d'avancement
+                      Avancement Prod
                     </span>
                     <span style={{ 
                       padding: '0.2rem 0.55rem', 
                       borderRadius: '9999px', 
-                      fontSize: '0.72rem', 
+                      fontSize: '0.75rem', 
                       fontWeight: 700, 
                       color: stats.badgeColor, 
                       background: stats.bgBadge, 
                       border: `1px solid ${stats.badgeColor}40` 
                     }}>
-                      {stats.statusLabel} ({stats.progressPercent}%)
+                      {stats.statusLabel}
                     </span>
                   </div>
 
@@ -3136,8 +3098,8 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: '#64748b', marginTop: '0.4rem' }}>
-                    <span>Fabrication : <strong>{stats.producedQty} / {stats.totalQty}</strong> lancées</span>
-                    <span>Reste : <strong>{stats.remaining}</strong></span>
+                    <span>Lancées en prod : <strong>{stats.producedQty} / {stats.totalQty}</strong></span>
+                    <span>Reste à lancer : <strong>{stats.remaining}</strong></span>
                   </div>
                 </div>
 
@@ -3204,7 +3166,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                     </td>
                     <td style={{ minWidth: '180px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', fontWeight: 700, marginBottom: '0.25rem', color: stats.badgeColor }}>
-                        <span>{stats.statusLabel}</span>
+                        <span>{stats.producedQty} / {stats.totalQty} lancées</span>
                         <span>{stats.progressPercent}%</span>
                       </div>
                       <div style={{ width: '100%', height: '6px', background: '#e2e8f0', borderRadius: '3px', overflow: 'hidden' }}>
