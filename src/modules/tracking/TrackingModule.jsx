@@ -303,20 +303,63 @@ export default function TrackingModule({ data, setData, quoteSettings }) {
 
     const openings = [];
 
+    // Map pour enrichir rapidement les ouvertures avec les données du plan (étage, repère, volet)
+    const voidMetaMap = new Map();
+    if (activeSitePlan && activeSitePlan.floors) {
+      (activeSitePlan.floors || []).forEach(f => {
+        (f.apartments || []).forEach(a => {
+          (a.voids || []).forEach((v, vIndex) => {
+            const repere = v.name?.trim() || `${f.name}${a.name}${vIndex + 1}`;
+            voidMetaMap.set(v.id, {
+              floorName: f.name,
+              aptName: a.name,
+              repere: repere,
+              shutter: v.shutter,
+              void: v
+            });
+          });
+        });
+      });
+    }
+
+    if (selectedBatch) {
+      // 1. Quand un lot précis est sélectionné : prendre STRICTEMENT et UNIQUEMENT les ouvertures de ce lot
+      (selectedBatch.items || []).forEach(bi => {
+        const item = selectedOrder.items.find(i => i.id === bi.id) || bi;
+        const family = classifyOpeningFamily(item, data);
+
+        (bi.measurements || []).forEach((m, mIdx) => {
+          const vMeta = m.id ? voidMetaMap.get(m.id) : null;
+          const repere = vMeta?.repere || m.label || `Ouverture ${mIdx + 1}`;
+          const realL = m.L !== undefined && m.L !== '' ? parseFloat(m.L) : (vMeta?.void?.L || item.config?.L || 1200);
+          const realH = m.H !== undefined && m.H !== '' ? parseFloat(m.H) : (vMeta?.void?.H || item.config?.H || 1200);
+
+          openings.push({
+            voidId: m.id || `M-${bi.id}-${mIdx}`,
+            itemId: item.id,
+            repere: repere,
+            label: item.label,
+            item: item,
+            family: family,
+            L: realL,
+            H: realH,
+            floorName: vMeta?.floorName || m.floorName || '',
+            aptName: vMeta?.aptName || m.aptName || '',
+            shutter: vMeta?.shutter || (m.shutterList?.[0] ? { qty: 1 } : null)
+          });
+        });
+      });
+
+      return openings;
+    }
+
+    // 2. Si aucun lot précis n'est sélectionné (toute la commande)
     if (activeSitePlan) {
       (activeSitePlan.floors || []).forEach(f => {
         (f.apartments || []).forEach(a => {
           (a.voids || []).forEach((v, vIndex) => {
             const item = selectedOrder.items.find(i => i.id === v.itemId);
             if (!item) return;
-
-            if (selectedBatch) {
-              const batchItem = (selectedBatch.items || []).find(bi => bi.id === v.itemId);
-              const isIncludedInBatch = batchItem && (batchItem.measurements || []).some(m => m.id === v.id || m.label?.includes(v.name));
-              if (!isIncludedInBatch && v.productionLaunched !== true) {
-                return;
-              }
-            }
 
             const repere = v.name?.trim() || `${f.name}${a.name}${vIndex + 1}`;
             const family = classifyOpeningFamily(item, data);
@@ -336,28 +379,6 @@ export default function TrackingModule({ data, setData, quoteSettings }) {
               aptName: a.name,
               shutter: v.shutter
             });
-          });
-        });
-      });
-    }
-
-    if (openings.length === 0 && selectedBatch) {
-      (selectedBatch.items || []).forEach(bi => {
-        const item = selectedOrder.items.find(i => i.id === bi.id) || bi;
-        const family = classifyOpeningFamily(item, data);
-        (bi.measurements || []).forEach((m, mIdx) => {
-          openings.push({
-            voidId: m.id || `M-${mIdx}`,
-            itemId: item.id,
-            repere: m.label || `Ouverture ${mIdx + 1}`,
-            label: item.label,
-            item: item,
-            family: family,
-            L: m.L || item.config?.L || 1200,
-            H: m.H || item.config?.H || 1200,
-            floorName: m.floorName || '',
-            aptName: m.aptName || '',
-            shutter: null
           });
         });
       });
@@ -785,6 +806,96 @@ export default function TrackingModule({ data, setData, quoteSettings }) {
       };
     });
   };
+
+  // Reset / Supprimer les sous-lots pour refaire le découpage
+  const handleResetBatchSubLots = () => {
+    if (!selectedOrder) return;
+    if (!window.confirm("Voulez-vous supprimer les sous-lots de ce lot pour pouvoir refaire le découpage ?")) return;
+
+    setData(prev => {
+      const updatedOrders = (prev.orders || []).map(o => {
+        if (o.id !== selectedOrder.id) return o;
+        
+        let newBatches = o.batches || [];
+        if (selectedBatch) {
+          newBatches = newBatches.map(b => {
+            if (b.id !== selectedBatch.id) return b;
+            return { ...b, subLots: [], subLotsApproved: false };
+          });
+        }
+
+        return {
+          ...o,
+          batches: newBatches,
+          subLots: !selectedBatch ? [] : o.subLots,
+          subLotsApproved: !selectedBatch ? false : o.subLotsApproved,
+          _lastModified: new Date().toISOString()
+        };
+      });
+
+      return {
+        ...prev,
+        orders: updatedOrders
+      };
+    });
+  };
+
+  // Correction automatique pour CMD-1548 Lot 09 si plus de 1 sous-lot a été généré par erreur
+  useEffect(() => {
+    if (!selectedOrder || selectedOrder.id !== 'CMD-1548') return;
+    const b9 = (selectedOrder.batches || []).find(b => b.id === 'BATCH-9' || b.name?.includes('Lot N°9') || b.name?.includes('Lot 09') || b.name?.includes('Lot 9'));
+    if (b9 && Array.isArray(b9.subLots) && b9.subLots.length > 1) {
+      console.log("Nettoyage automatique CMD-1548 Lot 09 : réduction à SL-01 uniquement.");
+      
+      const b9Openings = (b9.items || []).flatMap((bi, biIdx) => (bi.measurements || []).map((m, mIdx) => ({
+        voidId: m.id || `M-${bi.id}-${mIdx}`,
+        itemId: bi.id,
+        repere: m.label || `Ouverture ${mIdx + 1}`,
+        label: bi.label,
+        dim: `${m.L} x ${m.H} mm`,
+        L: m.L,
+        H: m.H
+      })));
+
+      const firstSubLot = b9.subLots[0] || {};
+      const singleSubLot = {
+        ...firstSubLot,
+        id: firstSubLot.id || `SL-${Date.now()}-1`,
+        code: 'SL-01',
+        name: `Sous-Lot SL-01 (Coulissant - ${b9Openings.length} ouv.)`,
+        family: 'coulissant',
+        items: b9Openings,
+        ouvertures: b9Openings.map(op => ({
+          id: `coul_${op.voidId}`,
+          repere: op.repere,
+          label: op.label,
+          dim: op.dim,
+          location: op.repere
+        })),
+        status: 'En attente'
+      };
+
+      setData(prev => {
+        const updatedOrders = (prev.orders || []).map(o => {
+          if (o.id !== 'CMD-1548') return o;
+          const updatedBatches = (o.batches || []).map(b => {
+            if (b.id !== b9.id) return b;
+            return {
+              ...b,
+              subLots: [singleSubLot],
+              subLotsApproved: false
+            };
+          });
+          return {
+            ...o,
+            batches: updatedBatches,
+            _lastModified: new Date().toISOString()
+          };
+        });
+        return { ...prev, orders: updatedOrders };
+      });
+    }
+  }, [selectedOrder, setData]);
 
   // Approve and freeze sub-lot division
   const handleApproveAndFreezeSubLots = () => {
@@ -1353,6 +1464,25 @@ export default function TrackingModule({ data, setData, quoteSettings }) {
             </div>
 
             <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <button
+                onClick={handleResetBatchSubLots}
+                className="btn btn-secondary"
+                style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '0.4rem', 
+                  color: '#dc2626', 
+                  borderColor: '#fca5a5', 
+                  background: '#fef2f2', 
+                  fontWeight: 700, 
+                  fontSize: '0.82rem', 
+                  padding: '0.5rem 0.9rem' 
+                }}
+                title="Supprimer les sous-lots et réinitialiser"
+              >
+                <Trash2 size={14} /> Supprimer les sous-lots
+              </button>
+
               {isSubLotsFrozen && currentSubLots.some(s => s.status === 'En attente') && (
                 <button
                   onClick={handleStartAllSubLots}
