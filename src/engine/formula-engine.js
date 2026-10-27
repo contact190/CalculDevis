@@ -1682,8 +1682,9 @@ export class FormulaEngine {
 
     if (vars.caissonId) {
       const c = (sc.caissons || []).find(x => x.id === vars.caissonId);
-      if (c) vars.caissonSize = parseFloat(c.height) || parseFloat(c.thickness) || 0;
+      if (c) vars.caissonSize = parseFloat(c.height) || parseFloat(c.size) || parseFloat(c.thickness) || 0;
     }
+    vars.caisson = vars.caissonSize;
     if (vars.axeId) {
       const a = (sc.axes || []).find(x => x.id === vars.axeId);
       if (a) vars.axeSize = parseFloat(a.diameter) || parseFloat((a.name || "").match(/\d+/)?.[0]) || 0;

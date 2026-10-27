@@ -1761,7 +1761,20 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                   const selectedAxe = axes.find(a => a.id === selectedAxeId) || axes[0];
                   const axeDiameter = selectedAxe ? parseFloat(selectedAxe.diameter) || parseFloat((selectedAxe.name || '').match(/\d+/)?.[0]) || 0 : 0;
 
-                  const scope = { L: L_comp, H, area, caissonSize, HC, lameWidth, weightPerM2, totalWeight, liftingWeight, axeDiameter };
+                  const scope = { 
+                    L: L_comp, 
+                    H, 
+                    area, 
+                    caissonSize, 
+                    caisson: caissonSize, 
+                    HC, 
+                    lameWidth, 
+                    weightPerM2, 
+                    totalWeight, 
+                    liftingWeight, 
+                    axeDiameter,
+                    nb_moteurs: isDouble ? (config.shutterConfig?.motorCount || 2) : 1
+                  };
 
                   // Apply compatibility formula for caissons (based on L and lameWidth of selected lame)
                   if (key === 'caissonId') {
@@ -1834,6 +1847,20 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                         return engine.evaluate(formula, scope);
                       } catch (e) {
                         console.warn(`[Kit Compatibility] Formula error for "${kit.name}":`, e.message);
+                        return true;
+                      }
+                    });
+                  }
+
+                  // Apply compatibility formula for glissieres
+                  if (key === 'glissiereId') {
+                    filteredItems = filteredItems.filter(glissiere => {
+                      const formula = glissiere.compatibilityFormula;
+                      if (!formula || formula.trim() === '') return true;
+                      try {
+                        return engine.evaluate(formula, scope);
+                      } catch (e) {
+                        console.warn(`[Glissiere Compatibility] Formula error for "${glissiere.name}":`, e.message);
                         return true;
                       }
                     });
@@ -1999,7 +2026,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                       )}
 
                       {/* Technical Alert for Shutter Components & Add-ons */}
-                      {(key === 'lameId' || key === 'axeId' || key === 'moteurId' || key === 'extraId' || key === 'extras' || key === 'kitId') && effectiveItem && (
+                      {(key === 'lameId' || key === 'axeId' || key === 'moteurId' || key === 'glissiereId' || key === 'extraId' || key === 'extras' || key === 'kitId') && effectiveItem && (
                         <div style={{ gridColumn: 'span 2', marginTop: '-0.5rem', marginBottom: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                           {(() => {
                              try {

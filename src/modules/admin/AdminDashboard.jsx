@@ -3326,9 +3326,9 @@ const AdminDashboard = ({ data, setData }) => {
                           <th>Formule Quantité (Nb)</th>
                           {key !== 'kits' && key !== 'moteurs' && <th>Formule Dimension (L/H)</th>}
 
-                          {(key === 'lames' || key === 'axes' || key === 'extras' || key === 'moteurs' || key === 'kits') && (
+                          {(key === 'lames' || key === 'axes' || key === 'extras' || key === 'moteurs' || key === 'kits' || key === 'glissieres') && (
                             <>
-                              <th title="Variables: L, H, area, totalWeight, liftingWeight, axeDiameter">Compatibilité</th>
+                              <th title="Variables: L, H, HC, lameWidth, caissonSize, caisson, area, totalWeight, liftingWeight, axeDiameter">Compatibilité</th>
                               <th>Alerte Technique</th>
                             </>
                           )}
@@ -3457,34 +3457,20 @@ const AdminDashboard = ({ data, setData }) => {
                                 />
                               </td>
                             )}
-                            {(key === 'lames' || key === 'axes') && (
+                            {(key === 'lames' || key === 'axes' || key === 'glissieres' || key === 'moteurs' || key === 'extras' || key === 'kits') && (
                               <>
                                 <td>
                                   <FormulaInput 
                                     value={item.compatibilityFormula || ''} 
                                     onChange={val => updateShutterItem(key, item.id, i, 'compatibilityFormula', val)} 
-                                    variables={['L', 'H', 'HC', 'lameWidth', 'caissonSize', 'area', 'totalWeight', 'liftingWeight', 'axeDiameter']}
-                                    placeholder={key === 'axes' ? "Ex: L < 2500" : "Ex: L <= 2500"}
-                                  />
-                                </td>
-                                <td>
-                                  <FormulaInput 
-                                    value={item.technicalAlert || ''} 
-                                    onChange={val => updateShutterItem(key, item.id, i, 'technicalAlert', val)} 
-                                    variables={['L', 'H', 'area', 'totalWeight', 'liftingWeight', 'axeDiameter', 'lameWidth', 'caissonSize']}
-                                    placeholder='Ex: if(L > 2200, "Attention...", "")'
-                                  />
-                                </td>
-                              </>
-                            )}
-                            {(key === 'moteurs' || key === 'extras' || key === 'kits') && (
-                              <>
-                                <td>
-                                  <FormulaInput 
-                                    value={item.compatibilityFormula || ''} 
-                                    onChange={val => updateShutterItem(key, item.id, i, 'compatibilityFormula', val)} 
-                                    variables={['L', 'H', 'HC', 'lameWidth', 'caissonSize', 'area', 'totalWeight', 'liftingWeight', 'axeDiameter']}
-                                    placeholder={key === 'moteurs' ? "Ex: L < 1500" : (key === 'kits' ? "Ex: L < 1800" : "Ex: caissonSize == 200")}
+                                    variables={['L', 'H', 'HC', 'lameWidth', 'caissonSize', 'caisson', 'area', 'totalWeight', 'liftingWeight', 'axeDiameter']}
+                                    placeholder={
+                                      key === 'axes' ? "Ex: L < 2500" : 
+                                      key === 'moteurs' ? "Ex: L < 1500" : 
+                                      key === 'kits' ? "Ex: L < 1800" : 
+                                      key === 'glissieres' ? "Ex: H <= 2500 && caissonSize != 0" : 
+                                      "Ex: L <= 2500"
+                                    }
                                   />
                                   <div style={{ fontSize: '0.6rem', color: '#94a3b8', marginTop: '2px' }}>Laisser vide = toujours valide</div>
                                 </td>
@@ -3492,8 +3478,8 @@ const AdminDashboard = ({ data, setData }) => {
                                   <FormulaInput 
                                     value={item.technicalAlert || ''} 
                                     onChange={val => updateShutterItem(key, item.id, i, 'technicalAlert', val)} 
-                                    variables={['L', 'H', 'area', 'totalWeight', 'liftingWeight']}
-                                    placeholder='Ex: if(totalWeight > 9, "Trop lourd!", "")'
+                                    variables={['L', 'H', 'area', 'totalWeight', 'liftingWeight', 'axeDiameter', 'lameWidth', 'caissonSize', 'caisson']}
+                                    placeholder='Ex: if(H > 2400, "Trop haut!", "")'
                                   />
                                 </td>
                               </>
