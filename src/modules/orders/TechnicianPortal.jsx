@@ -416,6 +416,10 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                   }
                 }
 
+                if (typeof property === 'object' && property !== null) {
+                  return { ...v, ...property };
+                }
+
                 const updatedVoid = { ...v, [property]: value };
                 if (property === 'L' || property === 'H') {
                   const item = order.items.find(i => i.id === v.itemId);
@@ -771,28 +775,18 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
   const renderValidationPopup = () => {
     if (!showValidation) return null;
 
-    // Récupérer les identifiants d'ouvertures déjà lancées dans les lots existants
-    const alreadyLaunchedIds = new Set();
-    (order.batches || []).forEach(b => {
-      (b.items || []).forEach(bi => {
-        (bi.measurements || []).forEach(m => {
-          if (m.id) alreadyLaunchedIds.add(m.id);
-        });
-      });
-    });
-
     const validatedVoids = [];
     (activeSitePlan.floors || []).forEach(f => {
       (f.apartments || []).forEach(a => {
-        (a.voids || []).forEach(v => {
-          // Si l'ouverture a déjà été lancée dans un lot précédent, on ne la propose pas
-          if (v.measurementsValidated && !v.productionLaunched && !alreadyLaunchedIds.has(v.id)) {
+        (a.voids || []).forEach((v, vIndex) => {
+          if (v.measurementsValidated && !v.productionLaunched) {
             const item = order.items.find(i => i.id === v.itemId);
             if (item) {
               const check = checkVoidCriticalDelta(v, item);
               // Strict exclusion: never allow critical voids in the launch checklist
               if (!check.isCritical) {
-                validatedVoids.push({ floor: f, apt: a, void: v, item });
+                const repere = v.name?.trim() || `${f.name}${a.name}${vIndex + 1}`;
+                validatedVoids.push({ floor: f, apt: a, void: v, item, repere });
               }
             }
           }
@@ -818,7 +812,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
           apartments: (f.apartments || []).map(a => ({
             ...a,
             voids: (a.voids || []).map(v => {
-              if (selectedVoidsForLaunch[v.id] && !alreadyLaunchedIds.has(v.id)) {
+              if (selectedVoidsForLaunch[v.id]) {
                 const item = order.items.find(i => i.id === v.itemId);
                 if (!item || checkVoidCriticalDelta(v, item).isCritical) {
                   return v; // Strict block: do not launch critical voids
@@ -982,8 +976,8 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                               <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#334155' }}>{apt.name}</span>
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column' }}>
-                              {aptVoids.map(({ void: v, item }, vIdx) => {
-                                const voidRepere = v.name?.trim() || `${floor.name}${apt.name}${vIdx + 1}`;
+                              {aptVoids.map(({ void: v, item, repere }) => {
+                                const voidRepere = repere || v.name?.trim() || `${floor.name}${apt.name}`;
                                 return (
                                 <div key={v.id} style={{ padding: '0.5rem 1rem 0.5rem 4rem', display: 'flex', gap: '1rem', alignItems: 'center', background: 'white' }}>
                                   <input 
@@ -1045,10 +1039,11 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
     const launchedVoids = [];
     (activeSitePlan.floors || []).forEach(f => {
       (f.apartments || []).forEach(a => {
-        (a.voids || []).forEach(v => {
+        (a.voids || []).forEach((v, vIndex) => {
           if (v.productionLaunched) {
             const item = order.items.find(i => i.id === v.itemId);
-            launchedVoids.push({ floor: f, apt: a, void: v, item });
+            const repere = v.name?.trim() || `${f.name}${a.name}${vIndex + 1}`;
+            launchedVoids.push({ floor: f, apt: a, void: v, item, repere });
           }
         });
       });
@@ -1178,8 +1173,8 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                               <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#7f1d1d' }}>{apt.name}</span>
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column' }}>
-                              {aptVoids.map(({ void: v, item }, vIdx) => {
-                                const voidRepere = v.name?.trim() || `${floor.name}${apt.name}${vIdx + 1}`;
+                              {aptVoids.map(({ void: v, item, repere }) => {
+                                const voidRepere = repere || v.name?.trim() || `${floor.name}${apt.name}`;
                                 return (
                                 <div key={v.id} style={{ padding: '0.5rem 1rem 0.5rem 4rem', display: 'flex', gap: '1rem', alignItems: 'center', background: 'white' }}>
                                   <input 
@@ -2291,8 +2286,20 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
                                       ⛔ Validation bloquée (Écart &gt; +100 mm — Devis à refaire)
                                     </div>
                                   ) : v.productionLaunched ? (
-                                    <div style={{ width: '100%', padding: '0.6rem', fontSize: '0.78rem', fontWeight: 800, background: '#dcfce7', color: '#166534', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', borderRadius: '0.5rem' }}>
-                                      🚀 Lancée en Production
+                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                      <div style={{ flex: 2, padding: '0.6rem', fontSize: '0.78rem', fontWeight: 800, background: '#dcfce7', color: '#166534', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', borderRadius: '0.5rem' }}>
+                                        🚀 Lancée en Production
+                                      </div>
+                                      <button 
+                                        onClick={() => {
+                                          if (!window.confirm("Voulez-vous modifier les cotes de cette fenêtre pour autoriser un nouveau lancement en production ?")) return;
+                                          relaunchVoidProduction(floor.id, apt.id, v.id);
+                                        }}
+                                        style={{ flex: 1, padding: '0.6rem', fontSize: '0.72rem', fontWeight: 700, background: '#fef2f2', border: '1.5px solid #fca5a5', color: '#dc2626', cursor: 'pointer', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem' }}
+                                        title="Modifier la cote et autoriser un nouveau lancement"
+                                      >
+                                        ✏️ Modifier
+                                      </button>
                                     </div>
                                   ) : !v.measurementsValidated ? (
                                     <button 

@@ -1935,11 +1935,36 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                             const totalWeight = area * weightPerM2;
                             return <span style={{ color: '#3b82f6', fontSize: '0.75rem', fontWeight: 600 }} title="Poids du tablier">⚖️ {totalWeight.toFixed(2)} kg</span>;
                           })()}
+                          {key === 'moteurId' && effectiveItem && effectiveItem.price !== undefined && effectiveItem.price !== null && effectiveItem.price !== '' && (() => {
+                            const p = parseFloat(effectiveItem.price);
+                            if (isNaN(p)) return null;
+                            const isDouble = config.shutterConfig?.isDoubleShutter;
+                            const motorCount = isDouble ? (config.shutterConfig?.motorCount || 2) : 1;
+                            const totalPrice = p * motorCount;
+                            return (
+                              <span style={{ color: '#059669', fontSize: '0.75rem', fontWeight: 600 }} title="Prix du moteur">
+                                💰 {p.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DZD{motorCount > 1 ? ` (×${motorCount} = ${totalPrice.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DZD)` : ''}
+                              </span>
+                            );
+                          })()}
                         </label>
                         <select className="input" value={selectedItemId || ''} onChange={e => handleShutterChange(e.target.value)}>
                           <option value="">-- Sélectionner --</option>
                           {key === 'glissiereId' && <option value="AUTO">-- Automatique (Kit) --</option>}
-                          {filteredItems.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+                          {filteredItems.map(item => {
+                            let labelText = item.name;
+                            if (key === 'moteurId' && item.price !== undefined && item.price !== null && item.price !== '') {
+                              const p = parseFloat(item.price);
+                              if (!isNaN(p)) {
+                                labelText += ` (${p.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DZD)`;
+                              }
+                            }
+                            return (
+                              <option key={item.id} value={item.id}>
+                                {labelText}
+                              </option>
+                            );
+                          })}
                         </select>
                       </div>
 
