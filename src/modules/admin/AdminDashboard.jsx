@@ -3326,7 +3326,7 @@ const AdminDashboard = ({ data, setData }) => {
                           <th>Formule Quantité (Nb)</th>
                           {key !== 'kits' && key !== 'moteurs' && <th>Formule Dimension (L/H)</th>}
 
-                          {(key === 'lames' || key === 'axes' || key === 'extras' || key === 'moteurs' || key === 'kits' || key === 'glissieres') && (
+                          {(key === 'lames' || key === 'lameFinales' || key === 'axes' || key === 'extras' || key === 'moteurs' || key === 'kits' || key === 'glissieres') && (
                             <>
                               <th title="Variables: L, H, HC, lameWidth, caissonSize, caisson, area, totalWeight, liftingWeight, axeDiameter">Compatibilité</th>
                               <th>Alerte Technique</th>
@@ -3457,7 +3457,7 @@ const AdminDashboard = ({ data, setData }) => {
                                 />
                               </td>
                             )}
-                            {(key === 'lames' || key === 'axes' || key === 'glissieres' || key === 'moteurs' || key === 'extras' || key === 'kits') && (
+                            {(key === 'lames' || key === 'lameFinales' || key === 'axes' || key === 'glissieres' || key === 'moteurs' || key === 'extras' || key === 'kits') && (
                               <>
                                 <td>
                                   <FormulaInput 
@@ -3469,6 +3469,7 @@ const AdminDashboard = ({ data, setData }) => {
                                       key === 'moteurs' ? "Ex: L < 1500" : 
                                       key === 'kits' ? "Ex: L < 1800" : 
                                       key === 'glissieres' ? "Ex: H <= 2500 && caissonSize != 0" : 
+                                      key === 'lameFinales' ? "Ex: lameWidth == 43" : 
                                       "Ex: L <= 2500"
                                     }
                                   />

@@ -1804,6 +1804,20 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                     });
                   }
 
+                  // Apply compatibility formula for lames finales
+                  if (key === 'lameFinaleId') {
+                    filteredItems = filteredItems.filter(lf => {
+                      const formula = lf.compatibilityFormula;
+                      if (!formula || formula.trim() === '') return true;
+                      try {
+                        return engine.evaluate(formula, scope);
+                      } catch (e) {
+                        console.warn(`[Lame Finale Compatibility] Formula error for "${lf.name}":`, e.message);
+                        return true;
+                      }
+                    });
+                  }
+
                   // Apply compatibility formula for motors
                   if (key === 'moteurId') {
                     filteredItems = filteredItems.filter(moteur => {
