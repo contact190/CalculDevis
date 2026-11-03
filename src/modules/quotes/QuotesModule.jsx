@@ -803,29 +803,7 @@ const QuotesModule = ({ data, setData, quoteSettings, onOpenQuote, onNewQuote })
                           <Copy size={14} />
                         </button>
 
-                        {/* Figer si Brouillon */}
-                        {(!q.status || q.status === 'Brouillon') && !isQuoteLocked(q, data.orders) && (
-                          <button
-                            onClick={() => handleLockQuote(q)}
-                            className="btn"
-                            style={{ 
-                              padding: '0.4rem 0.6rem', 
-                              fontSize: '0.78rem', 
-                              fontWeight: 700, 
-                              color: '#475569', 
-                              borderColor: '#cbd5e1', 
-                              background: '#f8fafc',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '0.25rem'
-                            }}
-                            title="Figer définitivement ce devis (action irréversible)"
-                          >
-                            <Lock size={13} /> Figer
-                          </button>
-                        )}
-
-                        {/* Transformer en Commande ou Badge Commande existante */}
+                        {/* Badge Commande existante */}
                         {(() => {
                           const existingOrder = (data.orders || []).find(o => o.quoteId === q.id);
                           if (existingOrder) {
@@ -847,28 +825,6 @@ const QuotesModule = ({ data, setData, quoteSettings, onOpenQuote, onNewQuote })
                               >
                                 📦 {existingOrder.id}
                               </span>
-                            );
-                          }
-                          if (q.status !== 'Confirmé') {
-                            return (
-                              <button
-                                onClick={() => handleConvertToOrder(q)}
-                                className="btn btn-primary"
-                                style={{ 
-                                  padding: '0.4rem 0.65rem', 
-                                  fontSize: '0.78rem', 
-                                  fontWeight: 700, 
-                                  background: '#10b981', 
-                                  borderColor: '#10b981',
-                                  color: 'white',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '0.3rem'
-                                }}
-                                title="Transformer en commande"
-                              >
-                                <ShoppingBag size={13} /> Commande
-                              </button>
                             );
                           }
                           return null;
