@@ -1144,8 +1144,17 @@ function App() {
     );
   }
 
-  // ─── Verification du code d'accès / session ───────────────────────────────
-  if (!currentUser) {
+  const isInstallerMode = urlParams.get('mode') === 'installer';
+  const installerOrderId = urlParams.get('orderId');
+  const isTechnicianMode = urlParams.get('mode') === 'technician';
+  const technicianOrderId = urlParams.get('orderId');
+  const isTrackingMode = urlParams.get('mode') === 'tracking' || urlParams.get('mode') === 'sublot';
+  const isInstallationMode = urlParams.get('mode') === 'installation' || urlParams.get('mode') === 'pose';
+  const installationOrderId = urlParams.get('orderId');
+  const isMobilePortalMode = isInstallationMode || isTrackingMode || (isTechnicianMode && technicianOrderId) || (isInstallerMode && installerOrderId);
+
+  // ─── Verification du code d'accès / session (les portails mobiles restent accessibles directement via QR code / lien) ───
+  if (!currentUser && !isMobilePortalMode) {
     return (
       <LoginModal 
         database={database} 
@@ -1156,14 +1165,6 @@ function App() {
       />
     );
   }
-
-  const isInstallerMode = urlParams.get('mode') === 'installer';
-  const installerOrderId = urlParams.get('orderId');
-  const isTechnicianMode = urlParams.get('mode') === 'technician';
-  const technicianOrderId = urlParams.get('orderId');
-  const isTrackingMode = urlParams.get('mode') === 'tracking' || urlParams.get('mode') === 'sublot';
-  const isInstallationMode = urlParams.get('mode') === 'installation' || urlParams.get('mode') === 'pose';
-  const installationOrderId = urlParams.get('orderId');
 
   if (isInstallationMode) {
     return (

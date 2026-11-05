@@ -518,10 +518,19 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
 
     if (!window.confirm(`Voulez-vous valider la fabrication pour ce lot de ${totalCurrentQty} unité(s) ?`)) return;
 
+    const existingBatchNums = (selectedOrder.batches || [])
+      .filter(b => !b._deleted)
+      .map(b => b.batchNumber || parseInt(String(b.name || '').match(/\d+/)?.[0] || '0', 10))
+      .filter(n => !isNaN(n) && n > 0);
+    const nextBatchNum = existingBatchNums.length > 0 ? Math.max(...existingBatchNums) + 1 : 1;
+
+    const nowIso = new Date().toISOString();
     const newBatch = {
-      id: `BATCH-${(selectedOrder.batches?.length || 0) + 1}`,
-      name: `Lot N°${(selectedOrder.batches?.length || 0) + 1}`,
-      createdAt: new Date().toISOString(),
+      id: `BATCH-${selectedOrder.id}-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      batchNumber: nextBatchNum,
+      name: `Lot N°${nextBatchNum}`,
+      createdAt: nowIso,
+      _lastModified: nowIso,
       items: newBatchItems
     };
 
@@ -530,7 +539,8 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
       batches: [...(selectedOrder.batches || []), newBatch],
       // Reset draft measurements
       items: selectedOrder.items.map(i => ({ ...i, siteMeasurements: [] })),
-      status: (selectedOrder.batches?.length || 0) === 0 ? 'En Fabrication' : selectedOrder.status
+      status: (selectedOrder.batches?.filter(b => !b._deleted).length || 0) === 0 ? 'En Fabrication' : selectedOrder.status,
+      _lastModified: nowIso
     };
 
     // Check if fully produced
@@ -2276,7 +2286,14 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                       const newPlans = planExists ? plans.map(p => p.id === updatedPlan.id ? updatedPlan : p) : [...plans, updatedPlan];
                       return { ...c, sitePlans: newPlans };
                     });
-                    const updatedOrders = (prev.orders || []).map(o => o.id === selectedOrder.id ? { ...o, items: updatedItems, status: 'Mesuré', batches: [] } : o);
+                    const nowIso = new Date().toISOString();
+                    const updatedOrders = (prev.orders || []).map(o => o.id === selectedOrder.id ? { 
+                      ...o, 
+                      items: updatedItems, 
+                      status: 'Mesuré', 
+                      batches: (o.batches || []).map(b => ({ ...b, _deleted: true, _lastModified: nowIso })),
+                      _lastModified: nowIso
+                    } : o);
                     return { ...prev, clients: updatedClients, orders: updatedOrders };
                   });
                   alert('Réinitialisé ! Vous pouvez maintenant relancer la production dans le portail technicien.');
@@ -2298,9 +2315,9 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                     </tr>
                   </thead>
                   <tbody>
-                    {(selectedOrder.batches || []).map(batch => (
+                    {(selectedOrder.batches || []).filter(b => !b._deleted).map(batch => (
                       <tr key={batch.id}>
-                        <td data-label="Lot" style={{ fontWeight: 700 }}>{batch.id}</td>
+                        <td data-label="Lot" style={{ fontWeight: 700 }}>{batch.name || (batch.batchNumber ? `Lot N°${batch.batchNumber}` : batch.id)}</td>
                         <td data-label="Date">{new Date(batch.createdAt).toLocaleString('fr-FR')}</td>
                         <td data-label="Produits">
                            {batch.items?.map(i => {
@@ -2321,7 +2338,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
                          </td>
                       </tr>
                     ))}
-                    {(selectedOrder.batches || []).length === 0 && (
+                    {(selectedOrder.batches || []).filter(b => !b._deleted).length === 0 && (
                       <tr><td colSpan="4" style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>Aucun lot validé pour le moment.</td></tr>
                     )}
                   </tbody>

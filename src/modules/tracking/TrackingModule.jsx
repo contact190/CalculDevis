@@ -160,7 +160,7 @@ export default function TrackingModule({ data, setData, quoteSettings }) {
 
   // Tous les lots de fabrication de la commande sélectionnée
   const orderBatches = useMemo(() => {
-    return selectedOrder?.batches || [];
+    return (selectedOrder?.batches || []).filter(b => !b._deleted);
   }, [selectedOrder]);
 
   // Lots non finis (pour filtres ou indicateurs)
@@ -840,62 +840,7 @@ export default function TrackingModule({ data, setData, quoteSettings }) {
     });
   };
 
-  // Correction automatique pour CMD-1548 Lot 09 si plus de 1 sous-lot a été généré par erreur
-  useEffect(() => {
-    if (!selectedOrder || selectedOrder.id !== 'CMD-1548') return;
-    const b9 = (selectedOrder.batches || []).find(b => b.id === 'BATCH-9' || b.name?.includes('Lot N°9') || b.name?.includes('Lot 09') || b.name?.includes('Lot 9'));
-    if (b9 && Array.isArray(b9.subLots) && b9.subLots.length > 1) {
-      console.log("Nettoyage automatique CMD-1548 Lot 09 : réduction à SL-01 uniquement.");
-      
-      const b9Openings = (b9.items || []).flatMap((bi, biIdx) => (bi.measurements || []).map((m, mIdx) => ({
-        voidId: m.id || `M-${bi.id}-${mIdx}`,
-        itemId: bi.id,
-        repere: m.label || `Ouverture ${mIdx + 1}`,
-        label: bi.label,
-        dim: `${m.L} x ${m.H} mm`,
-        L: m.L,
-        H: m.H
-      })));
 
-      const firstSubLot = b9.subLots[0] || {};
-      const singleSubLot = {
-        ...firstSubLot,
-        id: firstSubLot.id || `SL-${Date.now()}-1`,
-        code: 'SL-01',
-        name: `Sous-Lot SL-01 (Coulissant - ${b9Openings.length} ouv.)`,
-        family: 'coulissant',
-        items: b9Openings,
-        ouvertures: b9Openings.map(op => ({
-          id: `coul_${op.voidId}`,
-          repere: op.repere,
-          label: op.label,
-          dim: op.dim,
-          location: op.repere
-        })),
-        status: 'En attente'
-      };
-
-      setData(prev => {
-        const updatedOrders = (prev.orders || []).map(o => {
-          if (o.id !== 'CMD-1548') return o;
-          const updatedBatches = (o.batches || []).map(b => {
-            if (b.id !== b9.id) return b;
-            return {
-              ...b,
-              subLots: [singleSubLot],
-              subLotsApproved: false
-            };
-          });
-          return {
-            ...o,
-            batches: updatedBatches,
-            _lastModified: new Date().toISOString()
-          };
-        });
-        return { ...prev, orders: updatedOrders };
-      });
-    }
-  }, [selectedOrder, setData]);
 
   // Approve and freeze sub-lot division
   const handleApproveAndFreezeSubLots = () => {
