@@ -26,7 +26,11 @@ const ItemPreview = ({ config, database }) => {
   
   React.useEffect(() => {
     if (isVisible && canvasRef.current) {
-      drawTechnicalDrawing(canvasRef.current, config, database);
+      try {
+        drawTechnicalDrawing(canvasRef.current, config, database || {});
+      } catch (err) {
+        console.warn("ItemPreview drawing render error:", err);
+      }
     }
   }, [configStr, database, isVisible]);
 
@@ -206,13 +210,13 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
   const [selectedVoidsForRelaunch, setSelectedVoidsForRelaunch] = useState({});
 
   const order = useMemo(() => {
-    return (data.orders || []).find(o => o.id === orderId);
-  }, [data.orders, orderId]);
+    return (data?.orders || []).find(o => o.id === orderId);
+  }, [data?.orders, orderId]);
 
   const selectedClient = useMemo(() => {
     if (!order) return null;
-    return data.clients?.find(c => c.id === order.clientId);
-  }, [data.clients, order]);
+    return (data?.clients || []).find(c => c.id === order.clientId);
+  }, [data?.clients, order]);
 
   const activeSitePlan = useMemo(() => {
     if (!selectedClient) return { floors: [] };
@@ -299,8 +303,15 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
   const updateVoidProperty = (floorId, aptId, voidId, property, value) => {
     if (!order || !selectedClient) return;
 
-    const currentPlan = activeSitePlan;
-    const updatedPlan = {
+    setData(prev => {
+      const freshClient = (prev.clients || []).find(c => c.id === selectedClient.id);
+      if (!freshClient) return prev;
+      const plans = freshClient.sitePlans || [];
+      const currentPlan = plans.find(p => p.id === activeSitePlan.id) || activeSitePlan;
+      const freshOrder = (prev.orders || []).find(o => o.id === order.id);
+      const freshOrderItems = freshOrder?.items || order.items || [];
+
+      const updatedPlan = {
       ...currentPlan,
       floors: (currentPlan.floors || []).map(f => {
         if (f.id !== floorId) return f;
@@ -438,20 +449,19 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
       })
     };
 
-    const updatedItems = syncSitePlanToMeasurements(updatedPlan, order.items);
+      const updatedItems = syncSitePlanToMeasurements(updatedPlan, freshOrderItems);
+      const nowIso = new Date().toISOString();
 
-    setData(prev => {
-      const updatedClients = (prev.clients || []).map(c => {
-        if (c.id !== selectedClient.id) return c;
-        const plans = c.sitePlans || [];
-        const planExists = plans.some(p => p.id === updatedPlan.id);
-        const newPlans = planExists 
-          ? plans.map(p => p.id === updatedPlan.id ? updatedPlan : p)
-          : [...plans, updatedPlan];
-        return { ...c, sitePlans: newPlans, _lastModified: new Date().toISOString() };
-      });
+      const planExists = plans.some(p => p.id === updatedPlan.id);
+      const newPlans = planExists 
+        ? plans.map(p => p.id === updatedPlan.id ? updatedPlan : p)
+        : [...plans, updatedPlan];
+
+      const updatedClients = (prev.clients || []).map(c => 
+        c.id === selectedClient.id ? { ...c, sitePlans: newPlans, _lastModified: nowIso } : c
+      );
       const updatedOrders = (prev.orders || []).map(o => 
-        o.id === order.id ? { ...o, items: updatedItems, _lastModified: new Date().toISOString() } : o
+        o.id === order.id ? { ...o, items: updatedItems, _lastModified: nowIso } : o
       );
       return {
         ...prev,
@@ -520,53 +530,59 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
       return;
     }
 
-    const currentPlan = activeSitePlan;
-    const updatedPlan = {
-      ...currentPlan,
-      floors: (currentPlan.floors || []).map(f => {
-        return {
-          ...f,
-          apartments: (f.apartments || []).map(a => {
-            return {
-              ...a,
-              voids: (a.voids || []).map(v => {
-                if (selectedVoidsForAssign[v.id] && !v.productionLaunched) {
-                  return {
-                    ...v,
-                    L: sourceVoid.L !== undefined ? sourceVoid.L : v.L,
-                    H: sourceVoid.H !== undefined ? sourceVoid.H : v.H,
-                    wallDepth: sourceVoid.wallDepth,
-                    handleHeight: sourceVoid.handleHeight,
-                    handleHeightMode: sourceVoid.handleHeightMode,
-                    openingDirection: sourceVoid.openingDirection,
-                    optionalSides: sourceVoid.optionalSides !== undefined ? JSON.parse(JSON.stringify(sourceVoid.optionalSides)) : undefined,
-                    shutter: sourceVoid.shutter ? JSON.parse(JSON.stringify(sourceVoid.shutter)) : null,
-                    partOverrides: sourceVoid.partOverrides ? JSON.parse(JSON.stringify(sourceVoid.partOverrides)) : {},
-                    measurementsValidated: true
-                  };
-                }
-                return v;
-              })
-            };
-          })
-        };
-      })
-    };
-
-    const updatedItems = syncSitePlanToMeasurements(updatedPlan, order.items);
-
     setData(prev => {
-      const updatedClients = (prev.clients || []).map(c => {
-        if (c.id !== selectedClient.id) return c;
-        const plans = c.sitePlans || [];
-        const planExists = plans.some(p => p.id === updatedPlan.id);
-        const newPlans = planExists 
-          ? plans.map(p => p.id === updatedPlan.id ? updatedPlan : p)
-          : [...plans, updatedPlan];
-        return { ...c, sitePlans: newPlans, _lastModified: new Date().toISOString() };
-      });
+      const freshClient = (prev.clients || []).find(c => c.id === selectedClient.id);
+      if (!freshClient) return prev;
+      const plans = freshClient.sitePlans || [];
+      const currentPlan = plans.find(p => p.id === activeSitePlan.id) || activeSitePlan;
+      const freshOrder = (prev.orders || []).find(o => o.id === order.id);
+      const freshOrderItems = freshOrder?.items || order.items || [];
+
+      const updatedPlan = {
+        ...currentPlan,
+        floors: (currentPlan.floors || []).map(f => {
+          return {
+            ...f,
+            apartments: (f.apartments || []).map(a => {
+              return {
+                ...a,
+                voids: (a.voids || []).map(v => {
+                  if (selectedVoidsForAssign[v.id] && !v.productionLaunched) {
+                    return {
+                      ...v,
+                      L: sourceVoid.L !== undefined ? sourceVoid.L : v.L,
+                      H: sourceVoid.H !== undefined ? sourceVoid.H : v.H,
+                      wallDepth: sourceVoid.wallDepth,
+                      handleHeight: sourceVoid.handleHeight,
+                      handleHeightMode: sourceVoid.handleHeightMode,
+                      openingDirection: sourceVoid.openingDirection,
+                      optionalSides: sourceVoid.optionalSides !== undefined ? JSON.parse(JSON.stringify(sourceVoid.optionalSides)) : undefined,
+                      shutter: sourceVoid.shutter ? JSON.parse(JSON.stringify(sourceVoid.shutter)) : null,
+                      partOverrides: sourceVoid.partOverrides ? JSON.parse(JSON.stringify(sourceVoid.partOverrides)) : {},
+                      measurementsValidated: true
+                    };
+                  }
+                  return v;
+                })
+              };
+            })
+          };
+        })
+      };
+
+      const updatedItems = syncSitePlanToMeasurements(updatedPlan, freshOrderItems);
+      const nowIso = new Date().toISOString();
+
+      const planExists = plans.some(p => p.id === updatedPlan.id);
+      const newPlans = planExists 
+        ? plans.map(p => p.id === updatedPlan.id ? updatedPlan : p)
+        : [...plans, updatedPlan];
+
+      const updatedClients = (prev.clients || []).map(c => 
+        c.id === selectedClient.id ? { ...c, sitePlans: newPlans, _lastModified: nowIso } : c
+      );
       const updatedOrders = (prev.orders || []).map(o => 
-        o.id === order.id ? { ...o, items: updatedItems, _lastModified: new Date().toISOString() } : o
+        o.id === order.id ? { ...o, items: updatedItems, _lastModified: nowIso } : o
       );
       return {
         ...prev,
@@ -580,25 +596,14 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
     setSelectedVoidsForAssign({});
   };
 
-  if (!order) {
-    return (
-      <div style={{ padding: '2rem', textAlign: 'center', fontFamily: 'Inter, sans-serif' }}>
-        <h2 style={{ color: '#ef4444' }}>Commande Introuvable</h2>
-        <p>Le lien est incorrect ou la commande n'existe plus.</p>
-      </div>
-    );
-  }
-
-  const completionPercent = stats.total > 0 ? Math.round((stats.filled / stats.total) * 100) : 0;
-
+  // ─── HOOKS (TOUJOURS AU-DESSUS DE TOUT RETURN CONDITIONNEL) ───
   React.useEffect(() => {
     if (showValidation) {
       const initialSelection = {};
-      (activeSitePlan.floors || []).forEach(f => {
+      (activeSitePlan?.floors || []).forEach(f => {
         (f.apartments || []).forEach(a => {
           (a.voids || []).forEach(v => {
             if (v.measurementsValidated && !v.productionLaunched) {
-               // keep existing selection if previously unselected, else default to true
                initialSelection[v.id] = selectedVoidsForLaunch[v.id] !== undefined ? selectedVoidsForLaunch[v.id] : true;
             }
           });
@@ -611,7 +616,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
   React.useEffect(() => {
     if (showRelaunchModal) {
       const initialSelection = {};
-      (activeSitePlan.floors || []).forEach(f => {
+      (activeSitePlan?.floors || []).forEach(f => {
         (f.apartments || []).forEach(a => {
           (a.voids || []).forEach(v => {
             if (v.productionLaunched) {
@@ -628,10 +633,23 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
     if (assignPopupState) {
       const { sourceVoid } = assignPopupState;
       const initialSelection = {};
-      initialSelection[sourceVoid.id] = true;
+      if (sourceVoid?.id) {
+        initialSelection[sourceVoid.id] = true;
+      }
       setSelectedVoidsForAssign(initialSelection);
     }
   }, [assignPopupState]);
+
+  if (!order) {
+    return (
+      <div style={{ padding: '2rem', textAlign: 'center', fontFamily: 'Inter, sans-serif' }}>
+        <h2 style={{ color: '#ef4444' }}>Commande Introuvable</h2>
+        <p>Le lien est incorrect ou la commande n'existe plus.</p>
+      </div>
+    );
+  }
+
+  const completionPercent = stats.total > 0 ? Math.round((stats.filled / stats.total) * 100) : 0;
 
   const renderIndividualValidationPopup = () => {
     if (!voidToValidate) return null;
@@ -776,16 +794,23 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
     if (!showValidation) return null;
 
     const validatedVoids = [];
-    (activeSitePlan.floors || []).forEach(f => {
+    const excludedVoids = [];
+    (activeSitePlan?.floors || []).forEach(f => {
       (f.apartments || []).forEach(a => {
         (a.voids || []).forEach((v, vIndex) => {
-          if (v.measurementsValidated && !v.productionLaunched) {
-            const item = order.items.find(i => i.id === v.itemId);
-            if (item) {
+          if (!v.productionLaunched) {
+            const repere = v.name?.trim() || `${f.name}${a.name}${vIndex + 1}`;
+            const item = (order?.items || []).find(i => i.id === v.itemId);
+            if (!item) {
+              excludedVoids.push({ repere, label: 'Article inconnu', reason: 'Non lié à un article du devis' });
+            } else if (!v.measurementsValidated) {
+              // Non validée techniquement
+            } else {
               const check = checkVoidCriticalDelta(v, item);
-              // Strict exclusion: never allow critical voids in the launch checklist
-              if (!check.isCritical) {
-                const repere = v.name?.trim() || `${f.name}${a.name}${vIndex + 1}`;
+              if (check.isCritical) {
+                const deltaMax = check.deltaL > 100 ? check.deltaL : check.deltaH;
+                excludedVoids.push({ repere, label: item.label, reason: `Écart critique (+${deltaMax} mm) — Re-devis requis` });
+              } else {
                 validatedVoids.push({ floor: f, apt: a, void: v, item, repere });
               }
             }
@@ -794,7 +819,6 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
       });
     });
 
-
     const handleLaunch = () => {
       const selectedCount = Object.values(selectedVoidsForLaunch).filter(Boolean).length;
       if (selectedCount === 0) {
@@ -802,102 +826,142 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
         return;
       }
 
-      const currentPlan = activeSitePlan;
-      const newBatchItemsMap = new Map();
-
-      const updatedPlan = {
-        ...currentPlan,
-        floors: (currentPlan.floors || []).map(f => ({
-          ...f,
-          apartments: (f.apartments || []).map(a => ({
-            ...a,
-            voids: (a.voids || []).map(v => {
-              if (selectedVoidsForLaunch[v.id]) {
-                const item = order.items.find(i => i.id === v.itemId);
-                if (!item || checkVoidCriticalDelta(v, item).isCritical) {
-                  return v; // Strict block: do not launch critical voids
-                }
-                if (!newBatchItemsMap.has(v.itemId)) {
-                  newBatchItemsMap.set(v.itemId, {
-                    id: item.id,
-                    label: item.label,
-                    config: item.config,
-                    measurements: []
-                  });
-                }
-
-                const batchItem = newBatchItemsMap.get(v.itemId);
-                if (batchItem) {
-                  const shutterList = [];
-                  if (v.shutter && v.shutter.qty > 0) {
-                    shutterList.push({
-                      id: v.shutter.id || `shutter-${v.id}`,
-                      qty: v.shutter.qty,
-                      customLV: (v.shutter.customLV !== undefined && v.shutter.customLV !== '' && v.shutter.customLV !== 0) ? v.shutter.customLV : (v.L !== undefined && v.L !== '' ? parseFloat(v.L) : batchItem.config.L),
-                      overrides: v.shutter.overrides || {}
-                    });
-                  }
-                  batchItem.measurements.push({
-                    id: v.id,
-                    L: v.L !== undefined && v.L !== '' ? parseFloat(v.L) : batchItem.config.L,
-                    H: v.H !== undefined && v.H !== '' ? parseFloat(v.H) : batchItem.config.H,
-                    wallDepth: v.wallDepth !== undefined && v.wallDepth !== '' ? parseFloat(v.wallDepth) : '',
-                    handleHeight: parseHandleHeight(v.handleHeight),
-                    // optionalSides: undefined = Auto (keep quote config), object = technician override
-                    optionalSides: v.optionalSides !== undefined ? v.optionalSides : undefined,
-                    openingDirection: batchItem.config.openingDirection || undefined,
-                    qty: 1,
-                    label: `${f.name} - ${a.name} - ${v.name}`,
-                    shutterList: shutterList,
-                    instanceNames: [v.name],
-                    instanceFloors: [f.name],
-                    partOverrides: v.partOverrides || {}
-                  });
-                }
-                return { ...v, productionLaunched: true };
-              }
-              return v;
-            })
-          }))
-        }))
-      };
-
-      const updatedItems = syncSitePlanToMeasurements(updatedPlan, order.items);
-
-      const newBatchIdNum = (order.batches?.length || 0) + 1;
-      const newBatch = {
-        id: `BATCH-${newBatchIdNum}`,
-        name: `Lot N°${newBatchIdNum} (Terrain)`,
-        createdAt: new Date().toISOString(),
-        items: Array.from(newBatchItemsMap.values())
-      };
+      let launchedUnitsCount = 0;
+      let blockedReasons = [];
 
       setData(prev => {
-        const updatedClients = (prev.clients || []).map(c => {
-          if (c.id !== selectedClient.id) return c;
-          const plans = c.sitePlans || [];
-          const planExists = plans.some(p => p.id === updatedPlan.id);
-          const newPlans = planExists 
-            ? plans.map(p => p.id === updatedPlan.id ? updatedPlan : p)
-            : [...plans, updatedPlan];
-          return { ...c, sitePlans: newPlans, _lastModified: new Date().toISOString() };
-        });
+        const freshOrder = (prev.orders || []).find(o => o.id === order.id);
+        if (!freshOrder) return prev;
+
+        const freshClient = (prev.clients || []).find(c => c.id === selectedClient.id);
+        const clientPlans = freshClient?.sitePlans || [];
+        const currentPlan = clientPlans.find(p => p.id === activeSitePlan.id) || activeSitePlan;
+        const freshOrderItems = freshOrder.items || [];
+
+        const newBatchItemsMap = new Map();
+
+        const updatedPlan = {
+          ...currentPlan,
+          floors: (currentPlan.floors || []).map(f => ({
+            ...f,
+            apartments: (f.apartments || []).map(a => ({
+              ...a,
+              voids: (a.voids || []).map((v, vIdx) => {
+                if (selectedVoidsForLaunch[v.id]) {
+                  const repere = v.name?.trim() || `${f.name}${a.name}${vIdx + 1}`;
+                  const item = freshOrderItems.find(i => i.id === v.itemId);
+                  if (!item) {
+                    blockedReasons.push(`${repere} : Article du devis introuvable`);
+                    return v;
+                  }
+                  const check = checkVoidCriticalDelta(v, item);
+                  if (check.isCritical) {
+                    blockedReasons.push(`${repere} : Écart critique (+${check.deltaL > 100 ? check.deltaL : check.deltaH} mm)`);
+                    return v;
+                  }
+
+                  if (!newBatchItemsMap.has(v.itemId)) {
+                    newBatchItemsMap.set(v.itemId, {
+                      id: item.id,
+                      label: item.label,
+                      config: item.config,
+                      measurements: []
+                    });
+                  }
+
+                  const batchItem = newBatchItemsMap.get(v.itemId);
+                  if (batchItem) {
+                    const shutterList = [];
+                    if (v.shutter && v.shutter.qty > 0) {
+                      shutterList.push({
+                        id: v.shutter.id || `shutter-${v.id}`,
+                        qty: v.shutter.qty,
+                        customLV: (v.shutter.customLV !== undefined && v.shutter.customLV !== '' && v.shutter.customLV !== 0) ? v.shutter.customLV : (v.L !== undefined && v.L !== '' ? parseFloat(v.L) : batchItem.config.L),
+                        overrides: v.shutter.overrides || {}
+                      });
+                    }
+                    batchItem.measurements.push({
+                      id: v.id,
+                      L: v.L !== undefined && v.L !== '' ? parseFloat(v.L) : batchItem.config.L,
+                      H: v.H !== undefined && v.H !== '' ? parseFloat(v.H) : batchItem.config.H,
+                      wallDepth: v.wallDepth !== undefined && v.wallDepth !== '' ? parseFloat(v.wallDepth) : '',
+                      handleHeight: parseHandleHeight(v.handleHeight),
+                      optionalSides: v.optionalSides !== undefined ? v.optionalSides : undefined,
+                      openingDirection: batchItem.config.openingDirection || undefined,
+                      qty: 1,
+                      label: `${f.name} - ${a.name} - ${v.name}`,
+                      shutterList: shutterList,
+                      instanceNames: [v.name],
+                      instanceFloors: [f.name],
+                      partOverrides: v.partOverrides || {}
+                    });
+                    launchedUnitsCount++;
+                  }
+                  return { ...v, productionLaunched: true };
+                }
+                return v;
+              })
+            }))
+          }))
+        };
+
+        if (launchedUnitsCount === 0) {
+          // Point 5: Ne pas créer de lot vide
+          return prev;
+        }
+
+        const updatedItems = syncSitePlanToMeasurements(updatedPlan, freshOrderItems);
+
+        // Point 4: Calculer le numéro de lot dédié (batchNumber) sans collision
+        const existingBatchNums = (freshOrder.batches || [])
+          .filter(b => !b._deleted)
+          .map(b => b.batchNumber || parseInt(String(b.name || '').match(/\d+/)?.[0] || '0', 10))
+          .filter(n => !isNaN(n) && n > 0);
+        const nextBatchNum = existingBatchNums.length > 0 ? Math.max(...existingBatchNums) + 1 : 1;
+
+        const nowIso = new Date().toISOString();
+        const newBatch = {
+          id: `BATCH-${freshOrder.id}-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          batchNumber: nextBatchNum,
+          name: `Lot N°${nextBatchNum} (Terrain)`,
+          createdAt: nowIso,
+          _lastModified: nowIso,
+          items: Array.from(newBatchItemsMap.values())
+        };
+
+        const planExists = clientPlans.some(p => p.id === updatedPlan.id);
+        const newPlans = planExists 
+          ? clientPlans.map(p => p.id === updatedPlan.id ? updatedPlan : p)
+          : [...clientPlans, updatedPlan];
+
+        const updatedClients = (prev.clients || []).map(c => 
+          c.id === selectedClient.id ? { ...c, sitePlans: newPlans, _lastModified: nowIso } : c
+        );
         const updatedOrders = (prev.orders || []).map(o => 
           o.id === order.id ? { 
             ...o, 
             items: updatedItems, 
             status: 'PARTIEL_PRODUCTION',
             batches: [...(o.batches || []), newBatch],
-            _lastModified: new Date().toISOString()
+            _lastModified: nowIso
           } : o
         );
+
         return { ...prev, clients: updatedClients, orders: updatedOrders };
       });
+
+      if (launchedUnitsCount === 0) {
+        alert(`Aucun lot n'a été créé car toutes les fenêtres sélectionnées ont été écartées :\n- ${blockedReasons.join('\n- ')}`);
+        return;
+      }
+
       setShowValidation(false);
       setSelectedVoidsForLaunch({});
-      setTimeout(() => {
-        alert('Fenêtres lancées en production avec succès !');
-      }, 150);
+      if (blockedReasons.length > 0) {
+        alert(`${launchedUnitsCount} unité(s) lancée(s) en production dans le nouveau lot.\n\nAttention : ${blockedReasons.length} fenêtre(s) ont été écartées :\n- ${blockedReasons.join('\n- ')}`);
+      } else {
+        alert(`${launchedUnitsCount} unité(s) lancée(s) en production avec succès !`);
+      }
     };
 
     return (
@@ -1013,6 +1077,22 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
             </div>
           )}
 
+          {excludedVoids.length > 0 && (
+            <div style={{ marginBottom: '1.5rem', border: '1px solid #fecaca', borderRadius: '0.75rem', background: '#fff1f2', padding: '0.85rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', color: '#991b1b', fontWeight: 700, fontSize: '0.85rem' }}>
+                <AlertTriangle size={16} /> Fenêtres écartées ({excludedVoids.length})
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                {excludedVoids.map((ev, i) => (
+                  <div key={i} style={{ fontSize: '0.75rem', color: '#b91c1c', display: 'flex', justifyContent: 'space-between', gap: '0.5rem' }}>
+                    <span>• <strong>{ev.repere}</strong> ({ev.label})</span>
+                    <span style={{ fontWeight: 600 }}>{ev.reason}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div style={{ display: 'flex', gap: '0.75rem' }}>
             <button 
               onClick={() => setShowValidation(false)}
@@ -1058,37 +1138,43 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
 
       if (!window.confirm(`Voulez-vous relancer la production pour les ${selectedCount} fenêtres sélectionnées ? Leurs cotes seront débloquées et vous pourrez générer un nouveau lot.`)) return;
 
-      const currentPlan = activeSitePlan;
-      const updatedPlan = {
-        ...currentPlan,
-        floors: (currentPlan.floors || []).map(f => ({
-          ...f,
-          apartments: (f.apartments || []).map(a => ({
-            ...a,
-            voids: (a.voids || []).map(v => {
-              if (selectedVoidsForRelaunch[v.id]) {
-                return { ...v, productionLaunched: false, measurementsValidated: false };
-              }
-              return v;
-            })
-          }))
-        }))
-      };
-
-      const updatedItems = syncSitePlanToMeasurements(updatedPlan, order.items);
-
       setData(prev => {
-        const updatedClients = (prev.clients || []).map(c => {
-          if (c.id !== selectedClient.id) return c;
-          const plans = c.sitePlans || [];
-          const planExists = plans.some(p => p.id === updatedPlan.id);
-          const newPlans = planExists 
-            ? plans.map(p => p.id === updatedPlan.id ? updatedPlan : p)
-            : [...plans, updatedPlan];
-          return { ...c, sitePlans: newPlans };
-        });
+        const freshOrder = (prev.orders || []).find(o => o.id === order.id);
+        if (!freshOrder) return prev;
+        const freshClient = (prev.clients || []).find(c => c.id === selectedClient.id);
+        const clientPlans = freshClient?.sitePlans || [];
+        const currentPlan = clientPlans.find(p => p.id === activeSitePlan?.id) || activeSitePlan;
+        const freshOrderItems = freshOrder.items || [];
+
+        const updatedPlan = {
+          ...currentPlan,
+          floors: (currentPlan.floors || []).map(f => ({
+            ...f,
+            apartments: (f.apartments || []).map(a => ({
+              ...a,
+              voids: (a.voids || []).map(v => {
+                if (selectedVoidsForRelaunch[v.id]) {
+                  return { ...v, productionLaunched: false, measurementsValidated: false };
+                }
+                return v;
+              })
+            }))
+          }))
+        };
+
+        const updatedItems = syncSitePlanToMeasurements(updatedPlan, freshOrderItems);
+        const nowIso = new Date().toISOString();
+
+        const planExists = clientPlans.some(p => p.id === updatedPlan.id);
+        const newPlans = planExists 
+          ? clientPlans.map(p => p.id === updatedPlan.id ? updatedPlan : p)
+          : [...clientPlans, updatedPlan];
+
+        const updatedClients = (prev.clients || []).map(c => 
+          c.id === selectedClient.id ? { ...c, sitePlans: newPlans, _lastModified: nowIso } : c
+        );
         const updatedOrders = (prev.orders || []).map(o => 
-          o.id === order.id ? { ...o, items: updatedItems } : o
+          o.id === order.id ? { ...o, items: updatedItems, _lastModified: nowIso } : o
         );
         return { ...prev, clients: updatedClients, orders: updatedOrders };
       });

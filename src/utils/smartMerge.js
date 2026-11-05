@@ -19,8 +19,14 @@ export const smartMerge = (dbA, dbB) => {
 
     // Start with all items from A
     if (Array.isArray(arrA)) {
-      arrA.forEach(item => {
-        if (item && item.id) map.set(item.id, item);
+      arrA.forEach(rawItem => {
+        if (!rawItem || !rawItem.id) return;
+        // Migration CMD-65 Mirage -> CMD-68
+        let item = rawItem;
+        if (item.id === 'CMD-65' && (item.clientId === 'CLI-4768' || /mirage/i.test(item.clientName || ''))) {
+          item = { ...item, id: 'CMD-68', number: 'CMD-68' };
+        }
+        map.set(item.id, item);
       });
     }
 
@@ -53,14 +59,37 @@ export const smartMerge = (dbA, dbB) => {
             } else if (valB === undefined) {
               // Keep valA
             } else if (Array.isArray(valA) && Array.isArray(valB)) {
-              // On ne fusionne pas les tableaux imbriqués (ex: elements de composition) élément par élément car
-              // l'id n'y est pas une clé primaire unique (c'est une clé étrangère). On prend le tableau de l'objet le plus récent.
-              mergedItem[key] = incomingTime >= existingTime ? valB : valA;
-            } else if (typeof valA === 'object' && valA !== null && typeof valB === 'object' && valB !== null) {
-              if (incomingTime >= existingTime) {
-                mergedItem[key] = { ...valA, ...valB };
+              if (key === 'batches') {
+                // Fusion par ID des lots avec support tombstones (_deleted: true)
+                const batchMap = new Map();
+                valA.forEach(b => { if (b && b.id) batchMap.set(b.id, b); });
+                valB.forEach(b => {
+                  if (!b || !b.id) return;
+                  const existingB = batchMap.get(b.id);
+                  if (!existingB) {
+                    batchMap.set(b.id, b);
+                  } else {
+                    const bTimeA = existingB._lastModified ? new Date(existingB._lastModified).getTime() : 0;
+                    const bTimeB = b._lastModified ? new Date(b._lastModified).getTime() : incomingTime;
+                    batchMap.set(b.id, bTimeB >= bTimeA ? b : existingB);
+                  }
+                });
+                mergedItem[key] = Array.from(batchMap.values());
               } else {
-                mergedItem[key] = { ...valB, ...valA };
+                // On ne fusionne pas les tableaux imbriqués généraux élément par élément
+                mergedItem[key] = incomingTime >= existingTime ? valB : valA;
+              }
+            } else if (typeof valA === 'object' && valA !== null && typeof valB === 'object' && valB !== null) {
+              // Dictionnaires d'états d'articles : incoming récent est autoritaire pour propager les suppressions
+              const authoritativeDictKeys = ['finishedGoodsDelivery', 'finishedGoodsStock', 'installationSteps', 'unitStatusesDual'];
+              if (authoritativeDictKeys.includes(key)) {
+                mergedItem[key] = incomingTime >= existingTime ? valB : valA;
+              } else {
+                if (incomingTime >= existingTime) {
+                  mergedItem[key] = { ...valA, ...valB };
+                } else {
+                  mergedItem[key] = { ...valB, ...valA };
+                }
               }
             } else {
               mergedItem[key] = incomingTime >= existingTime ? valB : valA;

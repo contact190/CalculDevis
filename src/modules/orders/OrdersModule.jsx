@@ -256,8 +256,8 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
   const orders = useMemo(() => {
     const all = data?.orders || [];
     
-    // 1. Filtrer par Actives vs Historique
-    let filtered = all.filter(o => {
+    // 1. Filtrer par Actives vs Historique (en excluant les commandes supprimées)
+    let filtered = all.filter(o => !o || !o._deleted).filter(o => {
       const { remaining } = getOrderStats(o);
       const isHistory = remaining <= 0 && (o.batches?.length > 0 || o.status === 'Terminé / Historique' || o.status === 'Terminé' || o.status === 'Livré');
       return listView === 'history' ? isHistory : !isHistory;
@@ -398,11 +398,8 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
         .map(o => o.id)
         .filter(id => id && id.startsWith('CMD-'))
         .map(id => parseInt(id.split('-')[1], 10))
-        .filter(num => !isNaN(num));
-      let nextOrderCounter = 1;
-      while (updatedIds.includes(nextOrderCounter)) {
-        nextOrderCounter++;
-      }
+        .filter(num => !isNaN(num) && num < 70000);
+      const nextOrderCounter = (updatedIds.length > 0 ? Math.max(...updatedIds) : 0) + 1;
       return {
         ...prev,
         orders: remainingOrders,

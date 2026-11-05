@@ -22,10 +22,14 @@ let _deviceId = null;
 
 export function getDeviceId() {
   if (_deviceId) return _deviceId;
-  _deviceId = sessionStorage.getItem(DEVICE_ID_KEY);
-  if (!_deviceId) {
-    _deviceId = `dev-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    sessionStorage.setItem(DEVICE_ID_KEY, _deviceId);
+  // Ensure unique ID per window context even if sessionStorage was cloned by window.open
+  if (typeof window !== 'undefined') {
+    if (!window.__calculDevis_windowId) {
+      window.__calculDevis_windowId = `dev-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    }
+    _deviceId = window.__calculDevis_windowId;
+  } else {
+    _deviceId = `dev-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   }
   return _deviceId;
 }
@@ -336,15 +340,37 @@ export function applyOp(db, op) {
         } else if (valB === undefined) {
           // Keep valA
         } else if (Array.isArray(valA) && Array.isArray(valB)) {
-          // On ne fusionne pas les tableaux imbriqués (ex: elements de composition) élément par élément car
-          // l'id n'y est pas une clé primaire unique. On prend le tableau de l'objet le plus récent.
-          mergedItem[key] = incomingTime >= existingTime ? valB : valA;
-        } else if (typeof valA === 'object' && valA !== null && typeof valB === 'object' && valB !== null) {
-          // Respecter l'horodatage : si incoming est plus récent, valB écrase valA. Sinon valA écrase valB.
-          if (incomingTime >= existingTime) {
-            mergedItem[key] = { ...valA, ...valB };
+          if (collection === 'orders' && key === 'batches') {
+            // Fusion par ID des lots avec support tombstones (_deleted: true)
+            const batchMap = new Map();
+            valA.forEach(b => { if (b && b.id) batchMap.set(b.id, b); });
+            valB.forEach(b => {
+              if (!b || !b.id) return;
+              const existingB = batchMap.get(b.id);
+              if (!existingB) {
+                batchMap.set(b.id, b);
+              } else {
+                const bTimeA = existingB._lastModified ? new Date(existingB._lastModified).getTime() : 0;
+                const bTimeB = b._lastModified ? new Date(b._lastModified).getTime() : incomingTime;
+                batchMap.set(b.id, bTimeB >= bTimeA ? b : existingB);
+              }
+            });
+            mergedItem[key] = Array.from(batchMap.values());
           } else {
-            mergedItem[key] = { ...valB, ...valA };
+            // On ne fusionne pas les tableaux imbriqués généraux élément par élément
+            mergedItem[key] = incomingTime >= existingTime ? valB : valA;
+          }
+        } else if (typeof valA === 'object' && valA !== null && typeof valB === 'object' && valB !== null) {
+          // Pour les dictionnaires d'états (suivi pose, stock fini, etc.), incoming récent est autoritaire pour propager les suppressions de clés
+          const authoritativeDictKeys = ['finishedGoodsDelivery', 'finishedGoodsStock', 'installationSteps', 'unitStatusesDual'];
+          if (authoritativeDictKeys.includes(key)) {
+            mergedItem[key] = incomingTime >= existingTime ? valB : valA;
+          } else {
+            if (incomingTime >= existingTime) {
+              mergedItem[key] = { ...valA, ...valB };
+            } else {
+              mergedItem[key] = { ...valB, ...valA };
+            }
           }
         } else {
           mergedItem[key] = incomingTime >= existingTime ? valB : valA;

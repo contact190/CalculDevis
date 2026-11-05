@@ -2896,11 +2896,9 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
               .map(o => o.id)
               .filter(id => id && id.startsWith('CMD-'))
               .map(id => parseInt(id.split('-')[1], 10))
-              .filter(num => !isNaN(num));
-            let candidate = 1;
-            while (ids.includes(candidate)) {
-              candidate++;
-            }
+              .filter(num => !isNaN(num) && num < 70000);
+            const maxId = ids.length > 0 ? Math.max(...ids) : 0;
+            const candidate = maxId + 1;
             const orderId = `CMD-${String(candidate).padStart(2, '0')}`;
             orders = [...orders, { 
               ...finalQuote, 
@@ -2932,11 +2930,8 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
           .map(o => o.id)
           .filter(id => id && id.startsWith('CMD-'))
           .map(id => parseInt(id.split('-')[1], 10))
-          .filter(num => !isNaN(num));
-        let nextOrderCounter = 1;
-        while (updatedIds.includes(nextOrderCounter)) {
-          nextOrderCounter++;
-        }
+          .filter(num => !isNaN(num) && num < 70000);
+        const nextOrderCounter = (updatedIds.length > 0 ? Math.max(...updatedIds) : 0) + 1;
 
         return { ...prev, quotes, orders, clients, orderCounter: nextOrderCounter };
       });

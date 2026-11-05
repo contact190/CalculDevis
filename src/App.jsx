@@ -283,18 +283,34 @@ function App() {
     if (!repaired.contracts) repaired.contracts = [];
     if (!repaired.financialTrackers) repaired.financialTrackers = [];
     if (!repaired.invoiceRecords) repaired.invoiceRecords = [];
+
+    // Migration automatique CMD-65 -> CMD-68 pour Mirage Landmark
+    let hadMirageCmd65 = false;
+    repaired.orders = repaired.orders.map(o => {
+      if (o && o.id === 'CMD-65' && (o.clientId === 'CLI-4768' || /mirage/i.test(o.clientName || ''))) {
+        hadMirageCmd65 = true;
+        return { ...o, id: 'CMD-68', number: 'CMD-68', _lastModified: new Date().toISOString() };
+      }
+      return o;
+    });
+    if (hadMirageCmd65) {
+      const seen = new Set();
+      repaired.orders = repaired.orders.filter(o => {
+        if (!o || !o.id) return false;
+        if (seen.has(o.id)) return false;
+        seen.add(o.id);
+        return true;
+      });
+    }
     
     if (repaired.orderCounter === undefined || repaired.orderCounter === null) {
       const ids = (repaired.orders || [])
         .map(o => o.id)
         .filter(id => id && id.startsWith('CMD-'))
         .map(id => parseInt(id.split('-')[1], 10))
-        .filter(num => !isNaN(num));
-      let candidate = 1;
-      while (ids.includes(candidate)) {
-        candidate++;
-      }
-      repaired.orderCounter = candidate;
+        .filter(num => !isNaN(num) && num < 70000);
+      const maxId = ids.length > 0 ? Math.max(...ids) : 0;
+      repaired.orderCounter = maxId + 1;
     }
 
     return repaired;
