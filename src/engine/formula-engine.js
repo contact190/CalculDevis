@@ -842,13 +842,13 @@ export class FormulaEngine {
   }
   processShutterComponent(item, vars, shutterPack, key = '', config = {}, errors = []) {
     const isDouble = config.shutterConfig?.isDoubleShutter || false;
-    const usage = item.usageVolet || (key === 'moteurId' ? 'BOTH' : 'NORMAL');
+    const usage = item.usageVolet || 'BOTH';
 
     // 0. Usage Filtering
     if (isDouble) {
-      if (usage === 'NORMAL') return; // Normal item not allowed in double mode
+      if (usage === 'SINGLE_ONLY' || usage === 'SIMPLE') return;
     } else {
-      if (usage === 'DOUBLE') return; // Double item not allowed in normal mode
+      if (usage === 'DOUBLE') return;
     }
 
     const { L, H, HC, HT } = vars;
@@ -889,7 +889,11 @@ export class FormulaEngine {
     };
 
     // For compatibility and alerts, if it is a double shutter, components (except caisson) should be evaluated against individual shutter dimensions (divided by 2)
-    const compScope = { ...evalScope };
+    const compScope = { 
+      ...evalScope,
+      L_total: evalScope.L,
+      isDouble
+    };
     if (isDouble && key !== 'caissonId') {
       compScope.L = evalScope.L / 2;
       compScope.area = evalScope.area / 2;
@@ -1034,7 +1038,7 @@ export class FormulaEngine {
       const parentQty = Math.ceil(pieceCount);
       // Enrich scope with parent item's calculated quantities
       const addonScope = {
-        ...evalScope,
+        ...compScope,
         nb_lames: parentQty,
         qty_lame: parentQty,
         nb_volets: isDouble ? 2 : 1,

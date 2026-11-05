@@ -1730,9 +1730,14 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
 
                   let filteredItems = (items || []).filter(item => {
                     const isDouble = config.shutterConfig?.isDoubleShutter || false;
-                    const usage = item.usageVolet || (key === 'moteurId' ? 'BOTH' : 'NORMAL');
-                    if (isDouble) return usage === 'DOUBLE' || usage === 'BOTH';
-                    return usage === 'NORMAL' || usage === 'BOTH';
+                    const usage = item.usageVolet || 'BOTH';
+                    if (isDouble) {
+                      if (usage === 'SINGLE_ONLY' || usage === 'SIMPLE') return false;
+                      return true;
+                    } else {
+                      if (usage === 'DOUBLE') return false;
+                      return true;
+                    }
                   });
                   if (key === 'glissiereId' && currentComp?.rangeId) {
                       // Show items for this range OR universal items (no rangeId)
@@ -1763,6 +1768,8 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
 
                   const scope = { 
                     L: L_comp, 
+                    L_total: config.L || 0,
+                    isDouble: !!isDouble,
                     H, 
                     area, 
                     caissonSize, 
@@ -3403,11 +3410,26 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
           const totalWeight = apronItem?.totalWeight || (area * weightPerM2);
           const caissonSize = parseFloat(caisson?.size) || 0;
           const axeDiameter = parseFloat(axe?.diameter) || 0;
-          const liftingWeight = totalWeight;
-          const scope = { L: cfg.L || 0, H: cfg.H || 0, area, totalWeight, liftingWeight, axeDiameter, lameWidth, caissonSize };
+          const isDouble = !!cfg.shutterConfig?.isDoubleShutter;
+          const compL = isDouble ? (cfg.L || 0) / 2 : (cfg.L || 0);
+          const compArea = (compL * (cfg.H || 0)) / 1000000;
+          const compWeight = isDouble ? totalWeight / 2 : totalWeight;
+          const liftingWeight = compWeight;
+          const scope = { 
+            L: compL, 
+            L_total: cfg.L || 0, 
+            isDouble, 
+            H: cfg.H || 0, 
+            area: compArea, 
+            totalWeight: compWeight, 
+            liftingWeight, 
+            axeDiameter, 
+            lameWidth, 
+            caissonSize,
+            nb_moteurs: isDouble ? (cfg.shutterConfig?.motorCount || 2) : 1
+          };
 
-          const isDoubleStr = cfg.shutterConfig?.isDoubleShutter ? ' (Double)' : '';
-          const isDouble = cfg.shutterConfig?.isDoubleShutter;
+          const isDoubleStr = isDouble ? ' (Double)' : '';
           const doubleSuffix = isDouble ? ' (x2)' : '';
           descLines.push(`Volet Roulant${isDoubleStr} :`);
           if (caisson) descLines.push(`  Caisson : ${caisson.name}${doubleSuffix}`);

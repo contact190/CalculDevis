@@ -3501,14 +3501,15 @@ const AdminDashboard = ({ data, setData }) => {
                               </button>
                             </td>
                             <td>
-                              <select className="input" value={item.usageVolet || 'NORMAL'} onChange={e => updateShutterItem(key, item.id, i, 'usageVolet', e.target.value)} style={{ width: '100px', fontSize: '0.8rem' }}>
-                                <option value="NORMAL">Normal</option>
-                                <option value="DOUBLE">Double</option>
-                                <option value="BOTH">Les deux</option>
+                              <select className="input" value={item.usageVolet || 'NORMAL'} onChange={e => updateShutterItem(key, item.id, i, 'usageVolet', e.target.value)} style={{ width: '130px', fontSize: '0.8rem' }}>
+                                <option value="NORMAL">Standard (Simple & Double)</option>
+                                <option value="BOTH">Standard (Les deux)</option>
+                                <option value="DOUBLE">Double uniquement</option>
+                                <option value="SINGLE_ONLY">Simple uniquement</option>
                               </select>
                             </td>
                             <td>
-                               {item.usageVolet === 'BOTH' && (
+                               {(item.usageVolet === 'BOTH' || item.usageVolet === 'NORMAL' || item.usageVolet === 'DOUBLE' || !item.usageVolet) && (
                                  <FormulaInput 
                                    value={item.doubleQtyFormula || ''} 
                                    onChange={val => updateShutterItem(key, item.id, i, 'doubleQtyFormula', val)} 
@@ -3519,7 +3520,7 @@ const AdminDashboard = ({ data, setData }) => {
                              </td>
                              {!['kits', 'moteurs'].includes(key) && (
                                <td>
-                                 {item.usageVolet === 'BOTH' && (
+                                 {(item.usageVolet === 'BOTH' || item.usageVolet === 'NORMAL' || item.usageVolet === 'DOUBLE' || !item.usageVolet) && (
                                    <FormulaInput 
                                      value={item.doubleCuttingFormula || ''} 
                                      onChange={val => updateShutterItem(key, item.id, i, 'doubleCuttingFormula', val)} 
