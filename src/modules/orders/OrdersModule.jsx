@@ -161,6 +161,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
   const engine = useMemo(() => new FormulaEngine(data || {}), [data]);
   
   const getOrderStats = (order) => {
+    if (!order) return { totalQty: 0, totalRefs: 0, launched: 0, remaining: 0, progressPercent: 0 };
     const items = order.items || [];
     const totalQty = items.reduce((s, i) => s + (i.qty || 1), 0);
     const totalRefs = items.length;
@@ -257,7 +258,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
     const all = data?.orders || [];
     
     // 1. Filtrer par Actives vs Historique (en excluant les commandes supprimées)
-    let filtered = all.filter(o => !o || !o._deleted).filter(o => {
+    let filtered = all.filter(o => o && !o._deleted).filter(o => {
       const { remaining } = getOrderStats(o);
       const isHistory = remaining <= 0 && (o.batches?.length > 0 || o.status === 'Terminé / Historique' || o.status === 'Terminé' || o.status === 'Livré');
       return listView === 'history' ? isHistory : !isHistory;
