@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo, Suspense } from 'react';
-import { Home, Package, Settings, ChevronRight, LayoutDashboard, Users, RefreshCw, ShoppingBag, Truck, CheckCircle, Building, Wifi, WifiOff, TrendingUp, Store, FileText, CheckSquare, PackageCheck } from 'lucide-react';
+import { Home, Package, Settings, ChevronRight, LayoutDashboard, Users, RefreshCw, ShoppingBag, Truck, CheckCircle, Building, Wifi, WifiOff, TrendingUp, Store, FileText, CheckSquare, PackageCheck, HardHat } from 'lucide-react';
 
 // Helper to handle ChunkLoadError (e.g. after a new deployment, old chunks are missing on server)
 const lazyWithRetry = (importFn) => {
@@ -36,6 +36,8 @@ const FinanceModule = lazyWithRetry(() => import('./modules/finance/FinanceModul
 const TrackingModule = lazyWithRetry(() => import('./modules/tracking/TrackingModule'));
 const SubLotMobilePortal = lazyWithRetry(() => import('./modules/tracking/SubLotMobilePortal'));
 const FinishedGoodsModule = lazyWithRetry(() => import('./modules/finishedgoods/FinishedGoodsModule'));
+const InstallationModule = lazyWithRetry(() => import('./modules/installation/InstallationModule'));
+const InstallationMobilePortal = lazyWithRetry(() => import('./modules/installation/InstallationMobilePortal'));
 
 import { DEFAULT_DATA } from './data/default-data';
 import { syncDatabase, cloudSync } from './utils/supabaseClient';
@@ -164,6 +166,7 @@ function App() {
       { id: 'production', label: 'Atelier / Production', icon: Package },
       { id: 'tracking', label: 'Gestion & Suivi', icon: CheckSquare },
       { id: 'finished_goods', label: 'Produit Fini', icon: PackageCheck },
+      { id: 'installation', label: 'Suivi Pose', icon: HardHat },
       { id: 'shipping', label: 'Expédition & Colisage', icon: Truck },
       { id: 'clients', label: 'Clients', icon: Users },
       { id: 'finance', label: 'Finance', icon: TrendingUp },
@@ -250,11 +253,11 @@ function App() {
           if (q.products && !q.items) updated.items = q.products;
           return updated;
         })
-        // Prune empty quotes (0 items, no client) created by sync loops
+        // Prune orphan quotes lacking valid clientId to prevent zombie revival
         .filter(q => {
           if (!q) return false;
-          const isEmpty = (!q.items || q.items.length === 0) && !q.clientId;
-          return !isEmpty;
+          if (!q.clientId || (typeof q.clientId === 'string' && q.clientId.trim() === '')) return false;
+          return true;
         });
     }
     if (repaired.glassProfileCompatibility) {
@@ -1143,6 +1146,22 @@ function App() {
   const isTechnicianMode = urlParams.get('mode') === 'technician';
   const technicianOrderId = urlParams.get('orderId');
   const isTrackingMode = urlParams.get('mode') === 'tracking' || urlParams.get('mode') === 'sublot';
+  const isInstallationMode = urlParams.get('mode') === 'installation' || urlParams.get('mode') === 'pose';
+  const installationOrderId = urlParams.get('orderId');
+
+  if (isInstallationMode) {
+    return (
+      <Suspense fallback={<ModuleLoader />}>
+        <InstallationMobilePortal 
+          data={database} 
+          setData={setDatabase} 
+          orderId={installationOrderId}
+          isOnline={isOnline}
+          isSyncing={supabaseSyncStatus === 'syncing' || cloudSyncStatus === 'syncing'}
+        />
+      </Suspense>
+    );
+  }
 
   if (isTrackingMode) {
     return (
@@ -1466,6 +1485,13 @@ function App() {
           )}
           {activeTab === 'finished_goods' && (
             <FinishedGoodsModule 
+              data={filteredDatabase}
+              setData={setDatabase}
+              quoteSettings={quoteSettings}
+            />
+          )}
+          {activeTab === 'installation' && (
+            <InstallationModule 
               data={filteredDatabase}
               setData={setDatabase}
               quoteSettings={quoteSettings}

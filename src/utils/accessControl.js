@@ -19,6 +19,7 @@ export const AVAILABLE_TABS = [
   { id: 'production', label: 'Atelier / Production', description: 'Débits, optimisation de coupe et verres' },
   { id: 'tracking', label: 'Gestion & Suivi', description: 'Suivi de fabrication par sous-lots et QR codes' },
   { id: 'finished_goods', label: 'Produit Fini', description: 'Contrôle qualité et stockage produits finis' },
+  { id: 'installation', label: 'Suivi Pose', description: 'Suivi de la pose sur chantier par étage et étapes en temps réel' },
   { id: 'shipping', label: 'Expédition & Colisage', description: 'Bons de livraison, chargement et installation' },
   { id: 'clients', label: 'Clients', description: 'Répertoire des clients et fiches contacts' },
   { id: 'finance', label: 'Finance', description: 'Facturation, encaissements et trésorerie' },
