@@ -665,6 +665,9 @@ export const cloudSync = {
             unitPVs: opData.unitPVs,
             unitRemarks: opData.unitRemarks,
             unitStorageZones: opData.unitStorageZones,
+            finishedGoodsStock: opData.finishedGoodsStock,
+            finishedGoodsDelivery: opData.finishedGoodsDelivery,
+            installationSteps: opData.installationSteps,
             _lastModified: opData._lastModified,
             _modifiedBy: opData._modifiedBy
           };
@@ -680,7 +683,15 @@ export const cloudSync = {
         };
         
         // Check size of payload
-        const sizeEstimate = JSON.stringify(row.data || {}).length;
+        let sizeEstimate = JSON.stringify(row.data || {}).length;
+        if (sizeEstimate > 500000 && row.collection === 'orders' && row.data?.items) {
+          const { items, ...restData } = row.data;
+          const lighterSize = JSON.stringify(restData).length;
+          if (lighterSize <= 500000) {
+            row.data = restData;
+            sizeEstimate = lighterSize;
+          }
+        }
         if (sizeEstimate > 500000) { // 500 KB limit for realtime message
           console.warn(`Operation for ${op.collection} is too large (${(sizeEstimate/1024).toFixed(1)} KB). Converting to force_refresh.`);
           needsForceRefresh = true;
