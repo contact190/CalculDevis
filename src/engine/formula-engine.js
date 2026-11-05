@@ -906,8 +906,9 @@ export class FormulaEngine {
     }
 
     // 1. Compatibility Check (Standalone Logic V3.3)
-    if (item.compatibilityFormula) {
-      const isCompatible = this.evaluate(item.compatibilityFormula, compScope, `Compatibilité ${item.name}`);
+    const compatFormulaToUse = (isDouble && item.doubleCompatibilityFormula) ? item.doubleCompatibilityFormula : item.compatibilityFormula;
+    if (compatFormulaToUse) {
+      const isCompatible = this.evaluate(compatFormulaToUse, compScope, `Compatibilité ${item.name}`);
       if (!isCompatible) return;
     }
 

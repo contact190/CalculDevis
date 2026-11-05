@@ -3338,6 +3338,7 @@ const AdminDashboard = ({ data, setData }) => {
                           <th>Usage Volet</th>
                           <th>Formule Qté (Double)</th>
                           {!['kits', 'moteurs'].includes(key) && <th>Formule Dim (Double)</th>}
+                          <th>Compatibilité (Double)</th>
                           {key === 'glissieres' && <th>Opt1 Double (Nom/Vals/Prix)</th>}
                           <th>Actions</th>
                         </tr>
@@ -3530,6 +3531,29 @@ const AdminDashboard = ({ data, setData }) => {
                                  )}
                                </td>
                              )}
+                             <td>
+                               {(item.usageVolet === 'BOTH' || item.usageVolet === 'NORMAL' || item.usageVolet === 'DOUBLE' || !item.usageVolet) && (
+                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: '150px' }}>
+                                   <FormulaInput 
+                                     value={item.doubleCompatibilityFormula || ''} 
+                                     onChange={val => updateShutterItem(key, item.id, i, 'doubleCompatibilityFormula', val)} 
+                                     variables={['L', 'H', 'HC', 'lameWidth', 'caissonSize', 'caisson', 'area', 'totalWeight', 'liftingWeight', 'axeDiameter', 'nb_moteurs', 'L_total']}
+                                     placeholder={item.compatibilityFormula ? item.compatibilityFormula.replace(/\bL\b/g, '(L/2)') : "Auto: L/2"}
+                                   />
+                                   {item.compatibilityFormula && !item.doubleCompatibilityFormula && (
+                                     <button 
+                                       type="button"
+                                       className="base-btn btn-secondary"
+                                       onClick={() => updateShutterItem(key, item.id, i, 'doubleCompatibilityFormula', item.compatibilityFormula.replace(/\bL\b/g, '(L/2)'))}
+                                       style={{ fontSize: '0.65rem', padding: '1px 5px', alignSelf: 'flex-start', color: '#2563eb', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '4px' }}
+                                       title="Copier la formule standard en remplaçant L par (L/2)"
+                                     >
+                                       🪄 Remplir L/2
+                                     </button>
+                                   )}
+                                 </div>
+                               )}
+                             </td>
                              {key === 'glissieres' && (
                                <td>
                                  {item.usageVolet === 'BOTH' && (

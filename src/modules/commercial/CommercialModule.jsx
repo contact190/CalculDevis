@@ -1786,7 +1786,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                   // Apply compatibility formula for caissons (based on L and lameWidth of selected lame)
                   if (key === 'caissonId') {
                     filteredItems = filteredItems.filter(caisson => {
-                      const formula = caisson.compatibilityFormula;
+                      const formula = (isDouble && caisson.doubleCompatibilityFormula) ? caisson.doubleCompatibilityFormula : caisson.compatibilityFormula;
                       if (!formula || formula.trim() === '') return true;
                       try {
                         return engine.evaluate(formula, scope);
@@ -1800,7 +1800,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                   // Apply compatibility formula for lames
                   if (key === 'lameId') {
                     filteredItems = filteredItems.filter(lame => {
-                      const formula = lame.compatibilityFormula;
+                      const formula = (isDouble && lame.doubleCompatibilityFormula) ? lame.doubleCompatibilityFormula : lame.compatibilityFormula;
                       if (!formula || formula.trim() === '') return true;
                       try {
                         return engine.evaluate(formula, scope);
@@ -1814,7 +1814,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                   // Apply compatibility formula for lames finales
                   if (key === 'lameFinaleId') {
                     filteredItems = filteredItems.filter(lf => {
-                      const formula = lf.compatibilityFormula;
+                      const formula = (isDouble && lf.doubleCompatibilityFormula) ? lf.doubleCompatibilityFormula : lf.compatibilityFormula;
                       if (!formula || formula.trim() === '') return true;
                       try {
                         return engine.evaluate(formula, scope);
@@ -1828,7 +1828,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                   // Apply compatibility formula for motors
                   if (key === 'moteurId') {
                     filteredItems = filteredItems.filter(moteur => {
-                      const formula = moteur.compatibilityFormula;
+                      const formula = (isDouble && moteur.doubleCompatibilityFormula) ? moteur.doubleCompatibilityFormula : moteur.compatibilityFormula;
                       if (!formula || formula.trim() === '') {
                         console.log(`[Motor Debug] ${moteur.name} | No formula -> Compatible (usage=${moteur.usageVolet || 'BOTH'})`);
                         return true;
@@ -1848,7 +1848,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                   // Apply compatibility formula for axes
                   if (key === 'axeId') {
                     filteredItems = filteredItems.filter(axe => {
-                      const formula = axe.compatibilityFormula;
+                      const formula = (isDouble && axe.doubleCompatibilityFormula) ? axe.doubleCompatibilityFormula : axe.compatibilityFormula;
                       if (!formula || formula.trim() === '') return true;
                       try {
                         return engine.evaluate(formula, scope);
@@ -1862,7 +1862,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                   // Apply compatibility formula for kits
                   if (key === 'kitId' || key === 'kits') {
                     filteredItems = filteredItems.filter(kit => {
-                      const formula = kit.compatibilityFormula;
+                      const formula = (isDouble && kit.doubleCompatibilityFormula) ? kit.doubleCompatibilityFormula : kit.compatibilityFormula;
                       if (!formula || formula.trim() === '') return true;
                       try {
                         return engine.evaluate(formula, scope);
@@ -1876,7 +1876,7 @@ const ProductConfigurator = ({ config, setConfig, database, onSave, onCancel, la
                   // Apply compatibility formula for glissieres
                   if (key === 'glissiereId') {
                     filteredItems = filteredItems.filter(glissiere => {
-                      const formula = glissiere.compatibilityFormula;
+                      const formula = (isDouble && glissiere.doubleCompatibilityFormula) ? glissiere.doubleCompatibilityFormula : glissiere.compatibilityFormula;
                       if (!formula || formula.trim() === '') return true;
                       try {
                         return engine.evaluate(formula, scope);
