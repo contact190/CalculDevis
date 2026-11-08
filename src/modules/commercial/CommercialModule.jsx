@@ -2872,9 +2872,10 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
       const isNewQuote = !(database?.quotes || []).some(q => q.id === finalQuote.id);
 
       setDatabase(prev => {
-        // Double vérification dans le setter
+        // Double vérification dans le setter : bloquer uniquement si le devis est verrouillé ET déjà transformé en commande
         const currentDbQuote = (prev.quotes || []).find(q => q.id === finalQuote.id);
-        if (currentDbQuote && isQuoteLocked(currentDbQuote, prev.orders)) {
+        const existingOrder = (prev.orders || []).find(o => o.quoteId === finalQuote.id);
+        if (currentDbQuote && isQuoteLocked(currentDbQuote, prev.orders) && existingOrder) {
           return prev;
         }
 
@@ -2888,8 +2889,6 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
         let orders = prev.orders || [];
         let clients = prev.clients || [];
         if (finalQuote.status === 'Confirmé') {
-          const existingOrder = orders.find(o => o.quoteId === finalQuote.id);
-          
           // Si aucune commande n'existe encore pour ce devis, on crée la commande
           if (!existingOrder) {
             const ids = orders
@@ -2898,11 +2897,16 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
               .map(id => parseInt(id.split('-')[1], 10))
               .filter(num => !isNaN(num) && num < 70000);
             const maxId = ids.length > 0 ? Math.max(...ids) : 0;
-            const candidate = maxId + 1;
-            const orderId = `CMD-${String(candidate).padStart(2, '0')}`;
+            let candidate = maxId + 1;
+            let orderId = `CMD-${String(candidate).padStart(2, '0')}`;
+            while (orders.some(o => o.id === orderId)) {
+              candidate++;
+              orderId = `CMD-${String(candidate).padStart(2, '0')}`;
+            }
             orders = [...orders, { 
               ...finalQuote, 
               id: orderId, 
+              number: orderId,
               quoteId: finalQuote.id, 
               sitePlanId: finalQuote.sitePlanId || null,
               batches: [], 

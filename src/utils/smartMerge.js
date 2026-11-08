@@ -14,8 +14,9 @@ export const smartMerge = (dbA, dbB) => {
   const merged = { ...dbA };
 
   // Helper to merge arrays of objects with 'id', using _lastModified for conflict resolution
-  const mergeArrays = (arrA, arrB) => {
+  const mergeArrays = (arrA, arrB, collectionName = '') => {
     const map = new Map();
+    const isOrdersArray = collectionName === 'orders';
 
     // Start with all items from A
     if (Array.isArray(arrA)) {
@@ -41,6 +42,29 @@ export const smartMerge = (dbA, dbB) => {
           // New item from B — add it
           map.set(item.id, item);
         } else {
+          // ─── DÉTECTION DE COLLISION D'ID MULTI-APPAREILS POUR LES COMMANDES ───
+          // Si deux commandes ont le même ID mais des clients différents ou devis différents,
+          // il s'agit d'une collision et NON d'une modification de la même commande !
+          if (isOrdersArray && (
+            (existing.clientId && item.clientId && existing.clientId !== item.clientId) ||
+            (existing.quoteId && item.quoteId && existing.quoteId !== item.quoteId)
+          )) {
+            console.warn(`🚨 COLLISION DÉTECTÉE sur la commande ${item.id} entre ${existing.clientId || 'Client A'} et ${item.clientId || 'Client B'} !`);
+            let candidateNum = 15107;
+            while (map.has(`CMD-${candidateNum}`)) {
+              candidateNum++;
+            }
+            const remappedId = `CMD-${candidateNum}`;
+            const remappedItem = {
+              ...item,
+              id: remappedId,
+              number: remappedId,
+              _collisionRemappedFrom: item.id
+            };
+            map.set(remappedId, remappedItem);
+            return;
+          }
+
           // Conflict: same ID exists in both A and B
           const existingTime = existing._lastModified ? new Date(existing._lastModified).getTime() : 0;
           const incomingTime = item._lastModified ? new Date(item._lastModified).getTime() : 0;
@@ -111,7 +135,7 @@ export const smartMerge = (dbA, dbB) => {
     if (key.startsWith('_')) return; // Skip internal metadata keys
     
     if (Array.isArray(dbB[key]) && Array.isArray(dbA[key])) {
-      merged[key] = mergeArrays(dbA[key], dbB[key]);
+      merged[key] = mergeArrays(dbA[key], dbB[key], key);
     } else if (Array.isArray(dbB[key]) && !dbA[key]) {
       // B has an array that A doesn't have at all
       merged[key] = dbB[key];
@@ -121,7 +145,7 @@ export const smartMerge = (dbA, dbB) => {
       merged[key] = { ...dbA[key] };
       Object.keys(dbB[key]).forEach(subKey => {
          if (Array.isArray(dbB[key][subKey]) && Array.isArray(dbA[key][subKey])) {
-            merged[key][subKey] = mergeArrays(dbA[key][subKey], dbB[key][subKey]);
+            merged[key][subKey] = mergeArrays(dbA[key][subKey], dbB[key][subKey], subKey);
          } else if (Array.isArray(dbB[key][subKey]) && !dbA[key][subKey]) {
             merged[key][subKey] = dbB[key][subKey];
          } else {

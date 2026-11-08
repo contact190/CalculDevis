@@ -52,12 +52,17 @@ const ClientsModule = ({ data, setData, onOpenQuote, quoteSettings }) => {
         .map(id => parseInt(id.split('-')[1], 10))
         .filter(num => !isNaN(num) && num < 70000);
       const maxId = ids.length > 0 ? Math.max(...ids) : 0;
-      const candidate = maxId + 1;
-      const orderId = `CMD-${String(candidate).padStart(2, '0')}`;
+      let candidate = maxId + 1;
+      let orderId = `CMD-${String(candidate).padStart(2, '0')}`;
+      while (currentOrders.some(o => o.id === orderId)) {
+        candidate++;
+        orderId = `CMD-${String(candidate).padStart(2, '0')}`;
+      }
 
       const newOrder = {
         ...quote,
         id: orderId,
+        number: orderId,
         quoteId: quote.id,
         quoteNumber: quote.number,
         createdAt: new Date().toISOString(),
@@ -313,14 +318,18 @@ const ClientsModule = ({ data, setData, onOpenQuote, quoteSettings }) => {
                             value={q.status || 'Brouillon'} 
                             onChange={(e) => {
                               const newStatus = e.target.value;
-                              if (newStatus === 'Figé' || newStatus === 'Confirmé') {
+                              if (newStatus === 'Confirmé') {
+                                handleConvertToOrder(q);
+                                return;
+                              }
+                              if (newStatus === 'Figé') {
                                 if (!window.confirm(`Voulez-vous passer ce devis en statut "${newStatus}" ?\n\nAttention : Cette action est IRRÉVERSIBLE.`)) return;
                               }
                               const updated = { 
                                 ...q, 
                                 status: newStatus, 
-                                lockedAt: (newStatus === 'Figé' || newStatus === 'Confirmé') ? (q.lockedAt || new Date().toISOString()) : q.lockedAt,
-                                validatedAt: (newStatus === 'Validé' || newStatus === 'Confirmé') ? (q.validatedAt || new Date().toISOString()) : q.validatedAt 
+                                lockedAt: newStatus === 'Figé' ? (q.lockedAt || new Date().toISOString()) : q.lockedAt,
+                                validatedAt: newStatus === 'Validé' ? (q.validatedAt || new Date().toISOString()) : q.validatedAt 
                               };
                               setData(prev => ({ ...prev, quotes: prev.quotes.map(quote => quote.id === q.id ? updated : quote) }));
                             }}
@@ -492,14 +501,18 @@ const ClientsModule = ({ data, setData, onOpenQuote, quoteSettings }) => {
                                           value={q.status || 'Brouillon'} 
                                           onChange={(e) => {
                                             const newStatus = e.target.value;
-                                            if (newStatus === 'Figé' || newStatus === 'Confirmé') {
+                                            if (newStatus === 'Confirmé') {
+                                              handleConvertToOrder(q);
+                                              return;
+                                            }
+                                            if (newStatus === 'Figé') {
                                               if (!window.confirm(`Voulez-vous passer ce devis en statut "${newStatus}" ?\n\nAttention : Cette action est IRRÉVERSIBLE.`)) return;
                                             }
                                             const updated = { 
                                               ...q, 
                                               status: newStatus, 
-                                              lockedAt: (newStatus === 'Figé' || newStatus === 'Confirmé') ? (q.lockedAt || new Date().toISOString()) : q.lockedAt,
-                                              validatedAt: (newStatus === 'Validé' || newStatus === 'Confirmé') ? (q.validatedAt || new Date().toISOString()) : q.validatedAt 
+                                              lockedAt: newStatus === 'Figé' ? (q.lockedAt || new Date().toISOString()) : q.lockedAt,
+                                              validatedAt: newStatus === 'Validé' ? (q.validatedAt || new Date().toISOString()) : q.validatedAt 
                                             };
                                             setData(prev => ({ ...prev, quotes: prev.quotes.map(quote => quote.id === q.id ? updated : quote) }));
                                           }}

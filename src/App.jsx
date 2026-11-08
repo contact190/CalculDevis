@@ -47,6 +47,7 @@ import { smartMerge } from './utils/smartMerge';
 import { applyOps, generateOps, getDeviceId } from './utils/patchEngine';
 import { setCurrentAuthorName } from './utils/patchEngine';
 import LoginModal from './components/auth/LoginModal';
+import OfflineGuard from './components/shared/OfflineGuard';
 import AccessControlModal from './modules/access/AccessControlModal';
 import { getActiveUser, setActiveUser, canAccessTab, recordAccessLog } from './utils/accessControl';
 import { ShieldCheck, LogOut, Lock } from 'lucide-react';
@@ -514,6 +515,36 @@ function App() {
       }
     };
     loadAndSync();
+  }, [repairDatabase]);
+
+  const handleReconnectSync = useCallback(async () => {
+    try {
+      console.log('🔄 Reconnexion détectée, rafraîchissement depuis Supabase...');
+      setSupabaseSyncStatus('syncing');
+      const { data: cloudData } = await syncDatabase.loadWithMeta();
+      if (cloudData) {
+        setDatabase(prev => {
+          const merged = smartMerge(prev, cloudData);
+          const repaired = repairDatabase(merged);
+          persistentStorage.save(LOCAL_KEY, repaired);
+          return repaired;
+        });
+      }
+      const lastModified = lastLocalModifiedRef.current || new Date().toISOString();
+      const missedOps = await cloudSync.fetchOpsSince(lastModified, getDeviceId());
+      if (missedOps && missedOps.length > 0) {
+        setDatabase(prev => {
+          const { db: updatedDb } = applyOps(prev, missedOps);
+          const repaired = repairDatabase(updatedDb);
+          persistentStorage.save(LOCAL_KEY, repaired);
+          return repaired;
+        });
+      }
+      setSupabaseSyncStatus('ok');
+      setLastSupabaseSync(new Date());
+    } catch (e) {
+      console.warn('Reconnect sync error:', e);
+    }
   }, [repairDatabase]);
 
   const updateQuoteSettings = useCallback((newSettings) => {
@@ -1169,6 +1200,7 @@ function App() {
   if (isInstallationMode) {
     return (
       <Suspense fallback={<ModuleLoader />}>
+        <OfflineGuard onReconnect={handleReconnectSync} />
         <InstallationMobilePortal 
           data={database} 
           setData={setDatabase} 
@@ -1183,6 +1215,7 @@ function App() {
   if (isTrackingMode) {
     return (
       <Suspense fallback={<ModuleLoader />}>
+        <OfflineGuard onReconnect={handleReconnectSync} />
         <SubLotMobilePortal 
           data={database} 
           setData={setDatabase} 
@@ -1196,6 +1229,7 @@ function App() {
   if (isInstallerMode && installerOrderId) {
     return (
       <Suspense fallback={<ModuleLoader />}>
+        <OfflineGuard onReconnect={handleReconnectSync} />
         <InstallerPortal 
           data={database} 
           setData={setDatabase} 
@@ -1210,6 +1244,7 @@ function App() {
   if (isTechnicianMode && technicianOrderId) {
     return (
       <Suspense fallback={<ModuleLoader />}>
+        <OfflineGuard onReconnect={handleReconnectSync} />
         <TechnicianPortal 
           data={database} 
           setData={setDatabase} 
@@ -1226,6 +1261,8 @@ function App() {
 
   return (
     <div className="app-container">
+      {/* Offline Blocker Guard */}
+      <OfflineGuard onReconnect={handleReconnectSync} />
       {/* Save Status Bar (top of screen) */}
       <div style={{
         position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
