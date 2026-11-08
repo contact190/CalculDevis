@@ -32,10 +32,19 @@ import {
 } from './installationUtils';
 
 // Helper pour extraire le nom du client avec toutes les variantes de champs possibles
+// Helper pour extraire le nom du client avec toutes les variantes de champs possibles
 const getClientName = (order, clients = []) => {
   if (!order) return 'Client Inconnu';
   const cl = clients.find(c => c.id === order.clientId);
   return cl?.nom || cl?.name || order.clientName || order.clientNom || 'Client Inconnu';
+};
+
+// Helper pour afficher le vrai numéro de commande (toujours CMD-..., jamais le numéro du devis DEV-...)
+const getOrderNumber = (o) => {
+  if (!o) return 'CMD';
+  if (o.id && /^CMD/i.test(String(o.id))) return String(o.id);
+  if (o.number && /^CMD/i.test(String(o.number))) return String(o.number);
+  return `CMD-${o.id || o.number || '00'}`;
 };
 
 export default function InstallationMobilePortal({ data, setData, orderId, isOnline, isSyncing }) {
@@ -66,14 +75,39 @@ export default function InstallationMobilePortal({ data, setData, orderId, isOnl
 
   // Liste des commandes actives / en cours
   const orders = useMemo(() => {
-    return (data?.orders || []).filter(o => {
+    const list = (data?.orders || []).filter(o => {
       if (!o || o._deleted) return false;
+
+      // Doit être une vraie commande (exclure les devis non convertis)
+      const idStr = String(o.id || '');
+      if (idStr.startsWith('QUOTE-') || idStr.startsWith('DEV-')) return false;
+
+      // Doit avoir des articles
+      if (!o.items || !Array.isArray(o.items) || o.items.length === 0) return false;
+
       const status = (o.status || '').toLowerCase().trim();
       // Exclure les commandes annulées
       if (status === 'annulée' || status === 'annulee' || status === 'annulé' || status === 'annule') return false;
-      // Exclure les commandes terminées / historiques / archivées
-      if (status === 'terminé' || status === 'termine' || status.includes('historique') || status === 'archivé' || status === 'archive') return false;
+      // Exclure les commandes terminées / historiques / archivées / livrées
+      if (
+        status === 'terminé' || 
+        status === 'termine' || 
+        status.includes('historique') || 
+        status === 'archivé' || 
+        status === 'archive' ||
+        status === 'livré' ||
+        status === 'livre'
+      ) return false;
+
       return true;
+    });
+
+    // Trier les commandes de la plus récente à la plus ancienne
+    return list.sort((a, b) => {
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      if (dateA && dateB && dateA !== dateB) return dateB - dateA;
+      return String(b.id || '').localeCompare(String(a.id || ''), undefined, { numeric: true });
     });
   }, [data?.orders]);
 
@@ -227,7 +261,7 @@ export default function InstallationMobilePortal({ data, setData, orderId, isOnl
             </div>
             <div>
               <div style={{ fontSize: '0.92rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.2 }}>
-                {order ? (order.number || order.id || 'Chantier') : 'Suivi Chantier'}
+                {order ? (getOrderNumber(order)) : 'Suivi Chantier'}
               </div>
               <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '180px' }}>
                 {clientName}
@@ -291,7 +325,7 @@ export default function InstallationMobilePortal({ data, setData, orderId, isOnl
             >
               {orders.map(o => (
                 <option key={o.id} value={o.id}>
-                  {o.number || o.id} — {getClientName(o, data?.clients)}
+                  {getOrderNumber(o)} — {getClientName(o, data?.clients)}
                 </option>
               ))}
             </select>

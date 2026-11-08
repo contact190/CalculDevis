@@ -42,6 +42,14 @@ const getClientName = (order, clients = []) => {
   return cl?.nom || cl?.name || order.clientName || order.clientNom || 'Client Inconnu';
 };
 
+// Helper pour afficher le vrai numéro de commande (toujours CMD-..., jamais le numéro du devis DEV-...)
+const getOrderNumber = (o) => {
+  if (!o) return 'CMD';
+  if (o.id && /^CMD/i.test(String(o.id))) return String(o.id);
+  if (o.number && /^CMD/i.test(String(o.number))) return String(o.number);
+  return `CMD-${o.id || o.number || '00'}`;
+};
+
 export default function InstallationModule({ data, setData, quoteSettings }) {
   // Sélection de la commande / chantier
   const [selectedOrderId, setSelectedOrderId] = useState('');
@@ -54,16 +62,41 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
   const [showQrModal, setShowQrModal] = useState(false);
   const [showMobilePreviewModal, setShowMobilePreviewModal] = useState(false);
 
-  // Liste des commandes avec chantiers : UNIQUEMENT LES COMMANDES EN COURS
+  // Liste des commandes avec chantiers : UNIQUEMENT LES COMMANDES EN COURS (pas de devis, pas de commandes terminées/annulées)
   const orders = useMemo(() => {
-    return (data?.orders || []).filter(o => {
+    const list = (data?.orders || []).filter(o => {
       if (!o || o._deleted) return false;
+
+      // Doit être une vraie commande (exclure les devis non convertis)
+      const idStr = String(o.id || '');
+      if (idStr.startsWith('QUOTE-') || idStr.startsWith('DEV-')) return false;
+
+      // Doit avoir des articles
+      if (!o.items || !Array.isArray(o.items) || o.items.length === 0) return false;
+
       const status = (o.status || '').toLowerCase().trim();
       // Exclure les commandes annulées
       if (status === 'annulée' || status === 'annulee' || status === 'annulé' || status === 'annule') return false;
-      // Exclure les commandes terminées / historiques / archivées
-      if (status === 'terminé' || status === 'termine' || status.includes('historique') || status === 'archivé' || status === 'archive') return false;
+      // Exclure les commandes terminées / historiques / archivées / livrées
+      if (
+        status === 'terminé' || 
+        status === 'termine' || 
+        status.includes('historique') || 
+        status === 'archivé' || 
+        status === 'archive' ||
+        status === 'livré' ||
+        status === 'livre'
+      ) return false;
+
       return true;
+    });
+
+    // Trier les commandes : les plus récentes d'abord
+    return list.sort((a, b) => {
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      if (dateA && dateB && dateA !== dateB) return dateB - dateA;
+      return String(b.id || '').localeCompare(String(a.id || ''), undefined, { numeric: true });
     });
   }, [data?.orders]);
 
@@ -231,7 +264,7 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
                 const clientNom = getClientName(o, data?.clients);
                 return (
                   <option key={o.id} value={o.id}>
-                    {o.number || o.id || 'CMD'} — {clientNom} {o.siteName ? `(${o.siteName})` : ''}
+                    {getOrderNumber(o)} — {clientNom} {o.siteName ? `(${o.siteName})` : ''}
                   </option>
                 );
               })}
@@ -852,7 +885,7 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
             <p style={{ margin: '0 0 1.5rem 0', fontSize: '0.85rem', color: '#64748b' }}>
               Pointez l'appareil photo d'un smartphone sur ce QR Code pour accéder immédiatement à l'interface de pose du chantier :
               <br />
-              <strong style={{ color: '#0284c7', fontSize: '0.95rem' }}>{currentOrder.number || currentOrder.id} — {currentClientName}</strong>
+              <strong style={{ color: '#0284c7', fontSize: '0.95rem' }}>{getOrderNumber(currentOrder)} — {currentClientName}</strong>
             </p>
 
             <div style={{ background: '#f8fafc', padding: '1.25rem', borderRadius: '12px', display: 'inline-block', boxShadow: 'inset 0 0 0 1px #e2e8f0', marginBottom: '1.5rem' }}>
