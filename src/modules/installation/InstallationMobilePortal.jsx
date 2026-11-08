@@ -31,6 +31,13 @@ import {
   toggleArticleDelivery 
 } from './installationUtils';
 
+// Helper pour extraire le nom du client avec toutes les variantes de champs possibles
+const getClientName = (order, clients = []) => {
+  if (!order) return 'Client Inconnu';
+  const cl = clients.find(c => c.id === order.clientId);
+  return cl?.nom || cl?.name || order.clientName || order.clientNom || 'Client Inconnu';
+};
+
 export default function InstallationMobilePortal({ data, setData, orderId, isOnline, isSyncing }) {
   const urlParams = new URLSearchParams(window.location.search);
   const effectiveOrderId = orderId || urlParams.get('orderId');
@@ -57,15 +64,27 @@ export default function InstallationMobilePortal({ data, setData, orderId, isOnl
     setIsEditingPoseur(false);
   };
 
-  // Liste des commandes actives
+  // Liste des commandes actives / en cours
   const orders = useMemo(() => {
-    return (data?.orders || []).filter(o => !o._deleted && o.status !== 'Annulée');
+    return (data?.orders || []).filter(o => {
+      if (!o || o._deleted) return false;
+      const status = (o.status || '').toLowerCase().trim();
+      // Exclure les commandes annulées
+      if (status === 'annulée' || status === 'annulee' || status === 'annulé' || status === 'annule') return false;
+      // Exclure les commandes terminées / historiques / archivées
+      if (status === 'terminé' || status === 'termine' || status.includes('historique') || status === 'archivé' || status === 'archive') return false;
+      return true;
+    });
   }, [data?.orders]);
 
-  // Si aucun orderId dans l'URL, sélectionner la première
+  // Si aucun orderId dans l'URL ou si orderId n'est plus dans orders, sélectionner la première
   useEffect(() => {
-    if (!selectedOrderId && orders.length > 0) {
-      setSelectedOrderId(orders[0].id);
+    if (orders.length > 0) {
+      if (!selectedOrderId || !orders.some(o => o.id === selectedOrderId)) {
+        setSelectedOrderId(orders[0].id);
+      }
+    } else {
+      setSelectedOrderId('');
     }
   }, [orders, selectedOrderId]);
 
@@ -79,6 +98,10 @@ export default function InstallationMobilePortal({ data, setData, orderId, isOnl
     if (!order) return null;
     return (data?.clients || []).find(c => c.id === order.clientId) || null;
   }, [data?.clients, order]);
+
+  const clientName = useMemo(() => {
+    return getClientName(order, data?.clients);
+  }, [order, data?.clients]);
 
   // Structure du chantier
   const chantierData = useMemo(() => {
@@ -153,8 +176,8 @@ export default function InstallationMobilePortal({ data, setData, orderId, isOnl
   return (
     <div style={{
       minHeight: '100vh',
-      background: '#090d16',
-      color: '#f8fafc',
+      background: '#f8fafc',
+      color: '#0f172a',
       fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       paddingBottom: '5rem',
       WebkitTapHighlightColor: 'transparent'
@@ -174,7 +197,7 @@ export default function InstallationMobilePortal({ data, setData, orderId, isOnl
           borderRadius: '25px',
           fontSize: '0.88rem',
           fontWeight: 700,
-          boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+          boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
           display: 'flex',
           alignItems: 'center',
           gap: '0.5rem',
@@ -190,23 +213,24 @@ export default function InstallationMobilePortal({ data, setData, orderId, isOnl
         position: 'sticky',
         top: 0,
         zIndex: 1000,
-        background: 'rgba(15, 23, 42, 0.96)',
+        background: 'rgba(255, 255, 255, 0.96)',
         backdropFilter: 'blur(8px)',
-        borderBottom: '1px solid #334155',
-        padding: '0.75rem 1rem'
+        borderBottom: '1px solid #e2e8f0',
+        padding: '0.75rem 1rem',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
           
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-            <div style={{ width: '34px', height: '34px', borderRadius: '8px', background: 'linear-gradient(135deg, #0284c7, #0369a1)', display: 'grid', placeItems: 'center' }}>
+            <div style={{ width: '34px', height: '34px', borderRadius: '8px', background: 'linear-gradient(135deg, #0284c7, #0369a1)', display: 'grid', placeItems: 'center', boxShadow: '0 2px 6px rgba(2, 132, 199, 0.3)' }}>
               <HardHat size={20} color="#fff" />
             </div>
             <div>
-              <div style={{ fontSize: '0.92rem', fontWeight: 800, color: '#fff', lineHeight: 1.2 }}>
-                {order ? (order.number || 'Chantier') : 'Suivi Chantier'}
+              <div style={{ fontSize: '0.92rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.2 }}>
+                {order ? (order.number || order.id || 'Chantier') : 'Suivi Chantier'}
               </div>
-              <div style={{ fontSize: '0.72rem', color: '#94a3b8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '160px' }}>
-                {client?.name || order?.clientName || 'Client'}
+              <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '180px' }}>
+                {clientName}
               </div>
             </div>
           </div>
@@ -219,9 +243,9 @@ export default function InstallationMobilePortal({ data, setData, orderId, isOnl
                 setIsEditingPoseur(true);
               }}
               style={{
-                background: 'rgba(56, 189, 248, 0.12)',
-                border: '1px solid rgba(56, 189, 248, 0.3)',
-                color: '#38bdf8',
+                background: '#e0f2fe',
+                border: '1px solid #bae6fd',
+                color: '#0284c7',
                 borderRadius: '20px',
                 padding: '0.3rem 0.65rem',
                 fontSize: '0.75rem',
@@ -242,7 +266,7 @@ export default function InstallationMobilePortal({ data, setData, orderId, isOnl
               height: '10px',
               borderRadius: '50%',
               background: isOnline ? '#10b981' : '#ef4444',
-              boxShadow: isOnline ? '0 0 8px #10b981' : 'none'
+              boxShadow: isOnline ? '0 0 8px rgba(16, 185, 129, 0.5)' : 'none'
             }} title={isOnline ? 'Connecté en direct' : 'Hors-ligne'} />
           </div>
         </div>
@@ -257,16 +281,17 @@ export default function InstallationMobilePortal({ data, setData, orderId, isOnl
                 width: '100%',
                 padding: '0.45rem 0.6rem',
                 borderRadius: '6px',
-                background: '#090d16',
-                border: '1px solid #334155',
-                color: '#fff',
+                background: '#ffffff',
+                border: '1px solid #cbd5e1',
+                color: '#0f172a',
                 fontSize: '0.8rem',
-                fontWeight: 600
+                fontWeight: 600,
+                outline: 'none'
               }}
             >
               {orders.map(o => (
                 <option key={o.id} value={o.id}>
-                  {o.number} — {(data?.clients || []).find(c => c.id === o.clientId)?.name || 'Client'}
+                  {o.number || o.id} — {getClientName(o, data?.clients)}
                 </option>
               ))}
             </select>
@@ -279,15 +304,16 @@ export default function InstallationMobilePortal({ data, setData, orderId, isOnl
         <div style={{
           position: 'fixed',
           top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0,0,0,0.8)',
+          background: 'rgba(15, 23, 42, 0.6)',
+          backdropFilter: 'blur(4px)',
           zIndex: 2000,
           display: 'grid',
           placeItems: 'center',
           padding: '1rem'
         }}>
-          <div style={{ background: '#1e293b', padding: '1.5rem', borderRadius: '12px', width: '100%', maxWidth: '320px', border: '1px solid #475569' }}>
-            <h4 style={{ margin: '0 0 0.5rem 0', color: '#fff' }}>Votre Prénom / Nom</h4>
-            <p style={{ margin: '0 0 1rem 0', fontSize: '0.8rem', color: '#94a3b8' }}>
+          <div style={{ background: '#ffffff', padding: '1.5rem', borderRadius: '12px', width: '100%', maxWidth: '320px', border: '1px solid #e2e8f0', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+            <h4 style={{ margin: '0 0 0.5rem 0', color: '#0f172a', fontWeight: 700 }}>Votre Prénom / Nom</h4>
+            <p style={{ margin: '0 0 1rem 0', fontSize: '0.8rem', color: '#64748b' }}>
               Ce nom apparaîtra sur l'historique de chaque étape validée.
             </p>
             <input
@@ -299,25 +325,26 @@ export default function InstallationMobilePortal({ data, setData, orderId, isOnl
                 width: '100%',
                 padding: '0.65rem',
                 borderRadius: '8px',
-                background: '#0f172a',
-                border: '1px solid #38bdf8',
-                color: '#fff',
+                background: '#f8fafc',
+                border: '1.5px solid #0284c7',
+                color: '#0f172a',
                 fontSize: '1rem',
                 fontWeight: 600,
-                marginBottom: '1rem'
+                marginBottom: '1rem',
+                outline: 'none'
               }}
               autoFocus
             />
             <div style={{ display: 'flex', gap: '0.5rem' }}>
               <button
                 onClick={savePoseurName}
-                style={{ flex: 1, padding: '0.65rem', background: '#0284c7', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 700 }}
+                style={{ flex: 1, padding: '0.65rem', background: '#0284c7', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 700, cursor: 'pointer' }}
               >
                 Enregistrer
               </button>
               <button
                 onClick={() => setIsEditingPoseur(false)}
-                style={{ padding: '0.65rem 1rem', background: '#334155', color: '#fff', border: 'none', borderRadius: '6px' }}
+                style={{ padding: '0.65rem 1rem', background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}
               >
                 Annuler
               </button>
@@ -327,14 +354,14 @@ export default function InstallationMobilePortal({ data, setData, orderId, isOnl
       )}
 
       {/* ─── BARRE DE PROGRESSION GLOBALE ────────────────────────────────────── */}
-      <div style={{ padding: '0.85rem 1rem', background: '#131d2e', borderBottom: '1px solid #1e293b' }}>
+      <div style={{ padding: '0.85rem 1rem', background: '#ffffff', borderBottom: '1px solid #e2e8f0' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem', fontSize: '0.78rem' }}>
-          <span style={{ color: '#94a3b8', fontWeight: 600 }}>Avancement Chantier</span>
-          <span style={{ fontWeight: 800, color: chantierData.stats.percentProgress === 100 ? '#10b981' : '#38bdf8' }}>
+          <span style={{ color: '#64748b', fontWeight: 600 }}>Avancement Chantier</span>
+          <span style={{ fontWeight: 800, color: chantierData.stats.percentProgress === 100 ? '#10b981' : '#0284c7' }}>
             {chantierData.stats.percentProgress}% ({chantierData.stats.pose}/{chantierData.stats.livre} livrés finis)
           </span>
         </div>
-        <div style={{ width: '100%', height: '8px', background: '#090d16', borderRadius: '4px', overflow: 'hidden' }}>
+        <div style={{ width: '100%', height: '8px', background: '#f1f5f9', borderRadius: '4px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
           <div style={{
             width: `${chantierData.stats.percentProgress}%`,
             height: '100%',
@@ -349,7 +376,7 @@ export default function InstallationMobilePortal({ data, setData, orderId, isOnl
         
         {/* Recherche */}
         <div style={{ position: 'relative' }}>
-          <Search size={16} color="#64748b" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
+          <Search size={16} color="#94a3b8" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
           <input
             type="text"
             value={searchQuery}
@@ -359,10 +386,12 @@ export default function InstallationMobilePortal({ data, setData, orderId, isOnl
               width: '100%',
               padding: '0.6rem 0.75rem 0.6rem 2.2rem',
               borderRadius: '8px',
-              background: '#1e293b',
-              border: '1px solid #334155',
-              color: '#fff',
-              fontSize: '0.88rem'
+              background: '#ffffff',
+              border: '1px solid #cbd5e1',
+              color: '#0f172a',
+              fontSize: '0.88rem',
+              outline: 'none',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
             }}
           />
         </div>
@@ -375,12 +404,13 @@ export default function InstallationMobilePortal({ data, setData, orderId, isOnl
               flex: 1,
               padding: '0.5rem 0.2rem',
               borderRadius: '6px',
-              background: filterMode === 'livre' ? '#0284c7' : '#1e293b',
-              color: filterMode === 'livre' ? '#fff' : '#94a3b8',
-              border: filterMode === 'livre' ? '1px solid #0284c7' : '1px solid #334155',
+              background: filterMode === 'livre' ? '#0284c7' : '#ffffff',
+              color: filterMode === 'livre' ? '#fff' : '#64748b',
+              border: filterMode === 'livre' ? '1px solid #0284c7' : '1px solid #cbd5e1',
               fontSize: '0.78rem',
               fontWeight: 700,
-              cursor: 'pointer'
+              cursor: 'pointer',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
             }}
           >
             À Poser ({chantierData.stats.livre})
@@ -391,12 +421,13 @@ export default function InstallationMobilePortal({ data, setData, orderId, isOnl
               flex: 1,
               padding: '0.5rem 0.2rem',
               borderRadius: '6px',
-              background: filterMode === 'pose' ? '#a855f7' : '#1e293b',
-              color: filterMode === 'pose' ? '#fff' : '#94a3b8',
-              border: filterMode === 'pose' ? '1px solid #a855f7' : '1px solid #334155',
+              background: filterMode === 'pose' ? '#9333ea' : '#ffffff',
+              color: filterMode === 'pose' ? '#fff' : '#64748b',
+              border: filterMode === 'pose' ? '1px solid #9333ea' : '1px solid #cbd5e1',
               fontSize: '0.78rem',
               fontWeight: 700,
-              cursor: 'pointer'
+              cursor: 'pointer',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
             }}
           >
             Finis ({chantierData.stats.pose})
@@ -407,12 +438,13 @@ export default function InstallationMobilePortal({ data, setData, orderId, isOnl
               flex: 1,
               padding: '0.5rem 0.2rem',
               borderRadius: '6px',
-              background: filterMode === 'all' ? '#475569' : '#1e293b',
-              color: filterMode === 'all' ? '#fff' : '#94a3b8',
-              border: filterMode === 'all' ? '1px solid #475569' : '1px solid #334155',
+              background: filterMode === 'all' ? '#475569' : '#ffffff',
+              color: filterMode === 'all' ? '#fff' : '#64748b',
+              border: filterMode === 'all' ? '1px solid #475569' : '1px solid #cbd5e1',
               fontSize: '0.78rem',
               fontWeight: 700,
-              cursor: 'pointer'
+              cursor: 'pointer',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
             }}
           >
             Tout ({chantierData.stats.total})
@@ -430,10 +462,11 @@ export default function InstallationMobilePortal({ data, setData, orderId, isOnl
             <div
               key={floor.id}
               style={{
-                background: '#131d2e',
+                background: '#ffffff',
                 borderRadius: '12px',
-                border: '1px solid #1e293b',
-                overflow: 'hidden'
+                border: '1px solid #e2e8f0',
+                overflow: 'hidden',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
               }}
             >
               {/* EN-TÊTE ÉTAGE ACCORDÉON */}
@@ -441,28 +474,28 @@ export default function InstallationMobilePortal({ data, setData, orderId, isOnl
                 onClick={() => toggleFloor(floor.id)}
                 style={{
                   padding: '0.85rem 1rem',
-                  background: isExpanded ? '#1a2638' : '#131d2e',
+                  background: isExpanded ? '#f8fafc' : '#ffffff',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  borderBottom: isExpanded ? '1px solid #1e293b' : 'none',
+                  borderBottom: isExpanded ? '1px solid #e2e8f0' : 'none',
                   cursor: 'pointer'
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <div style={{ color: '#38bdf8', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
+                  <div style={{ color: '#0284c7', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
                     <ChevronRight size={18} />
                   </div>
-                  <span style={{ fontSize: '0.98rem', fontWeight: 800, color: '#fff' }}>
+                  <span style={{ fontSize: '0.98rem', fontWeight: 800, color: '#0f172a' }}>
                     {floor.displayName}
                   </span>
-                  <span style={{ fontSize: '0.7rem', color: '#94a3b8', background: '#090d16', padding: '0.1rem 0.4rem', borderRadius: '10px' }}>
+                  <span style={{ fontSize: '0.7rem', color: '#475569', background: '#f1f5f9', padding: '0.1rem 0.45rem', borderRadius: '10px', fontWeight: 600 }}>
                     {floor.filteredItems.length}
                   </span>
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <span style={{ fontSize: '0.75rem', fontWeight: 700, color: floor.stats.percent === 100 ? '#10b981' : '#38bdf8' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 700, color: floor.stats.percent === 100 ? '#10b981' : '#0284c7' }}>
                     {floor.stats.percent}%
                   </span>
                 </div>
@@ -472,7 +505,7 @@ export default function InstallationMobilePortal({ data, setData, orderId, isOnl
               {isExpanded && (
                 <div style={{ padding: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                   {!hasItems ? (
-                    <div style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem' }}>
+                    <div style={{ padding: '1rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.8rem' }}>
                       Aucune ouverture à afficher pour cet étage.
                     </div>
                   ) : (
@@ -483,22 +516,23 @@ export default function InstallationMobilePortal({ data, setData, orderId, isOnl
                         <div
                           key={item.id}
                           style={{
-                            background: isDelivered ? '#090d16' : 'rgba(9, 13, 22, 0.4)',
+                            background: isDelivered ? '#f8fafc' : '#ffffff',
                             borderRadius: '10px',
                             border: isDelivered 
-                              ? (item.isFullyInstalled ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid #334155') 
-                              : '1px dashed #334155',
-                            padding: '0.85rem'
+                              ? (item.isFullyInstalled ? '1.5px solid #86efac' : '1px solid #cbd5e1') 
+                              : '1px dashed #cbd5e1',
+                            padding: '0.85rem',
+                            boxShadow: isDelivered ? '0 1px 3px rgba(0,0,0,0.02)' : 'none'
                           }}
                         >
                           {/* LIGNE 1 : REPÈRE + DÉTAILS + TOUT VALIDER */}
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', marginBottom: '0.65rem' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                               <span style={{
-                                fontSize: '1.1rem',
+                                fontSize: '1.05rem',
                                 fontWeight: 900,
                                 color: '#fff',
-                                background: isDelivered ? '#0284c7' : '#334155',
+                                background: isDelivered ? '#0284c7' : '#94a3b8',
                                 padding: '0.25rem 0.6rem',
                                 borderRadius: '6px',
                                 letterSpacing: '0.5px'
@@ -506,10 +540,10 @@ export default function InstallationMobilePortal({ data, setData, orderId, isOnl
                                 {item.repere}
                               </span>
                               <div>
-                                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#f1f5f9' }}>
+                                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a' }}>
                                   {item.label}
                                 </div>
-                                <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+                                <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
                                   {item.dimensions} {item.isSliding ? '• Coulissant' : ''}
                                 </div>
                               </div>
@@ -523,9 +557,9 @@ export default function InstallationMobilePortal({ data, setData, orderId, isOnl
                                   style={{
                                     padding: '0.35rem 0.6rem',
                                     borderRadius: '6px',
-                                    background: item.isFullyInstalled ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)',
-                                    color: item.isFullyInstalled ? '#fca5a5' : '#6ee7b7',
-                                    border: item.isFullyInstalled ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(16, 185, 129, 0.35)',
+                                    background: item.isFullyInstalled ? '#fef2f2' : '#ecfdf5',
+                                    color: item.isFullyInstalled ? '#dc2626' : '#059669',
+                                    border: item.isFullyInstalled ? '1px solid #fecaca' : '1px solid #a7f3d0',
                                     fontSize: '0.72rem',
                                     fontWeight: 700,
                                     cursor: 'pointer'
@@ -537,8 +571,9 @@ export default function InstallationMobilePortal({ data, setData, orderId, isOnl
                                 <span style={{
                                   fontSize: '0.68rem',
                                   fontWeight: 700,
-                                  color: item.status === 'en_stock' ? '#60a5fa' : '#f87171',
-                                  background: item.status === 'en_stock' ? 'rgba(59, 130, 246, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                                  color: item.status === 'en_stock' ? '#2563eb' : '#dc2626',
+                                  background: item.status === 'en_stock' ? '#eff6ff' : '#fef2f2',
+                                  border: item.status === 'en_stock' ? '1px solid #bfdbfe' : '1px solid #fecaca',
                                   padding: '0.2rem 0.45rem',
                                   borderRadius: '4px'
                                 }}>
@@ -568,9 +603,9 @@ export default function InstallationMobilePortal({ data, setData, orderId, isOnl
                                       minHeight: '44px',
                                       padding: '0.5rem 0.6rem',
                                       borderRadius: '8px',
-                                      background: isDone ? '#10b981' : '#1e293b',
-                                      color: isDone ? '#fff' : '#cbd5e1',
-                                      border: isDone ? '1px solid #10b981' : '1px solid #334155',
+                                      background: isDone ? '#10b981' : '#ffffff',
+                                      color: isDone ? '#fff' : '#334155',
+                                      border: isDone ? '1px solid #059669' : '1px solid #cbd5e1',
                                       fontSize: '0.8rem',
                                       fontWeight: isDone ? 800 : 600,
                                       display: 'flex',
@@ -578,14 +613,15 @@ export default function InstallationMobilePortal({ data, setData, orderId, isOnl
                                       justifyContent: 'space-between',
                                       cursor: 'pointer',
                                       transition: 'all 0.15s ease',
-                                      textAlign: 'left'
+                                      textAlign: 'left',
+                                      boxShadow: isDone ? '0 1px 3px rgba(16, 185, 129, 0.2)' : '0 1px 2px rgba(0,0,0,0.02)'
                                     }}
                                   >
                                     <span style={{ lineHeight: 1.2 }}>{stepTitle}</span>
                                     {isDone ? (
                                       <CheckCircle2 size={16} color="#fff" />
                                     ) : (
-                                      <Circle size={15} color="#64748b" />
+                                      <Circle size={15} color="#94a3b8" />
                                     )}
                                   </button>
                                 );
@@ -594,15 +630,15 @@ export default function InstallationMobilePortal({ data, setData, orderId, isOnl
                           ) : (
                             <div style={{
                               padding: '0.65rem',
-                              background: 'rgba(239, 68, 68, 0.05)',
+                              background: '#fef2f2',
                               borderRadius: '6px',
-                              border: '1px dashed rgba(239, 68, 68, 0.25)',
+                              border: '1px dashed #fecaca',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'space-between',
                               gap: '0.5rem'
                             }}>
-                              <span style={{ fontSize: '0.75rem', color: '#fca5a5' }}>
+                              <span style={{ fontSize: '0.75rem', color: '#dc2626', fontWeight: 500 }}>
                                 Non encore livré sur le chantier
                               </span>
                               <button
@@ -639,4 +675,3 @@ export default function InstallationMobilePortal({ data, setData, orderId, isOnl
     </div>
   );
 }
-

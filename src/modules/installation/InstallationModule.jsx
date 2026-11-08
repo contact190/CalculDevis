@@ -35,6 +35,13 @@ import {
   toggleArticleDelivery 
 } from './installationUtils';
 
+// Helper pour extraire le nom du client avec toutes les variantes de champs possibles
+const getClientName = (order, clients = []) => {
+  if (!order) return 'Client Inconnu';
+  const cl = clients.find(c => c.id === order.clientId);
+  return cl?.nom || cl?.name || order.clientName || order.clientNom || 'Client Inconnu';
+};
+
 export default function InstallationModule({ data, setData, quoteSettings }) {
   // Sélection de la commande / chantier
   const [selectedOrderId, setSelectedOrderId] = useState('');
@@ -47,15 +54,27 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
   const [showQrModal, setShowQrModal] = useState(false);
   const [showMobilePreviewModal, setShowMobilePreviewModal] = useState(false);
 
-  // Liste des commandes avec chantiers
+  // Liste des commandes avec chantiers : UNIQUEMENT LES COMMANDES EN COURS
   const orders = useMemo(() => {
-    return (data?.orders || []).filter(o => !o._deleted && o.status !== 'Annulée');
+    return (data?.orders || []).filter(o => {
+      if (!o || o._deleted) return false;
+      const status = (o.status || '').toLowerCase().trim();
+      // Exclure les commandes annulées
+      if (status === 'annulée' || status === 'annulee' || status === 'annulé' || status === 'annule') return false;
+      // Exclure les commandes terminées / historiques / archivées
+      if (status === 'terminé' || status === 'termine' || status.includes('historique') || status === 'archivé' || status === 'archive') return false;
+      return true;
+    });
   }, [data?.orders]);
 
   // Sélectionne par défaut la première commande ou celle en cours
   useEffect(() => {
-    if (!selectedOrderId && orders.length > 0) {
-      setSelectedOrderId(orders[0].id);
+    if (orders.length > 0) {
+      if (!selectedOrderId || !orders.some(o => o.id === selectedOrderId)) {
+        setSelectedOrderId(orders[0].id);
+      }
+    } else {
+      setSelectedOrderId('');
     }
   }, [orders, selectedOrderId]);
 
@@ -69,6 +88,10 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
     if (!currentOrder) return null;
     return (data?.clients || []).find(c => c.id === currentOrder.clientId) || null;
   }, [data?.clients, currentOrder]);
+
+  const currentClientName = useMemo(() => {
+    return getClientName(currentOrder, data?.clients);
+  }, [currentOrder, data?.clients]);
 
   // Structure complète du chantier calculée dynamiquement
   const chantierData = useMemo(() => {
@@ -152,18 +175,30 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
   }, [chantierData.floors, searchQuery, statusFilter]);
 
   return (
-    <div className="installation-module" style={{ padding: '1.5rem', maxWidth: '1600px', margin: '0 auto', color: '#f8fafc' }}>
+    <div className="installation-module" style={{ padding: '1.5rem', maxWidth: '1600px', margin: '0 auto', color: '#1e293b' }}>
       
       {/* ─── HEADER DU MODULE ─────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', marginBottom: '1.5rem', background: '#1e293b', padding: '1.25rem 1.5rem', borderRadius: '12px', border: '1px solid #334155' }}>
+      <div style={{ 
+        display: 'flex', 
+        flexWrap: 'wrap', 
+        alignItems: 'center', 
+        justifyContent: 'space-between', 
+        gap: '1rem', 
+        marginBottom: '1.5rem', 
+        background: '#ffffff', 
+        padding: '1.25rem 1.5rem', 
+        borderRadius: '12px', 
+        border: '1px solid #e2e8f0',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+      }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.75rem', color: '#fff' }}>
-            <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'linear-gradient(135deg, #0284c7, #0369a1)', display: 'grid', placeItems: 'center', boxShadow: '0 4px 12px rgba(2, 132, 199, 0.3)' }}>
+          <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.75rem', color: '#0f172a' }}>
+            <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'linear-gradient(135deg, #0284c7, #0369a1)', display: 'grid', placeItems: 'center', boxShadow: '0 4px 12px rgba(2, 132, 199, 0.25)' }}>
               <HardHat size={22} color="#fff" />
             </div>
             Suivi de Pose Chantier
           </h1>
-          <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.85rem', color: '#94a3b8' }}>
+          <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.85rem', color: '#64748b' }}>
             Gestion de l'avancement de pose par étage, repères (1A1, 1A2...) et interface mobile en temps réel
           </p>
         </div>
@@ -171,31 +206,32 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
         {/* Sélecteur de commande / chantier */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', minWidth: '320px' }}>
           <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', marginBottom: '0.25rem' }}>
-              CHANTIER / COMMANDE
+            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.35rem', letterSpacing: '0.5px' }}>
+              CHANTIER / COMMANDE EN COURS
             </label>
             <select
               value={selectedOrderId}
               onChange={(e) => setSelectedOrderId(e.target.value)}
               style={{
                 width: '100%',
-                padding: '0.6rem 0.9rem',
+                padding: '0.65rem 0.9rem',
                 borderRadius: '8px',
-                background: '#0f172a',
-                border: '1px solid #475569',
-                color: '#fff',
+                background: '#ffffff',
+                border: '1.5px solid #cbd5e1',
+                color: '#0f172a',
                 fontSize: '0.9rem',
                 fontWeight: 600,
                 cursor: 'pointer',
-                outline: 'none'
+                outline: 'none',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
               }}
             >
-              {orders.length === 0 && <option value="">Aucune commande active</option>}
+              {orders.length === 0 && <option value="">Aucune commande en cours</option>}
               {orders.map(o => {
-                const cl = (data?.clients || []).find(c => c.id === o.clientId);
+                const clientNom = getClientName(o, data?.clients);
                 return (
                   <option key={o.id} value={o.id}>
-                    {o.number || 'CMD'} — {cl?.name || o.clientName || 'Client'} {o.siteName ? `(${o.siteName})` : ''}
+                    {o.number || o.id || 'CMD'} — {clientNom} {o.siteName ? `(${o.siteName})` : ''}
                   </option>
                 );
               })}
@@ -210,10 +246,11 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
           
           {/* CARTE LIEN MOBILE POSEUR */}
           <div style={{ 
-            background: 'linear-gradient(135deg, rgba(14, 116, 144, 0.25), rgba(3, 105, 161, 0.15))', 
+            background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)', 
             padding: '1.25rem', 
             borderRadius: '12px', 
-            border: '1px solid rgba(14, 165, 233, 0.35)',
+            border: '1px solid #bae6fd',
+            boxShadow: '0 2px 8px rgba(2, 132, 199, 0.08)',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'space-between',
@@ -221,16 +258,19 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
           }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#0284c7', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                   <Smartphone size={15} /> Interface Mobile Poseur
                 </span>
-                <span style={{ fontSize: '0.7rem', padding: '0.15rem 0.5rem', borderRadius: '20px', background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.3)' }}>
+                <span style={{ fontSize: '0.7rem', padding: '0.15rem 0.5rem', borderRadius: '20px', background: '#e0f2fe', color: '#0369a1', border: '1px solid #7dd3fc', fontWeight: 600 }}>
                   Temps Réel
                 </span>
               </div>
-              <p style={{ margin: 0, fontSize: '0.85rem', color: '#cbd5e1', lineHeight: '1.4' }}>
+              <p style={{ margin: 0, fontSize: '0.85rem', color: '#334155', lineHeight: '1.4' }}>
                 Partagez ce lien avec l'équipe de pose sur le chantier. Chaque validation met à jour cet écran instantanément.
               </p>
+              <div style={{ marginTop: '0.5rem', fontSize: '0.82rem', fontWeight: 600, color: '#0369a1' }}>
+                Client : <span style={{ color: '#0f172a', fontWeight: 700 }}>{currentClientName}</span>
+              </div>
             </div>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
@@ -251,7 +291,8 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
                   justifyContent: 'center',
                   gap: '0.4rem',
                   cursor: 'pointer',
-                  transition: 'all 0.2s'
+                  transition: 'all 0.2s',
+                  boxShadow: '0 2px 4px rgba(2, 132, 199, 0.2)'
                 }}
               >
                 {copiedLink ? <Check size={15} /> : <Copy size={15} />}
@@ -264,15 +305,16 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
                 style={{
                   padding: '0.55rem 0.8rem',
                   borderRadius: '7px',
-                  background: '#0f172a',
-                  color: '#38bdf8',
-                  border: '1px solid rgba(56, 189, 248, 0.4)',
+                  background: '#ffffff',
+                  color: '#0284c7',
+                  border: '1px solid #bae6fd',
                   fontSize: '0.82rem',
                   fontWeight: 600,
                   display: 'flex',
                   alignItems: 'center',
                   gap: '0.4rem',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
                 }}
                 title="Afficher le QR code pour smartphone"
               >
@@ -286,15 +328,16 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
                 style={{
                   padding: '0.55rem 0.8rem',
                   borderRadius: '7px',
-                  background: 'rgba(255, 255, 255, 0.08)',
-                  color: '#fff',
-                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  background: '#ffffff',
+                  color: '#334155',
+                  border: '1px solid #cbd5e1',
                   fontSize: '0.82rem',
                   fontWeight: 600,
                   display: 'flex',
                   alignItems: 'center',
                   gap: '0.4rem',
-                  textDecoration: 'none'
+                  textDecoration: 'none',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
                 }}
                 title="Ouvrir dans un nouvel onglet"
               >
@@ -305,26 +348,27 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
 
           {/* CARTE AVANCEMENT GLOBAL DE LA POSE */}
           <div style={{ 
-            background: '#1e293b', 
+            background: '#ffffff', 
             padding: '1.25rem', 
             borderRadius: '12px', 
-            border: '1px solid #334155',
+            border: '1px solid #e2e8f0',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'space-between'
           }}>
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: '#94a3b8' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.5px' }}>
                   Avancement Global de Pose
                 </span>
-                <span style={{ fontSize: '1.2rem', fontWeight: 800, color: chantierData.stats.percentProgress === 100 ? '#10b981' : '#38bdf8' }}>
+                <span style={{ fontSize: '1.2rem', fontWeight: 800, color: chantierData.stats.percentProgress === 100 ? '#10b981' : '#0284c7' }}>
                   {chantierData.stats.percentProgress}%
                 </span>
               </div>
 
               {/* Barre de progression */}
-              <div style={{ width: '100%', height: '10px', background: '#0f172a', borderRadius: '5px', overflow: 'hidden', marginBottom: '1rem', border: '1px solid #334155' }}>
+              <div style={{ width: '100%', height: '10px', background: '#f1f5f9', borderRadius: '5px', overflow: 'hidden', marginBottom: '1rem', border: '1px solid #e2e8f0' }}>
                 <div style={{ 
                   width: `${chantierData.stats.percentProgress}%`, 
                   height: '100%', 
@@ -339,25 +383,25 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
 
             {/* Statistiques clés (Chantier, Non produit, En stock, Livré, Posé) */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.4rem', textAlign: 'center' }}>
-              <div style={{ background: '#0f172a', padding: '0.5rem 0.2rem', borderRadius: '6px', border: '1px solid #334155' }}>
-                <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#fff' }}>{chantierData.stats.total}</div>
-                <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 600 }}>Total</div>
+              <div style={{ background: '#f8fafc', padding: '0.5rem 0.2rem', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>{chantierData.stats.total}</div>
+                <div style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 600 }}>Total</div>
               </div>
-              <div style={{ background: 'rgba(239, 68, 68, 0.08)', padding: '0.5rem 0.2rem', borderRadius: '6px', border: '1px solid rgba(239, 68, 68, 0.25)' }}>
-                <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#f87171' }}>{chantierData.stats.nonProduit}</div>
-                <div style={{ fontSize: '0.65rem', color: '#fca5a5', fontWeight: 600 }}>Non produit</div>
+              <div style={{ background: '#fef2f2', padding: '0.5rem 0.2rem', borderRadius: '6px', border: '1px solid #fecaca' }}>
+                <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#dc2626' }}>{chantierData.stats.nonProduit}</div>
+                <div style={{ fontSize: '0.65rem', color: '#ef4444', fontWeight: 600 }}>Non produit</div>
               </div>
-              <div style={{ background: 'rgba(59, 130, 246, 0.08)', padding: '0.5rem 0.2rem', borderRadius: '6px', border: '1px solid rgba(59, 130, 246, 0.25)' }}>
-                <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#60a5fa' }}>{chantierData.stats.enStock}</div>
-                <div style={{ fontSize: '0.65rem', color: '#93c5fd', fontWeight: 600 }}>En stock</div>
+              <div style={{ background: '#eff6ff', padding: '0.5rem 0.2rem', borderRadius: '6px', border: '1px solid #bfdbfe' }}>
+                <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#2563eb' }}>{chantierData.stats.enStock}</div>
+                <div style={{ fontSize: '0.65rem', color: '#3b82f6', fontWeight: 600 }}>En stock</div>
               </div>
-              <div style={{ background: 'rgba(16, 185, 129, 0.08)', padding: '0.5rem 0.2rem', borderRadius: '6px', border: '1px solid rgba(16, 185, 129, 0.25)' }}>
-                <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#34d399' }}>{chantierData.stats.livre}</div>
-                <div style={{ fontSize: '0.65rem', color: '#6ee7b7', fontWeight: 600 }}>Livrés</div>
+              <div style={{ background: '#ecfdf5', padding: '0.5rem 0.2rem', borderRadius: '6px', border: '1px solid #a7f3d0' }}>
+                <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#059669' }}>{chantierData.stats.livre}</div>
+                <div style={{ fontSize: '0.65rem', color: '#10b981', fontWeight: 600 }}>Livrés</div>
               </div>
-              <div style={{ background: 'rgba(168, 85, 247, 0.08)', padding: '0.5rem 0.2rem', borderRadius: '6px', border: '1px solid rgba(168, 85, 247, 0.25)' }}>
-                <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#c084fc' }}>{chantierData.stats.pose}</div>
-                <div style={{ fontSize: '0.65rem', color: '#d8b4fe', fontWeight: 600 }}>Finis 100%</div>
+              <div style={{ background: '#faf5ff', padding: '0.5rem 0.2rem', borderRadius: '6px', border: '1px solid #e9d5ff' }}>
+                <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#9333ea' }}>{chantierData.stats.pose}</div>
+                <div style={{ fontSize: '0.65rem', color: '#a855f7', fontWeight: 600 }}>Finis 100%</div>
               </div>
             </div>
           </div>
@@ -380,11 +424,12 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
                 width: '100%',
                 padding: '0.55rem 0.75rem 0.55rem 2.2rem',
                 borderRadius: '8px',
-                background: '#1e293b',
-                border: '1px solid #334155',
-                color: '#fff',
+                background: '#ffffff',
+                border: '1px solid #cbd5e1',
+                color: '#0f172a',
                 fontSize: '0.85rem',
-                outline: 'none'
+                outline: 'none',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
               }}
             />
           </div>
@@ -396,8 +441,8 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
             { id: 'all', label: 'Tous', count: chantierData.stats.total },
             { id: 'livre', label: 'Livrés (À poser)', count: chantierData.stats.livre, color: '#10b981' },
             { id: 'en_stock', label: 'En stock', count: chantierData.stats.enStock, color: '#3b82f6' },
-            { id: 'non_produit', label: 'Non produit', count: chantierData.stats.nonProduit, color: '#f87171' },
-            { id: 'pose', label: 'Pose terminée', count: chantierData.stats.pose, color: '#c084fc' }
+            { id: 'non_produit', label: 'Non produit', count: chantierData.stats.nonProduit, color: '#ef4444' },
+            { id: 'pose', label: 'Pose terminée', count: chantierData.stats.pose, color: '#9333ea' }
           ].map(f => {
             const active = statusFilter === f.id;
             return (
@@ -407,23 +452,27 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
                 style={{
                   padding: '0.4rem 0.75rem',
                   borderRadius: '6px',
-                  background: active ? '#0284c7' : '#1e293b',
-                  color: active ? '#fff' : '#94a3b8',
-                  border: active ? '1px solid #0284c7' : '1px solid #334155',
+                  background: active ? '#0284c7' : '#ffffff',
+                  color: active ? '#fff' : '#64748b',
+                  border: active ? '1px solid #0284c7' : '1px solid #cbd5e1',
                   fontSize: '0.8rem',
                   fontWeight: 600,
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '0.35rem'
+                  gap: '0.35rem',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                  transition: 'all 0.15s'
                 }}
               >
                 <span>{f.label}</span>
                 <span style={{ 
-                  background: active ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.3)', 
+                  background: active ? 'rgba(255,255,255,0.25)' : '#f1f5f9', 
+                  color: active ? '#ffffff' : '#64748b',
                   padding: '0.1rem 0.4rem', 
                   borderRadius: '10px', 
-                  fontSize: '0.7rem' 
+                  fontSize: '0.7rem',
+                  fontWeight: 700 
                 }}>
                   {f.count}
                 </span>
@@ -439,12 +488,13 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
             style={{
               padding: '0.4rem 0.7rem',
               borderRadius: '6px',
-              background: '#1e293b',
-              color: '#cbd5e1',
-              border: '1px solid #334155',
+              background: '#ffffff',
+              color: '#475569',
+              border: '1px solid #cbd5e1',
               fontSize: '0.78rem',
-              fontWeight: 500,
-              cursor: 'pointer'
+              fontWeight: 600,
+              cursor: 'pointer',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
             }}
           >
             Tout déplier
@@ -454,12 +504,13 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
             style={{
               padding: '0.4rem 0.7rem',
               borderRadius: '6px',
-              background: '#1e293b',
-              color: '#cbd5e1',
-              border: '1px solid #334155',
+              background: '#ffffff',
+              color: '#475569',
+              border: '1px solid #cbd5e1',
               fontSize: '0.78rem',
-              fontWeight: 500,
-              cursor: 'pointer'
+              fontWeight: 600,
+              cursor: 'pointer',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
             }}
           >
             Tout replier
@@ -469,10 +520,10 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
 
       {/* ─── LISTE DES ÉTAGES ET REPERES (ACCORDÉONS) ────────────────────────── */}
       {chantierData.floors.length === 0 ? (
-        <div style={{ background: '#1e293b', padding: '3rem', borderRadius: '12px', textAlign: 'center', border: '1px dashed #475569' }}>
-          <Building size={48} color="#64748b" style={{ margin: '0 auto 1rem auto' }} />
-          <h3 style={{ margin: '0 0 0.5rem 0', color: '#fff' }}>Aucune ouverture trouvée pour ce chantier</h3>
-          <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.9rem' }}>
+        <div style={{ background: '#ffffff', padding: '3rem', borderRadius: '12px', textAlign: 'center', border: '1.5px dashed #cbd5e1' }}>
+          <Building size={48} color="#94a3b8" style={{ margin: '0 auto 1rem auto' }} />
+          <h3 style={{ margin: '0 0 0.5rem 0', color: '#0f172a' }}>Aucune ouverture trouvée pour ce chantier</h3>
+          <p style={{ margin: 0, color: '#64748b', fontSize: '0.9rem' }}>
             Vérifiez que la commande contient des articles ou un plan de chantier avec des repères.
           </p>
         </div>
@@ -486,11 +537,11 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
               <div 
                 key={floor.id} 
                 style={{ 
-                  background: '#1e293b', 
+                  background: '#ffffff', 
                   borderRadius: '12px', 
-                  border: '1px solid #334155', 
+                  border: '1px solid #e2e8f0', 
                   overflow: 'hidden',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.05)'
                 }}
               >
                 {/* EN-TÊTE ÉTAGE (PLIABLE / DÉPLIABLE) */}
@@ -498,8 +549,8 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
                   onClick={() => toggleFloor(floor.id)}
                   style={{
                     padding: '1rem 1.25rem',
-                    background: isExpanded ? '#1e293b' : '#182234',
-                    borderBottom: isExpanded ? '1px solid #334155' : 'none',
+                    background: isExpanded ? '#f8fafc' : '#ffffff',
+                    borderBottom: isExpanded ? '1px solid #e2e8f0' : 'none',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
@@ -509,14 +560,14 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <div style={{ color: '#38bdf8', transition: 'transform 0.2s', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+                    <div style={{ color: '#0284c7', transition: 'transform 0.2s', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>
                       <ChevronRight size={20} />
                     </div>
                     <div>
-                      <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#fff', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <Building size={18} color="#0284c7" />
                         {floor.displayName}
-                        <span style={{ fontSize: '0.75rem', fontWeight: 500, color: '#94a3b8', background: '#0f172a', padding: '0.15rem 0.5rem', borderRadius: '12px', border: '1px solid #334155' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#475569', background: '#f1f5f9', padding: '0.15rem 0.5rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
                           {floor.items.length} ouverture{floor.items.length > 1 ? 's' : ''}
                         </span>
                       </h3>
@@ -526,19 +577,19 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
                   {/* Résumé de l'étage */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.75rem' }}>
-                      <span style={{ color: '#6ee7b7', background: 'rgba(16, 185, 129, 0.1)', padding: '0.2rem 0.5rem', borderRadius: '4px', border: '1px solid rgba(16, 185, 129, 0.25)' }}>
+                      <span style={{ color: '#059669', background: '#ecfdf5', padding: '0.2rem 0.5rem', borderRadius: '4px', border: '1px solid #a7f3d0', fontWeight: 600 }}>
                         {floor.stats.delivered} livré{floor.stats.delivered > 1 ? 's' : ''}
                       </span>
-                      <span style={{ color: '#c084fc', background: 'rgba(168, 85, 247, 0.1)', padding: '0.2rem 0.5rem', borderRadius: '4px', border: '1px solid rgba(168, 85, 247, 0.25)' }}>
+                      <span style={{ color: '#9333ea', background: '#faf5ff', padding: '0.2rem 0.5rem', borderRadius: '4px', border: '1px solid #e9d5ff', fontWeight: 600 }}>
                         {floor.stats.pose} posé{floor.stats.pose > 1 ? 's' : ''}
                       </span>
                     </div>
 
                     <div style={{ width: '100px', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <div style={{ flex: 1, height: '6px', background: '#0f172a', borderRadius: '3px', overflow: 'hidden' }}>
+                      <div style={{ flex: 1, height: '6px', background: '#e2e8f0', borderRadius: '3px', overflow: 'hidden' }}>
                         <div style={{ width: `${floor.stats.percent}%`, height: '100%', background: floor.stats.percent === 100 ? '#10b981' : '#0284c7' }} />
                       </div>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', minWidth: '32px', textAlign: 'right' }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#334155', minWidth: '32px', textAlign: 'right' }}>
                         {floor.stats.percent}%
                       </span>
                     </div>
@@ -549,7 +600,7 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
                 {isExpanded && (
                   <div style={{ padding: '0.75rem 1.25rem 1.25rem 1.25rem' }}>
                     {!hasItems ? (
-                      <div style={{ padding: '1.5rem', textAlign: 'center', color: '#64748b', fontSize: '0.85rem' }}>
+                      <div style={{ padding: '1.5rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.85rem' }}>
                         Aucun article ne correspond aux filtres pour cet étage.
                       </div>
                     ) : (
@@ -561,14 +612,15 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
                             <div
                               key={item.id}
                               style={{
-                                background: isDelivered ? '#0f172a' : 'rgba(15, 23, 42, 0.6)',
-                                border: isDelivered ? (item.isFullyInstalled ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid #334155') : '1px dashed #334155',
+                                background: isDelivered ? '#f8fafc' : '#ffffff',
+                                border: isDelivered ? (item.isFullyInstalled ? '1.5px solid #86efac' : '1px solid #cbd5e1') : '1px dashed #cbd5e1',
                                 borderRadius: '10px',
                                 padding: '0.85rem 1rem',
                                 display: 'grid',
                                 gridTemplateColumns: '110px minmax(200px, 1.2fr) 130px minmax(400px, 3fr) 110px',
                                 alignItems: 'center',
-                                gap: '1rem'
+                                gap: '1rem',
+                                boxShadow: isDelivered ? '0 1px 3px rgba(0,0,0,0.03)' : 'none'
                               }}
                             >
                               {/* 1. REPÈRE (ex: 1A1, 1A2...) */}
@@ -578,7 +630,7 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
                                   fontSize: '0.95rem',
                                   fontWeight: 800,
                                   color: '#fff',
-                                  background: isDelivered ? '#0284c7' : '#334155',
+                                  background: isDelivered ? '#0284c7' : '#94a3b8',
                                   padding: '0.35rem 0.65rem',
                                   borderRadius: '6px',
                                   letterSpacing: '0.5px'
@@ -589,13 +641,13 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
 
                               {/* 2. DÉSIGNATION & DIMENSIONS */}
                               <div>
-                                <div style={{ fontSize: '0.88rem', fontWeight: 600, color: '#f1f5f9', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                   {item.label}
                                 </div>
-                                <div style={{ fontSize: '0.75rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.15rem' }}>
+                                <div style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.15rem' }}>
                                   <span>{item.dimensions}</span>
                                   {item.isSliding && (
-                                    <span style={{ color: '#38bdf8', background: 'rgba(56, 189, 248, 0.1)', padding: '0.05rem 0.35rem', borderRadius: '3px', fontSize: '0.68rem', fontWeight: 600 }}>
+                                    <span style={{ color: '#0284c7', background: '#e0f2fe', padding: '0.05rem 0.35rem', borderRadius: '3px', fontSize: '0.68rem', fontWeight: 600 }}>
                                       Coulissant
                                     </span>
                                   )}
@@ -612,17 +664,17 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
                                       gap: '0.3rem', 
                                       fontSize: '0.75rem', 
                                       fontWeight: 700, 
-                                      color: '#34d399', 
-                                      background: 'rgba(16, 185, 129, 0.12)', 
+                                      color: '#059669', 
+                                      background: '#ecfdf5', 
                                       padding: '0.25rem 0.55rem', 
-                                      borderRadius: '6px',
-                                      border: '1px solid rgba(16, 185, 129, 0.3)'
+                                      borderRadius: '6px', 
+                                      border: '1px solid #a7f3d0' 
                                     }}>
                                       <CheckCircle2 size={13} /> Livré Chantier
                                     </span>
                                     <button
                                       onClick={() => toggleArticleDelivery(setData, currentOrder.id, item.id, true)}
-                                      style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '0.65rem', cursor: 'pointer', textAlign: 'left', padding: 0 }}
+                                      style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '0.65rem', cursor: 'pointer', textAlign: 'left', padding: 0, textDecoration: 'underline' }}
                                       title="Remettre en stock atelier"
                                     >
                                       Annuler livraison
@@ -636,25 +688,25 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
                                       gap: '0.3rem', 
                                       fontSize: '0.75rem', 
                                       fontWeight: 700, 
-                                      color: '#60a5fa', 
-                                      background: 'rgba(59, 130, 246, 0.12)', 
+                                      color: '#2563eb', 
+                                      background: '#eff6ff', 
                                       padding: '0.25rem 0.55rem', 
-                                      borderRadius: '6px',
-                                      border: '1px solid rgba(59, 130, 246, 0.3)'
+                                      borderRadius: '6px', 
+                                      border: '1px solid #bfdbfe' 
                                     }}>
                                       <Package size={13} /> En stock
                                     </span>
                                     <button
                                       onClick={() => toggleArticleDelivery(setData, currentOrder.id, item.id, false)}
                                       style={{ 
-                                        background: 'rgba(16, 185, 129, 0.15)', 
-                                        border: '1px solid rgba(16, 185, 129, 0.35)', 
-                                        color: '#6ee7b7', 
+                                        background: '#ecfdf5', 
+                                        border: '1px solid #a7f3d0', 
+                                        color: '#059669', 
                                         fontSize: '0.68rem', 
-                                        fontWeight: 600,
+                                        fontWeight: 600, 
                                         cursor: 'pointer', 
-                                        padding: '0.15rem 0.4rem',
-                                        borderRadius: '4px'
+                                        padding: '0.15rem 0.4rem', 
+                                        borderRadius: '4px' 
                                       }}
                                     >
                                       Marquer livré
@@ -668,17 +720,17 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
                                       gap: '0.3rem', 
                                       fontSize: '0.75rem', 
                                       fontWeight: 700, 
-                                      color: '#f87171', 
-                                      background: 'rgba(239, 68, 68, 0.1)', 
+                                      color: '#dc2626', 
+                                      background: '#fef2f2', 
                                       padding: '0.25rem 0.55rem', 
-                                      borderRadius: '6px',
-                                      border: '1px solid rgba(239, 68, 68, 0.25)'
+                                      borderRadius: '6px', 
+                                      border: '1px solid #fecaca' 
                                     }}>
                                       <Clock size={13} /> Non produit
                                     </span>
                                     <button
                                       onClick={() => toggleArticleDelivery(setData, currentOrder.id, item.id, false)}
-                                      style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '0.65rem', cursor: 'pointer', textAlign: 'left', padding: 0 }}
+                                      style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '0.65rem', cursor: 'pointer', textAlign: 'left', padding: 0, textDecoration: 'underline' }}
                                     >
                                       Forcer livraison
                                     </button>
@@ -707,19 +759,20 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
                                           style={{
                                             padding: '0.35rem 0.6rem',
                                             borderRadius: '6px',
-                                            background: isDone ? '#10b981' : '#1e293b',
-                                            color: isDone ? '#fff' : '#94a3b8',
-                                            border: isDone ? '1px solid #10b981' : '1px solid #334155',
+                                            background: isDone ? '#10b981' : '#ffffff',
+                                            color: isDone ? '#ffffff' : '#475569',
+                                            border: isDone ? '1px solid #059669' : '1px solid #cbd5e1',
                                             fontSize: '0.74rem',
-                                            fontWeight: isDone ? 700 : 500,
+                                            fontWeight: isDone ? 700 : 600,
                                             cursor: 'pointer',
                                             display: 'inline-flex',
                                             alignItems: 'center',
                                             gap: '0.35rem',
-                                            transition: 'all 0.15s'
+                                            transition: 'all 0.15s',
+                                            boxShadow: isDone ? '0 1px 3px rgba(16, 185, 129, 0.2)' : '0 1px 2px rgba(0,0,0,0.03)'
                                           }}
                                         >
-                                          {isDone ? <Check size={12} strokeWidth={3} /> : <Circle size={12} />}
+                                          {isDone ? <Check size={12} strokeWidth={3} /> : <Circle size={12} color="#94a3b8" />}
                                           <span>{stepTitle}</span>
                                         </button>
                                       );
@@ -727,7 +780,7 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
                                   </div>
                                 ) : (
                                   <div style={{ fontSize: '0.78rem', color: '#64748b', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                    <AlertCircle size={14} />
+                                    <AlertCircle size={14} color="#f59e0b" />
                                     En attente de livraison sur chantier pour démarrer le suivi de pose
                                   </div>
                                 )}
@@ -742,17 +795,17 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
                                       style={{
                                         padding: '0.3rem 0.6rem',
                                         borderRadius: '5px',
-                                        background: item.isFullyInstalled ? 'rgba(239, 68, 68, 0.12)' : 'rgba(16, 185, 129, 0.15)',
-                                        color: item.isFullyInstalled ? '#fca5a5' : '#6ee7b7',
-                                        border: item.isFullyInstalled ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(16, 185, 129, 0.35)',
+                                        background: item.isFullyInstalled ? '#fef2f2' : '#ecfdf5',
+                                        color: item.isFullyInstalled ? '#dc2626' : '#059669',
+                                        border: item.isFullyInstalled ? '1px solid #fecaca' : '1px solid #a7f3d0',
                                         fontSize: '0.7rem',
-                                        fontWeight: 600,
+                                        fontWeight: 700,
                                         cursor: 'pointer'
                                       }}
                                     >
                                       {item.isFullyInstalled ? 'Décocher tout' : 'Tout valider'}
                                     </button>
-                                    <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: '0.2rem' }}>
+                                    <div style={{ fontSize: '0.68rem', color: '#64748b', marginTop: '0.2rem', fontWeight: 600 }}>
                                       {item.completedStepsCount} / {item.totalStepsCount} étapes
                                     </div>
                                   </div>
@@ -776,7 +829,7 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
         <div style={{
           position: 'fixed',
           top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0, 0, 0, 0.75)',
+          background: 'rgba(15, 23, 42, 0.6)',
           backdropFilter: 'blur(4px)',
           display: 'grid',
           placeItems: 'center',
@@ -784,25 +837,25 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
           padding: '1rem'
         }}>
           <div style={{
-            background: '#1e293b',
-            border: '1px solid #475569',
+            background: '#ffffff',
+            border: '1px solid #e2e8f0',
             borderRadius: '16px',
             padding: '2rem',
             maxWidth: '440px',
             width: '100%',
             textAlign: 'center',
-            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)'
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)'
           }}>
-            <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.25rem', color: '#fff' }}>
+            <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.25rem', color: '#0f172a', fontWeight: 700 }}>
               Scanner pour ouvrir sur Mobile
             </h3>
-            <p style={{ margin: '0 0 1.5rem 0', fontSize: '0.85rem', color: '#94a3b8' }}>
+            <p style={{ margin: '0 0 1.5rem 0', fontSize: '0.85rem', color: '#64748b' }}>
               Pointez l'appareil photo d'un smartphone sur ce QR Code pour accéder immédiatement à l'interface de pose du chantier :
               <br />
-              <strong style={{ color: '#38bdf8' }}>{currentOrder.number} — {currentClient?.name || 'Client'}</strong>
+              <strong style={{ color: '#0284c7', fontSize: '0.95rem' }}>{currentOrder.number || currentOrder.id} — {currentClientName}</strong>
             </p>
 
-            <div style={{ background: '#fff', padding: '1.25rem', borderRadius: '12px', display: 'inline-block', boxShadow: '0 4px 12px rgba(0,0,0,0.3)', marginBottom: '1.5rem' }}>
+            <div style={{ background: '#f8fafc', padding: '1.25rem', borderRadius: '12px', display: 'inline-block', boxShadow: 'inset 0 0 0 1px #e2e8f0', marginBottom: '1.5rem' }}>
               <QRCodeSVG value={mobilePortalUrl} size={220} level="M" />
             </div>
 
@@ -818,7 +871,8 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
                   border: 'none',
                   fontSize: '0.85rem',
                   fontWeight: 600,
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 4px rgba(2, 132, 199, 0.2)'
                 }}
               >
                 {copiedLink ? 'Lien copié !' : 'Copier le lien direct'}
@@ -828,9 +882,9 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
                 style={{
                   padding: '0.65rem 1.25rem',
                   borderRadius: '8px',
-                  background: '#334155',
-                  color: '#fff',
-                  border: 'none',
+                  background: '#f1f5f9',
+                  color: '#475569',
+                  border: '1px solid #cbd5e1',
                   fontSize: '0.85rem',
                   fontWeight: 600,
                   cursor: 'pointer'
@@ -846,4 +900,3 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
     </div>
   );
 }
-
