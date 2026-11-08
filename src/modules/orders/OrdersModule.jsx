@@ -260,7 +260,8 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
     // 1. Filtrer par Actives vs Historique (en excluant les commandes supprimées)
     let filtered = all.filter(o => o && !o._deleted).filter(o => {
       const { remaining } = getOrderStats(o);
-      const isHistory = remaining <= 0 && (o.batches?.length > 0 || o.status === 'Terminé / Historique' || o.status === 'Terminé' || o.status === 'Livré');
+      const status = (o.status || '').toLowerCase().trim();
+      const isHistory = status === 'terminé / historique' || status === 'terminé' || status === 'termine' || status === 'livré' || status === 'livre' || status === 'archivé' || status === 'archive' || status === 'annulée' || status === 'annulee' || status === 'annulé' || status === 'annule' || (remaining <= 0 && (o.batches?.length || 0) > 0);
       return listView === 'history' ? isHistory : !isHistory;
     });
 
