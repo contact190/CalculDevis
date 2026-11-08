@@ -36,6 +36,9 @@ export const fetchWithTimeout = async (resource, options = {}, timeout = 8000) =
     return response;
   } catch (error) {
     clearTimeout(id);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('app:network-error'));
+    }
     throw error;
   }
 };

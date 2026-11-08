@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { WifiOff, RefreshCw, AlertTriangle, ShieldAlert } from 'lucide-react';
-import { supabaseFetch } from '../../utils/supabaseClient';
 
 export default function OfflineGuard({ onReconnect }) {
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
@@ -8,16 +7,15 @@ export default function OfflineGuard({ onReconnect }) {
   const [retryError, setRetryError] = useState(false);
   const checkIntervalRef = useRef(null);
 
-  // Vérification active de la connectivité réelle (ping Supabase)
+  // Vérification active de la connectivité réelle (ping Supabase ultra-léger)
   const verifyRealConnection = useCallback(async () => {
     if (!navigator.onLine) {
       setIsOffline(true);
       return false;
     }
     try {
-      // Requête légère avec court timeout (3s) pour vérifier l'accès réel à Internet et Supabase
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3500);
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
       
       const res = await fetch('https://uxfktjdibabwcjinynlk.supabase.co/rest/v1/', {
         method: 'HEAD',
@@ -61,22 +59,29 @@ export default function OfflineGuard({ onReconnect }) {
 
     const handleOffline = () => {
       setIsOffline(true);
+      setRetryError(false);
+    };
+
+    const handleNetworkError = () => {
+      verifyRealConnection();
     };
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+    window.addEventListener('app:network-error', handleNetworkError);
 
-    // Vérification périodique toutes les 15 secondes
+    // Vérification rapide toutes les 5 secondes
     checkIntervalRef.current = setInterval(() => {
       verifyRealConnection();
-    }, 15000);
+    }, 5000);
 
-    // Vérification initiale
+    // Vérification immédiate au montage
     verifyRealConnection();
 
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('app:network-error', handleNetworkError);
       if (checkIntervalRef.current) clearInterval(checkIntervalRef.current);
     };
   }, [verifyRealConnection, onReconnect]);
@@ -90,108 +95,170 @@ export default function OfflineGuard({ onReconnect }) {
       left: 0,
       right: 0,
       bottom: 0,
-      background: 'rgba(15, 23, 42, 0.88)',
-      backdropFilter: 'blur(8px)',
+      background: 'rgba(15, 23, 42, 0.92)',
+      backdropFilter: 'blur(10px)',
       zIndex: 999999,
       display: 'grid',
       placeItems: 'center',
-      padding: '1.5rem',
+      padding: '1.25rem',
       fontFamily: 'system-ui, -apple-system, sans-serif'
     }}>
       <div style={{
         background: '#ffffff',
-        borderRadius: '16px',
+        borderRadius: '20px',
         padding: '2.5rem 2rem',
-        maxWidth: '480px',
+        maxWidth: '500px',
         width: '100%',
         textAlign: 'center',
-        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4)',
-        border: '1.5px solid #fecaca',
-        animation: 'fadeIn 0.25s ease'
+        boxShadow: '0 25px 60px -15px rgba(220, 38, 38, 0.35), 0 0 0 1px rgba(239, 68, 68, 0.2)',
+        border: '2px solid #ef4444',
+        animation: 'fadeIn 0.2s ease-out'
       }}>
-        {/* Icône animée */}
+        {/* En-tête d'alerte avec icône pulsante */}
         <div style={{
-          width: '72px',
-          height: '72px',
+          width: '80px',
+          height: '80px',
           borderRadius: '50%',
           background: '#fef2f2',
-          border: '2px solid #fecaca',
+          border: '3px solid #f87171',
           display: 'grid',
           placeItems: 'center',
-          margin: '0 auto 1.5rem auto'
+          margin: '0 auto 1.25rem auto',
+          boxShadow: '0 0 20px rgba(239, 68, 68, 0.25)'
         }}>
-          <WifiOff size={36} color="#dc2626" />
+          <WifiOff size={42} color="#dc2626" strokeWidth={2.4} />
         </div>
 
-        <h2 style={{ margin: '0 0 0.75rem 0', fontSize: '1.35rem', fontWeight: 800, color: '#0f172a' }}>
-          Connexion Internet Interrompue
+        {/* Titre Erreur / Alerte */}
+        <div style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '0.4rem',
+          background: '#fee2e2',
+          color: '#991b1b',
+          padding: '0.35rem 0.85rem',
+          borderRadius: '9999px',
+          fontSize: '0.8rem',
+          fontWeight: 800,
+          letterSpacing: '0.05em',
+          textTransform: 'uppercase',
+          marginBottom: '0.75rem'
+        }}>
+          <AlertTriangle size={15} color="#b91c1c" />
+          ERREUR DE CONNEXION DÉTECTÉE
+        </div>
+
+        <h2 style={{
+          margin: '0 0 0.85rem 0',
+          fontSize: '1.45rem',
+          fontWeight: 800,
+          color: '#0f172a',
+          lineHeight: 1.3
+        }}>
+          Vérifiez votre connexion internet
         </h2>
 
-        <p style={{ margin: '0 0 1.25rem 0', fontSize: '0.92rem', color: '#475569', lineHeight: '1.5' }}>
-          L'application a été <strong style={{ color: '#dc2626' }}>temporairement suspendue</strong> pour empêcher toute divergence ou écrasement de commandes entre vos différents appareils.
-        </p>
+        {/* Bandeau d'alerte explicite */}
+        <div style={{
+          background: '#fff1f2',
+          border: '1.5px solid #fecdd3',
+          borderRadius: '12px',
+          padding: '1rem',
+          marginBottom: '1.25rem',
+          textAlign: 'left'
+        }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '0.65rem'
+          }}>
+            <AlertTriangle size={20} color="#e11d48" style={{ flexShrink: 0, marginTop: '2px' }} />
+            <div style={{ fontSize: '0.88rem', color: '#881337', lineHeight: 1.45 }}>
+              <strong style={{ display: 'block', fontSize: '0.92rem', marginBottom: '0.2rem' }}>
+                Connexion réseau interrompue ou instable
+              </strong>
+              Veuillez vérifier votre accès <strong>Wi-Fi</strong>, vos <strong>données mobiles (4G/5G)</strong> ou votre câble réseau.
+            </div>
+          </div>
+        </div>
 
+        {/* Explication du blocage de sécurité */}
         <div style={{
           background: '#f8fafc',
           border: '1px solid #e2e8f0',
           borderRadius: '10px',
-          padding: '0.85rem 1rem',
+          padding: '0.75rem 0.95rem',
           marginBottom: '1.5rem',
           textAlign: 'left',
           fontSize: '0.82rem',
-          color: '#334155',
+          color: '#475569',
           display: 'flex',
           gap: '0.6rem',
-          alignItems: 'flex-start'
+          alignItems: 'center'
         }}>
-          <ShieldAlert size={18} color="#0284c7" style={{ flexShrink: 0, marginTop: '2px' }} />
-          <div>
-            <strong>Sécurité des données active :</strong> Aucune saisie ni validation locale n'est autorisée sans connexion au serveur central Cloud.
-          </div>
+          <ShieldAlert size={18} color="#0284c7" style={{ flexShrink: 0 }} />
+          <span>
+            <strong>Protection active :</strong> L'écran est verrouillé pour empêcher l'écrasement ou la perte de commandes entre vos différents appareils.
+          </span>
         </div>
 
+        {/* Erreur lors du réessai manuel */}
         {retryError && (
           <div style={{
             background: '#fef2f2',
-            border: '1px solid #fecaca',
-            color: '#b91c1c',
-            borderRadius: '8px',
-            padding: '0.65rem 0.85rem',
+            border: '1.5px solid #fca5a5',
+            color: '#991b1b',
+            borderRadius: '10px',
+            padding: '0.75rem',
             marginBottom: '1.25rem',
-            fontSize: '0.82rem',
-            fontWeight: 600,
+            fontSize: '0.84rem',
+            fontWeight: 700,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '0.4rem'
+            gap: '0.5rem',
+            animation: 'shake 0.3s ease'
           }}>
-            <AlertTriangle size={15} /> Serveur toujours injoignable. Vérifiez votre Wi-Fi / 4G.
+            <AlertTriangle size={17} color="#dc2626" />
+            Toujours pas de connexion. Vérifiez votre réseau puis réessayez.
           </div>
         )}
 
+        {/* Bouton d'action */}
         <button
           onClick={handleManualRetry}
           disabled={isChecking}
           style={{
             width: '100%',
-            padding: '0.85rem 1.25rem',
-            borderRadius: '10px',
-            background: isChecking ? '#94a3b8' : '#0284c7',
+            padding: '0.95rem 1.25rem',
+            borderRadius: '12px',
+            background: isChecking ? '#94a3b8' : '#dc2626',
             color: '#ffffff',
             border: 'none',
-            fontSize: '0.95rem',
-            fontWeight: 700,
+            fontSize: '1rem',
+            fontWeight: 800,
             cursor: isChecking ? 'not-allowed' : 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '0.5rem',
-            transition: 'background 0.2s',
-            boxShadow: '0 4px 12px rgba(2, 132, 199, 0.25)'
+            gap: '0.6rem',
+            transition: 'all 0.2s ease',
+            boxShadow: '0 4px 14px rgba(220, 38, 38, 0.35)'
+          }}
+          onMouseEnter={(e) => {
+            if (!isChecking) e.currentTarget.style.background = '#b91c1c';
+          }}
+          onMouseLeave={(e) => {
+            if (!isChecking) e.currentTarget.style.background = '#dc2626';
           }}
         >
-          <RefreshCw size={18} className={isChecking ? 'spin' : ''} style={{ animation: isChecking ? 'spin 1s linear infinite' : 'none' }} />
-          {isChecking ? 'Vérification en cours...' : 'Tester la connexion & Reprendre'}
+          <RefreshCw
+            size={20}
+            style={{
+              animation: isChecking ? 'spin 1s linear infinite' : 'none'
+            }}
+          />
+          {isChecking ? 'Vérification en cours...' : 'Vérifier la connexion & Débloquer'}
         </button>
       </div>
     </div>
