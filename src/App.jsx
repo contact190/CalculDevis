@@ -448,26 +448,14 @@ function App() {
              let baseTimestamp = localTimestamp || "1970-01-01T00:00:00.000Z";
              
              if (cloudData) {
-                if (!localData) {
-                  finalData = cloudData;
-                  baseTimestamp = updatedAt || baseTimestamp;
-                  console.log("☁️ Snapshot Cloud chargé (pas de cache local).");
-                } else {
-                  console.log("☁️ Fusion intelligente (Smart Merge) des données locales avec le Cloud...");
-                  finalData = smartMerge(localData, cloudData);
-                  
-                  const localDate = localTimestamp ? new Date(localTimestamp).getTime() : 0;
-                  const cloudDate = updatedAt ? new Date(updatedAt).getTime() : 0;
-                  // Use the older timestamp for fetching operations to guarantee no operations are missed
-                  if (localDate < cloudDate && localTimestamp) {
-                    baseTimestamp = localTimestamp;
-                  } else if (updatedAt) {
-                    baseTimestamp = updatedAt;
-                  }
-                }
-             }
-             
-             // Now fetch missed ops
+                // RÈGLE A : Le Cloud est l'unique Source de Vérité maîtresse.
+                // Le local n'écrase plus le Cloud : on adopte directement le Cloud le plus frais.
+                finalData = cloudData;
+                baseTimestamp = updatedAt || baseTimestamp;
+                console.log("☁️ Base de données Cloud adoptée comme source de vérité maîtresse.");
+              }
+              
+              // Now fetch missed ops
              setLoadingMessage('Récupération des opérations récentes...');
              const missedOps = await cloudSync.fetchOpsSince(baseTimestamp, getDeviceId());
              
@@ -697,8 +685,7 @@ function App() {
 
         await persistentStorage.save('calculDevis_lastModified', now);
         lastLocalModifiedRef.current = now;
-        setSaveStatus('saved');
-        setTimeout(() => setSaveStatus('idle'), 2000);
+        // La confirmation visuelle "saved" est désormais réservée au succès Cloud
 
         // ─── Push delta ops to server (only if this is a LOCAL change) ─────
         if (!isApplyingRemoteOps.current && originalOldDb) {
@@ -719,13 +706,19 @@ function App() {
           if (generatedOps.length > 0) {
              setSupabaseSyncStatus('syncing');
              const cloudResult = await cloudSync.pushOps(generatedOps);
-             if (cloudResult && cloudResult.success) {
-               console.log(`☁️ ${cloudResult.applied} ops envoyées au Cloud avec succès.`);
-               setSupabaseSyncStatus('ok');
-               setLastSupabaseSync(new Date());
-             } else {
-               setSupabaseSyncStatus('error');
-             }
+              if (cloudResult && cloudResult.success) {
+                console.log(`☁️ ${cloudResult.applied} ops envoyées au Cloud avec succès.`);
+                setSupabaseSyncStatus('ok');
+                setLastSupabaseSync(new Date());
+                setSaveStatus('saved');
+                setTimeout(() => setSaveStatus('idle'), 2000);
+              } else {
+                setSupabaseSyncStatus('error');
+                setSaveStatus('error');
+                if (typeof window !== 'undefined') {
+                  window.dispatchEvent(new CustomEvent('app:network-error'));
+                }
+              }
 
              // Sauvegarde snapshot d'arrière-plan différée (3s) pour maintenir mainDb.json à jour sans bloquer l'écran
              if (bgSnapshotTimerRef.current) clearTimeout(bgSnapshotTimerRef.current);

@@ -7,7 +7,7 @@ export default function OfflineGuard({ onReconnect }) {
   const [retryError, setRetryError] = useState(false);
   const checkIntervalRef = useRef(null);
 
-  // Vérification active de la connectivité réelle (ping Supabase ultra-léger)
+  // Vérification active de la connectivité réelle (ping Supabase ultra-léger, seuil strict de 2.5s)
   const verifyRealConnection = useCallback(async () => {
     if (!navigator.onLine) {
       setIsOffline(true);
@@ -15,7 +15,7 @@ export default function OfflineGuard({ onReconnect }) {
     }
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      const timeoutId = setTimeout(() => controller.abort(), 2500);
       
       const res = await fetch('https://uxfktjdibabwcjinynlk.supabase.co/rest/v1/', {
         method: 'HEAD',
@@ -66,9 +66,15 @@ export default function OfflineGuard({ onReconnect }) {
       verifyRealConnection();
     };
 
+    const handleNetworkSlow = () => {
+      setIsOffline(true);
+      setRetryError(false);
+    };
+
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
     window.addEventListener('app:network-error', handleNetworkError);
+    window.addEventListener('app:network-slow', handleNetworkSlow);
 
     // Vérification rapide toutes les 5 secondes
     checkIntervalRef.current = setInterval(() => {
@@ -82,6 +88,7 @@ export default function OfflineGuard({ onReconnect }) {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('app:network-error', handleNetworkError);
+      window.removeEventListener('app:network-slow', handleNetworkSlow);
       if (checkIntervalRef.current) clearInterval(checkIntervalRef.current);
     };
   }, [verifyRealConnection, onReconnect]);
@@ -145,7 +152,7 @@ export default function OfflineGuard({ onReconnect }) {
           marginBottom: '0.75rem'
         }}>
           <AlertTriangle size={15} color="#b91c1c" />
-          ERREUR DE CONNEXION DÉTECTÉE
+          ERREUR DE CONNEXION / RÉSEAU TROP LENT
         </div>
 
         <h2 style={{
@@ -175,9 +182,9 @@ export default function OfflineGuard({ onReconnect }) {
             <AlertTriangle size={20} color="#e11d48" style={{ flexShrink: 0, marginTop: '2px' }} />
             <div style={{ fontSize: '0.88rem', color: '#881337', lineHeight: 1.45 }}>
               <strong style={{ display: 'block', fontSize: '0.92rem', marginBottom: '0.2rem' }}>
-                Connexion réseau interrompue ou instable
+                Connexion réseau trop lente (&gt; 2.5s) ou coupée
               </strong>
-              Veuillez vérifier votre accès <strong>Wi-Fi</strong>, vos <strong>données mobiles (4G/5G)</strong> ou votre câble réseau.
+              L'enregistrement est suspendu pour protéger vos données contre les conflits entre appareils. Veuillez vérifier votre accès <strong>Wi-Fi</strong> ou <strong>4G/5G</strong>.
             </div>
           </div>
         </div>

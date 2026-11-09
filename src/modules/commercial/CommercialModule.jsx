@@ -6,6 +6,7 @@ import LayoutComposer, { defaultLayout, rescaleTree } from '../../components/sha
 import jsPDF from 'jspdf';
 import { getTechnicalDrawingDataURL } from '../../utils/drawingUtils';
 import { generateNextQuoteNumber, isQuoteLocked, getQuoteTotals, cloneSitePlanForNewQuote } from '../../utils/quoteUtils';
+import { fetchLatestMaxOrderNumber, computeNextOrderId } from '../../utils/orderIdService';
 
 
 const EMPTY_CONFIG = {
@@ -2851,7 +2852,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
 
   const filteredBoms = consumableFilter === 'all' ? allBoms : allBoms.filter(b => b.itemId === consumableFilter);
 
-  const saveQuoteToDatabase = (quoteToSave, showAlert = false) => {
+  const saveQuoteToDatabase = async (quoteToSave, showAlert = false) => {
     if (setDatabase && quoteToSave) {
       if (!quoteToSave.items || quoteToSave.items.length === 0) {
         if (showAlert) alert("Veuillez ajouter au moins un produit avant d'enregistrer le devis.");
@@ -2870,6 +2871,15 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
         finalQuote.lockedAt = new Date().toISOString();
       }
       const isNewQuote = !(database?.quotes || []).some(q => q.id === finalQuote.id);
+
+      let precomputedOrderId = null;
+      if (finalQuote.status === 'Confirmé') {
+        const existingOrder = (database?.orders || []).find(o => o.quoteId === finalQuote.id);
+        if (!existingOrder) {
+          const maxNum = await fetchLatestMaxOrderNumber(database?.orders || []);
+          precomputedOrderId = computeNextOrderId(maxNum, database?.orders || []);
+        }
+      }
 
       setDatabase(prev => {
         // Double vérification dans le setter : bloquer uniquement si le devis est verrouillé ET déjà transformé en commande
@@ -2891,17 +2901,15 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
         if (finalQuote.status === 'Confirmé') {
           // Si aucune commande n'existe encore pour ce devis, on crée la commande
           if (!existingOrder) {
-            const ids = orders
-              .map(o => o.id)
-              .filter(id => id && id.startsWith('CMD-'))
-              .map(id => parseInt(id.split('-')[1], 10))
-              .filter(num => !isNaN(num) && num < 70000);
-            const maxId = ids.length > 0 ? Math.max(...ids) : 0;
-            let candidate = maxId + 1;
-            let orderId = `CMD-${String(candidate).padStart(2, '0')}`;
-            while (orders.some(o => o.id === orderId)) {
-              candidate++;
-              orderId = `CMD-${String(candidate).padStart(2, '0')}`;
+            let orderId = precomputedOrderId;
+            if (!orderId) {
+              const ids = orders
+                .map(o => o.id)
+                .filter(id => id && id.startsWith('CMD-'))
+                .map(id => parseInt(id.split('-')[1], 10))
+                .filter(num => !isNaN(num) && num < 70000);
+              const maxId = ids.length > 0 ? Math.max(...ids) : 0;
+              orderId = computeNextOrderId(maxId, orders);
             }
             orders = [...orders, { 
               ...finalQuote, 

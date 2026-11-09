@@ -14,7 +14,7 @@ export function updateClockSkew(skew) {
   }
 }
 
-export const fetchWithTimeout = async (resource, options = {}, timeout = 8000) => {
+export const fetchWithTimeout = async (resource, options = {}, timeout = 3500) => {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeout);
   try {
@@ -37,7 +37,11 @@ export const fetchWithTimeout = async (resource, options = {}, timeout = 8000) =
   } catch (error) {
     clearTimeout(id);
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('app:network-error'));
+      if (error.name === 'AbortError') {
+        window.dispatchEvent(new CustomEvent('app:network-slow'));
+      } else {
+        window.dispatchEvent(new CustomEvent('app:network-error'));
+      }
     }
     throw error;
   }

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Users, Plus, Edit2, Trash2, FileText, ChevronDown, ChevronUp, CheckCircle, Copy, Link, ExternalLink, Lock } from 'lucide-react';
 import { getQuoteTotals, generateNextQuoteNumber, isQuoteLocked, cloneSitePlanForNewQuote } from '../../utils/quoteUtils';
+import { fetchLatestMaxOrderNumber, computeNextOrderId } from '../../utils/orderIdService';
 
 const ClientsModule = ({ data, setData, onOpenQuote, quoteSettings }) => {
   const [editingClient, setEditingClient] = useState(null);
@@ -30,7 +31,7 @@ const ClientsModule = ({ data, setData, onOpenQuote, quoteSettings }) => {
     }));
   };
 
-  const handleConvertToOrder = (quote) => {
+  const handleConvertToOrder = async (quote) => {
     const orders = data.orders || [];
     const existingOrder = orders.find(o => o.quoteId === quote.id);
     if (existingOrder) {
