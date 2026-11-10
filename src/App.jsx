@@ -46,6 +46,9 @@ import { localSync } from './utils/localSync';
 import { smartMerge } from './utils/smartMerge';
 import { applyOps, generateOps, getDeviceId } from './utils/patchEngine';
 import { setCurrentAuthorName } from './utils/patchEngine';
+import { guardQuoteItems, withActiveQuote, loadSafetyNet, restoreItemsIntoQuote, markSafetyNetEntryRestored } from './utils/quoteSafetyNet';
+import { isQuoteLocked } from './utils/quoteUtils';
+import QuoteSafetyNetModal from './components/shared/QuoteSafetyNetModal';
 import LoginModal from './components/auth/LoginModal';
 import OfflineGuard from './components/shared/OfflineGuard';
 import AccessControlModal from './modules/access/AccessControlModal';
@@ -156,6 +159,31 @@ function App() {
     currentQuoteRef.current = currentQuote;
   }, [currentQuote]);
   const [selectedShopQuote, setSelectedShopQuote] = useState(null);
+
+  // ─── Filet de sécurité : copie des articles retirés d'un devis par une synchronisation ───
+  const [safetyNetEntries, setSafetyNetEntries] = useState([]);
+  const [isSafetyNetOpen, setIsSafetyNetOpen] = useState(false);
+  useEffect(() => {
+    const refresh = () => { loadSafetyNet().then(setSafetyNetEntries).catch(() => {}); };
+    refresh();
+    window.addEventListener('app:quote-safety-net', refresh);
+    return () => window.removeEventListener('app:quote-safety-net', refresh);
+  }, []);
+  // Compare la base avant/après l'arrivée de données distantes. N'altère rien, ne lève jamais d'erreur.
+  // activeKept = true : le devis ouvert à l'écran n'est pas remplacé par ce chemin (il sera réécrit en base).
+  const recordQuoteItemLoss = useCallback((beforeDb, afterDb, source, activeKept = false) => {
+    try {
+      const active = currentQuoteRef.current;
+      let before = beforeDb;
+      let skipQuoteIds = [];
+      if (active && active.id) {
+        const idle = Date.now() - lastLocalQuoteEditRef.current > 3000;
+        if (idle && !activeKept) before = withActiveQuote(beforeDb, active);
+        else skipQuoteIds = [active.id];
+      }
+      guardQuoteItems(before, afterDb, { source, skipQuoteIds });
+    } catch (e) { /* le filet ne doit jamais gêner la synchronisation */ }
+  }, []);
 
   const menuItems = useMemo(() => {
     return [
@@ -333,6 +361,7 @@ function App() {
     const loadAndSync = async () => {
       setIsLoading(true);
       let finalRepairedDb = null;
+      let localBeforeLoad = null; // base locale avant adoption des données serveur/Cloud (filet de sécurité)
       try {
         setLoadingMessage('Chargement des paramètres...');
         let settingsData = null;
@@ -371,6 +400,7 @@ function App() {
         setLoadingMessage('Chargement des données locales...');
         let localData = await persistentStorage.load(LOCAL_KEY);
         const localTimestamp = await persistentStorage.load('calculDevis_lastModified');
+        localBeforeLoad = localData || null;
 
         if (!localData) {
           try {
@@ -491,6 +521,10 @@ function App() {
         if (finalRepairedDb && finalRepairedDb.quotes) {
           try {
             const savedActiveQuote = await persistentStorage.load('calculDevis_activeQuote');
+            // Filet de sécurité : la base adoptée au démarrage contient-elle moins d'articles que la base locale ?
+            if (localBeforeLoad) {
+              guardQuoteItems(withActiveQuote(localBeforeLoad, savedActiveQuote), finalRepairedDb, { source: 'chargement au démarrage' });
+            }
             if (savedActiveQuote && savedActiveQuote.id) {
               const dbQuote = finalRepairedDb.quotes.find(q => q.id === savedActiveQuote.id);
               if (dbQuote) {
@@ -514,6 +548,7 @@ function App() {
         setDatabase(prev => {
           const merged = smartMerge(prev, cloudData);
           const repaired = repairDatabase(merged);
+          recordQuoteItemLoss(prev, repaired, 'reconnexion (Cloud)', true);
           persistentStorage.save(LOCAL_KEY, repaired);
           return repaired;
         });
@@ -524,6 +559,7 @@ function App() {
         setDatabase(prev => {
           const { db: updatedDb } = applyOps(prev, missedOps);
           const repaired = repairDatabase(updatedDb);
+          recordQuoteItemLoss(prev, repaired, 'reconnexion (modifications manquées)', true);
           persistentStorage.save(LOCAL_KEY, repaired);
           return repaired;
         });
@@ -810,6 +846,7 @@ function App() {
             }
 
             const repaired = repairDatabase(finalData);
+            recordQuoteItemLoss(databaseRef.current, repaired, 'rechargement complet (Cloud)');
             setDatabase(repaired);
             // Sync active currentQuote from incoming database
             const activeQuote = currentQuoteRef.current;
@@ -846,6 +883,7 @@ function App() {
       const { db: newDb, appliedCount } = applyOps(databaseRef.current, remoteOps);
       if (appliedCount > 0) {
         const repaired = repairDatabase(newDb);
+        recordQuoteItemLoss(databaseRef.current, repaired, 'modification reçue d\'un autre poste');
         setDatabase(repaired);
         // Sync active currentQuote from incoming operations
         const activeQuote = currentQuoteRef.current;
@@ -886,6 +924,7 @@ function App() {
           // Merge local changes with server data instead of completely overwriting
           const merged = smartMerge(databaseRef.current, serverData);
           const repaired = repairDatabase(merged);
+          recordQuoteItemLoss(databaseRef.current, repaired, 'rechargement complet (serveur local)');
           setDatabase(repaired);
           // Sync active currentQuote from server data
           const activeQuote = currentQuoteRef.current;
@@ -971,7 +1010,7 @@ function App() {
       if (cloudSyncIntervalRef.current) clearInterval(cloudSyncIntervalRef.current);
       if (opsPollInterval) clearInterval(opsPollInterval);
     };
-  }, [isLoading, repairDatabase]);
+  }, [isLoading, repairDatabase, recordQuoteItemLoss]);
 
   // ─── Network listeners ────────────────────────────────────────────────────
   useEffect(() => {
@@ -1082,6 +1121,32 @@ function App() {
     } else if (!backup) {
       alert('Aucune sauvegarde de sécurité trouvée.');
     }
+  };
+
+  // ─── Filet de sécurité : remettre dans un devis les articles retirés par une synchronisation ───
+  const handleRestoreLostItems = (entry) => {
+    if (!entry || !database) return;
+    const dbQuote = (database.quotes || []).find(q => q && q.id === entry.quoteId && !q._deleted);
+    if (!dbQuote) { alert("Ce devis n'existe plus : impossible d'y remettre les articles."); return; }
+    if (isQuoteLocked(dbQuote, database.orders)) { alert("Ce devis est figé ou confirmé (lecture seule). Dupliquez-le pour y remettre les articles."); return; }
+    const { addedCount } = restoreItemsIntoQuote(dbQuote, entry.lostItems);
+    if (addedCount === 0) {
+      alert('Ces articles sont déjà présents dans le devis.');
+    } else {
+      if (!window.confirm(`Remettre ${addedCount} article(s) dans le devis ${entry.quoteNumber} ?`)) return;
+      // Le devis ouvert à l'écran est mis à jour en même temps, sinon il réécraserait la base
+      setCurrentQuote(prev => (prev && prev.id === entry.quoteId) ? restoreItemsIntoQuote(prev, entry.lostItems).quote : prev);
+      setDatabase(prev => {
+        if (!prev || !Array.isArray(prev.quotes)) return prev;
+        return {
+          ...prev,
+          quotes: prev.quotes.map(q => (q && q.id === entry.quoteId && !isQuoteLocked(q, prev.orders))
+            ? restoreItemsIntoQuote(q, entry.lostItems).quote
+            : q)
+        };
+      });
+    }
+    markSafetyNetEntryRestored(entry.id).then(() => loadSafetyNet()).then(setSafetyNetEntries).catch(() => {});
   };
 
   // ─── Force full sync (local server + Supabase Cloud Snapshot) ──────────────
@@ -1339,6 +1404,16 @@ function App() {
               <RefreshCw size={12} color="#64748b" />
             </button>
           </div>
+
+          {/* Filet de sécurité : visible uniquement si des articles ont été retirés par une synchronisation */}
+          {safetyNetEntries.length > 0 && (
+            <button
+              onClick={() => setIsSafetyNetOpen(true)}
+              style={{ width: '100%', padding: '0.4rem', fontSize: '0.68rem', background: 'rgba(245,158,11,0.12)', color: '#fcd34d', border: '1px solid rgba(245,158,11,0.3)', borderRadius: '0.4rem', cursor: 'pointer', fontWeight: 600 }}
+            >
+              🛟 Articles retirés ({safetyNetEntries.filter(e => !e.restoredAt).length})
+            </button>
+          )}
 
           {/* Emergency Restore */}
           <button
@@ -1600,6 +1675,14 @@ function App() {
           )}
         </Suspense>
       </main>
+
+      {isSafetyNetOpen && (
+        <QuoteSafetyNetModal
+          entries={safetyNetEntries}
+          onClose={() => setIsSafetyNetOpen(false)}
+          onRestore={handleRestoreLostItems}
+        />
+      )}
 
       {/* Modale de gestion des accès & traçabilité (Admin) */}
       {isAccessModalOpen && (
