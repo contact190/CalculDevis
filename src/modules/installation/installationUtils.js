@@ -28,11 +28,11 @@ export const INSTALLATION_STEPS = [
   { 
     id: 'pose_vitrage', 
     label: 'Pose Vitrage', 
-    labelSliding: 'Remplissage vitrage',
+    labelSliding: 'Pose Vitrage',
     shortLabel: 'Pose Vit.',
-    shortLabelSliding: 'Remplissage',
+    shortLabelSliding: 'Pose Vit.',
     icon: 'Maximize2', 
-    desc: 'Pose et calage des vitrages / Remplissage vantaux coulissants' 
+    desc: 'Pose et calage des vitrages' 
   },
   { 
     id: 'reglage', 
@@ -43,10 +43,11 @@ export const INSTALLATION_STEPS = [
   },
   { 
     id: 'finition', 
-    label: 'Finition', 
+    label: 'Silicone', 
+    labelSliding: 'Silicone',
     icon: 'CheckCircle2', 
-    shortLabel: 'Finition',
-    desc: 'Joints silicone, habillages, cornières et nettoyage final' 
+    shortLabel: 'Silicone',
+    desc: 'Joints silicone, étanchéité et finitions' 
   },
 ];
 

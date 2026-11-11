@@ -171,15 +171,48 @@ export default function InstallationMobilePortal({ data, setData, orderId, isOnl
   };
 
   // Action sur une étape
-  const handleStepClick = (itemId, repere, stepId, stepLabel, currentDone) => {
-    updateInstallationStep(setData, order.id, itemId, stepId, !currentDone, poseurName);
-    showToast(`${repere} : ${stepLabel} ${!currentDone ? 'validé !' : 'annulé'}`);
+  const handleStepClick = (itemId, repere, stepId, stepLabel, currentDone, item) => {
+    // Si l'élément est déjà terminé (100% posé) et qu'on essaie de décocher
+    if (item?.isFullyInstalled && currentDone) {
+      const confirmUnlock = window.confirm(`⚠️ Le repère ${repere} est déjà entièrement posé (6/6 étapes validées).\n\nVoulez-vous vraiment déverrouiller et annuler l'étape « ${stepLabel} » ?`);
+      if (!confirmUnlock) return;
+    }
+
+    const nextDone = !currentDone;
+    updateInstallationStep(setData, order.id, itemId, stepId, nextDone, poseurName);
+
+    // Si on vient de valider la dernière étape manquante
+    if (nextDone && item) {
+      const otherStepsDone = INSTALLATION_STEPS.filter(s => s.id !== stepId).every(s => !!item.steps[s.id]?.done);
+      if (otherStepsDone) {
+        showToast(`🎉 Félicitations ! Pose 100% terminée pour ${repere} !`);
+        setTimeout(() => {
+          alert(`✅ Confirmation de fin de pose :\n\nToutes les étapes sont désormais terminées pour le repère ${repere}.\nL'élément est validé et son état est maintenant verrouillé.`);
+        }, 150);
+        return;
+      }
+    }
+
+    showToast(`${repere} : ${stepLabel} ${nextDone ? 'validé !' : 'annulé'}`);
   };
 
   // Action tout valider
-  const handleToggleAll = (itemId, repere, targetDone) => {
+  const handleToggleAll = (itemId, repere, targetDone, item) => {
+    if (item?.isFullyInstalled && !targetDone) {
+      const confirmCancel = window.confirm(`⚠️ Le repère ${repere} est déjà entièrement validé et verrouillé.\n\nVoulez-vous vraiment annuler toutes les étapes de pose ?`);
+      if (!confirmCancel) return;
+    }
+
     toggleAllInstallationSteps(setData, order.id, itemId, targetDone, poseurName);
-    showToast(`${repere} : ${targetDone ? 'Toutes les étapes validées !' : 'Étapes remises à zéro'}`);
+
+    if (targetDone) {
+      showToast(`🎉 Toutes les étapes validées pour ${repere} !`);
+      setTimeout(() => {
+        alert(`✅ Confirmation de fin de pose :\n\nToutes les étapes de pose pour le repère ${repere} ont été validées par ${poseurName}.\nL'état est désormais verrouillé.`);
+      }, 150);
+    } else {
+      showToast(`${repere} : Étapes remises à zéro`);
+    }
   };
 
   // Filtrage des articles pour l'affichage mobile
@@ -586,21 +619,39 @@ export default function InstallationMobilePortal({ data, setData, orderId, isOnl
                             {/* Statut ou Tout Valider */}
                             <div>
                               {isDelivered ? (
-                                <button
-                                  onClick={() => handleToggleAll(item.id, item.repere, !item.isFullyInstalled)}
-                                  style={{
-                                    padding: '0.35rem 0.6rem',
-                                    borderRadius: '6px',
-                                    background: item.isFullyInstalled ? '#fef2f2' : '#ecfdf5',
-                                    color: item.isFullyInstalled ? '#dc2626' : '#059669',
-                                    border: item.isFullyInstalled ? '1px solid #fecaca' : '1px solid #a7f3d0',
-                                    fontSize: '0.72rem',
-                                    fontWeight: 700,
-                                    cursor: 'pointer'
-                                  }}
-                                >
-                                  {item.isFullyInstalled ? 'Annuler' : 'Tout validé'}
-                                </button>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                  {item.isFullyInstalled && (
+                                    <span style={{
+                                      fontSize: '0.68rem',
+                                      fontWeight: 800,
+                                      color: '#166534',
+                                      background: '#dcfce7',
+                                      border: '1px solid #86efac',
+                                      padding: '0.25rem 0.5rem',
+                                      borderRadius: '6px',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '0.25rem'
+                                    }}>
+                                      🔒 Validé
+                                    </span>
+                                  )}
+                                  <button
+                                    onClick={() => handleToggleAll(item.id, item.repere, !item.isFullyInstalled, item)}
+                                    style={{
+                                      padding: '0.35rem 0.6rem',
+                                      borderRadius: '6px',
+                                      background: item.isFullyInstalled ? '#fef2f2' : '#ecfdf5',
+                                      color: item.isFullyInstalled ? '#dc2626' : '#059669',
+                                      border: item.isFullyInstalled ? '1px solid #fecaca' : '1px solid #a7f3d0',
+                                      fontSize: '0.72rem',
+                                      fontWeight: 700,
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    {item.isFullyInstalled ? 'Déverrouiller' : 'Tout validé'}
+                                  </button>
+                                </div>
                               ) : (
                                 <span style={{
                                   fontSize: '0.68rem',
@@ -617,9 +668,9 @@ export default function InstallationMobilePortal({ data, setData, orderId, isOnl
                             </div>
                           </div>
 
-                          {/* LIGNE 2 : LES 6 TOUCHES D'ÉTAPES TACTILES */}
+                          {/* LIGNE 2 : LES 6 TOUCHES D'ÉTAPES TACTILES AVEC DATE ET POSEUR */}
                           {isDelivered ? (
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.45rem' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem' }}>
                               {INSTALLATION_STEPS.map(step => {
                                 const stepState = item.steps[step.id];
                                 const isDone = !!stepState?.done;
@@ -632,16 +683,14 @@ export default function InstallationMobilePortal({ data, setData, orderId, isOnl
                                 return (
                                   <button
                                     key={step.id}
-                                    onClick={() => handleStepClick(item.id, item.repere, step.id, stepTitle, isDone)}
+                                    onClick={() => handleStepClick(item.id, item.repere, step.id, stepTitle, isDone, item)}
                                     style={{
-                                      minHeight: '44px',
-                                      padding: '0.5rem 0.6rem',
+                                      minHeight: '48px',
+                                      padding: '0.5rem 0.65rem',
                                       borderRadius: '8px',
                                       background: isDone ? '#10b981' : '#ffffff',
                                       color: isDone ? '#fff' : '#334155',
                                       border: isDone ? '1px solid #059669' : '1px solid #cbd5e1',
-                                      fontSize: '0.8rem',
-                                      fontWeight: isDone ? 800 : 600,
                                       display: 'flex',
                                       alignItems: 'center',
                                       justifyContent: 'space-between',
@@ -651,12 +700,25 @@ export default function InstallationMobilePortal({ data, setData, orderId, isOnl
                                       boxShadow: isDone ? '0 1px 3px rgba(16, 185, 129, 0.2)' : '0 1px 2px rgba(0,0,0,0.02)'
                                     }}
                                   >
-                                    <span style={{ lineHeight: 1.2 }}>{stepTitle}</span>
-                                    {isDone ? (
-                                      <CheckCircle2 size={16} color="#fff" />
-                                    ) : (
-                                      <Circle size={15} color="#94a3b8" />
-                                    )}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', overflow: 'hidden' }}>
+                                      <span style={{ fontSize: '0.82rem', fontWeight: isDone ? 800 : 600, lineHeight: 1.2 }}>
+                                        {stepTitle}
+                                      </span>
+                                      {isDone && (
+                                        <div style={{ fontSize: '0.66rem', color: '#ecfdf5', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap', marginTop: '2px' }}>
+                                          <span>📅 {stepState?.at ? `${new Date(stepState.at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })} ${new Date(stepState.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}` : 'Fait'}</span>
+                                          <span>•</span>
+                                          <span>👤 {stepState?.by || poseurName}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div style={{ flexShrink: 0, marginLeft: '6px' }}>
+                                      {isDone ? (
+                                        <CheckCircle2 size={18} color="#fff" />
+                                      ) : (
+                                        <Circle size={16} color="#94a3b8" />
+                                      )}
+                                    </div>
                                   </button>
                                 );
                               })}

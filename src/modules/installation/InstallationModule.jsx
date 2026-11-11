@@ -24,7 +24,10 @@ import {
   RotateCcw,
   AlertCircle,
   HelpCircle,
-  HardHat
+  HardHat,
+  FileText,
+  Printer,
+  Lock
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { 
@@ -56,6 +59,12 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'livre' | 'en_stock' | 'non_produit' | 'pose'
   
+  // Sous-onglets bureau : 'chantier' (Suivi live par étage) | 'rapport' (Rapport traçabilité dates & poseurs)
+  const [activeTab, setActiveTab] = useState('chantier');
+  const [reportSearch, setReportSearch] = useState('');
+  const [reportFloorFilter, setReportFloorFilter] = useState('all');
+  const [reportStatusFilter, setReportStatusFilter] = useState('all');
+
   // États de pliage/dépliage des étages
   const [expandedFloors, setExpandedFloors] = useState({});
   const [copiedLink, setCopiedLink] = useState(false);
@@ -206,6 +215,108 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
       };
     });
   }, [chantierData.floors, searchQuery, statusFilter]);
+
+  // Tous les articles aplatis pour le rapport de traçabilité
+  const allReportItems = useMemo(() => {
+    const list = [];
+    chantierData.floors.forEach(floor => {
+      floor.items.forEach(it => {
+        list.push({
+          ...it,
+          floorDisplayName: floor.displayName,
+          floorRawName: floor.rawName
+        });
+      });
+    });
+    return list;
+  }, [chantierData.floors]);
+
+  // Filtrage spécifique pour le sous-onglet Rapport
+  const filteredReportItems = useMemo(() => {
+    const q = reportSearch.trim().toLowerCase();
+
+    return allReportItems.filter(item => {
+      // Filtre texte (repère, label, dimensions, poseurs)
+      const matchText = !q ||
+        item.repere.toLowerCase().includes(q) ||
+        item.label.toLowerCase().includes(q) ||
+        item.dimensions.toLowerCase().includes(q) ||
+        item.floorDisplayName.toLowerCase().includes(q) ||
+        INSTALLATION_STEPS.some(s => {
+          const stepBy = item.steps[s.id]?.by || '';
+          return stepBy.toLowerCase().includes(q);
+        });
+
+      if (!matchText) return false;
+
+      // Filtre étage
+      if (reportFloorFilter !== 'all' && item.floorRawName !== reportFloorFilter && item.floorDisplayName !== reportFloorFilter) {
+        return false;
+      }
+
+      // Filtre statut
+      if (reportStatusFilter === 'pose') return item.isFullyInstalled;
+      if (reportStatusFilter === 'en_cours') return item.completedStepsCount > 0 && !item.isFullyInstalled;
+      if (reportStatusFilter === 'non_commence') return item.completedStepsCount === 0;
+      if (reportStatusFilter === 'livre') return item.status === 'livre';
+
+      return true;
+    });
+  }, [allReportItems, reportSearch, reportFloorFilter, reportStatusFilter]);
+
+  // Synthèse des poseurs ayant intervenu sur ce chantier
+  const poseursStats = useMemo(() => {
+    const map = {};
+    allReportItems.forEach(it => {
+      INSTALLATION_STEPS.forEach(s => {
+        const step = it.steps[s.id];
+        if (step?.done && step?.by) {
+          map[step.by] = (map[step.by] || 0) + 1;
+        }
+      });
+    });
+    return Object.entries(map).sort((a, b) => b[1] - a[1]);
+  }, [allReportItems]);
+
+  // Clic sur une étape bureau : avec gestion du verrouillage et confirmation
+  const handleDesktopStepClick = (item, step, isDone) => {
+    const stepTitle = (item.isSliding && step.id === 'pose_vitrage')
+      ? step.labelSliding
+      : step.label;
+
+    if (item.isFullyInstalled && isDone) {
+      const confirmUnlock = window.confirm(`⚠️ L'ouverture ${item.repere} est déjà entièrement terminée (100% posée).\n\nVoulez-vous vraiment la déverrouiller et annuler l'étape « ${stepTitle} » ?`);
+      if (!confirmUnlock) return;
+    }
+
+    const nextDone = !isDone;
+    updateInstallationStep(setData, currentOrder.id, item.id, step.id, nextDone, 'Bureau');
+
+    if (nextDone) {
+      const otherStepsDone = INSTALLATION_STEPS.filter(s => s.id !== step.id).every(s => !!item.steps[s.id]?.done);
+      if (otherStepsDone) {
+        setTimeout(() => {
+          alert(`✅ Confirmation de fin de pose :\n\nToutes les étapes sont maintenant terminées pour le repère ${item.repere} !\nL'état de pose est désormais verrouillé.`);
+        }, 150);
+      }
+    }
+  };
+
+  // Action Tout valider bureau : avec confirmation
+  const handleDesktopToggleAll = (item, targetDone) => {
+    if (item.isFullyInstalled && !targetDone) {
+      const confirmCancel = window.confirm(`⚠️ L'ouverture ${item.repere} est entièrement validée et verrouillée (6/6 étapes).\n\nVoulez-vous vraiment annuler toutes les étapes de pose ?`);
+      if (!confirmCancel) return;
+    }
+
+    toggleAllInstallationSteps(setData, currentOrder.id, item.id, targetDone, 'Bureau');
+
+    if (targetDone) {
+      setTimeout(() => {
+        alert(`✅ Confirmation de fin de pose :\n\nToutes les étapes de pose pour le repère ${item.repere} ont été validées.\nL'état est désormais verrouillé.`);
+      }, 150);
+    }
+  };
 
   return (
     <div className="installation-module" style={{ padding: '1.5rem', maxWidth: '1600px', margin: '0 auto', color: '#1e293b' }}>
@@ -441,7 +552,66 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
         </div>
       )}
 
-      {/* ─── FILTRES ET ACTIONS ──────────────────────────────────────────────── */}
+      {/* ─── SOUS-ONGLETS BUREAU ─────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1.25rem', borderBottom: '2px solid #e2e8f0', paddingBottom: '0.5rem' }}>
+        <button
+          onClick={() => setActiveTab('chantier')}
+          style={{
+            padding: '0.6rem 1.25rem',
+            borderRadius: '8px',
+            background: activeTab === 'chantier' ? '#0284c7' : '#ffffff',
+            color: activeTab === 'chantier' ? '#ffffff' : '#475569',
+            border: activeTab === 'chantier' ? '1px solid #0284c7' : '1px solid #cbd5e1',
+            fontSize: '0.88rem',
+            fontWeight: 700,
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.45rem',
+            boxShadow: activeTab === 'chantier' ? '0 2px 4px rgba(2, 132, 199, 0.2)' : '0 1px 2px rgba(0,0,0,0.03)',
+            transition: 'all 0.15s'
+          }}
+        >
+          <Building size={17} />
+          <span>Suivi Chantier par Étage</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('rapport')}
+          style={{
+            padding: '0.6rem 1.25rem',
+            borderRadius: '8px',
+            background: activeTab === 'rapport' ? '#0284c7' : '#ffffff',
+            color: activeTab === 'rapport' ? '#ffffff' : '#475569',
+            border: activeTab === 'rapport' ? '1px solid #0284c7' : '1px solid #cbd5e1',
+            fontSize: '0.88rem',
+            fontWeight: 700,
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.45rem',
+            boxShadow: activeTab === 'rapport' ? '0 2px 4px rgba(2, 132, 199, 0.2)' : '0 1px 2px rgba(0,0,0,0.03)',
+            transition: 'all 0.15s'
+          }}
+        >
+          <FileText size={17} />
+          <span>Rapport de Pose (Détails Dates & Poseurs)</span>
+          <span style={{
+            background: activeTab === 'rapport' ? 'rgba(255,255,255,0.25)' : '#f1f5f9',
+            color: activeTab === 'rapport' ? '#ffffff' : '#64748b',
+            fontSize: '0.72rem',
+            fontWeight: 800,
+            padding: '0.1rem 0.45rem',
+            borderRadius: '10px'
+          }}>
+            {chantierData.stats.pose} / {chantierData.stats.total}
+          </span>
+        </button>
+      </div>
+
+      {activeTab === 'chantier' && (
+        <>
+          {/* ─── FILTRES ET ACTIONS ──────────────────────────────────────────────── */}
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', marginBottom: '1.25rem' }}>
         
         {/* Recherche par repère (ex: 1A1, 1A2...) */}
@@ -650,7 +820,7 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
                                 borderRadius: '10px',
                                 padding: '0.85rem 1rem',
                                 display: 'grid',
-                                gridTemplateColumns: '110px minmax(200px, 1.2fr) 130px minmax(400px, 3fr) 110px',
+                                gridTemplateColumns: '110px minmax(180px, 1fr) 130px minmax(500px, 3.5fr) 130px',
                                 alignItems: 'center',
                                 gap: '1rem',
                                 boxShadow: isDelivered ? '0 1px 3px rgba(0,0,0,0.03)' : 'none'
@@ -771,43 +941,65 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
                                 )}
                               </div>
 
-                              {/* 4. LES 6 ÉTAPES DE POSE EN TEMPS RÉEL (Pour les articles livrés) */}
+                              {/* 4. LES 6 ÉTAPES DE POSE EN TEMPS RÉEL (Pour les articles livrés) AVEC DATE EN HAUT */}
                               <div>
                                 {isDelivered ? (
-                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.45rem', alignItems: 'flex-end' }}>
                                     {INSTALLATION_STEPS.map(step => {
                                       const stepState = item.steps[step.id];
                                       const isDone = !!stepState?.done;
                                       
-                                      // Remplissage vitrage pour coulissant
+                                      // Titre adapté pour coulissant
                                       const stepTitle = (item.isSliding && step.id === 'pose_vitrage')
                                         ? step.labelSliding
                                         : step.label;
 
+                                      const dateFormatted = isDone && stepState?.at 
+                                        ? new Date(stepState.at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
+                                        : '—';
+
+                                      const fullTooltip = `${stepTitle} : ${
+                                        isDone 
+                                          ? `Validé le ${new Date(stepState.at).toLocaleDateString('fr-FR')} à ${new Date(stepState.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} par ${stepState.by || 'Poseur'}`
+                                          : 'Cliquer pour valider cette étape'
+                                      }`;
+
                                       return (
-                                        <button
-                                          key={step.id}
-                                          onClick={() => updateInstallationStep(setData, currentOrder.id, item.id, step.id, !isDone)}
-                                          title={`${stepTitle} : ${isDone ? `Validé le ${new Date(stepState.at).toLocaleDateString()} (${stepState.by || 'Poseur'})` : 'Cliquer pour valider'}`}
-                                          style={{
-                                            padding: '0.35rem 0.6rem',
-                                            borderRadius: '6px',
-                                            background: isDone ? '#10b981' : '#ffffff',
-                                            color: isDone ? '#ffffff' : '#475569',
-                                            border: isDone ? '1px solid #059669' : '1px solid #cbd5e1',
-                                            fontSize: '0.74rem',
-                                            fontWeight: isDone ? 700 : 600,
-                                            cursor: 'pointer',
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '0.35rem',
-                                            transition: 'all 0.15s',
-                                            boxShadow: isDone ? '0 1px 3px rgba(16, 185, 129, 0.2)' : '0 1px 2px rgba(0,0,0,0.03)'
-                                          }}
-                                        >
-                                          {isDone ? <Check size={12} strokeWidth={3} /> : <Circle size={12} color="#94a3b8" />}
-                                          <span>{stepTitle}</span>
-                                        </button>
+                                        <div key={step.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
+                                          {/* DATE EN HAUT DE L'ÉTAPE */}
+                                          <span style={{
+                                            fontSize: '0.64rem',
+                                            fontWeight: 700,
+                                            color: isDone ? '#047857' : '#94a3b8',
+                                            lineHeight: 1,
+                                            padding: '0 2px',
+                                            whiteSpace: 'nowrap'
+                                          }} title={fullTooltip}>
+                                            {dateFormatted}
+                                          </span>
+                                          <button
+                                            onClick={() => handleDesktopStepClick(item, step, isDone)}
+                                            title={fullTooltip}
+                                            style={{
+                                              padding: '0.35rem 0.6rem',
+                                              borderRadius: '6px',
+                                              background: isDone ? '#10b981' : '#ffffff',
+                                              color: isDone ? '#ffffff' : '#475569',
+                                              border: isDone ? '1px solid #059669' : '1px solid #cbd5e1',
+                                              fontSize: '0.74rem',
+                                              fontWeight: isDone ? 700 : 600,
+                                              cursor: 'pointer',
+                                              display: 'inline-flex',
+                                              alignItems: 'center',
+                                              gap: '0.35rem',
+                                              transition: 'all 0.15s',
+                                              boxShadow: isDone ? '0 1px 3px rgba(16, 185, 129, 0.2)' : '0 1px 2px rgba(0,0,0,0.03)'
+                                            }}
+                                          >
+                                            {isDone ? <Check size={12} strokeWidth={3} /> : <Circle size={12} color="#94a3b8" />}
+                                            <span>{stepTitle}</span>
+                                          </button>
+                                        </div>
                                       );
                                     })}
                                   </div>
@@ -819,24 +1011,27 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
                                 )}
                               </div>
 
-                              {/* 5. ACTION TOUT VALIDER / PROGRESSION */}
+                              {/* 5. ACTION TOUT VALIDER / PROGRESSION AVEC VERROUILLAGE */}
                               <div style={{ textAlign: 'right' }}>
                                 {isDelivered && (
                                   <div>
                                     <button
-                                      onClick={() => toggleAllInstallationSteps(setData, currentOrder.id, item.id, !item.isFullyInstalled)}
+                                      onClick={() => handleDesktopToggleAll(item, !item.isFullyInstalled)}
                                       style={{
-                                        padding: '0.3rem 0.6rem',
+                                        padding: '0.35rem 0.65rem',
                                         borderRadius: '5px',
-                                        background: item.isFullyInstalled ? '#fef2f2' : '#ecfdf5',
-                                        color: item.isFullyInstalled ? '#dc2626' : '#059669',
-                                        border: item.isFullyInstalled ? '1px solid #fecaca' : '1px solid #a7f3d0',
-                                        fontSize: '0.7rem',
-                                        fontWeight: 700,
-                                        cursor: 'pointer'
+                                        background: item.isFullyInstalled ? '#dcfce7' : '#ecfdf5',
+                                        color: item.isFullyInstalled ? '#166534' : '#059669',
+                                        border: item.isFullyInstalled ? '1px solid #86efac' : '1px solid #a7f3d0',
+                                        fontSize: '0.72rem',
+                                        fontWeight: 800,
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '0.3rem'
                                       }}
                                     >
-                                      {item.isFullyInstalled ? 'Décocher tout' : 'Tout valider'}
+                                      {item.isFullyInstalled ? '🔒 Terminé' : 'Tout valider'}
                                     </button>
                                     <div style={{ fontSize: '0.68rem', color: '#64748b', marginTop: '0.2rem', fontWeight: 600 }}>
                                       {item.completedStepsCount} / {item.totalStepsCount} étapes
@@ -856,6 +1051,357 @@ export default function InstallationModule({ data, setData, quoteSettings }) {
           })}
         </div>
       )}
+    </>
+  )}
+
+  {/* ─── SOUS-ONGLET : RAPPORT DÉTAILLÉ DE POSE (DATES & POSEURS) ──────── */}
+  {activeTab === 'rapport' && (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+      
+      {/* BANDEAU DU RAPPORT */}
+      <div style={{
+        background: '#ffffff',
+        padding: '1.25rem 1.5rem',
+        borderRadius: '12px',
+        border: '1px solid #e2e8f0',
+        display: 'flex',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: '1rem',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+      }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+            <FileText size={22} color="#0284c7" />
+            Rapport Détaillé de Pose — {currentOrder ? getOrderNumber(currentOrder) : 'Commande'}
+          </h2>
+          <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.85rem', color: '#64748b' }}>
+            Traçabilité par ouverture : dates, heures de passage et nom des techniciens poseurs
+          </p>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <button
+            onClick={() => window.print()}
+            style={{
+              padding: '0.65rem 1.2rem',
+              borderRadius: '8px',
+              background: '#0f172a',
+              color: '#ffffff',
+              border: 'none',
+              fontSize: '0.85rem',
+              fontWeight: 700,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              cursor: 'pointer',
+              boxShadow: '0 2px 5px rgba(0,0,0,0.15)'
+            }}
+          >
+            <Printer size={16} /> Imprimer le Rapport
+          </button>
+        </div>
+      </div>
+
+      {/* SYNTHÈSE DES POSEURS INTERVENUS */}
+      <div style={{
+        background: '#ffffff',
+        padding: '1.1rem 1.25rem',
+        borderRadius: '12px',
+        border: '1px solid #e2e8f0',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
+      }}>
+        <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#475569', marginBottom: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+          👷 Poseurs & Actions Validées sur cette commande
+        </div>
+        {poseursStats.length === 0 ? (
+          <div style={{ fontSize: '0.85rem', color: '#94a3b8', fontStyle: 'italic' }}>
+            Aucune validation n'a encore été enregistrée par un poseur pour cette commande.
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
+            {poseursStats.map(([name, count]) => (
+              <div
+                key={name}
+                style={{
+                  background: '#f0f9ff',
+                  border: '1px solid #bae6fd',
+                  borderRadius: '8px',
+                  padding: '0.45rem 0.85rem',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}
+              >
+                <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#0369a1' }}>
+                  👤 {name}
+                </span>
+                <span style={{
+                  background: '#0284c7',
+                  color: '#ffffff',
+                  fontSize: '0.72rem',
+                  fontWeight: 800,
+                  padding: '0.12rem 0.5rem',
+                  borderRadius: '12px'
+                }}>
+                  {count} étape{count > 1 ? 's' : ''} validée{count > 1 ? 's' : ''}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* BARRE DE RECHERCHE ET FILTRES RAPPORT */}
+      <div style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: '0.75rem',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        background: '#ffffff',
+        padding: '0.85rem 1.25rem',
+        borderRadius: '10px',
+        border: '1px solid #e2e8f0'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flex: '1 1 240px', maxWidth: '380px' }}>
+          <div style={{ position: 'relative', width: '100%' }}>
+            <Search size={15} color="#94a3b8" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
+            <input
+              type="text"
+              value={reportSearch}
+              onChange={(e) => setReportSearch(e.target.value)}
+              placeholder="Rechercher par repère, poseur, dimension..."
+              style={{
+                width: '100%',
+                padding: '0.5rem 0.75rem 0.5rem 2.1rem',
+                borderRadius: '7px',
+                border: '1px solid #cbd5e1',
+                fontSize: '0.82rem',
+                outline: 'none'
+              }}
+            />
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem', alignItems: 'center' }}>
+          {/* Filtre étage */}
+          <select
+            value={reportFloorFilter}
+            onChange={(e) => setReportFloorFilter(e.target.value)}
+            style={{
+              padding: '0.5rem 0.75rem',
+              borderRadius: '7px',
+              border: '1px solid #cbd5e1',
+              background: '#ffffff',
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              outline: 'none',
+              cursor: 'pointer'
+            }}
+          >
+            <option value="all">Tous les étages ({allReportItems.length})</option>
+            {chantierData.floors.map(f => (
+              <option key={f.id} value={f.rawName}>{f.displayName} ({f.items.length})</option>
+            ))}
+          </select>
+
+          {/* Filtre statut */}
+          <select
+            value={reportStatusFilter}
+            onChange={(e) => setReportStatusFilter(e.target.value)}
+            style={{
+              padding: '0.5rem 0.75rem',
+              borderRadius: '7px',
+              border: '1px solid #cbd5e1',
+              background: '#ffffff',
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              outline: 'none',
+              cursor: 'pointer'
+            }}
+          >
+            <option value="all">Tous les statuts</option>
+            <option value="pose">Pose 100% terminée ({allReportItems.filter(i => i.isFullyInstalled).length})</option>
+            <option value="en_cours">En cours de pose ({allReportItems.filter(i => i.completedStepsCount > 0 && !i.isFullyInstalled).length})</option>
+            <option value="non_commence">En attente / Non commencé ({allReportItems.filter(i => i.completedStepsCount === 0).length})</option>
+            <option value="livre">Livré sur chantier ({allReportItems.filter(i => i.status === 'livre').length})</option>
+          </select>
+        </div>
+      </div>
+
+      {/* TABLEAU DU RAPPORT */}
+      <div style={{
+        background: '#ffffff',
+        borderRadius: '12px',
+        border: '1px solid #e2e8f0',
+        overflowX: 'auto',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+      }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '1150px' }}>
+          <thead>
+            <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0', fontSize: '0.74rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              <th style={{ padding: '0.85rem 1rem' }}>Repère</th>
+              <th style={{ padding: '0.85rem 0.75rem' }}>Étage</th>
+              <th style={{ padding: '0.85rem 0.75rem' }}>Désignation & Dim.</th>
+              <th style={{ padding: '0.85rem 0.75rem' }}>Chantier</th>
+              {INSTALLATION_STEPS.map(step => (
+                <th key={step.id} style={{ padding: '0.85rem 0.5rem', textAlign: 'center' }}>
+                  {step.label}
+                </th>
+              ))}
+              <th style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>Avancement</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredReportItems.length === 0 ? (
+              <tr>
+                <td colSpan={5 + INSTALLATION_STEPS.length} style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.9rem' }}>
+                  Aucune ouverture ne correspond aux critères de recherche.
+                </td>
+              </tr>
+            ) : (
+              filteredReportItems.map((item, idx) => {
+                const isDelivered = item.status === 'livre';
+
+                return (
+                  <tr 
+                    key={item.id} 
+                    style={{ 
+                      borderBottom: '1px solid #f1f5f9', 
+                      background: idx % 2 === 0 ? '#ffffff' : '#fcfcfd',
+                      fontSize: '0.82rem'
+                    }}
+                  >
+                    {/* Repère */}
+                    <td style={{ padding: '0.85rem 1rem', fontWeight: 800 }}>
+                      <span style={{
+                        display: 'inline-block',
+                        background: isDelivered ? '#0284c7' : '#94a3b8',
+                        color: '#ffffff',
+                        padding: '0.25rem 0.55rem',
+                        borderRadius: '5px',
+                        fontSize: '0.85rem'
+                      }}>
+                        {item.repere}
+                      </span>
+                    </td>
+
+                    {/* Étage */}
+                    <td style={{ padding: '0.85rem 0.75rem', color: '#475569', fontWeight: 600 }}>
+                      {item.floorDisplayName}
+                    </td>
+
+                    {/* Désignation & Dim */}
+                    <td style={{ padding: '0.85rem 0.75rem' }}>
+                      <div style={{ fontWeight: 700, color: '#0f172a' }}>{item.label}</div>
+                      <div style={{ fontSize: '0.72rem', color: '#64748b' }}>{item.dimensions} {item.isSliding ? '• Coulissant' : ''}</div>
+                    </td>
+
+                    {/* Statut Chantier */}
+                    <td style={{ padding: '0.85rem 0.75rem' }}>
+                      {isDelivered ? (
+                        <span style={{ color: '#059669', background: '#ecfdf5', border: '1px solid #a7f3d0', padding: '0.2rem 0.45rem', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 700 }}>
+                          Livré
+                        </span>
+                      ) : item.status === 'en_stock' ? (
+                        <span style={{ color: '#2563eb', background: '#eff6ff', border: '1px solid #bfdbfe', padding: '0.2rem 0.45rem', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 700 }}>
+                          En stock
+                        </span>
+                      ) : (
+                        <span style={{ color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', padding: '0.2rem 0.45rem', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 700 }}>
+                          Non produit
+                        </span>
+                      )}
+                    </td>
+
+                    {/* 6 Étapes avec Date et Poseur */}
+                    {INSTALLATION_STEPS.map(step => {
+                      const stepState = item.steps[step.id];
+                      const isDone = !!stepState?.done;
+
+                      return (
+                        <td key={step.id} style={{ padding: '0.6rem 0.4rem', textAlign: 'center' }}>
+                          {isDone ? (
+                            <div style={{
+                              background: '#ecfdf5',
+                              border: '1px solid #a7f3d0',
+                              borderRadius: '6px',
+                              padding: '0.3rem 0.4rem',
+                              display: 'inline-flex',
+                              flexDirection: 'column',
+                              gap: '1px',
+                              minWidth: '92px'
+                            }}>
+                              <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#047857', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '3px' }}>
+                                <Check size={11} strokeWidth={3} /> {stepState?.at ? new Date(stepState.at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : 'Fait'}
+                              </div>
+                              <div style={{ fontSize: '0.64rem', color: '#065f46' }}>
+                                {stepState?.at ? new Date(stepState.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : ''}
+                              </div>
+                              <div style={{ fontSize: '0.67rem', fontWeight: 700, color: '#0369a1', marginTop: '1px', background: '#e0f2fe', borderRadius: '3px', padding: '0.05rem 0.2rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                👤 {stepState?.by || 'Poseur'}
+                              </div>
+                            </div>
+                          ) : (
+                            <div style={{
+                              background: '#f8fafc',
+                              border: '1px dashed #cbd5e1',
+                              borderRadius: '6px',
+                              padding: '0.4rem 0.3rem',
+                              color: '#94a3b8',
+                              fontSize: '0.68rem',
+                              fontWeight: 600,
+                              minWidth: '92px'
+                            }}>
+                              ⏳ En attente
+                            </div>
+                          )}
+                        </td>
+                      );
+                    })}
+
+                    {/* Statut Final / Progression */}
+                    <td style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>
+                      {item.isFullyInstalled ? (
+                        <span style={{
+                          background: '#dcfce7',
+                          color: '#166534',
+                          border: '1px solid #86efac',
+                          padding: '0.25rem 0.6rem',
+                          borderRadius: '6px',
+                          fontSize: '0.75rem',
+                          fontWeight: 800,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.3rem'
+                        }}>
+                          <Lock size={12} /> 100% Terminé
+                        </span>
+                      ) : (
+                        <span style={{
+                          background: item.completedStepsCount > 0 ? '#eff6ff' : '#f8fafc',
+                          color: item.completedStepsCount > 0 ? '#1d4ed8' : '#64748b',
+                          border: '1px solid #cbd5e1',
+                          padding: '0.25rem 0.55rem',
+                          borderRadius: '6px',
+                          fontSize: '0.72rem',
+                          fontWeight: 700
+                        }}>
+                          {item.completedStepsCount} / {item.totalStepsCount} ({Math.round((item.completedStepsCount / item.totalStepsCount) * 100)}%)
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )}
 
       {/* ─── MODAL QR CODE CHANTIER ─────────────────────────────────────────── */}
       {showQrModal && currentOrder && (
