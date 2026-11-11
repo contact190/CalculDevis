@@ -196,6 +196,7 @@ export default function SubLotMobilePortal({ data, setData, isOnline, isSyncing 
     );
   }
 
+  const isSliding = subLot.family === 'coulissant';
   const hasLegacyPanneaux = (subLot.cadres?.length > 0 || subLot.panneaux?.length > 0) && (!subLot.ouvertures || subLot.ouvertures.length === 0);
   const checklist = subLot.checklist || {};
 
