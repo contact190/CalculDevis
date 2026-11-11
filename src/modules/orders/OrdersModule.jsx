@@ -5,6 +5,7 @@ import { QuoteSettingsPanel } from '../commercial/CommercialModule';
 import jsPDF from 'jspdf';
 import { getTechnicalDrawingDataURL } from '../../utils/drawingUtils';
 import { checkVoidCriticalDelta } from '../../utils/quoteUtils';
+import { findPlanByOrderOrQuote } from '../../utils/sitePlanMatch.js';
 
 const ItemPreview = ({ config, database }) => {
   const [dataUrl, setDataUrl] = React.useState(null);
@@ -309,7 +310,7 @@ const OrdersModule = ({ data, setData, quoteSettings, setQuoteSettings }) => {
     if (selectedOrder.sitePlanId) {
       return plans.find(p => p.id === selectedOrder.sitePlanId) || { floors: [] };
     }
-    const directMatch = plans.find(p => p.orderId === selectedOrder.id || (selectedOrder.quoteId && p.quoteId === selectedOrder.quoteId));
+    const directMatch = findPlanByOrderOrQuote(plans, selectedOrder);
     if (directMatch) return directMatch;
     for (const plan of plans) {
        for (const floor of (plan.floors || [])) {

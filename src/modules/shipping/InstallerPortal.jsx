@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Truck, Wrench, CheckCircle, ArrowLeft, QrCode, Camera, Package, UserCheck, ShieldCheck, ClipboardList, MessageSquare, Send, X, RefreshCw, AlertTriangle } from 'lucide-react';
 import QRScanner from './QRScanner';
 import { uploadInstallerPhoto } from '../../utils/supabaseClient';
+import { findPlanByOrderOrQuote } from '../../utils/sitePlanMatch.js';
 
 const InstallerPortal = ({ data, setData, orderId, refetchData, isOnline, isSyncing }) => {
   const [view, setView] = useState('menu'); // 'menu', 'delivery', 'manutention', 'installation'
@@ -30,7 +31,7 @@ const InstallerPortal = ({ data, setData, orderId, refetchData, isOnline, isSync
       activeSitePlan = plans.find(p => p.id === order.sitePlanId);
     }
     if (!activeSitePlan) {
-      activeSitePlan = plans.find(p => p.orderId === order.id || (order.quoteId && p.quoteId === order.quoteId));
+      activeSitePlan = findPlanByOrderOrQuote(plans, order);
     }
     if (!activeSitePlan) {
       for (const plan of plans) {

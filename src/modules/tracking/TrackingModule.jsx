@@ -33,6 +33,7 @@ import {
 import { QRCodeSVG, QRCodeCanvas } from 'qrcode.react';
 import jsPDF from 'jspdf';
 import WorkshopAnalysisTab from './WorkshopAnalysisTab';
+import { findPlanByOrderOrQuote } from '../../utils/sitePlanMatch.js';
 
 // Helper to classify joinery type according to strict workshop rules
 export const classifyOpeningFamily = (item, database) => {
@@ -155,7 +156,9 @@ export default function TrackingModule({ data, setData, quoteSettings }) {
   const clientPlans = client?.sitePlans || [];
   const activeSitePlan = useMemo(() => {
     if (!selectedOrder) return null;
-    return clientPlans.find(p => p.id === selectedOrder.sitePlanId || p.quoteId === selectedOrder.quoteId) || null;
+    return (selectedOrder.sitePlanId && clientPlans.find(p => p.id === selectedOrder.sitePlanId))
+      || findPlanByOrderOrQuote(clientPlans, selectedOrder)
+      || null;
   }, [clientPlans, selectedOrder]);
 
   // Tous les lots de fabrication de la commande sélectionnée
