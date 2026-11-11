@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { persistentStorage } from './storage.js';
 import { getDeviceId, setClockSkew, getSynchronizedDate } from './patchEngine.js';
+import { mergeSnapshotItems } from './snapshotMerge.js';
 
 const SUPABASE_URL = 'https://uxfktjdibabwcjinynlk.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV4Zmt0amRpYmFid2NqaW55bmxrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxMDczNTUsImV4cCI6MjA5OTY4MzM1NX0.p7tzcrPlxmes7pyoWES6bKsf7tO7HAGfgn7Cs5r_AE0';
@@ -253,29 +254,8 @@ export const syncDatabase = {
           console.log(`Downloading ${downloadPromises.length} modified bucket partitions...`);
           const downloadedData = await Promise.all(downloadPromises);
           
-          const mergeItemArrays = (arrA, arrB) => {
-            const map = new Map();
-            if (Array.isArray(arrA)) {
-              arrA.forEach(item => { if (item && item.id) map.set(item.id, item); });
-            }
-            if (Array.isArray(arrB)) {
-              arrB.forEach(item => {
-                if (!item || !item.id) return;
-                const existing = map.get(item.id);
-                if (!existing) {
-                  map.set(item.id, item);
-                } else {
-                  const existingTime = existing._lastModified ? new Date(existing._lastModified).getTime() : 0;
-                  const incomingTime = item._lastModified ? new Date(item._lastModified).getTime() : 0;
-                  
-                  if (incomingTime >= existingTime) {
-                    map.set(item.id, item);
-                  }
-                }
-              });
-            }
-            return Array.from(map.values());
-          };
+          // Fusion local ↔ instantané Cloud (plans de chantier fusionnés ouverture par ouverture)
+          const mergeItemArrays = mergeSnapshotItems;
 
           for (let i = 0; i < downloadKeys.length; i++) {
             const keyInfo = downloadKeys[i];

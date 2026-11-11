@@ -6,6 +6,8 @@
  * This prevents the "last sync wins" problem that caused data loss.
  */
 
+import { safeMergeSitePlans, safeMergeTombstones, SYNC_DEL_PLANS } from './sitePlanSync.js';
+
 export const smartMerge = (dbA, dbB) => {
   if (!dbA && !dbB) return null;
   if (!dbA) return dbB;
@@ -99,10 +101,18 @@ export const smartMerge = (dbA, dbB) => {
                   }
                 });
                 mergedItem[key] = Array.from(batchMap.values());
+              } else if (collectionName === 'clients' && key === 'sitePlans') {
+                // Plans de chantier : fusion ouverture par ouverture
+                mergedItem[key] = safeMergeSitePlans(
+                  valA, valB, incomingTime >= existingTime,
+                  existing[SYNC_DEL_PLANS], item[SYNC_DEL_PLANS]
+                );
               } else {
                 // On ne fusionne pas les tableaux imbriqués généraux élément par élément
                 mergedItem[key] = incomingTime >= existingTime ? valB : valA;
               }
+            } else if (collectionName === 'clients' && key === SYNC_DEL_PLANS && typeof valA === 'object' && valA !== null && typeof valB === 'object' && valB !== null) {
+              mergedItem[key] = safeMergeTombstones(valA, valB);
             } else if (typeof valA === 'object' && valA !== null && typeof valB === 'object' && valB !== null) {
               // Dictionnaires d'états d'articles : incoming récent est autoritaire pour propager les suppressions
               const authoritativeDictKeys = ['finishedGoodsDelivery', 'finishedGoodsStock', 'installationSteps', 'unitStatusesDual'];
