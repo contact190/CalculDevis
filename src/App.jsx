@@ -46,6 +46,7 @@ import { localSync } from './utils/localSync';
 import { smartMerge } from './utils/smartMerge';
 import { applyOps, generateOps, getDeviceId, getSynchronizedDate } from './utils/patchEngine';
 import { stampDbForSync } from './utils/sitePlanSync';
+import { prepareLocalBeforeRemote } from './utils/reconnectSync';
 import { setCurrentAuthorName } from './utils/patchEngine';
 import { guardQuoteItems, withActiveQuote, loadSafetyNet, restoreItemsIntoQuote, markSafetyNetEntryRestored } from './utils/quoteSafetyNet';
 import { isQuoteLocked } from './utils/quoteUtils';
@@ -544,26 +545,44 @@ function App() {
     try {
       console.log('🔄 Reconnexion détectée, rafraîchissement depuis Supabase...');
       setSupabaseSyncStatus('syncing');
+      // Intègre des données venues du Cloud SANS les renvoyer ensuite comme si ce poste venait de les saisir.
+      // Avant : la fusion était renvoyée en bloc (jusqu'à 600 dossiers d'un coup, datés « maintenant »),
+      // et un instantané en retard écrasait alors le travail récent des autres postes.
+      const applyRemote = (compute, label) => {
+        const current = databaseRef.current;
+        if (!current) {
+          // Base pas encore chargée : comportement d'origine
+          setDatabase(prev => {
+            const repaired = repairDatabase(compute(prev));
+            recordQuoteItemLoss(prev, repaired, label, true);
+            persistentStorage.save(LOCAL_KEY, repaired);
+            return repaired;
+          });
+          return;
+        }
+        // 1) Les vraies modifications locales pas encore envoyées partent telles quelles
+        const { base, pendingOps } = prepareLocalBeforeRemote(previousDbRef.current, current, isApplyingRemoteOps.current);
+        // 2) Fusion avec les données du Cloud
+        const repaired = repairDatabase(compute(base));
+        recordQuoteItemLoss(current, repaired, label, true);
+        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+        setDatabase(repaired);
+        // 3) Ce résultat devient la référence : il ne sera pas renvoyé comme une saisie locale
+        previousDbRef.current = repaired;
+        persistentStorage.save(LOCAL_KEY, repaired);
+        if (pendingOps.length > 0) {
+          cloudSync.pushOps(pendingOps).catch(() => {});
+        }
+      };
+
       const { data: cloudData } = await syncDatabase.loadWithMeta();
       if (cloudData) {
-        setDatabase(prev => {
-          const merged = smartMerge(prev, cloudData);
-          const repaired = repairDatabase(merged);
-          recordQuoteItemLoss(prev, repaired, 'reconnexion (Cloud)', true);
-          persistentStorage.save(LOCAL_KEY, repaired);
-          return repaired;
-        });
+        applyRemote(base => smartMerge(base, cloudData), 'reconnexion (Cloud)');
       }
       const lastModified = lastLocalModifiedRef.current || new Date().toISOString();
       const missedOps = await cloudSync.fetchOpsSince(lastModified, getDeviceId());
       if (missedOps && missedOps.length > 0) {
-        setDatabase(prev => {
-          const { db: updatedDb } = applyOps(prev, missedOps);
-          const repaired = repairDatabase(updatedDb);
-          recordQuoteItemLoss(prev, repaired, 'reconnexion (modifications manquées)', true);
-          persistentStorage.save(LOCAL_KEY, repaired);
-          return repaired;
-        });
+        applyRemote(base => applyOps(base, missedOps).db, 'reconnexion (modifications manquées)');
       }
       setSupabaseSyncStatus('ok');
       setLastSupabaseSync(new Date());
@@ -739,7 +758,11 @@ function App() {
 
         // ─── Push delta ops to server (only if this is a LOCAL change) ─────
         if (!isApplyingRemoteOps.current && originalOldDb) {
-          previousDbRef.current = stampedDb;
+          // Ne jamais ramener la référence en arrière : si des données distantes ont été intégrées
+          // pendant cette sauvegarde, elles seraient sinon renvoyées comme des saisies locales.
+          if (previousDbRef.current === originalOldDb || previousDbRef.current === stampedDb) {
+            previousDbRef.current = stampedDb;
+          }
           
           const result = await localSync.pushOps(stampedDb, originalOldDb);
           if (result && result.success) {
@@ -799,7 +822,9 @@ function App() {
             }
           }
         }
-        previousDbRef.current = stampedDb;
+        if (previousDbRef.current === originalOldDb || previousDbRef.current === stampedDb) {
+          previousDbRef.current = stampedDb;
+        }
       } catch (e) {
         console.error('IndexedDB save error:', e);
         setSaveStatus('error');
