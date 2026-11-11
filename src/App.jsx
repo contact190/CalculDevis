@@ -44,7 +44,8 @@ import { syncDatabase, cloudSync } from './utils/supabaseClient';
 import { persistentStorage } from './utils/storage';
 import { localSync } from './utils/localSync';
 import { smartMerge } from './utils/smartMerge';
-import { applyOps, generateOps, getDeviceId } from './utils/patchEngine';
+import { applyOps, generateOps, getDeviceId, getSynchronizedDate } from './utils/patchEngine';
+import { stampDbForSync } from './utils/sitePlanSync';
 import { setCurrentAuthorName } from './utils/patchEngine';
 import { guardQuoteItems, withActiveQuote, loadSafetyNet, restoreItemsIntoQuote, markSafetyNetEntryRestored } from './utils/quoteSafetyNet';
 import { isQuoteLocked } from './utils/quoteUtils';
@@ -682,6 +683,19 @@ function App() {
         op.op === 'add' || 
         op.op === 'delete'
       );
+    } else if (previousDbRef.current && isApplyingRemoteOps.current) {
+      // Modification locale faite pendant la réception d'opérations distantes : elle n'est pas
+      // envoyée tout de suite (comportement historique), mais on date quand même les ouvertures
+      // modifiées / supprimées pour qu'elles soient fusionnées correctement au prochain envoi.
+      try {
+        const stamped = stampDbForSync(previousDbRef.current, database, getSynchronizedDate().getTime());
+        if (stamped !== database) {
+          setDatabase(cur => (cur === database ? stamped : cur));
+          return;
+        }
+      } catch (e) {
+        console.warn('Datage des plans ignoré :', e);
+      }
     }
 
     const saveAction = async () => {

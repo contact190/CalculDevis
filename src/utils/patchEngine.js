@@ -16,6 +16,8 @@
  * }
  */
 
+import { safeStampClientForSync, safeMergeSitePlans, safeMergeTombstones, SYNC_TS, SYNC_DEL_PLANS } from './sitePlanSync.js';
+
 // Generate a unique device ID per browser session
 const DEVICE_ID_KEY = 'calculDevis_deviceId';
 let _deviceId = null;
@@ -119,8 +121,8 @@ function deepEqual(a, b) {
       return a.every((val, i) => deepEqual(val, b[i]));
     }
     
-    const keysA = Object.keys(a).filter(k => k !== '_lastModified' && k !== '_modifiedBy');
-    const keysB = Object.keys(b).filter(k => k !== '_lastModified' && k !== '_modifiedBy');
+    const keysA = Object.keys(a).filter(k => k !== '_lastModified' && k !== '_modifiedBy' && k !== SYNC_TS);
+    const keysB = Object.keys(b).filter(k => k !== '_lastModified' && k !== '_modifiedBy' && k !== SYNC_TS);
     
     if (keysA.length !== keysB.length) return false;
     return keysA.every(key => deepEqual(a[key], b[key]));
@@ -145,6 +147,10 @@ export function generateOps(oldDb, newDb) {
   const deviceId = getDeviceId();
   
   for (const collection of TRACKABLE_COLLECTIONS) {
+    // Clients : dater les ouvertures réellement modifiées par CET appareil (fusion ouverture par ouverture)
+    const forSync = collection === 'clients'
+      ? (oldItem, newItem) => safeStampClientForSync(oldItem, newItem, now)
+      : (oldItem, newItem) => newItem;
     const oldArr = getPath(oldDb, collection);
     const newArr = getPath(newDb, collection);
     
@@ -180,7 +186,7 @@ export function generateOps(oldDb, newDb) {
           op: 'add',
           collection,
           id,
-          data: { ...newItem, _lastModified: now, _modifiedBy: deviceId },
+          data: { ...forSync(undefined, newItem), _lastModified: now, _modifiedBy: deviceId },
           timestamp: now,
           deviceId
         });
@@ -190,7 +196,7 @@ export function generateOps(oldDb, newDb) {
           op: 'update',
           collection,
           id,
-          data: { ...newItem, _lastModified: now, _modifiedBy: deviceId },
+          data: { ...forSync(oldItem, newItem), _lastModified: now, _modifiedBy: deviceId },
           timestamp: now,
           deviceId
         });
@@ -356,10 +362,19 @@ export function applyOp(db, op) {
               }
             });
             mergedItem[key] = Array.from(batchMap.values());
+          } else if (collection === 'clients' && key === 'sitePlans') {
+            // Plans de chantier : fusion ouverture par ouverture (une vieille copie n'écrase plus les saisies récentes)
+            mergedItem[key] = safeMergeSitePlans(
+              valA, valB, incomingTime >= existingTime,
+              existing[SYNC_DEL_PLANS], data[SYNC_DEL_PLANS]
+            );
           } else {
             // On ne fusionne pas les tableaux imbriqués généraux élément par élément
             mergedItem[key] = incomingTime >= existingTime ? valB : valA;
           }
+        } else if (collection === 'clients' && key === SYNC_DEL_PLANS && typeof valA === 'object' && valA !== null && typeof valB === 'object' && valB !== null) {
+          // Registre des plans supprimés : union (une suppression ne s'oublie pas)
+          mergedItem[key] = safeMergeTombstones(valA, valB);
         } else if (typeof valA === 'object' && valA !== null && typeof valB === 'object' && valB !== null) {
           // Pour les dictionnaires d'états (suivi pose, stock fini, etc.), incoming récent est autoritaire pour propager les suppressions de clés
           const authoritativeDictKeys = ['finishedGoodsDelivery', 'finishedGoodsStock', 'installationSteps', 'unitStatusesDual'];
