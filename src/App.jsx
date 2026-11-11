@@ -1109,6 +1109,17 @@ function App() {
         }
       }
     }
+    // Lots supprimés (tombstones _deleted dans orders[].batches) : on les masque partout.
+    // Le tombstone reste dans la base pour que la suppression se propage aux autres appareils.
+    const ordersSrc = (copied || database).orders;
+    if (Array.isArray(ordersSrc) && ordersSrc.some(o => o && Array.isArray(o.batches) && o.batches.some(b => b && b._deleted))) {
+      if (!copied) copied = { ...database };
+      copied.orders = ordersSrc.map(o =>
+        (o && Array.isArray(o.batches) && o.batches.some(b => b && b._deleted))
+          ? { ...o, batches: o.batches.filter(b => b && !b._deleted) }
+          : o
+      );
+    }
     return copied || database;
   }, [database]);
 
