@@ -3,6 +3,7 @@ import { Ruler, CheckCircle, ArrowLeft, QrCode, ClipboardList, RefreshCw, Shield
 import { FormulaEngine } from '../../engine/formula-engine';
 import { getTechnicalDrawingDataURL, drawTechnicalDrawing } from '../../utils/drawingUtils';
 import { checkVoidCriticalDelta } from '../../utils/quoteUtils';
+import { findPlanByOrderOrQuote } from '../../utils/sitePlanMatch.js';
 
 const ItemPreview = ({ config, database }) => {
   const containerRef = useRef(null);
@@ -224,7 +225,7 @@ const TechnicianPortal = ({ data, setData, orderId, isOnline, isSyncing }) => {
     if (order?.sitePlanId) {
       return plans.find(p => p.id === order.sitePlanId) || { floors: [] };
     }
-    const directMatch = plans.find(p => p.orderId === order?.id || (order?.quoteId && p.quoteId === order.quoteId));
+    const directMatch = findPlanByOrderOrQuote(plans, order);
     if (directMatch) return directMatch;
     for (const plan of plans) {
        for (const floor of (plan.floors || [])) {

@@ -5,6 +5,7 @@ import jsPDF from 'jspdf';
 import QRScanner from './QRScanner';
 import { FormulaEngine } from '../../engine/formula-engine';
 import { drawDocumentHeader } from '../../utils/pdfDocumentUtils';
+import { findPlanByOrderOrQuote } from '../../utils/sitePlanMatch.js';
 
 // Module version: 1.0.1 - Logistic & Installation Tracking
 const ShippingModule = ({ data, setData, refetchData, quoteSettings, setQuoteSettings }) => {
@@ -124,7 +125,7 @@ const ShippingModule = ({ data, setData, refetchData, quoteSettings, setQuoteSet
       activeSitePlan = plans.find(p => p.id === selectedOrder.sitePlanId);
     }
     if (!activeSitePlan) {
-      activeSitePlan = plans.find(p => p.orderId === selectedOrder.id || (selectedOrder.quoteId && p.quoteId === selectedOrder.quoteId));
+      activeSitePlan = findPlanByOrderOrQuote(plans, selectedOrder);
     }
     if (!activeSitePlan) {
       for (const plan of plans) {

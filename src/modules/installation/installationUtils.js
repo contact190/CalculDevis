@@ -1,3 +1,4 @@
+import { findPlanByOrderOrQuote } from '../../utils/sitePlanMatch.js';
 /**
  * installationUtils.js
  * Utilitaires pour le Suivi de Pose sur Chantier (Desktop & Mobile)
@@ -208,16 +209,13 @@ export function findActiveSitePlan(order, database) {
     if (found) return found;
   }
 
-  const byOrderOrQuote = clientPlans.find(p => 
-    p.orderId === order.id || (order.quoteId && p.quoteId === order.quoteId)
-  );
+  const byOrderOrQuote = findPlanByOrderOrQuote(clientPlans, order);
   if (byOrderOrQuote) return byOrderOrQuote;
 
   // Search in global sitePlans array if any
   if (Array.isArray(database?.sitePlans)) {
-    const foundGlobal = database.sitePlans.find(p => 
-      p.id === order.sitePlanId || p.orderId === order.id || (order.quoteId && p.quoteId === order.quoteId)
-    );
+    const foundGlobal = (order.sitePlanId && database.sitePlans.find(p => p.id === order.sitePlanId)) ||
+      findPlanByOrderOrQuote(database.sitePlans, order);
     if (foundGlobal) return foundGlobal;
   }
 
