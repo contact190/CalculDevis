@@ -66,11 +66,17 @@ export default function InstallationMobilePortal({ data, setData, orderId, isOnl
   const [toastMessage, setToastMessage] = useState(null);
 
   // Sauvegarder le nom du poseur
-  const savePoseurName = () => {
+  const savePoseurName = (e) => {
+    if (e && e.preventDefault) e.preventDefault();
     const trimmed = tempPoseurName.trim() || 'Poseur';
     setPoseurName(trimmed);
-    localStorage.setItem('calculDevis_poseurName', trimmed);
+    try {
+      localStorage.setItem('calculDevis_poseurName', trimmed);
+    } catch (err) {
+      console.warn("Storage not available", err);
+    }
     setIsEditingPoseur(false);
+    showToast(`Poseur défini : ${trimmed}`);
   };
 
   // Liste des commandes actives / en cours
@@ -368,54 +374,63 @@ export default function InstallationMobilePortal({ data, setData, orderId, isOnl
 
       {/* ─── MODAL ÉDITION NOM DU POSEUR ─────────────────────────────────────── */}
       {isEditingPoseur && (
-        <div style={{
-          position: 'fixed',
-          top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(15, 23, 42, 0.6)',
-          backdropFilter: 'blur(4px)',
-          zIndex: 2000,
-          display: 'grid',
-          placeItems: 'center',
-          padding: '1rem'
-        }}>
+        <div 
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsEditingPoseur(false);
+          }}
+          style={{
+            position: 'fixed',
+            top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(15, 23, 42, 0.6)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 2000,
+            display: 'grid',
+            placeItems: 'center',
+            padding: '1rem'
+          }}
+        >
           <div style={{ background: '#ffffff', padding: '1.5rem', borderRadius: '12px', width: '100%', maxWidth: '320px', border: '1px solid #e2e8f0', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
             <h4 style={{ margin: '0 0 0.5rem 0', color: '#0f172a', fontWeight: 700 }}>Votre Prénom / Nom</h4>
             <p style={{ margin: '0 0 1rem 0', fontSize: '0.8rem', color: '#64748b' }}>
               Ce nom apparaîtra sur l'historique de chaque étape validée.
             </p>
-            <input
-              type="text"
-              value={tempPoseurName}
-              onChange={(e) => setTempPoseurName(e.target.value)}
-              placeholder="Ex: Karim, Yacine..."
-              style={{
-                width: '100%',
-                padding: '0.65rem',
-                borderRadius: '8px',
-                background: '#f8fafc',
-                border: '1.5px solid #0284c7',
-                color: '#0f172a',
-                fontSize: '1rem',
-                fontWeight: 600,
-                marginBottom: '1rem',
-                outline: 'none'
-              }}
-              autoFocus
-            />
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <button
-                onClick={savePoseurName}
-                style={{ flex: 1, padding: '0.65rem', background: '#0284c7', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 700, cursor: 'pointer' }}
-              >
-                Enregistrer
-              </button>
-              <button
-                onClick={() => setIsEditingPoseur(false)}
-                style={{ padding: '0.65rem 1rem', background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}
-              >
-                Annuler
-              </button>
-            </div>
+            <form onSubmit={savePoseurName}>
+              <input
+                type="text"
+                value={tempPoseurName}
+                onChange={(e) => setTempPoseurName(e.target.value)}
+                placeholder="Ex: Karim, Yacine..."
+                style={{
+                  width: '100%',
+                  padding: '0.65rem',
+                  borderRadius: '8px',
+                  background: '#f8fafc',
+                  border: '1.5px solid #0284c7',
+                  color: '#0f172a',
+                  fontSize: '1rem',
+                  fontWeight: 600,
+                  marginBottom: '1rem',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
+                autoFocus
+              />
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  type="submit"
+                  style={{ flex: 1, padding: '0.65rem', background: '#0284c7', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 700, cursor: 'pointer' }}
+                >
+                  Enregistrer
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsEditingPoseur(false)}
+                  style={{ padding: '0.65rem 1rem', background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}
+                >
+                  Annuler
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
