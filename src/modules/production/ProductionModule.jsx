@@ -6,6 +6,7 @@ import { DEFAULT_DATA } from '../../data/default-data';
 import jsPDF from 'jspdf';
 import { getTechnicalDrawingDataURL } from '../../utils/drawingUtils';
 import { buildVoidRepereIndex } from '../../utils/sitePlanMatch.js';
+import { groupOrdersForWorkshop } from '../../utils/orderGroups.js';
 
 const calculateBarsNeeded = (pieces, bLength, stockOffcuts = []) => {
   if (!pieces || pieces.length === 0) return 0;
@@ -181,6 +182,32 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
     }
     return found;
   }, [database, selectedGlobalQuoteId, currentQuote]);
+
+  // Liste de sélection : commandes actives (en production) en tête, puis les autres
+  const orderGroups = useMemo(() => groupOrdersForWorkshop(database?.orders), [database?.orders]);
+  const renderOrderOption = (o) => {
+    const client = database.clients?.find(c => c.id === o.clientId);
+    return <option key={o.id} value={o.id}>📦 {o.number || o.id}{client ? ` — ${client.nom}` : ''}</option>;
+  };
+  const renderOrderGroups = () => (
+    <>
+      {orderGroups.active.length > 0 && (
+        <optgroup label="🟢 COMMANDES ACTIVES (en production)">
+          {orderGroups.active.map(renderOrderOption)}
+        </optgroup>
+      )}
+      {orderGroups.pending.length > 0 && (
+        <optgroup label="🛒 COMMANDES CONFIRMÉES (pas encore lancées)">
+          {orderGroups.pending.map(renderOrderOption)}
+        </optgroup>
+      )}
+      {orderGroups.history.length > 0 && (
+        <optgroup label="✅ COMMANDES TERMINÉES">
+          {orderGroups.history.map(renderOrderOption)}
+        </optgroup>
+      )}
+    </>
+  );
 
   const quoteItems = activeQuote?.items || [];
 
@@ -2146,12 +2173,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
             <select value={selectedGlobalQuoteId} onChange={e => setSelectedGlobalQuoteId(e.target.value)} className="input" style={{ width: '100%', padding: '0.75rem', borderRadius: '0.75rem' }}>
               <option value="">Sélectionner un document...</option>
               {currentQuote?.id && <option value={currentQuote.id}>⭐ Devis Actif (Écran Commercial)</option>}
-              <optgroup label="🛒 COMMANDES (Lancées)">
-                {(database.orders || []).map(o => {
-                  const client = database.clients?.find(c => c.id === o.clientId);
-                  return <option key={o.id} value={o.id}>📦 {o.number || o.id}{client ? ` — ${client.nom}` : ''}</option>;
-                })}
-              </optgroup>
+              {renderOrderGroups()}
               <optgroup label="📋 DEVIS SIMPLES">
                 {(database.quotes || []).filter(q => !(database.orders || []).some(o => o.quoteId === q.id || o.id === q.id)).map(q => {
                   const client = database.clients?.find(c => c.id === q.clientId);
@@ -2211,12 +2233,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
               >
                 <option value="">Sélectionner un document...</option>
                 {currentQuote?.id && <option value={currentQuote.id}>⭐ Devis Actif (Écran Commercial)</option>}
-                <optgroup label="🛒 COMMANDES (Lancées)">
-                  {(database.orders || []).map(o => {
-                    const client = database.clients?.find(c => c.id === o.clientId);
-                    return <option key={o.id} value={o.id}>📦 {o.number || o.id}{client ? ` — ${client.nom}` : ''}</option>;
-                  })}
-                </optgroup>
+                {renderOrderGroups()}
                 <optgroup label="📋 DEVIS SIMPLES">
                   {(database.quotes || []).filter(q => !(database.orders || []).some(o => o.quoteId === q.id || o.id === q.id)).map(q => {
                     const client = database.clients?.find(c => c.id === q.clientId);
@@ -4549,12 +4566,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                   <option value="">— Sélectionner un document —</option>
                   {currentQuote?.id && <option value={currentQuote.id}>⭐ Devis Actif (Écran Commercial)</option>}
                   
-                  <optgroup label="🛒 COMMANDES (Payé/Confirmé)">
-                    {(database.orders || []).map(o => {
-                      const client = database.clients?.find(c => c.id === o.clientId);
-                      return <option key={o.id} value={o.id}>📦 {o.number || o.id}{client ? ` — ${client.nom}` : ''}</option>;
-                    })}
-                  </optgroup>
+                  {renderOrderGroups()}
 
                   <optgroup label="📋 DEVIS ( Brouillon / Attente )">
                     {(database.quotes || []).map(q => {
