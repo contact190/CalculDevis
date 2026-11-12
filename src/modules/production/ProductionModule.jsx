@@ -5,6 +5,7 @@ import { FormulaEngine } from '../../engine/formula-engine';
 import { DEFAULT_DATA } from '../../data/default-data';
 import jsPDF from 'jspdf';
 import { getTechnicalDrawingDataURL } from '../../utils/drawingUtils';
+import { buildVoidRepereIndex } from '../../utils/sitePlanMatch.js';
 
 const calculateBarsNeeded = (pieces, bLength, stockOffcuts = []) => {
   if (!pieces || pieces.length === 0) return 0;
@@ -210,6 +211,18 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
       }
     }
 
+    // Repères de chantier (1A1, 2B3…) pour les commandes dont le plan est lié par son numéro de commande
+    // (et non par l'ancien champ sitePlanId). Affichage uniquement : aucun calcul n'en dépend.
+    let repereIndex = null;
+    const getRepereFromClientPlans = (voidId) => {
+      if (voidId == null || !activeQuote) return null;
+      if (!repereIndex) {
+        const client = database?.clients?.find(c => c.id === activeQuote.clientId);
+        repereIndex = buildVoidRepereIndex(client?.sitePlans, activeQuote);
+      }
+      return repereIndex.get(voidId) || null;
+    };
+
     const getPositionLabel = (item, m, idx) => {
       // 1. If explicit instanceNames exists
       if (m.instanceNames?.[idx]) return m.instanceNames[idx];
@@ -232,6 +245,10 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
         if (sm?.instanceNames?.[idx]) return sm.instanceNames[idx];
         if (sm?.instanceNames?.[0]) return sm.instanceNames[0];
       }
+
+      // 3bis. Repère de chantier retrouvé dans les plans du client (avant : « Produit 4-1 »)
+      const repere = getRepereFromClientPlans(m.id);
+      if (repere) return repere;
 
       // 4. Default fallback
       return `${item.label}-${idx + 1}`;
