@@ -40,3 +40,14 @@ export function groupOrdersForWorkshop(orders) {
   active.sort((a, b) => (b.t - a.t) || (a.index - b.index));
   return { active: active.map(x => x.o), pending, history };
 }
+
+/**
+ * Numéro à afficher pour un document de l'Atelier.
+ * Une commande garde dans son champ `number` le numéro du DEVIS dont elle est issue (ex. DEV-74018) :
+ * pour une commande, on affiche donc son propre numéro (CMD-62). Pour un devis, rien ne change.
+ */
+export function getDocNumber(doc, fallback = '') {
+  if (!doc) return fallback;
+  if (typeof doc.id === 'string' && doc.id.startsWith('CMD')) return doc.id;
+  return doc.number || fallback;
+}
