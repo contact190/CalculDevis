@@ -46,3 +46,16 @@ test('atelier : à date de lot égale ou absente, l\'ordre d\'origine est conser
   ];
   assert.deepEqual(groupOrdersForWorkshop(orders).active.map(o => o.id), ['A', 'C', 'B', 'D']);
 });
+
+test('atelier : une commande affiche son numéro de commande, pas le numéro du devis d\'origine', async () => {
+  const { getDocNumber } = await import('../src/utils/orderGroups.js');
+  assert.equal(getDocNumber({ id: 'CMD-70557', number: 'DEV-70557' }, 'x'), 'CMD-70557');
+  assert.equal(getDocNumber({ id: 'CMD-62' }, 'Mode Manuel'), 'CMD-62', 'commande sans champ number : avant, « Mode Manuel »');
+  assert.equal(getDocNumber({ id: 'CMD-68', number: 'CMD-68' }, 'x'), 'CMD-68');
+  // devis et autres documents : comme avant
+  assert.equal(getDocNumber({ id: 'QUOTE-1792406412827', number: 'DEV-74018' }, 'x'), 'DEV-74018');
+  assert.equal(getDocNumber({ id: 'QUOTE-1' }, 'Chantier'), 'Chantier');
+  assert.equal(getDocNumber({ id: 'ORD-009', number: 'DEV-1' }, 'ORD-009'), 'DEV-1');
+  assert.equal(getDocNumber(null, '—'), '—');
+  assert.equal(getDocNumber(undefined), '');
+});

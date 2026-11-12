@@ -6,7 +6,7 @@ import { DEFAULT_DATA } from '../../data/default-data';
 import jsPDF from 'jspdf';
 import { getTechnicalDrawingDataURL } from '../../utils/drawingUtils';
 import { buildVoidRepereIndex } from '../../utils/sitePlanMatch.js';
-import { groupOrdersForWorkshop } from '../../utils/orderGroups.js';
+import { groupOrdersForWorkshop, getDocNumber } from '../../utils/orderGroups.js';
 
 const calculateBarsNeeded = (pieces, bLength, stockOffcuts = []) => {
   if (!pieces || pieces.length === 0) return 0;
@@ -187,7 +187,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
   const orderGroups = useMemo(() => groupOrdersForWorkshop(database?.orders), [database?.orders]);
   const renderOrderOption = (o) => {
     const client = database.clients?.find(c => c.id === o.clientId);
-    return <option key={o.id} value={o.id}>📦 {o.number || o.id}{client ? ` — ${client.nom}` : ''}</option>;
+    return <option key={o.id} value={o.id}>📦 {getDocNumber(o, o.id)}{client ? ` — ${client.nom}` : ''}</option>;
   };
   const renderOrderGroups = () => (
     <>
@@ -1215,7 +1215,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
     doc.text(supplierName || 'Tous fournisseurs / Atelier', rightBoxX + 3, boxY + 11);
 
     const clientName = database.clients?.find(c => c.id === activeQuote?.clientId)?.nom || '—';
-    const refName = activeQuote?.id?.startsWith('CMD') ? activeQuote.id : (activeQuote?.number || 'Non spécifié');
+    const refName = activeQuote?.id?.startsWith('CMD') ? activeQuote.id : (getDocNumber(activeQuote, 'Non spécifié'));
     doc.setFontSize(8);
     doc.text(`Chantier: ${refName}`, rightBoxX + 3, boxY + 19);
     doc.text(`Client Final: ${clientName}`, rightBoxX + 3, boxY + 24);
@@ -1361,7 +1361,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
       doc.text(`Page ${i} sur ${totalPages} • CalculDevis PRO`, pw / 2, 290, { align: 'center' });
     }
 
-    doc.save(`Proforma_Chiffree_${activeQuote?.number || 'Chantier'}.pdf`);
+    doc.save(`Proforma_Chiffree_${getDocNumber(activeQuote, 'Chantier')}.pdf`);
   };
 
   const exportPricedProformaCSV = (groupsToExport) => {
@@ -1392,7 +1392,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.setAttribute("download", `Proforma_Chiffree_${activeQuote?.number || 'Chantier'}.csv`);
+    link.setAttribute("download", `Proforma_Chiffree_${getDocNumber(activeQuote, 'Chantier')}.csv`);
     link.click();
   };
 
@@ -1494,7 +1494,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `${title}_${activeQuote?.number || 'Export'}.csv`);
+    link.setAttribute("download", `${title}_${getDocNumber(activeQuote, 'Export')}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -1997,7 +1997,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
     // Add page numbering, client name, and command number to each page
     const pageCount = doc.internal.getNumberOfPages();
     const clientNom = database.clients?.find(c => c.id === activeQuote?.clientId)?.nom || '—';
-    const cmdNum = activeQuote?.number || '—';
+    const cmdNum = getDocNumber(activeQuote, '—');
     for (let i = 1; i <= pageCount; i++) {
       doc.setPage(i);
       doc.setFont('helvetica', 'normal');
@@ -2013,7 +2013,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
       doc.text(`Page ${i} / ${pageCount}`, 190, 290, { align: 'right' });
     }
 
-    doc.save(`PROD_${type.toUpperCase()}_${activeQuote?.number || 'EXPORT'}.pdf`);
+    doc.save(`PROD_${type.toUpperCase()}_${getDocNumber(activeQuote, 'EXPORT')}.pdf`);
   };
 
   const generateOpeningPDF = () => generateDetailedProductionPDF('opening');
@@ -2220,7 +2220,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
             </div>
             <h1 style={{ fontSize: '2.25rem', fontWeight: 900, margin: 0, letterSpacing: '-0.025em' }}>Pilotage Production</h1>
             <p style={{ color: '#cbd5e1', margin: '0.5rem 0 0 0', fontSize: '1.1rem', fontWeight: 500 }}>
-               {activeQuote?.number || 'Mode Manuel'} — {database.clients?.find(c => c.id === activeQuote?.clientId)?.nom || 'Projet Actif'}
+               {getDocNumber(activeQuote, 'Mode Manuel')} — {database.clients?.find(c => c.id === activeQuote?.clientId)?.nom || 'Projet Actif'}
             </p>
           </div>
           <div style={{ display: 'flex', gap: '1rem' }}>
@@ -2685,7 +2685,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                     doc.setFontSize(10);
                     doc.setFont('helvetica', 'bold');
                     const clientName = database.clients?.find(c => c.id === activeQuote?.clientId)?.nom || '—';
-                    const refName = activeQuote?.id?.startsWith('CMD') ? activeQuote.id : (activeQuote?.number || 'Non spécifié');
+                    const refName = activeQuote?.id?.startsWith('CMD') ? activeQuote.id : (getDocNumber(activeQuote, 'Non spécifié'));
                     doc.text(`Chantier : ${refName}`, 15, y);
                     doc.text(`Client Final : ${clientName}`, 15, y + 6);
                     doc.text(`Date : ${new Date().toLocaleDateString('fr-FR')}`, 15, y + 12);
@@ -2752,7 +2752,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                       });
                     }
                     
-                    doc.save(`${docHeader}_${activeQuote?.number || 'Chantier'}.pdf`);
+                    doc.save(`${docHeader}_${getDocNumber(activeQuote, 'Chantier')}.pdf`);
                   }}
                   className="btn"
                   style={{ background: '#8b5cf6', color: 'white', fontWeight: 700, fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
@@ -2881,7 +2881,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                       doc.setFontSize(10);
                       doc.setFont('helvetica', 'bold');
                       const clientName = database.clients?.find(c => c.id === activeQuote?.clientId)?.nom || '—';
-                      const refName = activeQuote?.id?.startsWith('CMD') ? activeQuote.id : (activeQuote?.number || 'Non spécifié');
+                      const refName = activeQuote?.id?.startsWith('CMD') ? activeQuote.id : (getDocNumber(activeQuote, 'Non spécifié'));
                       doc.text(`Chantier : ${refName}`, 15, y);
                       doc.text(`Client Final : ${clientName}`, 15, y + 6);
                       doc.text(`Date : ${new Date().toLocaleDateString('fr-FR')}`, 15, y + 12);
@@ -2958,7 +2958,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                       renderRows(glassList, y);
                     });
                     
-                    doc.save(`Commande_Vitrage_${activeQuote?.number || 'Chantier'}.pdf`);
+                    doc.save(`Commande_Vitrage_${getDocNumber(activeQuote, 'Chantier')}.pdf`);
                   }}
                   className="btn"
                   style={{ background: '#06b6d4', color: 'white', fontWeight: 700, fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
@@ -2993,7 +2993,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
                     const link = document.createElement("a");
                     link.href = URL.createObjectURL(blob);
-                    link.setAttribute("download", `Commande_Vitrage_${activeQuote?.number || 'Chantier'}.csv`);
+                    link.setAttribute("download", `Commande_Vitrage_${getDocNumber(activeQuote, 'Chantier')}.csv`);
                     link.click();
                   }}
                   className="btn"
@@ -3027,7 +3027,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
                     const link = document.createElement("a");
                     link.href = URL.createObjectURL(blob);
-                    link.setAttribute("download", `Achat_${activeQuote?.number || 'Chantier'}.csv`);
+                    link.setAttribute("download", `Achat_${getDocNumber(activeQuote, 'Chantier')}.csv`);
                     link.click();
                   }}
                   className="btn"
@@ -4360,7 +4360,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
               currentLabel++;
             });
           });
-          doc.save(`Etiquettes_DEBIT_PRIORISE_${activeQuote?.number || 'Export'}.pdf`);
+          doc.save(`Etiquettes_DEBIT_PRIORISE_${getDocNumber(activeQuote, 'Export')}.pdf`);
         };
         const generateThermalLabelsPDF = () => {
           const labelW = 39;
@@ -4428,12 +4428,12 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
               doc.setFont('helvetica', 'normal');
               doc.setFontSize(5);
               doc.setTextColor(120, 120, 120);
-              doc.text(`Doc: ${activeQuote?.number || '—'}`, labelW - 2, 13.5, { align: 'right' });
+              doc.text(`Doc: ${getDocNumber(activeQuote, '—')}`, labelW - 2, 13.5, { align: 'right' });
               doc.text(`Client: ${activeQuote?.clientNom ? activeQuote.clientNom.substring(0, 10) : '—'}`, labelW - 2, 16.5, { align: 'right' });
             });
           });
 
-          doc.save(`Etiquettes_THERMIQUE_${activeQuote?.number || 'Export'}.pdf`);
+          doc.save(`Etiquettes_THERMIQUE_${getDocNumber(activeQuote, 'Export')}.pdf`);
         };
 
         const generateCuttingOptimizationPDF = () => {
@@ -4443,7 +4443,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
           doc.setFontSize(18); doc.setFont('helvetica', 'bold');
           doc.text("PLAN DE COUPE OPTIMISÉ (NESTING)", 105, currentY, { align: 'center' });
           doc.setFontSize(10); doc.setFont('helvetica', 'normal');
-          doc.text(`Client: ${activeQuote?.clientNom || '—'}  |  Dossier: ${activeQuote?.number || '—'}`, 105, currentY + 7, { align: 'center' });
+          doc.text(`Client: ${activeQuote?.clientNom || '—'}  |  Dossier: ${getDocNumber(activeQuote, '—')}`, 105, currentY + 7, { align: 'center' });
           currentY += 20;
 
           const groupedByProfile = {};
@@ -4529,7 +4529,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
           // Add page numbering, client name, and command number to each page
           const pageCount = doc.internal.getNumberOfPages();
           const clientNom = activeQuote?.clientNom || database.clients?.find(c => c.id === activeQuote?.clientId)?.nom || '—';
-          const cmdNum = activeQuote?.number || '—';
+          const cmdNum = getDocNumber(activeQuote, '—');
           for (let i = 1; i <= pageCount; i++) {
             doc.setPage(i);
             doc.setFont('helvetica', 'normal');
@@ -4545,7 +4545,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
             doc.text(`Page ${i} / ${pageCount}`, 195, 290, { align: 'right' });
           }
 
-          doc.save(`OPTIM_COUPE_${activeQuote?.number || 'Export'}.pdf`);
+          doc.save(`OPTIM_COUPE_${getDocNumber(activeQuote, 'Export')}.pdf`);
         };
 
 
@@ -4918,7 +4918,7 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
                     Proforma Chiffrée — Détail des Coûts & Totaux
                   </h2>
                   <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap', marginTop: '0.2rem', fontSize: '0.75rem', color: '#94a3b8' }}>
-                    <span>Chantier : <strong style={{ color: '#f8fafc' }}>{activeQuote?.id?.startsWith('CMD') ? activeQuote.id : (activeQuote?.number || 'Non spécifié')}</strong></span>
+                    <span>Chantier : <strong style={{ color: '#f8fafc' }}>{activeQuote?.id?.startsWith('CMD') ? activeQuote.id : (getDocNumber(activeQuote, 'Non spécifié'))}</strong></span>
                     <span>•</span>
                     <span>Client : <strong style={{ color: '#f8fafc' }}>{database.clients?.find(c => c.id === activeQuote?.clientId)?.nom || '—'}</strong></span>
                     {supplierName && (
