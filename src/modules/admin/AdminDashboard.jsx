@@ -3365,7 +3365,7 @@ const AdminDashboard = ({ data, setData }) => {
                                   <FormulaInput
                                     value={item.compatibilityFormula || ''}
                                     onChange={val => updateShutterItem(key, item.id, i, 'compatibilityFormula', val)}
-                                    variables={['L', 'H', 'lameWidth', 'caissonSize', 'area']}
+                                    variables={['L', 'L_total', 'H', 'HC', 'lameWidth', 'caissonSize', 'caisson', 'area', 'totalWeight', 'liftingWeight', 'axeDiameter', 'weightPerM2', 'nb_moteurs', 'isDouble']}
                                     placeholder={key === 'caissons' ? "Ex: lameWidth<=43 && L<=1500" : "Ex: caissonSize == 155"}
                                   />
                                   <div style={{ fontSize: '0.6rem', color: '#94a3b8', marginTop: '2px' }}>Laisser vide = toujours valide</div>
