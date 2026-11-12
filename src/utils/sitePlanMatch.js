@@ -23,3 +23,28 @@ export function findPlanByOrderOrQuote(plans, order) {
   const sameQuote = plans.filter(p => p && p.quoteId === order.quoteId);
   return sameQuote.find(p => !p.orderId) || sameQuote[0];
 }
+
+/**
+ * Index « id d'ouverture → repère de chantier » (ex. 1A1, 2B3) sur tous les plans d'un client.
+ * Le plan de la commande passe en premier ; les autres plans du client servent de secours.
+ * Même formule que le portail technicien : étage + appartement + rang de l'ouverture.
+ * Sert uniquement à l'affichage (fiches de coupe) : ne modifie rien, n'entre dans aucun calcul.
+ */
+export function buildVoidRepereIndex(plans, order) {
+  const index = new Map();
+  if (!Array.isArray(plans)) return index;
+  const linked = order
+    ? ((order.sitePlanId && plans.find(p => p && p.id === order.sitePlanId)) || findPlanByOrderOrQuote(plans, order))
+    : undefined;
+  const ordered = linked ? [linked, ...plans.filter(p => p !== linked)] : plans;
+  for (const p of ordered) {
+    for (const f of (p?.floors || [])) {
+      for (const a of (f?.apartments || [])) {
+        (a?.voids || []).forEach((v, i) => {
+          if (v && v.id != null && !index.has(v.id)) index.set(v.id, `${f.name}${a.name}${i + 1}`);
+        });
+      }
+    }
+  }
+  return index;
+}
