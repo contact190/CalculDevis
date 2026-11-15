@@ -1798,32 +1798,17 @@ const ProductionModule = ({ currentConfig, currentQuote, database, setData, quot
       // ── Dynamic Positions for following elements ──
       let nextY = finalNextY;
 
-      // Couvre-joint detection
-      const cjProfiles = filteredItems.filter(p => p.isCouvreJoint || p.usage === 'ACCESSOIRES / FINITION' && /couvre|cj/i.test(p.label || ''));
-      const cjSummary = [];
-      const seenThick = new Set();
+      // Couvre-joint : côtés cochés sur le devis (même source que le dessin et le devis)
+      const cjSides = [];
+      const os = cfg.optionalSides || {};
+      if (os.top) cjSides.push('Haut');
+      if (os.bottom) cjSides.push('Bas');
+      if (os.left) cjSides.push('Gauche');
+      if (os.right) cjSides.push('Droite');
 
-      cjProfiles.forEach(pCalc => {
-        const pRef = (database.profiles || []).find(x => x.id === pCalc.id || x.name === pCalc.id);
-        const thicknessValue = pRef?.thickness || pRef?.epas || pRef?.epaisseur || pRef?.ep || pRef?.e || 0;
-        const thickness = parseFloat(thicknessValue) || 0;
-        if (thickness > 0 && !seenThick.has(thickness)) {
-          seenThick.add(thickness);
-          cjSummary.push({ name: pRef?.name || pCalc?.name || 'Couvre-joint', thickness });
-        }
-      });
-
-      if (cjSummary.length > 0) {
-        doc.setFontSize(9);
-        cjSummary.forEach((cj, cjIdx) => {
-          doc.text(`Couvre-joint: ${cj.thickness} mm`, startX, nextY);
-          nextY += 7;
-        });
-      } else {
-        doc.setFontSize(9);
-        doc.text("Couvre-joint: Sans", startX, nextY);
-        nextY += 7;
-      }
+      doc.setFontSize(9);
+      doc.text(`Couvre-joint: ${cjSides.length > 0 ? cjSides.join(', ') : 'Sans'}`, startX, nextY);
+      nextY += 7;
 
       // Shutter Info Box
       if (cfg.hasShutter && database.shutterComponents) {
