@@ -26,7 +26,7 @@ export const nowIso = () => new Date(clock).toISOString();
 
 export const clone = (x) => JSON.parse(JSON.stringify(x));
 
-const META = new Set(['_syncTs', '_syncDel', '_syncDelPlans']);
+const META = new Set(['_syncTs', '_syncDel', '_syncDelPlans', '_stateTs']);
 /** Retire les métadonnées de synchro (nouvelles) pour comparer au comportement historique. */
 export function stripSyncMeta(x) {
   if (Array.isArray(x)) return x.map(stripSyncMeta);

@@ -46,7 +46,7 @@ import { localSync } from './utils/localSync';
 import { smartMerge } from './utils/smartMerge';
 import { applyOps, generateOps, getDeviceId, getSynchronizedDate } from './utils/patchEngine';
 import { stampDbForSync } from './utils/sitePlanSync';
-import { prepareLocalBeforeRemote } from './utils/reconnectSync';
+import { prepareLocalBeforeRemote, orderStateOpsDuringRemote } from './utils/reconnectSync';
 import { setCurrentAuthorName } from './utils/patchEngine';
 import { guardQuoteItems, withActiveQuote, loadSafetyNet, restoreItemsIntoQuote, markSafetyNetEntryRestored } from './utils/quoteSafetyNet';
 import { isQuoteLocked } from './utils/quoteUtils';
@@ -682,6 +682,8 @@ function App() {
     let cachedOps = null;
     let isInstantOpsSave = false;
     let isCriticalFullSnapshotSave = false;
+    // Saisie de chantier faite pendant la réception d'opérations distantes : envoyée quand même
+    let pushStateOpsDuringRemote = false;
 
     if (previousDbRef.current && !isApplyingRemoteOps.current) {
       cachedOps = generateOps(previousDbRef.current, database);
@@ -715,6 +717,13 @@ function App() {
       } catch (e) {
         console.warn('Datage des plans ignoré :', e);
       }
+      // Étapes de pose / livraisons cochées pendant cette fenêtre : avant, elles n'étaient jamais envoyées
+      const stateOps = orderStateOpsDuringRemote(previousDbRef.current, database);
+      if (stateOps.length > 0) {
+        cachedOps = stateOps;
+        isInstantOpsSave = true;
+        pushStateOpsDuringRemote = true;
+      }
     }
 
     const saveAction = async () => {
@@ -726,7 +735,15 @@ function App() {
         let stampedDb = database;
         let generatedOps = cachedOps || [];
         // ─── Stamp local changes in database before saving ───
-        if (!isApplyingRemoteOps.current && originalOldDb) {
+        if (pushStateOpsDuringRemote && originalOldDb) {
+          generatedOps = cachedOps || [];
+          const applyResult = applyOps(database, generatedOps);
+          if (applyResult && applyResult.appliedCount > 0) {
+            stampedDb = applyResult.db;
+            previousDbRef.current = stampedDb;
+            setDatabase(stampedDb);
+          }
+        } else if (!isApplyingRemoteOps.current && originalOldDb) {
           // Réutiliser les ops pré-calculées au lieu de recalculer
           if (!cachedOps) {
             generatedOps = generateOps(originalOldDb, database);
@@ -756,8 +773,24 @@ function App() {
         lastLocalModifiedRef.current = now;
         // La confirmation visuelle "saved" est désormais réservée au succès Cloud
 
+        // ─── Saisies de chantier faites pendant la réception : envoi Cloud uniquement de ces commandes ───
+        if (pushStateOpsDuringRemote && originalOldDb && generatedOps.length > 0) {
+          setSupabaseSyncStatus('syncing');
+          const cloudResult = await cloudSync.pushOps(generatedOps);
+          if (cloudResult && cloudResult.success) {
+            console.log(`☁️ ${generatedOps.length} saisie(s) de chantier envoyée(s) pendant une réception.`);
+            setSupabaseSyncStatus('ok');
+            setLastSupabaseSync(new Date());
+            setSaveStatus('saved');
+            setTimeout(() => setSaveStatus('idle'), 2000);
+          } else {
+            setSupabaseSyncStatus('error');
+            setSaveStatus('error');
+          }
+        }
+
         // ─── Push delta ops to server (only if this is a LOCAL change) ─────
-        if (!isApplyingRemoteOps.current && originalOldDb) {
+        if (!pushStateOpsDuringRemote && !isApplyingRemoteOps.current && originalOldDb) {
           // Ne jamais ramener la référence en arrière : si des données distantes ont été intégrées
           // pendant cette sauvegarde, elles seraient sinon renvoyées comme des saisies locales.
           if (previousDbRef.current === originalOldDb || previousDbRef.current === stampedDb) {
@@ -915,6 +948,17 @@ function App() {
       }
 
       console.log(`📥 Application de ${remoteOps.length} ops distantes en temps réel...`);
+      // Avant d'intégrer : une saisie de chantier pas encore envoyée part d'abord (sinon elle était absorbée et perdue)
+      try {
+        const pendingStateOps = orderStateOpsDuringRemote(previousDbRef.current, databaseRef.current);
+        if (pendingStateOps.length > 0) {
+          const stamped = applyOps(databaseRef.current, pendingStateOps);
+          if (stamped && stamped.appliedCount > 0) databaseRef.current = stamped.db;
+          cloudSync.pushOps(pendingStateOps).catch(() => {});
+        }
+      } catch (e) {
+        console.warn('Envoi préalable des saisies de chantier ignoré :', e);
+      }
       isApplyingRemoteOps.current = true;
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       if (bgSnapshotTimerRef.current) clearTimeout(bgSnapshotTimerRef.current);

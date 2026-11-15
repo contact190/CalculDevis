@@ -159,7 +159,31 @@ test('données sans date (ancien format) : même avec appareils en retard et ord
   assert.ok(compared > 5000);
 });
 
-test('tout ce qui n\'est pas un plan de chantier (commandes, lots, devis, catalogue, réglages) : identique même en conflit', () => {
+
+const ORDER_STATE_KEYS = ['installationSteps', 'finishedGoodsDelivery', 'finishedGoodsStock', 'unitStatusesDual'];
+/** Annule les changements d'états de chantier faits par une modification aléatoire (vérifiés à part). */
+function keepOrderState(before, after) {
+  if (!after || after === before || after.orders === before.orders) return after;
+  const prev = new Map((before.orders || []).map(o => [o && o.id, o]));
+  let changed = false;
+  const orders = after.orders.map(o => {
+    const p = o && prev.get(o.id);
+    if (!p || p === o) return o;
+    const r = { ...o };
+    for (const k of ORDER_STATE_KEYS) { if (k in p) r[k] = p[k]; else delete r[k]; }
+    changed = true;
+    const sameAsBefore = JSON.stringify(r) === JSON.stringify(p);
+    return sameAsBefore ? p : r;
+  });
+  if (!changed) return after;
+  const res = { ...after, orders };
+  return orders.every((o, i) => o === (before.orders || [])[i]) && orders.length === (before.orders || []).length && Object.keys(after).every(k => k === 'orders' || after[k] === before[k]) ? before : res;
+}
+
+// Exception voulue (correctif synchro poseur, 15 nov. 2026) : les états de chantier d'une commande
+// (installationSteps, finishedGoodsDelivery, finishedGoodsStock, unitStatusesDual) sont désormais fusionnés
+// repère par repère en cas de conflit → vérifiés dans orderStateSync.test.mjs. Tout le reste doit rester identique.
+test('tout ce qui n\'est pas un plan de chantier ni un état de chantier (commandes, lots, devis, catalogue, réglages) : identique même en conflit', () => {
   let compared = 0;
   for (let seed = 1; seed <= 300; seed++) {
     const seedDb = mkDb(makeIdGen(`o${seed}-`));
@@ -173,8 +197,8 @@ test('tout ce qui n\'est pas un plan de chantier (commandes, lots, devis, catalo
     for (let i = 0; i < 40; i++) {
       tick(500 + ctl.int(2000));
       const d = ctl.int(N);
-      const opsNew = localEdit(wNew, d, db => randomEdit(db, rngNew, genNew, OTHER_EDITS));
-      const opsOld = localEdit(wOld, d, db => randomEdit(db, rngOld, genOld, OTHER_EDITS));
+      const opsNew = localEdit(wNew, d, db => keepOrderState(db, randomEdit(db, rngNew, genNew, OTHER_EDITS)));
+      const opsOld = localEdit(wOld, d, db => keepOrderState(db, randomEdit(db, rngOld, genOld, OTHER_EDITS)));
       assert.deepEqual(opsNew, opsOld);
       for (let o = 0; o < N; o++) if (o !== d) { pendNew[o].push(opsNew); pendOld[o].push(opsOld); }
       // livraisons aléatoires (retards, désordre)
@@ -184,7 +208,7 @@ test('tout ce qui n\'est pas un plan de chantier (commandes, lots, devis, catalo
           wNew.states[o] = NEW.applyOps(wNew.states[o], clone(pendNew[o].splice(k, 1)[0])).db;
           wOld.states[o] = OLD.applyOps(wOld.states[o], clone(pendOld[o].splice(k, 1)[0])).db;
         }
-        assert.deepEqual(wNew.states[o], wOld.states[o], `seed=${seed} step=${i} dev=${o}`);
+        assert.deepEqual(stripSyncMeta(wNew.states[o]), stripSyncMeta(wOld.states[o]), `seed=${seed} step=${i} dev=${o}`);
         compared++;
       }
     }

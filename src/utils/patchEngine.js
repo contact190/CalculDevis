@@ -17,6 +17,7 @@
  */
 
 import { safeStampClientForSync, safeMergeSitePlans, safeMergeTombstones, SYNC_TS, SYNC_DEL_PLANS } from './sitePlanSync.js';
+import { safeStampOrderForSync, applyOrderStateMerge, isOrderStateKey } from './orderStateSync.js';
 
 // Generate a unique device ID per browser session
 const DEVICE_ID_KEY = 'calculDevis_deviceId';
@@ -148,9 +149,12 @@ export function generateOps(oldDb, newDb) {
   
   for (const collection of TRACKABLE_COLLECTIONS) {
     // Clients : dater les ouvertures réellement modifiées par CET appareil (fusion ouverture par ouverture)
+    // Commandes : dater les états de chantier (pose, livraison…) réellement modifiés (fusion repère par repère)
     const forSync = collection === 'clients'
       ? (oldItem, newItem) => safeStampClientForSync(oldItem, newItem, now)
-      : (oldItem, newItem) => newItem;
+      : collection === 'orders'
+        ? (oldItem, newItem) => safeStampOrderForSync(oldItem, newItem, Date.parse(now))
+        : (oldItem, newItem) => newItem;
     const oldArr = getPath(oldDb, collection);
     const newArr = getPath(newDb, collection);
     
@@ -336,8 +340,10 @@ export function applyOp(db, op) {
 
       // Deep merge the properties of the item to avoid overwriting nested fields (e.g. blDates)
       const mergedItem = { ...existing };
+      const isOrderState = collection === 'orders';
       Object.keys(data).forEach(key => {
         if (key === '_lastModified' || key === '_modifiedBy') return;
+        if (isOrderState && isOrderStateKey(key)) return; // fusion repère par repère ci-dessous
         const valA = existing[key];
         const valB = data[key];
         
@@ -392,6 +398,8 @@ export function applyOp(db, op) {
         }
       });
       
+      if (isOrderState) applyOrderStateMerge(mergedItem, existing, data, incomingTime >= existingTime);
+
       mergedItem._lastModified = incomingTime >= existingTime ? (timestamp || getSynchronizedDate().toISOString()) : existing._lastModified;
       mergedItem._modifiedBy = incomingTime >= existingTime ? (op.deviceId || 'unknown') : existing._modifiedBy;
       

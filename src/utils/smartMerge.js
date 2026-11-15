@@ -7,6 +7,7 @@
  */
 
 import { safeMergeSitePlans, safeMergeTombstones, SYNC_DEL_PLANS } from './sitePlanSync.js';
+import { applyOrderStateMerge, isOrderStateKey } from './orderStateSync.js';
 
 export const smartMerge = (dbA, dbB) => {
   if (!dbA && !dbB) return null;
@@ -76,6 +77,7 @@ export const smartMerge = (dbA, dbB) => {
           
           Object.keys(item).forEach(key => {
             if (key === '_lastModified' || key === '_modifiedBy') return;
+            if (isOrdersArray && isOrderStateKey(key)) return; // fusion repère par repère ci-dessous
             
             const valA = existing[key];
             const valB = item[key];
@@ -130,6 +132,8 @@ export const smartMerge = (dbA, dbB) => {
             }
           });
           
+          if (isOrdersArray) applyOrderStateMerge(mergedItem, existing, item, incomingTime >= existingTime);
+
           mergedItem._lastModified = incomingTime >= existingTime ? item._lastModified : existing._lastModified;
           mergedItem._modifiedBy = incomingTime >= existingTime ? item._modifiedBy : existing._modifiedBy;
           
