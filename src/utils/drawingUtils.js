@@ -346,37 +346,51 @@ export const drawTechnicalDrawing = (canvas, cfg, database) => {
   }
 
   // 3. Couvre-joints (Architraves)
+  // Seuls les côtés cochés sur le devis sont dessinés (plus de "bas" forcé).
+  // Rendu hachuré noir + contour noir épais : bien lisible en impression noir et blanc.
   const cjThick = Math.max(18 * scale, 20); // Minimum 20px so it's always visible
-  // Force bottom CJ to always be drawn
-  const effectiveSides = { ...optionalSides, bottom: true };
-  const hasCJ = true; // always draw at least the bottom
-  if (hasCJ) {
-    ctx.fillStyle = '#e2e8f0';
-    ctx.strokeStyle = '#94a3b8';
-    ctx.lineWidth = 1;
-    
-    // Top Architrave
-    if (effectiveSides.top) {
-      ctx.fillRect(offsetX - cjThick, offsetY - cjThick, dW + cjThick * 2, cjThick);
-      ctx.strokeRect(offsetX - cjThick, offsetY - cjThick, dW + cjThick * 2, cjThick);
+  const sides = optionalSides || {};
+  const drawHatchedRect = (x, y, w, h) => {
+    if (w <= 0 || h <= 0) return;
+    ctx.save();
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(x, y, w, h);
+    ctx.beginPath();
+    ctx.rect(x, y, w, h);
+    ctx.clip();
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 1.6;
+    const step = 7;
+    ctx.beginPath();
+    for (let d = -h; d < w + h; d += step) {
+      ctx.moveTo(x + d, y + h);
+      ctx.lineTo(x + d + h, y);
     }
-    // Bottom Architrave (always drawn)
-    ctx.fillRect(offsetX - cjThick, offsetY + dH_total, dW + cjThick * 2, cjThick);
-    ctx.strokeRect(offsetX - cjThick, offsetY + dH_total, dW + cjThick * 2, cjThick);
-    // Left Architrave (Vertical) - Covers full height from Top CJ to Bottom CJ
-    if (effectiveSides.left) {
-      const startY = offsetY - (effectiveSides.top ? cjThick : 0);
-      const hExt = dH_total + (effectiveSides.top ? cjThick : 0) + cjThick;
-      ctx.fillRect(offsetX - cjThick, startY, cjThick, hExt);
-      ctx.strokeRect(offsetX - cjThick, startY, cjThick, hExt);
-    }
-    // Right Architrave (Vertical) - Covers full height from Top CJ to Bottom CJ
-    if (effectiveSides.right) {
-      const startY = offsetY - (effectiveSides.top ? cjThick : 0);
-      const hExt = dH_total + (effectiveSides.top ? cjThick : 0) + cjThick;
-      ctx.fillRect(offsetX + dW, startY, cjThick, hExt);
-      ctx.strokeRect(offsetX + dW, startY, cjThick, hExt);
-    }
+    ctx.stroke();
+    ctx.restore();
+    ctx.save();
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 2.5;
+    ctx.strokeRect(x, y, w, h);
+    ctx.restore();
+  };
+
+  // Top Architrave
+  if (sides.top) {
+    drawHatchedRect(offsetX - cjThick, offsetY - cjThick, dW + cjThick * 2, cjThick);
+  }
+  // Bottom Architrave (seulement si coché)
+  if (sides.bottom) {
+    drawHatchedRect(offsetX - cjThick, offsetY + dH_total, dW + cjThick * 2, cjThick);
+  }
+  // Left / Right Architraves (Vertical) - entre CJ haut et CJ bas s'ils existent
+  const vStartY = offsetY;
+  const vLen = dH_total;
+  if (sides.left) {
+    drawHatchedRect(offsetX - cjThick, vStartY, cjThick, vLen);
+  }
+  if (sides.right) {
+    drawHatchedRect(offsetX + dW, vStartY, cjThick, vLen);
   }
 
   // 4. Shutter Control Position
