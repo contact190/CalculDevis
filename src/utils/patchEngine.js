@@ -196,14 +196,25 @@ export function generateOps(oldDb, newDb) {
         });
       } else if (!deepEqual(oldItem, newItem)) {
         // Item was modified
-        ops.push({
+        const data = { ...forSync(oldItem, newItem), _lastModified: now, _modifiedBy: deviceId };
+        const updateOp = {
           op: 'update',
           collection,
           id,
-          data: { ...forSync(oldItem, newItem), _lastModified: now, _modifiedBy: deviceId },
+          data,
           timestamp: now,
           deviceId
-        });
+        };
+        // Commandes : liste des champs réellement modifiés (non énumérée : ne change ni les copies
+        // ni les comparaisons). Sert à envoyer une version allégée quand la commande est trop lourde.
+        if (collection === 'orders') {
+          try {
+            const keys = new Set([...Object.keys(oldItem), ...Object.keys(data)]);
+            const changed = [...keys].filter(k => k !== '_lastModified' && k !== '_modifiedBy' && !deepEqual(oldItem[k], data[k]));
+            Object.defineProperty(updateOp, 'changedKeys', { value: changed, enumerable: false });
+          } catch (e) { /* pas de version allégée possible : comportement d'origine */ }
+        }
+        ops.push(updateOp);
       }
     }
     

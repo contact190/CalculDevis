@@ -655,9 +655,20 @@ export const cloudSync = {
             finishedGoodsStock: opData.finishedGoodsStock,
             finishedGoodsDelivery: opData.finishedGoodsDelivery,
             installationSteps: opData.installationSteps,
+            _stateTs: opData._stateTs,
             _lastModified: opData._lastModified,
             _modifiedBy: opData._modifiedBy
           };
+          // Commande trop lourde (gros chantier) : on n'envoie que les champs réellement modifiés.
+          // Avant, la modification n'était pas envoyée du tout (simple signal de rechargement, limité à 1 / 5 min).
+          if (Array.isArray(op.changedKeys) && JSON.stringify(opData).length > 500000) {
+            const light = { id: opData.id, _lastModified: opData._lastModified, _modifiedBy: opData._modifiedBy };
+            if (opData._stateTs !== undefined) light._stateTs = opData._stateTs;
+            for (const k of op.changedKeys) {
+              if (Object.prototype.hasOwnProperty.call(opData, k) && opData[k] !== undefined) light[k] = opData[k];
+            }
+            opData = light;
+          }
         }
 
         const row = {
