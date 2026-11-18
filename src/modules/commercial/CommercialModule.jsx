@@ -3351,7 +3351,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
         }
 
         // Hauteur de poignée explicite quel que soit le produit (porte & fenêtre)
-        descLines.push(`Note : Hauteur poignée : 1,50 m (porte) / Axée (fenêtre)`);
+        descLines.push(`Note : Hauteur poignée : 1,05 m (porte) / Axée (fenêtre)`);
 
         // Détection fixe en bas (hauteur fixe bas + allège : 1,10 m)
         const itemLabelLower = (item.label || '').toLowerCase();
@@ -3837,7 +3837,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(71, 85, 105); // Slate 600
     const note3Lines = doc.splitTextToSize(
-      "Hauteur de poignée conventionnelle (applicable à tout produit) : 1,50 m pour les portes et axée (au centre de l'ouvrant) pour les fenêtres. Pour tout produit comportant une partie fixe en bas, la hauteur du fixe plus allège est fixée à 1,10 m du sol fini.",
+      "Hauteur de poignée conventionnelle (applicable à tout produit) : 1,05 m pour les portes et axée (au centre de l'ouvrant) pour les fenêtres. Pour tout produit comportant une partie fixe en bas, la hauteur du fixe plus allège est fixée à 1,10 m du sol fini.",
       notesInnerW
     );
     doc.text(note3Lines, 19, curNY);
@@ -5019,7 +5019,7 @@ const CommercialModule = ({ config, setConfig, database, setDatabase, currentQuo
                 <div style={{ background: '#f8fafc', borderRadius: '0.6rem', padding: '0.75rem', border: '1px solid #e2e8f0', gridColumn: '1 / -1' }}>
                   <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Hauteur de poignée & allège</div>
                   <div style={{ fontSize: '0.85rem', color: '#1e293b' }}>
-                    Note : Hauteur poignée : <strong>1,50 m</strong> (porte) / <strong>Axée</strong> (fenêtre)
+                    Note : Hauteur poignée : <strong>1,05 m</strong> (porte) / <strong>Axée</strong> (fenêtre)
                     {(() => {
                       const cfg = infoPopupItem.config || {};
                       const itemLabelLower = (infoPopupItem.label || '').toLowerCase();
