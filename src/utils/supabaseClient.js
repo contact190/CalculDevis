@@ -624,6 +624,18 @@ export async function uploadInstallerPhoto(base64DataUrl, orderId = 'general') {
 
 let lastForceRefreshSent = 0;
 
+// Opérations trop lourdes pour le temps réel Supabase (au-delà, le message arrive vidé de ses données).
+// Elles sont enregistrées en entier sous une collection préfixée : les anciennes versions du logiciel
+// les ignorent (collection inconnue), les nouvelles les relisent dans la base puis les appliquent normalement.
+export const HEAVY_OP_PREFIX = '_lourd:';
+const HEAVY_OP_MAX_SIZE = 8000000; // au-delà : ancien comportement (signal de rechargement complet)
+
+export function unwrapHeavyCollection(collection) {
+  return typeof collection === 'string' && collection.startsWith(HEAVY_OP_PREFIX)
+    ? collection.slice(HEAVY_OP_PREFIX.length)
+    : collection;
+}
+
 export const cloudSync = {
   /**
    * Push a batch of operations to the Supabase operations_log table
@@ -634,6 +646,7 @@ export const cloudSync = {
     try {
       // ─── Filter out huge operations that would crash Supabase Realtime ───
       const safeRows = [];
+      const heavyRows = [];
       let needsForceRefresh = false;
 
       for (const op of ops) {
@@ -681,16 +694,13 @@ export const cloudSync = {
         };
         
         // Check size of payload
-        let sizeEstimate = JSON.stringify(row.data || {}).length;
-        if (sizeEstimate > 500000 && row.collection === 'orders' && row.data?.items) {
-          const { items, ...restData } = row.data;
-          const lighterSize = JSON.stringify(restData).length;
-          if (lighterSize <= 500000) {
-            row.data = restData;
-            sizeEstimate = lighterSize;
-          }
-        }
-        if (sizeEstimate > 500000) { // 500 KB limit for realtime message
+        // Avant : une commande trop lourde partait SANS ses articles (commande vide chez les autres postes),
+        // et un devis trop lourd n'était pas envoyé du tout. Désormais l'opération est envoyée en entier,
+        // marquée « lourde » : les postes la relisent directement dans la base (pas par le temps réel).
+        const sizeEstimate = JSON.stringify(row.data || {}).length;
+        if (sizeEstimate > 500000 && sizeEstimate <= HEAVY_OP_MAX_SIZE && (row.op === 'add' || row.op === 'update') && row.data && typeof row.data === 'object') {
+          heavyRows.push({ ...row, collection: HEAVY_OP_PREFIX + row.collection });
+        } else if (sizeEstimate > 500000) { // 500 KB limit for realtime message
           console.warn(`Operation for ${op.collection} is too large (${(sizeEstimate/1024).toFixed(1)} KB). Converting to force_refresh.`);
           needsForceRefresh = true;
         } else {
@@ -720,6 +730,16 @@ export const cloudSync = {
         const { error } = await supabase.from('operations_log').insert(safeRows);
         if (error) throw error;
       }
+      // Opérations lourdes : une par une, pour qu'un échec n'empêche pas les autres
+      let heavyFailed = false;
+      for (const heavyRow of heavyRows) {
+        const { error } = await supabase.from('operations_log').insert([heavyRow]);
+        if (error) {
+          console.error(`Échec d'envoi de l'opération lourde ${heavyRow.doc_id}:`, error);
+          heavyFailed = true;
+        }
+      }
+      if (heavyFailed) throw new Error('Envoi incomplet : une opération lourde n\'a pas pu être enregistrée.');
       return { success: true, applied: ops.length };
     } catch (e) {
       console.error("Failed to push ops to cloud:", e);
@@ -742,12 +762,28 @@ export const cloudSync = {
           
           const op = {
             op: row.op,
-            collection: row.collection,
+            collection: unwrapHeavyCollection(row.collection),
             id: row.doc_id,
             data: row.data,
             timestamp: row.timestamp,
             deviceId: row.device_id
           };
+
+          // Opération lourde : le temps réel ne transporte pas ses données, on les relit dans la base.
+          // En cas d'échec, la relecture automatique (toutes les 10 s) la récupère.
+          if (row.collection !== op.collection) {
+            if (!row.id) return;
+            supabase.from('operations_log').select('data').eq('id', row.id).single()
+              .then(({ data: full, error }) => {
+                if (error || !full || full.data == null) {
+                  console.warn(`Opération lourde ${row.doc_id} : relecture différée`, error);
+                  return;
+                }
+                onOpsReceived([{ ...op, data: full.data }]);
+              })
+              .catch(e => console.warn(`Opération lourde ${row.doc_id} : relecture différée`, e));
+            return;
+          }
           onOpsReceived([op]);
         }
       )
@@ -794,7 +830,7 @@ export const cloudSync = {
       
       return (data || []).map(row => ({
         op: row.op,
-        collection: row.collection,
+        collection: unwrapHeavyCollection(row.collection),
         id: row.doc_id,
         data: row.data,
         timestamp: row.timestamp,
